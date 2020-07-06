@@ -18,9 +18,9 @@ package floating_ip
 
 import (
 	log "github.com/cihub/seelog"
-	"infini.sh/framework/core/api"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/env"
+	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/net"
 )
 
@@ -58,7 +58,7 @@ func (module FloatingIPPlugin) Start() error {
 		panic(err)
 	}
 
-	apiConfig := &api.APIConfig{}
+	apiConfig := &global.Env().SystemConfig.APIConfig
 	env.ParseConfig("api", apiConfig)
 	log.Infof("high availability address: %s://%s:%s", apiConfig.GetSchema(), floatingIPConfig.IP, apiConfig.NetworkConfig.GetBindingPort())
 	return nil
