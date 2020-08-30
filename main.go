@@ -20,26 +20,35 @@ import (
 	_ "expvar"
 	"infini.sh/framework"
 	"infini.sh/framework/core/module"
-	"infini.sh/framework/core/orm"
 	"infini.sh/framework/core/util"
-	"infini.sh/framework/modules"
-	"infini.sh/proxy/config"
-	"infini.sh/proxy/model"
-	"infini.sh/proxy/modules/proxy"
-	"infini.sh/proxy/modules/floating_ip"
+	"infini.sh/framework/modules/api"
+	"infini.sh/framework/modules/boltdb"
+	"infini.sh/framework/modules/elastic"
+	"infini.sh/framework/modules/filter"
+	"infini.sh/framework/modules/pipeline"
+	"infini.sh/framework/modules/queue"
+	"infini.sh/framework/modules/ui"
+	stats "infini.sh/framework/plugins/stats_statsd"
+	"infini.sh/gateway/config"
+	floating_ip2 "infini.sh/gateway/floating_ip"
+	proxy2 "infini.sh/gateway/proxy"
 )
 
 func main() {
-	terminalHeader := ("___  ____ ____ _  _ _   _\n")
-	terminalHeader += ("|__] |__/ |  |  \\/   \\_/\n")
-	terminalHeader += ("|    |  \\ |__| _/\\_   |\n")
 
-	terminalFooter := ("                         |    |                \n")
-	terminalFooter += ("   _` |   _ \\   _ \\   _` |     _ \\  |  |   -_) \n")
-	terminalFooter += (" \\__, | \\___/ \\___/ \\__,_|   _.__/ \\_, | \\___| \n")
-	terminalFooter += (" ____/                             ___/        \n")
+	terminalHeader := ("\n   ___   _   _____  __  __    __  _       \n")
+	terminalHeader += ("  / _ \\ /_\\ /__   \\/__\\/ / /\\ \\ \\/_\\ /\\_/\\\n")
+	terminalHeader += (" / /_\\///_\\\\  / /\\/_\\  \\ \\/  \\/ //_\\\\\\_ _/\n")
+	terminalHeader += ("/ /_\\\\/  _  \\/ / //__   \\  /\\  /  _  \\/ \\ \n")
+	terminalHeader += ("\\____/\\_/ \\_/\\/  \\__/    \\/  \\/\\_/ \\_/\\_/ \n\n")
 
-	app := framework.NewApp("proxy", "An elasticsearch proxy written in golang.",
+	terminalFooter := ("   __ _  __ ____ __ _  __ __    __ _____ __                         \n")
+	terminalFooter += ("  / // |/ // __// // |/ // /   / //_  _//  \\                        \n")
+	terminalFooter += (" / // || // _/ / // || // /   / /_ / / / o |                        \n")
+	terminalFooter += ("/_//_/|_//_/  /_//_/|_//_/() /___//_/ /__,'    \n\n")
+	terminalFooter += ("©2020 INFINI.LTD, All Rights Reserved.\n")
+
+	app := framework.NewApp("gateway", "A lightweight powerful high-performance elasticsearch gateway.",
 		util.TrimSpaces(config.Version), util.TrimSpaces(config.LastCommitLog), util.TrimSpaces(config.BuildDate), terminalHeader, terminalFooter)
 
 	app.Init(nil)
@@ -49,16 +58,22 @@ func main() {
 	app.Start(func() {
 
 		//load core modules first
-		modules.Register()
-
-		module.RegisterUserPlugin(proxy.ProxyPlugin{})
-		module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
+		module.RegisterSystemModule(elastic.ElasticModule{})
+		module.RegisterSystemModule(boltdb.StorageModule{})
+		module.RegisterSystemModule(filter.FilterModule{})
+		module.RegisterSystemModule(queue.DiskQueue{})
+		module.RegisterSystemModule(api.APIModule{})
+		module.RegisterSystemModule(ui.UIModule{})
+		module.RegisterSystemModule(pipeline.PipeModule{})
+		module.RegisterUserPlugin(stats.StatsDModule{})
+		module.RegisterUserPlugin(proxy2.ProxyPlugin{})
+		module.RegisterUserPlugin(floating_ip2.FloatingIPPlugin{})
 
 		//start each module, with enabled provider
 		module.Start()
 
 	}, func() {
-		orm.RegisterSchema(&model.Request{})
+		//orm.RegisterSchema(&model.Request{})
 
 	})
 

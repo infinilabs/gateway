@@ -78,18 +78,16 @@ func (config CacheConfig) GetTTLMilliseconds() int64 {
 func InitAPI() {
 
 	cacheConfig := CacheConfig{
-		KeyPrefix:   "proxy_",
+		KeyPrefix:    "proxy_",
 		CacheEnabled: false,
-		RedisConfig: RedisConfig{Host: "localhost", Port: "6379", Password: "", DB: 0},
+		RedisConfig:  RedisConfig{Host: "localhost", Port: "6379", Password: "", DB: 0},
 	}
-
-
 
 	env.ParseConfig("cache", &cacheConfig)
 
 	cacheHandler := CacheHandler{config: &cacheConfig}
 
-	if cacheConfig.CacheEnabled{
+	if cacheConfig.CacheEnabled {
 		cacheHandler.Init()
 	}
 

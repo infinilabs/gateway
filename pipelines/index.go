@@ -10,8 +10,8 @@ import (
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/util"
-	"infini.sh/proxy/config"
-	"infini.sh/proxy/model"
+	"infini.sh/gateway/config"
+	"infini.sh/gateway/model"
 )
 
 type IndexJoint struct {

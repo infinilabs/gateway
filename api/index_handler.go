@@ -10,8 +10,8 @@ import (
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/util"
-	"infini.sh/proxy/config"
-	"infini.sh/proxy/model"
+	"infini.sh/gateway/config"
+	"infini.sh/gateway/model"
 	"net/http"
 	"strconv"
 	"strings"
@@ -21,9 +21,10 @@ import (
 // IndexAction returns cluster health information
 func (handler *API) IndexAction(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 
-	log.Debug("index action")
-
 	upstream := handler.GetHeader(req, "UPSTREAM", "auto")
+
+	log.Trace("upstream: ", upstream)
+
 	if upstream != "auto" {
 		log.Debug("parameter upstream: ", upstream)
 
@@ -51,23 +52,32 @@ func (handler *API) IndexAction(w http.ResponseWriter, req *http.Request, _ http
 		}
 	}
 
+	log.Trace("data1 ")
+
 	data := map[string]interface{}{}
 	data["name"] = global.Env().SystemConfig.NodeConfig.Name
 
+	log.Trace("data2 ")
 	version := map[string]interface{}{}
 	version["number"] = util.TrimSpaces(config.Version)
 	version["build_commit"] = util.TrimSpaces(config.LastCommitLog)
 	version["build_date"] = strings.TrimSpace(config.BuildDate)
 
+	log.Trace("data3 ")
 	data["version"] = version
 	data["tagline"] = "You Know, for Proxy"
 	data["uptime"] = time.Since(env.GetStartTime()).String()
 
+	log.Trace("data4 ")
 	ups := config.GetUpstreamConfigs()
 
+	log.Trace("data5 ", ups)
 	m := util.MapStr{}
 	for _, v := range ups {
+		log.Trace("data6-1 ", v, ",", v.Elasticsearch)
 		cfg := elastic.GetConfig(v.Elasticsearch)
+		log.Trace("data6-2 ", v, ",", cfg)
+
 		if v.Enabled {
 			m[v.Name] = util.MapStr{
 				"endpoint":        cfg.Endpoint,
@@ -79,9 +89,19 @@ func (handler *API) IndexAction(w http.ResponseWriter, req *http.Request, _ http
 			}
 		}
 	}
+
+	log.Trace("data7 ")
+
 	data["upstream"] = m
 
-	handler.WriteJSON(w, &data, http.StatusOK)
+	log.Trace("data: ", data)
+
+	err := handler.WriteJSON(w, &data, http.StatusOK)
+	if err != nil {
+		panic(err)
+	}
+
+	log.Trace("data8 ")
 }
 
 func (handler *API) executeHttpRequest(cfg elastic.ElasticsearchConfig, url, method string, body []byte) (*util.Result, error) {
@@ -91,7 +111,7 @@ func (handler *API) executeHttpRequest(cfg elastic.ElasticsearchConfig, url, met
 	if cfg.BasicAuth != nil {
 		request.SetBasicAuth(cfg.BasicAuth.Username, cfg.BasicAuth.Password)
 	}
-	request.ContentType="application/json"
+	request.ContentType = "application/json"
 
 	return util.ExecuteRequest(request)
 }
@@ -105,9 +125,7 @@ func (handler *API) handleRead(w http.ResponseWriter, req *http.Request, body []
 	var hash string
 
 	if handler.cacheConfig.CacheEnabled {
-
 		hash = getHash(handler.cacheConfig.KeyPrefix, req, body)
-
 		cache, err := handler.cacheHandler.Get(hash)
 		if len(cache) > 0 && err == nil {
 			if global.Env().IsDebug {
@@ -123,7 +141,6 @@ func (handler *API) handleRead(w http.ResponseWriter, req *http.Request, body []
 	upstream := handler.GetHeader(req, "UPSTREAM", "auto")
 	if upstream != "auto" {
 		log.Debug("parameter upstream: ", upstream)
-
 		cfg := config.GetUpstreamConfig(upstream)
 		if cfg.Enabled && cfg.Readable {
 
