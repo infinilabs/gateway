@@ -165,6 +165,8 @@ func StartAPI() {
 	}
 
 	server := &fasthttp.Server{
+		Name: "INFINI",
+		DisableHeaderNamesNormalizing:true,
 		Handler:            ProxyHandler,
 		Concurrency:        1000,
 		LogAllErrors:       true,
