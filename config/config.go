@@ -3,6 +3,7 @@ package config
 import (
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/pipeline"
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -33,21 +34,31 @@ type ProxyConfig struct {
 	Balancer            string               `config:"balancer"`
 	PassthroughPatterns []string             `config:"pass_through"`
 	Enabled             bool                 `config:"enabled"`
+	AsyncWrite          bool                 `config:"async_write"`
 	TLSConfig           config.TLSConfig     `config:"tls"`
 	NetworkConfig       config.NetworkConfig `config:"network"`
 	CacheConfig         CacheConfig          `config:"cache"`
 }
 
 type CacheConfig struct {
-	Enabled       bool   `config:"enabled"`
-	TTL           string `config:"ttl"`
-	MaxCachedItem int64  `config:"max_cached_item"`
-	duration      time.Duration
+	Enabled                bool   `config:"enabled"`
+	Type                   string `config:"type"` //redis,local
+	TTL                    string `config:"ttl"`
+	AsyncSearchTTL         string `config:"async_search_ttl"`
+	MaxCachedItem          int64  `config:"max_cached_item"`
+	generalTTLDuration     time.Duration
+	asyncSearchTTLDuration time.Duration
+}
+
+func (config CacheConfig) GetChaosTTLDuration() time.Duration {
+	baseTTL:=config.GetTTLDuration().Milliseconds()
+	randomTTL := rand.Int63n(baseTTL / 5)
+	return (time.Duration(baseTTL+randomTTL))*time.Millisecond
 }
 
 func (config CacheConfig) GetTTLDuration() time.Duration {
-	if config.duration > 0 {
-		return config.duration
+	if config.generalTTLDuration > 0 {
+		return config.generalTTLDuration
 	}
 
 	if config.TTL != "" {
@@ -55,9 +66,28 @@ func (config CacheConfig) GetTTLDuration() time.Duration {
 		if err != nil {
 			dur, _ = time.ParseDuration("10s")
 		}
-		config.duration = dur
+		config.generalTTLDuration = dur
+	}else{
+		config.generalTTLDuration =time.Second*10
 	}
-	return config.duration
+	return config.generalTTLDuration
+}
+
+func (config CacheConfig) GetAsyncSearchTTLDuration() time.Duration {
+	if config.asyncSearchTTLDuration > 0 {
+		return config.asyncSearchTTLDuration
+	}
+
+	if config.AsyncSearchTTL != "" {
+		dur, err := time.ParseDuration(config.AsyncSearchTTL)
+		if err != nil {
+			dur, _ = time.ParseDuration("30m")
+		}
+		config.asyncSearchTTLDuration = dur
+	}else{
+		config.asyncSearchTTLDuration =time.Minute*30
+	}
+	return config.asyncSearchTTLDuration
 }
 
 const Url pipeline.ParaKey = "url"

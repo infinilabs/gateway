@@ -36,8 +36,11 @@ func ProxyHandler(ctx *fasthttp.RequestCtx) {
 
 	proxyServer.ServeHTTP(ctx)
 
-	//ctx.Response.SetStatusCode(http.StatusOK)
-	//ctx.Response.SetBody([]byte("."))
+	//logging event
+	//TODO configure log req and response, by condition
+	//fmt.Println(ctx.Response.StatusCode())
+	//fmt.Println(string(ctx.Response.Body()))
+
 
 }
 
@@ -169,7 +172,7 @@ func StartAPI() {
 		DisableHeaderNamesNormalizing:true,
 		Handler:            ProxyHandler,
 		Concurrency:        1000,
-		LogAllErrors:       true,
+		LogAllErrors:       false,
 		MaxRequestBodySize: 20 * 1024 * 1024,
 		GetOnly:            false,
 		ReduceMemoryUsage:  false,

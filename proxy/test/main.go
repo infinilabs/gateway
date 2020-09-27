@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"github.com/dgraph-io/ristretto"
 	"time"
@@ -96,8 +98,79 @@ import (
 //}
 //
 
+func main()  {
 
-func main() {
+	header:=[]byte("hello header")
+	body:=[]byte("hello body")
+
+	fmt.Println(header)
+	fmt.Println(body)
+
+	buffer:=bytes.Buffer{}
+
+	headerLength := make([]byte, 4)
+	binary.LittleEndian.PutUint32(headerLength, uint32(len(header)))
+	fmt.Println(headerLength)
+
+	bodyLength := make([]byte, 4)
+	binary.LittleEndian.PutUint32(bodyLength, uint32(len(body)))
+	fmt.Println(bodyLength)
+
+
+	//header length
+	buffer.Write(headerLength)
+	buffer.Write(header)
+
+	//body
+	buffer.Write(bodyLength)
+	buffer.Write(body)
+
+	data:=buffer.Bytes()
+	fmt.Println(data)
+	buffer.Reset()
+
+	readerHeaderLengthBytes := make([]byte, 4)
+	reader:=bytes.NewBuffer(data)
+	n,err:=reader.Read(readerHeaderLengthBytes)
+	if err!=nil{
+		fmt.Println(n,err)
+	}
+
+	fmt.Println(readerHeaderLengthBytes)
+
+	readerHeaderLength:=binary.LittleEndian.Uint32(readerHeaderLengthBytes)
+	readerHeader := make([]byte,readerHeaderLength )
+	n,err=reader.Read(readerHeader)
+	if err!=nil{
+		fmt.Println(n,err)
+	}
+
+	fmt.Println(readerHeader)
+
+
+
+	readerBodyLengthBytes := make([]byte, 4)
+	n,err=reader.Read(readerBodyLengthBytes)
+	if err!=nil{
+		fmt.Println(n,err)
+	}
+
+	fmt.Println(readerBodyLengthBytes)
+
+	readerBodyLength:=binary.LittleEndian.Uint32(readerBodyLengthBytes)
+	readerBody := make([]byte,readerBodyLength )
+	n,err=reader.Read(readerBody)
+	if err!=nil{
+		fmt.Println(n,err)
+	}
+
+	fmt.Println(readerBody)
+
+
+
+}
+
+func main1() {
 	cache, err := ristretto.NewCache(&ristretto.Config{
 		NumCounters: 1e7,     // Num keys to track frequency of (10M).
 		MaxCost:     1 << 30, // Maximum cost of cache (1GB).

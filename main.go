@@ -42,9 +42,9 @@ func main() {
 	terminalHeader += ("/ /_\\\\/  _  \\/ / //__   \\  /\\  /  _  \\/ \\ \n")
 	terminalHeader += ("\\____/\\_/ \\_/\\/  \\__/    \\/  \\/\\_/ \\_/\\_/ \n\n")
 
-	terminalFooter := ("")
+	terminalFooter := ("Thanks for using GATEWAY, have a good day!")
 
-	app := framework.NewApp("gateway", "A light-weight, powerful and high-performance elasticsearch gateway.",
+	app := framework.NewApp("gateway", "A light-weight, powerful and high-performance elasticsearch proxy.",
 		util.TrimSpaces(config.Version), util.TrimSpaces(config.LastCommitLog), util.TrimSpaces(config.BuildDate), terminalHeader, terminalFooter)
 
 	app.Init(nil)

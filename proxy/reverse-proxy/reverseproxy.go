@@ -7,9 +7,11 @@ package proxy
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/binary"
 	"fmt"
 	log "github.com/cihub/seelog"
 	"github.com/dgraph-io/ristretto"
+	"github.com/karlseguin/ccache"
 	"github.com/valyala/fasthttp"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/global"
@@ -17,50 +19,55 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/gateway/config"
 	"infini.sh/gateway/translog"
-	"net"
 	"net/http"
 	"src/github.com/go-redis/redis"
 	"strings"
 	"sync"
+	"time"
 )
 
-// ReverseProxy reverse handler using fasthttp.HostClient
 // TODO: support https config
 type ReverseProxy struct {
-	oldAddr string                 // old addr to keep old API working as usual
-	bla     IBalancer              // balancer
-	clients []*fasthttp.HostClient // clients
+	oldAddr     string
+	bla         IBalancer
+	clients     []*fasthttp.HostClient
+	proxyConfig *config.ProxyConfig
 }
 
-var proxyConfig *config.ProxyConfig
-
-//var proxyCache *ccache.Cache
+var ccacheCache *ccache.LayeredCache
 
 var client *redis.Client
 var cache *ristretto.Cache
 
 func getRedisClient() *redis.Client {
+
+	if client != nil {
+		return client
+	}
+
 	l.Lock()
 	defer l.Unlock()
+
 	if client != nil {
 		return client
 	}
 
 	client = redis.NewClient(&redis.Options{
-		Addr: fmt.Sprintf("%s:%s", "localhost", "6379"),
+		Addr: fmt.Sprintf("%s:%s", "192.168.3.98", "6379"),
 		//Password: handler.config.RedisConfig.Password,
 		//DB:       handler.config.RedisConfig.DB,
 		Password: "",
 		DB:       0,
 	})
 
-	pong, err := client.Ping().Result()
-	fmt.Println(pong, err)
+	_, err := client.Ping().Result()
+	if err != nil {
+		panic(err)
+	}
 
 	return client
 }
 
-// NewReverseProxy create an ReverseProxy with options
 func NewReverseProxy(cfg *config.ProxyConfig) *ReverseProxy {
 
 	var err error
@@ -73,18 +80,16 @@ func NewReverseProxy(cfg *config.ProxyConfig) *ReverseProxy {
 		panic(err)
 	}
 
-
-	proxyConfig = cfg
-	//proxyCache = ccache.New(ccache.Configure().MaxSize(proxyConfig.CacheConfig.MaxCachedItem).ItemsToPrune(100))
+	ccacheCache = ccache.Layered(ccache.Configure().MaxSize(cfg.CacheConfig.MaxCachedItem).ItemsToPrune(100))
 
 	ups := config.GetActiveUpstreamConfigs()
 
 	log.Trace("active upstream: ", ups)
 
-	//// apply an new object of `ReverseProxy`
 	p := ReverseProxy{
-		oldAddr: "",
-		clients: make([]*fasthttp.HostClient, len(ups)),
+		oldAddr:     "",
+		clients:     make([]*fasthttp.HostClient, len(ups)),
+		proxyConfig: cfg,
 	}
 
 	ws := make([]int, len(ups))
@@ -122,7 +127,6 @@ func NewReverseProxy(cfg *config.ProxyConfig) *ReverseProxy {
 
 func (p *ReverseProxy) getClient() *fasthttp.HostClient {
 	if p.clients == nil {
-		// closed
 		panic("ReverseProxy has been closed")
 	}
 
@@ -137,9 +141,6 @@ func (p *ReverseProxy) getClient() *fasthttp.HostClient {
 
 func cleanHopHeaders(req *fasthttp.Request) {
 	for _, h := range hopHeaders {
-		// if h == "Te" && hv == "trailers" {
-		// 	continue
-		// }
 		req.Header.Del(h)
 	}
 }
@@ -154,9 +155,9 @@ func (p *ReverseProxy) HandleIndex(ctx *fasthttp.RequestCtx) bool {
 	//bulk
 	//index
 
-	if strings.Contains(ctx.URI().String(), "_bulk") {
+	if p.proxyConfig.AsyncWrite && strings.Contains(ctx.URI().String(), "_bulk") {
 
-		stats.Increment("requests", "in.bulk")
+		stats.Increment("request", "action.bulk")
 
 		if global.Env().IsDebug {
 			log.Trace("saving bulk request")
@@ -165,7 +166,7 @@ func (p *ReverseProxy) HandleIndex(ctx *fasthttp.RequestCtx) bool {
 		translog.SaveRequest(ctx)
 
 		ctx.Response.SetStatusCode(http.StatusOK)
-		ctx.Response.SwapBody(bulkRequestOKBody)
+		ctx.Response.SetBodyRaw(bulkRequestOKBody)
 
 		return true
 	}
@@ -174,92 +175,214 @@ func (p *ReverseProxy) HandleIndex(ctx *fasthttp.RequestCtx) bool {
 }
 
 func (p *ReverseProxy) getHash(req *fasthttp.Request) string {
-	buffer := bytes.NewBuffer(req.Body())
+
+	//TODO configure, remove keys from hash factor
+	req.URI().QueryArgs().Del("preference")
+
+	data := make([]byte,
+		len(req.Body())+
+			len(req.URI().QueryArgs().QueryString())+
+			len(req.PostArgs().QueryString())+
+			len(req.Header.Method())+
+			len(req.RequestURI()),
+	)
+
+	if global.Env().IsDebug {
+		log.Trace("generate hash:", string(req.Header.Method()), string(req.RequestURI()), string(req.URI().QueryArgs().QueryString()), string(req.Body()), string(req.PostArgs().QueryString()))
+	}
+
+	//TODO 后台可以按照请求路径来勾选 Hash 因子
+
+	buffer := bytes.NewBuffer(data)
 	buffer.Write(req.Header.Method())
+	buffer.Write(req.Header.Peek("Authorization")) //TODO enable configure for this feature, may filter by user or share, add/remove Authorization header to hash factor
 	buffer.Write(req.RequestURI())
 	buffer.Write(req.URI().QueryArgs().QueryString())
 	buffer.Write(req.Body())
+	buffer.Write(req.PostArgs().QueryString())
+
 	return util.MD5digestString(buffer.Bytes())
 }
 
-var byPassGet = []string{"scroll", "scroll_id"}
-
-//var v = map[string][]byte{}
 var l sync.RWMutex
 
-func Get(key string) []byte {
+const cacheRedis = "redis"
+const cacheCCache = "ccache"
 
-	o,found:=cache.Get(key)
-	if found {
-		return o.([]byte)
+func (p *ReverseProxy) Get(key string) ([]byte, bool) {
+
+	switch p.proxyConfig.CacheConfig.Type {
+	case cacheRedis:
+		b, err := getRedisClient().Get(key).Result()
+		if err == redis.Nil {
+			return nil, false
+		} else if err != nil {
+			panic(err)
+		}
+		return []byte(b), true
+	case cacheCCache:
+
+		item := ccacheCache.GetOrCreateSecondaryCache("default").Get(key)
+		if item != nil {
+			data := item.Value().([]byte)
+			if item.Expired() {
+				stats.Increment("cache", "expired")
+				ccacheCache.GetOrCreateSecondaryCache("default").Delete(key)
+			}
+			return data, true
+		}
+
+	default:
+		o, found := cache.Get(key)
+		if found {
+			return o.([]byte), found
+		}
 	}
-	return nil
 
-	//b, err := getRedisClient().Get(key).Result()
-	//if err == redis.Nil {
-	//	fmt.Println(key, " 不存在")
-	//	return nil
-	//} else if err != nil {
-	//	panic(err)
-	//} else {
-	//	//fmt.Println(key, ":", string(b))
-	//}
-	//return []byte(b)
-
-	//l.Lock()
-	//defer l.Unlock()
-	//return v[key]
+	return nil, false
 
 }
-func Set(key string, data []byte) {
 
-	cache.Set(key, data, 1) // set a value
+func (p *ReverseProxy) Set(key string, data []byte, ttl time.Duration) {
 
+	switch p.proxyConfig.CacheConfig.Type {
+	case cacheRedis:
+		err := getRedisClient().Set(key, data, ttl).Err()
+		if err != nil {
+			panic(err)
+		}
+		return
+	case cacheCCache:
+		ccacheCache.GetOrCreateSecondaryCache("default").Set(key, data, ttl)
+		return
+	default:
+		cache.SetWithTTL(key, data, 1, ttl)
+	}
 
-	//err := getRedisClient().Set(key, data, 100*time.Second).Err()
-	//if err != nil {
-	//	panic(err)
-	//}
-
-	//l.Lock()
-	//defer l.Unlock()
-	// v[key]=data
 }
+
+var colon = []byte(": ")
+var newLine = []byte("\n")
+
+func (p *ReverseProxy) Decode(data []byte, req *fasthttp.Request, res *fasthttp.Response) {
+	readerHeaderLengthBytes := make([]byte, 4)
+	reader := bytes.NewBuffer(data)
+	_, err := reader.Read(readerHeaderLengthBytes)
+	if err != nil {
+		panic(err)
+	}
+
+	readerHeaderLength := binary.LittleEndian.Uint32(readerHeaderLengthBytes)
+	readerHeader := make([]byte, readerHeaderLength)
+	_, err = reader.Read(readerHeader)
+	if err != nil {
+		panic(err)
+	}
+
+	line := bytes.Split(readerHeader, newLine)
+	for _, l := range line {
+		kv := bytes.Split(l, colon)
+		if len(kv) == 2 {
+			res.Header.SetBytesKV(kv[0], kv[1])
+		}
+	}
+
+	readerBodyLengthBytes := make([]byte, 4)
+	_, err = reader.Read(readerBodyLengthBytes)
+	if err != nil {
+		panic(err)
+	}
+
+	readerBodyLength := binary.LittleEndian.Uint32(readerBodyLengthBytes)
+	readerBody := make([]byte, readerBodyLength)
+	_, err = reader.Read(readerBody)
+	if err != nil {
+		panic(err)
+	}
+
+	res.SetBodyRaw(readerBody)
+	res.SetStatusCode(fasthttp.StatusOK)
+}
+
+func (p *ReverseProxy) Encode(req *fasthttp.Request, res *fasthttp.Response) []byte {
+
+	buffer := bytes.Buffer{}
+	res.Header.VisitAll(func(key, value []byte) {
+		buffer.Write(key)
+		buffer.Write(colon)
+		buffer.Write(value)
+		buffer.Write(newLine)
+	})
+
+	header := buffer.Bytes()
+	body := res.Body()
+
+	data := bytes.Buffer{}
+
+	headerLength := make([]byte, 4)
+	binary.LittleEndian.PutUint32(headerLength, uint32(len(header)))
+
+	bodyLength := make([]byte, 4)
+	binary.LittleEndian.PutUint32(bodyLength, uint32(len(body)))
+
+	//header length
+	data.Write(headerLength)
+	data.Write(header)
+
+	//body
+	data.Write(bodyLength)
+	data.Write(body)
+
+	return data.Bytes()
+}
+
 
 // ServeHTTP ReverseProxy to serve
 // ref to: https://golang.org/src/net/http/httputil/reverseproxy.go#L169
 func (p *ReverseProxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
+
 	req := &ctx.Request
 	res := &ctx.Response
-
 	res.Reset()
 
+	//Phase: eBPF based IP filter
+
+	//Phase: XDP based traffic control, forward 1%-100% to another node, can be used for warming up or a/b testing
+
+	//Phase: Handle Parameters, remove customized parameters and setup context
+
+	//Phase: Requests Deny
 	//TODO 根据请求IP和头信息,执行请求拒绝, 基于后台设置的黑白名单,执行准入, 只允许特定 IP Agent 访问 Gateway 访问
 
-	//TODO 慢查询,非法查询 主动检测和拒绝, 走 cache
+	//Phase: Deny Requests By Custom Rules, filter bad queries
+	//TODO 慢查询,非法查询 主动检测和拒绝
 
+	//Phase: Throttle Requests
+
+	//Phase: Requests Decision
+		//Phase: DAG based Process
+		//自动学习请求网站来生成 FST 路由信息, 基于 FST 数来快速路由
+
+		//Phase: Handle Write Requests
+		//Phase: Async Persist CUD
+
+		//Phase: Cache Process
+		//TODO, no_cache -> skip cache and del query_args
+
+		//Phase: Request Rewrite, reset @timestamp precision for Kibana
+
+	//Phase: Recording
 	//TODO 记录所有请求,采样记录,按条件记录
 
-	//自动学习请求网站来生成 FST 路由信息, 基于 FST 数来快速路由
+	//TODO 实时统计前后端 QPS, 出拓扑监控图
+	//TODO 后台可以上传替换和编辑文件内容到缓存库里面, 直接返回自定义内容,如: favicon.ico, 可用于常用请求的提前预热,按 RequestURI 进行选择, 而不是完整 Hash
 
-	// prepare request(replace headers and some URL host)
-	if ip, _, err := net.SplitHostPort(ctx.RemoteAddr().String()); err == nil {
-		if global.Env().IsDebug {
-			log.Trace("requesting from:", ctx.RemoteAddr(), ",id:", ctx.ID(), " , method:", string(ctx.Method()), ", TLS:", ctx.IsTLS())
-		}
-		req.Header.Add("X-Forwarded-For", ip)
-	}
-
-	// to save all response header
-	// resHeaders := make(map[string]string)
-	// res.Header.VisitAll(func(k, v []byte) {
-	// 	key := string(k)
-	// 	value := string(v)
-	// 	if val, ok := resHeaders[key]; ok {
-	// 		resHeaders[key] = val + "," + value
-	// 	}
-	// 	resHeaders[key] = value
-	// })
+	//if ip, _, err := net.SplitHostPort(ctx.RemoteAddr().String()); err == nil {
+	//	if global.Env().IsDebug {
+	//		log.Trace("requesting from:", ctx.RemoteAddr(), ",id:", ctx.ID(), " , method:", string(ctx.Method()), ", TLS:", ctx.IsTLS())
+	//	}
+	//	req.Header.Add("X-Forwarded-For", ip)
+	//}
 
 	////routing by domain
 	//{
@@ -269,34 +392,19 @@ func (p *ReverseProxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	//	}
 	//}
 
-	//使用算法来获取合适的 client
-	pc := p.getClient()
 
-	// assign the host to support virtual hosting, aka shared web hosting (one IP, multiple domains)
-	req.SetHost(pc.Addr)
 
 	cleanHopHeaders(req)
-
-	// Check that the server actually sent compressed data
-	//var reader io.ReadCloser
-	//var err error
-	var useGzip bool
-	if req.Header.HasAcceptEncoding("gzip") {
-		useGzip = true
-		//fmt.Println("use gzip")
-	}
 
 	method := string(req.Header.Method())
 	url := string(req.RequestURI())
 	args := req.URI().QueryArgs()
 
-	//if global.Env().IsDebug {
+	if global.Env().IsDebug {
 		fmt.Println(method, ",", url, ",", args)
-	//}
+	}
 
-	//fmt.Println(req.PostArgs()) //curl -XPOST http://localhost:8000/_search -d'a=b'
-
-	stats.Increment("requests", strings.ToLower(strings.TrimSpace(method)))
+	stats.Increment("request", strings.ToLower(strings.TrimSpace(method)))
 
 	cacheable := false
 
@@ -304,195 +412,201 @@ func (p *ReverseProxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		cacheable = true
 	}
 
+	//check special path
 	switch {
 	case url == "/favicon.ico":
 		ctx.Response.SetStatusCode(http.StatusNotFound)
 		return
-	case util.SuffixStr(url, "/_search"):
+	case util.ContainStr(url, "/_search"):
+		//if util.ContainStr(url, "*") {
+		//	//fmt.Println("hit index pattern")
+		//	//GET _cat/indices/filebeat-*?s=index:desc
+		//}
+		cacheable = true
+		break
+	case util.ContainsAnyInArray(url, []string{"_mget", "/_security/user/_has_privileges", ".kibana_task_manager/_update_by_query", "/.kibana/_update/search-telemetry", "/.kibana/_update/ui-metric"}):
+		//TODO get TTL config, various by request, throttle request from various clients, but doing same work
+		cacheable = true
+		break
+	case util.ContainStr(url, "_async_search"):
 
-		//fmt.Println("hit search,", url, ",", string(req.Body()))
+		if method == fasthttp.MethodPost {
+			//request normalization
+			//timestamp precision processing, scale time from million seconds to seconds, for cache reuse, for search optimization purpose
+			//{"range":{"@timestamp":{"gte":"2019-09-26T08:21:12.152Z","lte":"2020-09-26T08:21:12.152Z","format":"strict_date_optional_time"}
+			//==>
+			//{"range":{"@timestamp":{"gte":"2019-09-26T08:21:00.000Z","lte":"2020-09-26T08:21:00.000Z","format":"strict_date_optional_time"}
+			body := req.Body()
+			log.Debug("timestamp precision updaing,", string(body))
 
-		if util.ContainStr(url, "*") {
-			fmt.Println("hit index pattern")
-			//GET _cat/indices/filebeat-*?s=index:desc
+			ok := util.ProcessJsonData(&body, []byte("@timestamp"), []byte("strict_date_optional_time"), []byte("range"), true, func(start, end int) {
+				startProcess := false
+				precisionLimit := 4 //0-9: 时分秒微妙 00:00:00:000
+				precisionOffset := 0
+				for i, v := range body[start:end] {
+					if v == 84 {
+						startProcess = true
+						precisionOffset = 0
+						continue
+					}
+					if startProcess && v > 47 && v < 58 {
+						precisionOffset++
+						if precisionOffset <= precisionLimit {
+							continue
+						} else if precisionOffset > 9 {
+							startProcess = false
+							continue
+						}
+						body[start+i] = 48
+					}
+
+				}
+			})
+			if ok {
+				req.SetBody(body)
+				log.Trace("timestamp precision updated,", string(body))
+			}
+
+			//{"size":0,"query":{"bool":{"must":[{"range":{"@timestamp":{"gte":"2019-09-26T15:16:59.127Z","lte":"2020-09-26T15:16:59.127Z","format":"strict_date_optional_time"}}}],"filter":[{"match_all":{}}],"should":[],"must_not":[]}},"aggs":{"61ca57f1-469d-11e7-af02-69e470af7417":{"terms":{"field":"log.file.path","order":{"_count":"desc"}},"aggs":{"timeseries":{"date_histogram":{"field":"@timestamp","min_doc_count":0,"time_zone":"Asia/Shanghai","extended_bounds":{"min":1569511019127,"max":1601133419127},"fixed_interval":"86400s"},"aggs":{"61ca57f2-469d-11e7-af02-69e470af7417":{"bucket_script":{"buckets_path":{"count":"_count"},"script":{"source":"count * 1","lang":"expression"},"gap_policy":"skip"}}}}},"meta":{"timeField":"@timestamp","intervalString":"86400s","bucketSize":86400,"seriesId":"61ca57f1-469d-11e7-af02-69e470af7417"}}},"timeout":"30000ms"}
 
 		}
 		cacheable = true
-		//fmt.Println("hit search")
 		break
 	}
 
-	if util.ContainsAnyInArray(url, byPassGet) {
+	//check bypass patterns
+	if util.ContainsAnyInArray(url, p.proxyConfig.PassthroughPatterns) {
 		if global.Env().IsDebug {
 			log.Trace("url hit bypass pattern, will not be cached, ", url)
 		}
 		cacheable = false
 	}
 
+	if args.Has("no_cache"){
+		cacheable=false
+		req.URI().QueryArgs().Del("no_cache")
+	}
+
 	//TODO optimize scroll API, should always point to same IP, prefer to route to where index/shard located
 
-	if cacheable && proxyConfig.CacheConfig.Enabled {
+	if cacheable && p.proxyConfig.CacheConfig.Enabled {
 
 		//LRU 缓存可以选择开启
 		//5s 内,如果相同的 hash 出现过 2 次,则缓存起来第 3 次, 有效期 10s
 		//hash->count, hash->content
 
 		hash := p.getHash(req)
-		//hash_type := hash+".type"
+		item, found := p.Get(hash)
 
-		//item := proxyCache.Get(hash)
-		item := Get(hash)
-		//if global.Env().IsDebug {
-			fmt.Println("hash,", hash,len(item))
-		//}
-
-		if item == nil {
-			//handle
-			if global.Env().IsDebug {
-				log.Trace("cache miss, ", hash)
-			}
-
-			stats.Increment("cache", "miss")
-
-			//always gzip between es and gateway
-			if useGzip {
-				req.Header.Set("Accept-Encoding", "gzip")
-			}
-
-			if err := pc.Do(req, res); err != nil {
-				log.Errorf("failed to proxy request: %v\n", err)
-				res.SetStatusCode(http.StatusInternalServerError)
-				res.SwapBody([]byte(err.Error()))
-				return
-			}
-
-			body := res.Body()
-
-			//cache 200 only
-			if res.StatusCode() == http.StatusOK {
-
-				//var o = map[string]interface{}{}
-
-				//err := util.FromJson(string(res.BodyInflate()), &o)
-				//if err != nil {
-				//	fmt.Println("set cache json error,",string(body))
-				//	panic(err)
-				//}
-				//proxyCache.Set(hash, body, proxyConfig.CacheConfig.GetTTLDuration())
-				contentType := res.Header.ContentType()
-				if global.Env().IsDebug {
-					fmt.Println("resp content type:", string(contentType))
-				}
-				Set(hash, body)
-
-				//proxyCache.Set(hash_type,contentType , proxyConfig.CacheConfig.GetTTLDuration())
-			} else {
-				if global.Env().IsDebug {
-					fmt.Println(res.StatusCode())
-					fmt.Println(string(req.RequestURI()))
-					//fmt.Println(string(res.Body()))
-				}
-			}
-			if global.Env().IsDebug {
-				fmt.Println("cache missing")
-			}
-			return
-
-		} else if len(item) > 0 {
-			//content := item
-			//fmt.Println("content:",item,",",len(item))
-			////content := item.Value().([]byte)
-			//if global.Env().IsDebug {
-			//	log.Trace("hit cache, ", hash, ", expired: ", item.Expired(), ", ttl:", item.TTL())
-			//}
-
+		if found {
 			stats.Increment("cache", "hit")
 
-			//if TTL <1s, fetch in background
-			//go func() {
-			//trigger cached refresh in tasks
-			//}()
-
-			//res.Header.Set("TTL", item.TTL().String())
+			p.Decode(item, req, res)
 
 			res.Header.DisableNormalizing()
-
-			//contentType := proxyCache.Get(hash_type)
-			//if contentType!=nil{
-			//	fmt.Println("hit:",string(contentType.Value().([]byte)))
-			//	res.Header.SetBytesV("Content-Type",contentType.Value().([]byte))
-			//}else{
-			if util.PrefixStr(url, "/_cat") {
-				res.Header.SetBytesV("content-type", []byte("text/plain"))
-			} else {
-				res.Header.SetBytesV("content-type", []byte("application/json"))
-			}
-
-			if useGzip {
-				fmt.Println("use gzip")
-				//TODO, if request not asking gzip, ungzip first befrore return
-				res.Header.Set("content-encoding", "gzip")
-			}
-
-			var o = map[string]interface{}{}
 			if global.Env().IsDebug {
-				err := util.FromJson(string(item), &o)
-				if err != nil {
-					fmt.Println("json error", string(req.Header.Method()), string(res.Header.ContentType()), res.StatusCode(), string(req.RequestURI()), string(item))
-
-					panic(err)
-				}
+				log.Trace("cache hit:", hash, ",", string(req.Header.Method()), ",", string(req.RequestURI()))
 			}
-			//fmt.Println(string(item))
-			//output cached response
-			res.SetStatusCode(http.StatusOK)
-			res.Header.SetContentLength(len(item))
 
-			var body []byte
-			body = append(body, item...) //need to copy it into a memory before exit the Handle function
-			//ctx.SetBody(body)
-
-			res.ResetBody()
-			res.SetBodyRaw(body)
-
-
-			fmt.Println("cache req:",req.Header.String())
-			fmt.Println("cache res:",res.Header.String())
-			//fmt.Println(string(item))
-
+			return
+		} else {
+			stats.Increment("cache", "miss")
 
 			if global.Env().IsDebug {
-				fmt.Println("hit cache,", hash, ",", string(req.RequestURI()), ",", len(item))
+				log.Trace("cache miss:", hash, ",", string(req.Header.Method()), ",", string(req.RequestURI()), ",", string(req.Body()))
 			}
-			//async delete
-			//if item.Expired() {
-			//	if global.Env().IsDebug {
-			//		log.Trace("cache expired, release now, ", hash)
-			//	}
-			//	//item.Release()
-			//	proxyCache.Delete(hash)
-			//	//proxyCache.Delete(hash_type)
-			//	stats.Increment("cache", "hit_expired")
+
+			p.delegateRequest(req,res)
+
+			////使用算法来获取合适的 client
+			//pc := p.getClient()
+			//// assign the host to support virtual hosting, aka shared web hosting (one IP, multiple domains)
+			//req.SetHost(pc.Addr)
+			//req.Header.Set("Host", pc.Addr)
+			//if err := pc.Do(req, res); err != nil {
+			//	log.Errorf("failed to proxy request: %v\n", err)
+			//	res.SetStatusCode(http.StatusInternalServerError)
+			//	res.SetBodyRaw([]byte(err.Error()))
+			//	return
 			//}
+
+			//cache 200 only TODO allow configure to support: 404/200/201/500, also set TTL
+			if res.StatusCode() == http.StatusOK {
+				body := res.Body()
+				var id string
+				if strings.Contains(url, "/_async_search") {
+
+					ok, b := util.ExtractFieldFromJson(&body, []byte("\"id\""), []byte("\"is_partial\""), []byte("id\""))
+					if ok {
+
+						b = bytes.Replace(b, []byte(":"), nil, -1)
+						b = bytes.Replace(b, []byte("\""), nil, -1)
+						b = bytes.Replace(b, []byte(","), nil, -1)
+						b = bytes.TrimSpace(b)
+
+						id = string(b)
+					}
+
+					//store cache_token
+					if method == fasthttp.MethodPost {
+						//TODO set the cache TTL, 30minutes
+						//if response contains:
+						//"id" : "FktyZXA2bklVU2VDeWIwVWdkVTlMcGcdMWpuRkM3SDZSWWVBSTdKT1hkRDNkdzoyNDY3MjY=",
+						//then it is a async task, store ID to cache, and if this task finished, associate that result to this same request
+						if ok {
+							if global.Env().IsDebug {
+								log.Trace("async hash: set async hash cache", string(id), "=>", string(hash))
+							}
+							p.Set(id, []byte(hash), p.proxyConfig.CacheConfig.GetAsyncSearchTTLDuration())
+						}
+
+					} else if method == fasthttp.MethodGet {
+
+						//only cache finished async search results
+						if util.BytesSearchValue(body, []byte("is_running"), []byte(","), []byte("true")) {
+							if global.Env().IsDebug {
+								log.Trace("async search is still running")
+							}
+							return
+						} else {
+							//async search results finished, let's cache it
+							if global.Env().IsDebug {
+								log.Trace("async search results finished, let's cache it")
+							}
+
+							if ok {
+								item, found := p.Get(id)
+								if found {
+									if global.Env().IsDebug {
+										log.Trace("found request hash, set cache:", id, ": ", string(item))
+									}
+									cacheBytes := p.Encode(req, res)
+									p.Set(string(item), cacheBytes, p.proxyConfig.CacheConfig.GetChaosTTLDuration())
+								} else {
+									if global.Env().IsDebug {
+										log.Trace("async search request hash was lost:", id)
+									}
+								}
+							}
+
+						}
+					}
+
+				} else {
+					cacheBytes := p.Encode(req, res)
+					p.Set(hash, cacheBytes, p.proxyConfig.CacheConfig.GetChaosTTLDuration())
+				}
+
+			}
 
 			return
 		}
-
 	}
 
 	switch method {
 	case fasthttp.MethodGet:
 
-		if global.Env().IsDebug {
-			log.Trace("hit get method")
-		}
-
-		//handler.handleRead(w, req, body)
-
 		p.delegateRequest(req, res)
-		if global.Env().IsDebug {
-			fmt.Println("hit last get")
-		}
 
 		break
 	case fasthttp.MethodPost:
@@ -501,25 +615,17 @@ func (p *ReverseProxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		}
 
 		p.delegateRequest(req, res)
-
 		break
 	case fasthttp.MethodPut:
-		//可能是写
-		//排除部分读和查询请求(_search)
-		//handler.handleWrite(w, req, body)
-
 		//处理索引请求
 		if p.HandleIndex(ctx) {
 			break
 		}
 
 		p.delegateRequest(req, res)
-
 		break
 	case fasthttp.MethodDelete:
-		//handler.handleWrite(w, req, body)
 		p.delegateRequest(req, res)
-
 		break
 	default:
 		if global.Env().IsDebug {
@@ -527,61 +633,37 @@ func (p *ReverseProxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		}
 		p.delegateRequest(req, res)
 	}
-
-	//logger.Debugf("response headers = %s", res.Header.String())
-	// write response headers
-	//for _, h := range hopHeaders {
-	//	res.Header.Del(h)
-	//}
-
-	// logger.Debugf("response headers = %s", resHeaders)
-	// for k, v := range resHeaders {
-	// 	res.Header.Set(k, v)
-	// }
 }
 
 func (p *ReverseProxy) delegateRequest(req *fasthttp.Request, res *fasthttp.Response) {
-	if global.Env().IsDebug {
-		fmt.Println("delegrate request,", string(req.Header.Method()), string(req.RequestURI()), ",", string(req.Body()))
-	}
-	if global.Env().IsDebug {
-		log.Trace("delegate request by default")
-	}
+
+	stats.Increment("cache", "strike")
 
 	//使用算法来获取合适的 client
 	pc := p.getClient()
 
-	// assign the host to support virtual hosting, aka shared web hosting (one IP, multiple domains)
-	req.SetHost(pc.Addr)
-
 	cleanHopHeaders(req)
 
+	// assign the host to support virtual hosting, aka shared web hosting (one IP, multiple domains)
+	req.SetHost(pc.Addr)
+	req.Header.Set("Host", pc.Addr)
+
 	if err := pc.Do(req, res); err != nil {
-		log.Errorf("failed to proxy request: %v\n", err)
+		log.Errorf("failed to proxy request: %v\n", err, string(res.Body()))
 		res.SetStatusCode(http.StatusInternalServerError)
-		res.SwapBody([]byte(err.Error()))
+		res.SetBodyRaw([]byte(err.Error()))
 		return
 	}
 
-	//verify content type
-	if global.Env().IsDebug {
-		if string(req.Header.Method()) != fasthttp.MethodHead {
-			var o = map[string]interface{}{}
+	//if global.Env().IsDebug {
+	//	//log.Trace("delegate request: ", string(req.Header.Method()), ",", string(req.Header.RequestURI()), ",", string(req.Body()))
+	//	//fmt.Println(req.Header.String())
+	//	//fmt.Println(string(req.Body()))
+	//	//fmt.Println(res.StatusCode())
+	//	//fmt.Println(string(res.Body()))
+	//}
 
-			err := util.FromJson(string(res.Body()), &o)
-			if err != nil {
-				fmt.Println("json error", string(req.Header.Method()), string(res.Header.ContentType()), res.StatusCode(), string(req.RequestURI()), string(res.Body()))
-				panic(err)
-			}
-		}
-	}
-
-	fmt.Println("cold req:",req.Header.String())
-	fmt.Println("cold res:",res.Header.String())
-
-
-	res.SetStatusCode(http.StatusOK)
-	res.SwapBody(res.Body())
+	//res.SetBodyRaw(res.Body())
 }
 
 // SetClient ...
@@ -608,34 +690,13 @@ func (p *ReverseProxy) Close() {
 	p = nil
 }
 
-//
-//func copyResponse(src *fasthttp.Response, dst *fasthttp.Response) {
-//	src.CopyTo(dst)
-//	logger.Debugf("response header=%v", src.Header)
-//}
-//
-//func copyRequest(src *fasthttp.Request, dst *fasthttp.Request) {
-//	src.CopyTo(dst)
-//}
-//
-//func cloneResponse(src *fasthttp.Response) *fasthttp.Response {
-//	dst := new(fasthttp.Response)
-//	copyResponse(src, dst)
-//	return dst
-//}
-//
-//func cloneRequest(src *fasthttp.Request) *fasthttp.Request {
-//	dst := new(fasthttp.Request)
-//	copyRequest(src, dst)
-//	return dst
-//}
-
 // Hop-by-hop headers. These are removed when sent to the backend.
 // As of RFC 7230, hop-by-hop headers are required to appear in the
 // Connection header field. These are the headers defined by the
 // obsoleted RFC 2616 (section 13.5.1) and are used for backward
 // compatibility.
 var hopHeaders = []string{
+	"Host",                // Host
 	"Connection",          // Connection
 	"Proxy-Connection",    // non-standard but still sent by libcurl and rejected by e.g. google
 	"Keep-Alive",          // Keep-Alive
@@ -645,5 +706,4 @@ var hopHeaders = []string{
 	"Trailer",             // not Trailers per URL above; https://www.rfc-editor.org/errata_search.php?eid=4522
 	"Transfer-Encoding",   // Transfer-Encoding
 	"Upgrade",             // Upgrade
-	//"Accept-Encoding",
 }
