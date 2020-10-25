@@ -48,3 +48,5 @@ bin/
 vendor
 .git
 trash
+*.so
+.public

@@ -19,6 +19,8 @@ type UpstreamConfig struct {
 	Readable      bool   `config:"readable"`
 	Timeout       string `config:"timeout"`
 	Elasticsearch string `config:"elasticsearch"`
+	DiscoveryNodes bool `config:"discovery_nodes"`
+
 }
 
 func (v *UpstreamConfig) SafeGetQueueName() string {
@@ -30,14 +32,17 @@ func (v *UpstreamConfig) SafeGetQueueName() string {
 }
 
 type ProxyConfig struct {
-	Upstream            []UpstreamConfig     `config:"upstream"`
-	Balancer            string               `config:"balancer"`
-	PassthroughPatterns []string             `config:"pass_through"`
-	Enabled             bool                 `config:"enabled"`
-	AsyncWrite          bool                 `config:"async_write"`
-	TLSConfig           config.TLSConfig     `config:"tls"`
-	NetworkConfig       config.NetworkConfig `config:"network"`
-	CacheConfig         CacheConfig          `config:"cache"`
+	Upstream            []UpstreamConfig `config:"upstream"`
+	Balancer            string           `config:"balancer"`
+	PassthroughPatterns []string         `config:"pass_through"`
+	Enabled             bool             `config:"enabled"`
+
+	TracingEnabled bool                 `config:"tracing_enabled"`
+	MaxConcurrency int                  `config:"max_concurrency"`
+	AsyncWrite     bool                 `config:"async_write"`
+	TLSConfig      config.TLSConfig     `config:"tls"`
+	NetworkConfig  config.NetworkConfig `config:"network"`
+	CacheConfig    CacheConfig          `config:"cache"`
 }
 
 type CacheConfig struct {
@@ -51,9 +56,9 @@ type CacheConfig struct {
 }
 
 func (config CacheConfig) GetChaosTTLDuration() time.Duration {
-	baseTTL:=config.GetTTLDuration().Milliseconds()
+	baseTTL := config.GetTTLDuration().Milliseconds()
 	randomTTL := rand.Int63n(baseTTL / 5)
-	return (time.Duration(baseTTL+randomTTL))*time.Millisecond
+	return (time.Duration(baseTTL + randomTTL)) * time.Millisecond
 }
 
 func (config CacheConfig) GetTTLDuration() time.Duration {
@@ -67,8 +72,8 @@ func (config CacheConfig) GetTTLDuration() time.Duration {
 			dur, _ = time.ParseDuration("10s")
 		}
 		config.generalTTLDuration = dur
-	}else{
-		config.generalTTLDuration =time.Second*10
+	} else {
+		config.generalTTLDuration = time.Second * 10
 	}
 	return config.generalTTLDuration
 }
@@ -84,8 +89,8 @@ func (config CacheConfig) GetAsyncSearchTTLDuration() time.Duration {
 			dur, _ = time.ParseDuration("30m")
 		}
 		config.asyncSearchTTLDuration = dur
-	}else{
-		config.asyncSearchTTLDuration =time.Minute*30
+	} else {
+		config.asyncSearchTTLDuration = time.Minute * 30
 	}
 	return config.asyncSearchTTLDuration
 }

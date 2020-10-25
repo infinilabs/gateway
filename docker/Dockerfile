@@ -8,12 +8,12 @@ RUN  apk update \
 RUN mkdir -p /go/src/infini.sh
 
 WORKDIR /go/src/infini.sh/
-COPY ./ /go/src/infini.sh/proxy
+COPY ./ /go/src/infini.sh/gateway
 
-RUN cd proxy && make build
+RUN cd gateway && make build
 
 FROM alpine:latest
 WORKDIR /
-COPY  --from=0 /go/src/infini.sh/proxy/bin/proxy /
+COPY  --from=0 /go/src/infini.sh/gateway/bin/gateway /
 EXPOSE 2900
-CMD ["/proxy"]
+CMD ["/gateway"]

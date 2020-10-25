@@ -1,5 +1,11 @@
 
-PROXY, a lightweight elasticsearch proxy written in golang.
+INFINIBYTE, a lightweight data pipeline written in golang.
+
+# Route
+
+# Filter
+
+# Output
 
 # Features
 - Auto handling upstream failure while indexing, aka nonstop indexing
@@ -126,99 +132,43 @@ ___  ____ ____ _  _ _   _
 
 Have fun!
 
-# Options
+# Benchmark Test
 
-- Additional request headers
-  1. `UPSTREAM`, manually choose which upstream are going to query against(read/search requests)
-
-    ```
-    ➜ curl -v -XGET -H'UPSTREAM:primary'  https://localhost:2900/index/_doc/1
-    Note: Unnecessary use of -X or --request, GET is already inferred.
-    *   Trying 127.0.0.1...
-    * TCP_NODELAY set
-    * Connected to localhost (127.0.0.1) port 2900 (#0)
-    > GET /index/_doc/1 HTTP/1.1
-    > Host: localhost:2900
-    > User-Agent: curl/7.54.0
-    > Accept: */*
-    > UPSTREAM:primary
-    >
-    < HTTP/1.1 200 OK
-    < Upstream: primary
-    < Date: Sat, 07 Apr 2018 13:00:30 GMT
-    < Content-Length: 86
-    < Content-Type: text/plain; charset=utf-8
-    <
-    * Connection #0 to host localhost left intact
-    {"_index":"index","_type":"_doc","_id":"1","_version":5,"found":true,"_source":{"a":6}}%
-    ```
-
-# Floating IP
-In order to use floating IP, configure `floating_ip` under plugin section, set `ip` to a unoccupied ip which will be used to share across proxies, set `interface` to which network device will be used to bind floating ip.
+Elasticsearch, Gateway, Load generator deployed on a single host with spec: Intel Core i5 3 GHz 6-Core, 12 GB 2400 MHz DDR4 
 
 ```
-plugins:
-- name: floating_ip
-  enabled: true
-  ip: 192.168.1.222
-  netmask: 255.255.255.0
-  interface: en0
-  priority: 100
-```
-Note: Floating IP feature may not support on docker/container platform, and should not deploy multi proxy instances on single host.
-
-# API
-
-- Status
-```
-curl -k -XGET https://localhost:2900/_proxy/stats
-```
-```
-curl -k -XGET https://localhost:2900/_proxy/queue/stats
-```
-- Resume Queue
-```
-curl -k -XPOST https://localhost:2900/_proxy/queue/resume -d'{"queue":"primary"}'
-```
-- Get Error requests
-```
-curl -k -XGET https://localhost:2900/_proxy/requests/?from=0&size=20&upstream=primary&status=1
-```
-- Replay Error log
-```
-curl -k -XPOST https://localhost:2900/_proxy/request/redo -d'{"ids":["bb6t4cqaukihf1ag10q0","bb6t4daaukihf1ag10r0"]}'
-```
-
-# Smoking Benchmark
-
-MacBook Pro (13-inch, 2017, Four Thunderbolt 3 Ports), 3.5 GHz Intel Core i7, 16 GB 2133 MHz LPDDR3
-
-- Https 2900, query
-```
-~$ wrk -c 1000 -d 3m -t 10 -H --latency  https://localhost:2900/index/_search?q=customer:A
-Running 3m test @ https://localhost:2900/index/_search?q=customer:A
-  10 threads and 1000 connections
-  Thread Stats   Avg      Stdev     Max   +/- Stdev
-    Latency    19.13ms    9.07ms 247.10ms   75.79%
-    Req/Sec     2.63k   699.58    10.55k    61.93%
-  4707681 requests in 3.00m, 1.89GB read
-  Socket errors: connect 417, read 290, write 0, timeout 0
-Requests/sec:  26140.53
-Transfer/sec:     10.72MB
-```
-
-- Https 2900, query with cache
-```
-~$ wrk -c 1000 -d 3m -t 10 -H --latency  https://localhost:2900/index/_search?q=customer:A
-Running 3m test @ https://localhost:2900/index/_search?q=customer:A
-  10 threads and 1000 connections
-  Thread Stats   Avg      Stdev     Max   +/- Stdev
-    Latency     7.59ms    8.47ms 338.09ms   87.25%
-    Req/Sec     6.88k     3.08k   38.47k    78.65%
-  12275137 requests in 3.00m, 4.90GB read
-  Socket errors: connect 387, read 676, write 0, timeout 0
-Requests/sec:  68158.61
-Transfer/sec:     27.84MB
+➜  http-loader git:(master) ✗ ./http-loader -c 100 -d 10 https://user:pass@localhost:8000/
+1644553 requests in 9.991120172s, 1.01GB read
+Requests/sec:		164601.46
+Transfer/sec:		103.13MB
+Avg Req Time:		607.528µs
+Fastest Request:	29.71µs
+Slowest Request:	76.16518ms
+Number of Errors:	0
+➜  http-loader git:(master) ✗ ./http-loader -c 100 -d 10 https://user:pass@localhost:8000/_search
+1079734 requests in 9.993402481s, 4.45GB read
+Requests/sec:		108044.68
+Transfer/sec:		456.46MB
+Avg Req Time:		925.543µs
+Fastest Request:	37.548µs
+Slowest Request:	51.972866ms
+Number of Errors:	0
+➜  http-loader git:(master) ✗ ./http-loader -c 100 -d 10 https://user:pass@localhost:8000/_search\?q\=message:ERROR
+108297 requests in 10.183267733s, 1.12GB read
+Requests/sec:		10634.80
+Transfer/sec:		112.94MB
+Avg Req Time:		9.403093ms
+Fastest Request:	37.446µs
+Slowest Request:	10.285918012s
+Number of Errors:	0
+➜  http-loader git:(master) ✗ ./http-loader -c 100 -d 10 https://user:pass@localhost:8000/_search\?q\=message:ERROR
+968915 requests in 9.972749603s, 10.05GB read
+Requests/sec:		97156.25
+Transfer/sec:		1.01GB
+Avg Req Time:		1.029269ms
+Fastest Request:	38.208µs
+Slowest Request:	230.891481ms
+Number of Errors:	0
 ```
 
 # Build
@@ -241,12 +191,7 @@ The docker image size is only 8.7 MB.
 
 Pull it from official docker hub
 ```
-docker pull medcl/elasticsearch-proxy:latest
-```
-
-Or build your own image locally
-```
-docker build -t medcl/elasticsearch-proxy:latest -f docker/Dockerfile .
+docker pull medcl/infini-gateway:latest
 ```
 
 Customize your `proxy.yml`, place somewhere, eg: `/tmp/proxy.yml`
@@ -265,9 +210,9 @@ EOF
 
 Rock with your proxy!
 ```
-docker run --publish 2900:2900  -v /tmp/proxy.yml:/proxy.yml medcl/elasticsearch-proxy:latest
+docker run --publish 2900:2900  -v /tmp/gateway.yml:/gateway.yml medcl/infini-gateway:latest
 ```
 
 License
 =======
-Released under the [Apache License, Version 2.0](https://infini.sh/LICENSE).
+Released under the [AGPL](https://infini.sh/LICENSE).

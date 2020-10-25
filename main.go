@@ -17,9 +17,12 @@ limitations under the License.
 package main
 
 import (
+	"errors"
 	_ "expvar"
 	"infini.sh/framework"
+	"infini.sh/framework/core/env"
 	"infini.sh/framework/core/module"
+	pipe "infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/modules/api"
 	"infini.sh/framework/modules/boltdb"
@@ -30,9 +33,14 @@ import (
 	"infini.sh/framework/modules/ui"
 	stats "infini.sh/framework/plugins/stats_statsd"
 	"infini.sh/gateway/config"
-	floating_ip2 "infini.sh/gateway/floating_ip"
-	proxy2 "infini.sh/gateway/proxy"
+	floating_ip2 "infini.sh/gateway/modules/floating_ip"
+	"infini.sh/gateway/modules/indexing"
+	proxy2 "infini.sh/gateway/modules/proxy"
+	"infini.sh/gateway/web"
 )
+
+var appConfig *config.AppConfig
+var appUI *web.UI
 
 func main() {
 
@@ -53,6 +61,24 @@ func main() {
 
 	app.Start(func() {
 
+		appConfig = &config.AppConfig{
+			UILocalPath:    ".public",
+			UIVFSEnabled:   true,
+			UILocalEnabled: true,
+		}
+
+		ok, err := env.ParseConfig("web", appConfig)
+		if err != nil {
+			panic(err)
+		}
+		if !ok {
+			panic(errors.New("config not exists"))
+		}
+
+		//load web UI files
+		appUI = &web.UI{Config: appConfig}
+		appUI.InitUI()
+
 		//load core modules first
 		module.RegisterSystemModule(elastic.ElasticModule{})
 		module.RegisterSystemModule(boltdb.StorageModule{})
@@ -62,8 +88,13 @@ func main() {
 		module.RegisterSystemModule(ui.UIModule{})
 		module.RegisterSystemModule(pipeline.PipeModule{})
 		module.RegisterUserPlugin(stats.StatsDModule{})
-		module.RegisterUserPlugin(proxy2.ProxyPlugin{})
+		module.RegisterUserPlugin(proxy2.ProxyModule{})
 		module.RegisterUserPlugin(floating_ip2.FloatingIPPlugin{})
+
+
+		//register pipeline joints
+		pipe.RegisterPipeJoint(indexing.JsonBulkIndexingJoint{})
+		pipe.RegisterPipeJoint(indexing.IndexJoint{})
 
 		//start each module, with enabled provider
 		module.Start()

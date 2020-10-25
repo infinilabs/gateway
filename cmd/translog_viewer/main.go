@@ -5,8 +5,8 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	xcap "infini.sh/gateway/captn"
-	"infini.sh/gateway/translog"
+	"infini.sh/gateway/lib/translog"
+	xcap "infini.sh/gateway/trash/captn"
 	"os"
 	capnp "zombiezen.com/go/capnproto2"
 )

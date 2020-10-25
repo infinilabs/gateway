@@ -1,16 +1,16 @@
 version: "3.5"
 
 services:
-  infini-elasticsearch-proxy:
+  infini-elasticsearch-gateway:
     build:
       context: .
       dockerfile: ./Dockerfile
 
     ports:
       - 2900:2900
-    container_name: "infini-elasticsearch-proxy"
+    container_name: "infini-elasticsearch-gateway"
     volumes:
-      - ../:/go/src/infini.sh/proxy
+      - ../:/go/src/infini.sh/gateway
 
 volumes:
   dist:
