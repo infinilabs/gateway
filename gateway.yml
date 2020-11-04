@@ -4,9 +4,11 @@ path.logs: log
 
 web:
   enabled: true
-  ui_path: .public
-  ui_vfs: true
-  ui_local: true
+  ui:
+    enabled: true
+    path: .public
+    vfs: true
+    local: true
   network:
     binding: 127.0.0.1:2900
     skip_occupied_port: true
@@ -19,10 +21,58 @@ web:
 #  tls:
 #    enabled: false
 
+entry:
+  - name: es_gateway
+    enabled: true
+    async_write: false
+    tracing_enabled: true
+    max_concurrency: 5000
+    network:
+      binding: 0.0.0.0:8000
+      skip_occupied_port: true
+      reuse_port: true
+    tls:
+      enabled: false
+  - name: es_backup
+    enabled: true
+    async_write: false
+    tracing_enabled: true
+    max_concurrency: 5000
+    network:
+      binding: 0.0.0.0:8000
+      skip_occupied_port: true
+      reuse_port: true
+    tls:
+      enabled: false
+  - name: es_ingest_https
+    enabled: true
+    async_write: false
+    tracing_enabled: true
+    max_concurrency: 5000
+    network:
+      binding: 0.0.0.0:8000
+      skip_occupied_port: true
+      reuse_port: true
+    tls:
+      enabled: false
+  - name: es_search_https
+    enabled: true
+    async_write: false
+    tracing_enabled: true
+    max_concurrency: 5000
+    network:
+      binding: 0.0.0.0:8000
+      skip_occupied_port: true
+      reuse_port: true
+    tls:
+      enabled: false
+
+
 fiter:
   - name: request_logging
   - name: rate_limit
   - name: request_cache
+  - name: save_translog
 
 flow:
   - name: cache_first
@@ -57,17 +107,52 @@ elasticsearch:
     username: elastic
     password: pass
 
+output:
+  elasticsearch:
+    - name: primary
+      enabled: true
+      max_connection: 1000
+      mode: pass_through
+      rate_limit:
+        max_qps: 20000
+      timeout: 60s
+      elasticsearch: default
+      weight:
+        - host: 192.168.3.1:9200
+          weight: 10
+        - host: 192.168.3.2:9200
+          weight: 20
+      discovery:
+        enabled: true
+        node_roles:
+          - "coordinating"
+          - "ingest"
+          - "data"
+      balancer: weight
+  kafka:
+    - name: central_kafka
+      host: 192.168.3.100
+      port: 8031
+  disk_queue:
+    - name: request_logging
+      max_file_size: "1gb"
+      max_file_count: 10
+  translog:
+    - name: request_translog
+      max_file_size: "1gb"
+      max_file_count: 10
+
 proxy:
   enabled: true
-  async_write: false
-  tracing_enabled: true
-  max_concurrency: 5000
-  network:
-    binding: 0.0.0.0:8000
-    skip_occupied_port: true
-    reuse_port: true
-  tls:
-    enabled: false
+#  async_write: false
+#  tracing_enabled: true
+#  max_concurrency: 5000
+#  network:
+#    binding: 0.0.0.0:8000
+#    skip_occupied_port: true
+#    reuse_port: true
+#  tls:
+#    enabled: false
 
   cache:
     enabled: true
@@ -75,21 +160,22 @@ proxy:
     type: ccache
     ttl: 60s #can be adjusted by avg query latency, + random 20%
     max_cached_item: 5000
+
   balancer: weight
   pass_through: ["_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"]
-  upstream:
-    - name: primary
-      enabled: true
-      weight: 10
-      max_connection: 1000
-      mode: pass_through
-      rate_limit:
-        max_qps: 20000
-#      queue_name: primary
-#      max_queue_depth: -1
-      timeout: 60s
-      elasticsearch: default
-      discovery_nodes: true
+#  upstream:
+#    - name: primary
+#      enabled: true
+#      weight: 10
+#      max_connection: 1000
+#      mode: pass_through
+#      rate_limit:
+#        max_qps: 20000
+##      queue_name: primary
+##      max_queue_depth: -1
+#      timeout: 60s
+#      elasticsearch: default
+#      discovery_nodes: true
 
 statsd:
   enabled: true
@@ -122,12 +208,23 @@ modules:
   store_enabled: false
   orm_enabled: false
 
-- name: pipeline
-  enabled: true
-  runners:
-    - name: request_logging_index
-      enabled: true
-      max_go_routine: 3
-      threshold_in_ms: 0
-      timeout_in_ms: 5000
-      pipeline_id: request_logging_index
+#- name: pipeline
+#  enabled: true
+#  runners:
+#    - name: request_logging_index
+#      enabled: true
+#      max_go_routine: 3
+#      threshold_in_ms: 0
+#      timeout_in_ms: 5000
+#      pipeline_id: request_logging_index
+
+
+#services:
+#  enabled: true
+#  service:
+#    - name: request_logging_index
+#      enabled: true
+#      max_go_routine: 3
+#      threshold_in_ms: 0
+#      timeout_in_ms: 5000
+#      pipeline_id: request_logging_index

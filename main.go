@@ -26,16 +26,15 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/modules/api"
 	"infini.sh/framework/modules/boltdb"
-	"infini.sh/framework/modules/elastic"
 	"infini.sh/framework/modules/filter"
 	"infini.sh/framework/modules/pipeline"
 	"infini.sh/framework/modules/queue"
 	"infini.sh/framework/modules/ui"
 	stats "infini.sh/framework/plugins/stats_statsd"
 	"infini.sh/gateway/config"
-	floating_ip2 "infini.sh/gateway/modules/floating_ip"
-	"infini.sh/gateway/modules/indexing"
-	proxy2 "infini.sh/gateway/modules/proxy"
+	proxy2 "infini.sh/gateway/proxy"
+	floating_ip2 "infini.sh/gateway/service/floating_ip"
+	"infini.sh/gateway/service/indexing"
 	"infini.sh/gateway/web"
 )
 
@@ -52,7 +51,7 @@ func main() {
 
 	terminalFooter := ("Thanks for using GATEWAY, have a good day!")
 
-	app := framework.NewApp("gateway", "A light-weight, powerful and high-performance elasticsearch proxy.",
+	app := framework.NewApp("gateway", "A light-weight, powerful and high-performance elasticsearch gateway.",
 		util.TrimSpaces(config.Version), util.TrimSpaces(config.LastCommitLog), util.TrimSpaces(config.BuildDate), terminalHeader, terminalFooter)
 
 	app.Init(nil)
@@ -62,9 +61,7 @@ func main() {
 	app.Start(func() {
 
 		appConfig = &config.AppConfig{
-			UILocalPath:    ".public",
-			UIVFSEnabled:   true,
-			UILocalEnabled: true,
+			UI: config.UIConfig{LocalPath: ".public", LocalEnabled: true, VFSEnabled: true,Enabled: true},
 		}
 
 		ok, err := env.ParseConfig("web", appConfig)
@@ -80,13 +77,14 @@ func main() {
 		appUI.InitUI()
 
 		//load core modules first
-		module.RegisterSystemModule(elastic.ElasticModule{})
+		//module.RegisterSystemModule(elastic.ElasticModule{})
 		module.RegisterSystemModule(boltdb.StorageModule{})
 		module.RegisterSystemModule(filter.FilterModule{})
 		module.RegisterSystemModule(queue.DiskQueue{})
 		module.RegisterSystemModule(api.APIModule{})
 		module.RegisterSystemModule(ui.UIModule{})
 		module.RegisterSystemModule(pipeline.PipeModule{})
+
 		module.RegisterUserPlugin(stats.StatsDModule{})
 		module.RegisterUserPlugin(proxy2.ProxyModule{})
 		module.RegisterUserPlugin(floating_ip2.FloatingIPPlugin{})
@@ -94,7 +92,6 @@ func main() {
 
 		//register pipeline joints
 		pipe.RegisterPipeJoint(indexing.JsonBulkIndexingJoint{})
-		pipe.RegisterPipeJoint(indexing.IndexJoint{})
 
 		//start each module, with enabled provider
 		module.Start()

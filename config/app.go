@@ -1,8 +1,12 @@
 package config
+
+type UIConfig struct {
+	Enabled bool `config:"enabled"`
+	LocalPath    string `config:"path"`
+	LocalEnabled bool   `config:"local"`
+	VFSEnabled   bool   `config:"vfs"`
+}
+
 type AppConfig struct {
-	//IndexName     string `config:"index_name"`
-	//ElasticConfig string `config:"elastic_config"`
-	UILocalPath        string `config:"ui_path"`
-	UILocalEnabled      bool   `config:"ui_local"`
-	UIVFSEnabled      bool   `config:"ui_vfs"`
+	UI UIConfig `config:"ui"`
 }
