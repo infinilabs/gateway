@@ -33,39 +33,39 @@ entry:
       reuse_port: true
     tls:
       enabled: false
-  - name: es_backup
-    enabled: true
-    async_write: false
-    tracing_enabled: true
-    max_concurrency: 5000
-    network:
-      binding: 0.0.0.0:8000
-      skip_occupied_port: true
-      reuse_port: true
-    tls:
-      enabled: false
-  - name: es_ingest_https
-    enabled: true
-    async_write: false
-    tracing_enabled: true
-    max_concurrency: 5000
-    network:
-      binding: 0.0.0.0:8000
-      skip_occupied_port: true
-      reuse_port: true
-    tls:
-      enabled: false
-  - name: es_search_https
-    enabled: true
-    async_write: false
-    tracing_enabled: true
-    max_concurrency: 5000
-    network:
-      binding: 0.0.0.0:8000
-      skip_occupied_port: true
-      reuse_port: true
-    tls:
-      enabled: false
+#  - name: es_backup
+#    enabled: true
+#    async_write: false
+#    tracing_enabled: true
+#    max_concurrency: 5000
+#    network:
+#      binding: 0.0.0.0:8000
+#      skip_occupied_port: true
+#      reuse_port: true
+#    tls:
+#      enabled: false
+#  - name: es_ingest_https
+#    enabled: true
+#    async_write: false
+#    tracing_enabled: true
+#    max_concurrency: 5000
+#    network:
+#      binding: 0.0.0.0:8000
+#      skip_occupied_port: true
+#      reuse_port: true
+#    tls:
+#      enabled: false
+#  - name: es_search_https
+#    enabled: true
+#    async_write: false
+#    tracing_enabled: true
+#    max_concurrency: 5000
+#    network:
+#      binding: 0.0.0.0:8000
+#      skip_occupied_port: true
+#      reuse_port: true
+#    tls:
+#      enabled: false
 
 
 fiter:

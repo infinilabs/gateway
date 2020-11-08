@@ -32,8 +32,8 @@ import (
 	"infini.sh/framework/modules/ui"
 	stats "infini.sh/framework/plugins/stats_statsd"
 	"infini.sh/gateway/config"
-	proxy2 "infini.sh/gateway/proxy"
-	floating_ip2 "infini.sh/gateway/service/floating_ip"
+	"infini.sh/gateway/service/floating_ip"
+	"infini.sh/gateway/service/gateway"
 	"infini.sh/gateway/service/indexing"
 	"infini.sh/gateway/web"
 )
@@ -86,8 +86,8 @@ func main() {
 		module.RegisterSystemModule(pipeline.PipeModule{})
 
 		module.RegisterUserPlugin(stats.StatsDModule{})
-		module.RegisterUserPlugin(proxy2.ProxyModule{})
-		module.RegisterUserPlugin(floating_ip2.FloatingIPPlugin{})
+		module.RegisterUserPlugin(gateway.GatewayModule{})
+		module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
 
 
 		//register pipeline joints

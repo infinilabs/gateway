@@ -10,17 +10,12 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	log "github.com/cihub/seelog"
-	"github.com/valyala/fasthttp/reuseport"
-	"infini.sh/framework/core/env"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/api"
-	"infini.sh/gateway/common"
+	"infini.sh/framework/lib/fasthttp/reuseport"
 	"infini.sh/gateway/config"
-	"infini.sh/gateway/proxy/filter"
-	proxy "infini.sh/gateway/proxy/reverse-proxy"
 	r "infini.sh/gateway/proxy/router"
 	"net"
 	"os"
@@ -38,49 +33,13 @@ type Entrypoint struct {
 	listenAddress string
 	router        *r.Router
 	server        *fasthttp.Server
-
 }
 
-
-func (this Entrypoint) Name() string {
+func (this *Entrypoint) Name() string {
 	return this.config.Name
 }
 
-//var proxyServer *proxy.ReverseProxy
-
-func LoadConfig() {
-
-	env.ParseConfig("proxy", &proxyConfig)
-
-	if !proxyConfig.Enabled {
-		return
-	}
-
-	config.SetProxyConfig(proxyConfig)
-
-	api.Init()
-	filter.Init()
-
-	proxyServer = proxy.NewReverseProxy(&proxyConfig)
-
-	//init router, and default handler to
-	router = r.New()
-	router.NotFound = proxyServer.DelegateToUpstream
-
-	if global.Env().IsDebug{
-		log.Trace("tracing enabled:", proxyConfig.TracingEnabled)
-	}
-
-	if proxyConfig.TracingEnabled {
-		router.OnFinishHandler = common.GetFlowProcess("request_logging")
-	}
-
-}
-
-
-
-
-func (this Entrypoint) Start() error {
+func (this *Entrypoint) Start() error {
 	if !this.config.Enabled {
 		return nil
 	}
@@ -100,6 +59,12 @@ func (this Entrypoint) Start() error {
 	}
 	if err != nil {
 		panic(errors.Errorf("error in listener: %s", err))
+	}
+
+	this.router=r.New()
+	this.router.NotFound= func(ctx *fasthttp.RequestCtx) {
+		ctx.Response.SetBody([]byte("NOT FOUND"))
+		ctx.Response.SetStatusCode(404)
 	}
 
 	this.server = &fasthttp.Server{
@@ -208,15 +173,15 @@ func (this Entrypoint) Start() error {
 
 		go func() {
 			if err := this.server.Serve(lnTls); err != nil {
-				panic(errors.Errorf("error in fasthttp Server: %s", err))
+				panic(errors.Errorf("error in server: %s", err))
 			}
 		}()
 
 	} else {
-		log.Trace("starting insecure proxy server")
+		log.Trace("starting insecure server")
 		go func() {
 			if err := this.server.Serve(ln); err != nil {
-				panic(errors.Errorf("error in proxy Server: %s", err))
+				panic(errors.Errorf("error in server: %s", err))
 			}
 		}()
 	}
@@ -226,12 +191,13 @@ func (this Entrypoint) Start() error {
 		panic(err)
 	}
 
-	log.Info("proxy server listen at: ", schema, this.listenAddress)
+	log.Infof("entry [%s] listen at: %s%s", this.Name(), schema, this.listenAddress)
 
 	return nil
 }
 
-func (this Entrypoint) Stop() error {
+func (this *Entrypoint) Stop() error {
+	log.Tracef("entry [%s] closed", this.Name())
 	if !this.config.Enabled {
 		return nil
 	}
