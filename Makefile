@@ -28,6 +28,7 @@ CURDIR := $(shell pwd)
 OLDGOPATH:= $(GOPATH)
 
 CMD_DIR := $(CURDIR)/cmd
+OUTPUT_DIR := $(CURDIR)/bin
 
 
 # INFINI framework
@@ -65,54 +66,54 @@ default: build
 build: config
 	@#echo $(GOPATH)
 	@echo $(NEWGOPATH)
-	$(GOBUILD) -o bin/$(APP_NAME)
+	$(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)
 	@$(MAKE) restore-generated-file
 
 build-cmd: config
 	@$(MAKE) restore-generated-file
-	@for f in $(shell ls ${CMD_DIR}); do (cd $(CMD_DIR)/$${f} && $(GOBUILD) -o $(CURDIR)/bin/$${f}); done
+	@for f in $(shell ls ${CMD_DIR}); do (cd $(CMD_DIR)/$${f} && $(GOBUILD) -o $(OUTPUT_DIR)/$${f}); done
 
 
 # used to build the binary for gdb debugging
 build-race: clean config update-vfs
-	$(GOBUILD) -gcflags "-m -N -l" -race -o bin/$(APP_NAME)
+	$(GOBUILD) -gcflags "-m -N -l" -race -o $(OUTPUT_DIR)/$(APP_NAME)
 	@$(MAKE) restore-generated-file
 
 tar: build
-	cd bin && tar cfz ../bin/$(APP_NAME).tar.gz $(APP_NAME) $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/$(APP_NAME).tar.gz $(APP_NAME) $(APP_CONFIG)
 
 cross-build: clean config update-vfs
 	$(GO) test
-	GOOS=windows GOARCH=amd64 $(GOBUILD) -o bin/$(APP_NAME)-windows64.exe
-	GOOS=darwin  GOARCH=amd64 $(GOBUILD) -o bin/$(APP_NAME)-darwin64
-	GOOS=linux  GOARCH=amd64 $(GOBUILD) -o bin/$(APP_NAME)-linux64
+	GOOS=windows GOARCH=amd64 $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-windows64.exe
+	GOOS=darwin  GOARCH=amd64 $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-darwin64
+	GOOS=linux  GOARCH=amd64 $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-linux64
 	@$(MAKE) restore-generated-file
 
 
 build-win:
-	CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ GOOS=windows GOARCH=amd64     $(GOBUILD) -o bin/$(APP_NAME)-windows64.exe
-	CC=i686-w64-mingw32-gcc   CXX=i686-w64-mingw32-g++ GOOS=windows GOARCH=386         $(GOBUILD) -o bin/$(APP_NAME)-windows32.exe
+	CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ GOOS=windows GOARCH=amd64     $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-windows64.exe
+	CC=i686-w64-mingw32-gcc   CXX=i686-w64-mingw32-g++ GOOS=windows GOARCH=386         $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-windows32.exe
 
 build-linux:
-	GOOS=linux  GOARCH=amd64  $(GOBUILD) -o bin/$(APP_NAME)-linux64
-	GOOS=linux  GOARCH=386    $(GOBUILD) -o bin/$(APP_NAME)-linux32
+	GOOS=linux  GOARCH=amd64  $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-linux64
+	GOOS=linux  GOARCH=386    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-linux32
 
 build-arm:
-	GOOS=linux  GOARCH=arm   GOARM=5    $(GOBUILD) -o bin/$(APP_NAME)-armv5
+	GOOS=linux  GOARCH=arm   GOARM=5    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-armv5
 	# for Raspberry Pi
 	#env GOOS=linux GOARCH=arm GOARM=5 go build
 
 build-darwin:
-	GOOS=darwin  GOARCH=amd64     $(GOBUILD) -o bin/$(APP_NAME)-darwin64
-	#GOOS=darwin  GOARCH=386       $(GOBUILD) -o bin/$(APP_NAME)-darwin32
+	GOOS=darwin  GOARCH=amd64     $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-darwin64
+	#GOOS=darwin  GOARCH=386       $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-darwin32
 
 build-bsd:
-	GOOS=freebsd  GOARCH=amd64    $(GOBUILD) -o bin/$(APP_NAME)-freebsd64
-	GOOS=freebsd  GOARCH=386      $(GOBUILD) -o bin/$(APP_NAME)-freebsd32
-	GOOS=netbsd  GOARCH=amd64     $(GOBUILD) -o bin/$(APP_NAME)-netbsd64
-	GOOS=netbsd  GOARCH=386       $(GOBUILD) -o bin/$(APP_NAME)-netbsd32
-	GOOS=openbsd  GOARCH=amd64    $(GOBUILD) -o bin/$(APP_NAME)-openbsd64
-	GOOS=openbsd  GOARCH=386      $(GOBUILD) -o bin/$(APP_NAME)-openbsd32
+	GOOS=freebsd  GOARCH=amd64    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-freebsd64
+	GOOS=freebsd  GOARCH=386      $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-freebsd32
+	GOOS=netbsd  GOARCH=amd64     $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-netbsd64
+	GOOS=netbsd  GOARCH=386       $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-netbsd32
+	GOOS=openbsd  GOARCH=amd64    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-openbsd64
+	GOOS=openbsd  GOARCH=386      $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-openbsd32
 
 all: clean config update-vfs cross-build restore-generated-file
 
@@ -129,8 +130,8 @@ clean_data:
 	rm -rif log
 
 clean: clean_data
-	rm -rif bin
-	mkdir bin
+	rm -rif $(OUTPUT_DIR)
+	mkdir $(OUTPUT_DIR)
 
 init:
 	@echo building $(APP_NAME) $(APP_VERSION)
@@ -161,8 +162,8 @@ update-vfs:
 config: init update-vfs update-generated-file
 	@echo "update configs"
 	@# $(GO) env
-	@mkdir -p bin
-	@cp $(APP_CONFIG) bin/$(APP_CONFIG)
+	@mkdir -p $(OUTPUT_DIR)
+	@cp $(APP_CONFIG) $(OUTPUT_DIR)/$(APP_CONFIG)
 
 
 dist: cross-build package
@@ -173,35 +174,35 @@ dist-all-platform: all-platform package-all-platform
 
 package:
 	@echo "Packaging"
-	cd bin && tar cfz ../bin/darwin64.tar.gz darwin64  $(APP_CONFIG)
-	cd bin && tar cfz ../bin/linux64.tar.gz linux64  $(APP_CONFIG)
-	cd bin && tar cfz ../bin/windows64.tar.gz windows64  $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/darwin64.tar.gz darwin64  $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/linux64.tar.gz linux64  $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/windows64.tar.gz windows64  $(APP_CONFIG)
 
 package-all-platform: package-darwin-platform package-linux-platform package-windows-platform
 	@echo "Packaging all"
-	cd bin && tar cfz ../bin/freebsd64.tar.gz     $(APP_NAME)-freebsd64  $(APP_CONFIG)
-	cd bin && tar cfz ../bin/freebsd32.tar.gz     $(APP_NAME)-freebsd32  $(APP_CONFIG)
-	cd bin && tar cfz ../bin/netbsd64.tar.gz      $(APP_NAME)-netbsd64  $(APP_CONFIG)
-	cd bin && tar cfz ../bin/netbsd32.tar.gz      $(APP_NAME)-netbsd32  $(APP_CONFIG)
-	cd bin && tar cfz ../bin/openbsd64.tar.gz     $(APP_NAME)-openbsd64  $(APP_CONFIG)
-	cd bin && tar cfz ../bin/openbsd32.tar.gz     $(APP_NAME)-openbsd32  $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/freebsd64.tar.gz     $(APP_NAME)-freebsd64  $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/freebsd32.tar.gz     $(APP_NAME)-freebsd32  $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/netbsd64.tar.gz      $(APP_NAME)-netbsd64  $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/netbsd32.tar.gz      $(APP_NAME)-netbsd32  $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/openbsd64.tar.gz     $(APP_NAME)-openbsd64  $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/openbsd32.tar.gz     $(APP_NAME)-openbsd32  $(APP_CONFIG)
 
 
 package-darwin-platform:
 	@echo "Packaging Darwin"
-	cd bin && tar cfz ../bin/darwin64.tar.gz      $(APP_NAME)-darwin64 $(APP_CONFIG)
-	#cd bin && tar cfz ../bin/darwin32.tar.gz      $(APP_NAME)-darwin32 $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/darwin64.tar.gz      $(APP_NAME)-darwin64 $(APP_CONFIG)
+	#cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/darwin32.tar.gz      $(APP_NAME)-darwin32 $(APP_CONFIG)
 
 package-linux-platform:
 	@echo "Packaging Linux"
-	cd bin && tar cfz ../bin/linux64.tar.gz     $(APP_NAME)-linux64 $(APP_CONFIG)
-	cd bin && tar cfz ../bin/linux32.tar.gz     $(APP_NAME)-linux32 $(APP_CONFIG)
-	cd bin && tar cfz ../bin/armv5.tar.gz       $(APP_NAME)-armv5   $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/linux64.tar.gz     $(APP_NAME)-linux64 $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/linux32.tar.gz     $(APP_NAME)-linux32 $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/armv5.tar.gz       $(APP_NAME)-armv5   $(APP_CONFIG)
 
 package-windows-platform:
 	@echo "Packaging Windows"
-	cd bin && tar cfz ../bin/windows64.tar.gz   $(APP_NAME)-windows64.exe $(APP_CONFIG)
-	cd bin && tar cfz ../bin/windows32.tar.gz   $(APP_NAME)-windows32.exe $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/windows64.tar.gz   $(APP_NAME)-windows64.exe $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/windows32.tar.gz   $(APP_NAME)-windows32.exe $(APP_CONFIG)
 
 test:
 	go get -u github.com/kardianos/govendor
