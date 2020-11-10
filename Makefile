@@ -27,6 +27,9 @@ PATH := $(PATH):$(GOPATH)/bin
 CURDIR := $(shell pwd)
 OLDGOPATH:= $(GOPATH)
 
+CMD_DIR := $(CURDIR)/cmd
+
+
 # INFINI framework
 INFINI_BASE_FOLDER := $(OLDGOPATH)/src/infini.sh/
 FRAMEWORK_FOLDER := $(INFINI_BASE_FOLDER)framework/
@@ -67,6 +70,8 @@ build: config
 
 build-cmd: config
 	@$(MAKE) restore-generated-file
+	@for f in $(shell ls ${CMD_DIR}); do (cd $(CMD_DIR)/$${f} && $(GOBUILD) -o $(CURDIR)/bin/$${f}); done
+
 
 # used to build the binary for gdb debugging
 build-race: clean config update-vfs
