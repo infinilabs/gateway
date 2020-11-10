@@ -23,6 +23,12 @@ import (
 	"time"
 )
 
+func NewEntrypoint(config config.EntryConfig) *Entrypoint{
+	return &Entrypoint{
+		config: config,
+	}
+}
+
 type Entrypoint struct {
 	config config.EntryConfig
 
@@ -44,15 +50,21 @@ func (this *Entrypoint) Start() error {
 		return nil
 	}
 
+	if this.config.NetworkConfig.ReusePort==this.config.NetworkConfig.SkipOccupiedPort&&this.config.NetworkConfig.ReusePort==true{
+		return errors.New("port reuse and skip occupied can't be enabled at the same time for entry:"+this.config.Name)
+	}
+
 	this.listenAddress = this.config.NetworkConfig.GetBindingAddr()
 
 	if !this.config.NetworkConfig.ReusePort && this.config.NetworkConfig.SkipOccupiedPort {
 		this.listenAddress = util.AutoGetAddress(this.config.NetworkConfig.GetBindingAddr())
+		log.Trace("auto skip address ",this.listenAddress)
 	}
 
 	var ln net.Listener
 	var err error
 	if this.config.NetworkConfig.ReusePort {
+		log.Debug("reuse port ",this.listenAddress)
 		ln, err = reuseport.Listen("tcp4", this.config.NetworkConfig.GetBindingAddr())
 	} else {
 		ln, err = net.Listen("tcp", this.listenAddress)
@@ -76,8 +88,8 @@ func (this *Entrypoint) Start() error {
 		MaxRequestBodySize:            200 * 1024 * 1024,
 		GetOnly:                       false,
 		ReduceMemoryUsage:             false,
-		ReadTimeout:                   120 * time.Second,
-		WriteTimeout:                  10 * time.Second,
+		ReadTimeout:                   30 * time.Second,
+		WriteTimeout:                  30 * time.Second,
 		ReadBufferSize:                64 * 1024,
 	}
 
@@ -202,7 +214,6 @@ func (this *Entrypoint) Stop() error {
 		return nil
 	}
 	return this.server.Shutdown()
-
 	//translog.Close()
 
 }

@@ -24,48 +24,22 @@ web:
 entry:
   - name: es_gateway
     enabled: true
-    async_write: false
-    tracing_enabled: true
-    max_concurrency: 5000
     network:
       binding: 0.0.0.0:8000
-      skip_occupied_port: true
-      reuse_port: true
+  - name: es_secure_gateway
+    enabled: true
+    network:
+      binding: 0.0.0.0:8001
     tls:
-      enabled: false
-#  - name: es_backup
-#    enabled: true
-#    async_write: false
-#    tracing_enabled: true
-#    max_concurrency: 5000
-#    network:
-#      binding: 0.0.0.0:8000
-#      skip_occupied_port: true
-#      reuse_port: true
-#    tls:
-#      enabled: false
-#  - name: es_ingest_https
-#    enabled: true
-#    async_write: false
-#    tracing_enabled: true
-#    max_concurrency: 5000
-#    network:
-#      binding: 0.0.0.0:8000
-#      skip_occupied_port: true
-#      reuse_port: true
-#    tls:
-#      enabled: false
-#  - name: es_search_https
-#    enabled: true
-#    async_write: false
-#    tracing_enabled: true
-#    max_concurrency: 5000
-#    network:
-#      binding: 0.0.0.0:8000
-#      skip_occupied_port: true
-#      reuse_port: true
-#    tls:
-#      enabled: false
+      enabled: true
+  - name: es_ingest_https
+    enabled: true
+    network:
+      binding: 0.0.0.0:8002
+  - name: es_search_https
+    enabled: true
+    network:
+      binding: 0.0.0.0:8003
 
 
 fiter:

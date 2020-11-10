@@ -4,15 +4,10 @@ import (
 	log "github.com/cihub/seelog"
 	. "infini.sh/framework/core/config"
 	"infini.sh/framework/core/env"
-	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/api"
-	"infini.sh/gateway/common"
 	"infini.sh/gateway/config"
-	"infini.sh/gateway/proxy/filter"
-	"infini.sh/gateway/proxy/output/translog"
-	proxy "infini.sh/gateway/proxy/reverse-proxy"
+	entry2 "infini.sh/gateway/proxy/entry"
 )
 
 func ProxyHandler(ctx *fasthttp.RequestCtx) {
@@ -47,7 +42,7 @@ func ProxyHandler(ctx *fasthttp.RequestCtx) {
 	//自动学习请求网站来生成 FST 路由信息, 基于 FST 数来快速路由
 
 	//# Delegate Requests to upstream
-	proxyServer.DelegateRequest(&ctx.Request, &ctx.Response)
+	//proxyServer.DelegateRequest(&ctx.Request, &ctx.Response)
 
 	//https://github.com/projectcontour/contour/blob/main/internal/dag/dag.go
 	//Timeout Policy
@@ -85,13 +80,13 @@ func (this GatewayModule) Name() string {
 	return "gateway"
 }
 
-var (
-	proxyConfig = config.ProxyConfig{
-		MaxConcurrency:      1000,
-		PassthroughPatterns: []string{"_cat", "scroll", "scroll_id", "_refresh", "_cluster", "_ccr", "_count", "_flush", "_ilm", "_ingest", "_license", "_migration", "_ml", "_nodes", "_rollup", "_data_stream", "_open", "_close"},
-	}
-)
-var proxyServer *proxy.ReverseProxy
+//var (
+//	proxyConfig = config.ProxyConfig{
+//		MaxConcurrency:      1000,
+//		PassthroughPatterns: []string{"_cat", "scroll", "scroll_id", "_refresh", "_cluster", "_ccr", "_count", "_flush", "_ilm", "_ingest", "_license", "_migration", "_ml", "_nodes", "_rollup", "_data_stream", "_open", "_close"},
+//	}
+//)
+//var proxyServer *proxy.ReverseProxy
 
 //
 ////var proxyServer *proxy.ReverseProxy
@@ -125,51 +120,89 @@ var proxyServer *proxy.ReverseProxy
 //
 //}
 
+var entryConfigs []config.EntryConfig
+
 func (module GatewayModule) Setup(cfg *Config) {
 
-	env.ParseConfig("proxy", &proxyConfig)
-
-	if !proxyConfig.Enabled {
-		return
+	entryConfigs=[]config.EntryConfig{}
+	ok,err:=env.ParseConfig("entry",&entryConfigs)
+	if err!=nil{
+		panic(err)
 	}
 
-	config.SetProxyConfig(proxyConfig)
-
-	api.Init()
-	filter.Init()
-
-	proxyServer = proxy.NewReverseProxy(&proxyConfig)
-
-	//init router, and default handler to
-	router.NotFound = proxyServer.DelegateToUpstream
-
-	if global.Env().IsDebug{
-		log.Trace("tracing enabled:", proxyConfig.TracingEnabled)
+	if ok{
+		//for _,v:=range entryConfigs{
+			//fmt.Println(v)
+		//}
 	}
 
-	if proxyConfig.TracingEnabled {
-		router.OnFinishHandler = common.GetFlowProcess("request_logging")
-	}
+
+	//env.ParseConfig("proxy", &proxyConfig)
+	//
+	//if !proxyConfig.Enabled {
+	//	return
+	//}
+	//
+	//config.SetProxyConfig(proxyConfig)
+	//
+	//api.Init()
+	//filter.Init()
+	//
+	//proxyServer = proxy.NewReverseProxy(&proxyConfig)
+	//
+	////init router, and default handler to
+	//router.NotFound = proxyServer.DelegateToUpstream
+	//
+	//if global.Env().IsDebug{
+	//	log.Trace("tracing enabled:", proxyConfig.TracingEnabled)
+	//}
+	//
+	//if proxyConfig.TracingEnabled {
+	//	router.OnFinishHandler = common.GetFlowProcess("request_logging")
+	//}
 
 }
-
+var entryPoints= map[string]*entry2.Entrypoint{}
 func (module GatewayModule) Start() error {
 
-	if !proxyConfig.Enabled {
-		return nil
+	//
+	//if !proxyConfig.Enabled {
+	//	return nil
+	//}
+	//
+	//translog.Open()
+
+	for _,v:=range entryConfigs{
+		entry := entry2.NewEntrypoint(v)
+		log.Trace("start entry:",entry.Name())
+		err:=entry.Start()
+		if err!=nil{
+			panic(err)
+		}
+		entryPoints[v.Name]=entry
 	}
 
-	translog.Open()
+
+
+
 
 	return nil
 }
 
 func (module GatewayModule) Stop() error {
-	if !proxyConfig.Enabled {
-		return nil
-	}
 
-	translog.Close()
+	//if !proxyConfig.Enabled {
+	//	return nil
+	//}
+	//
+	//translog.Close()
+
+	for _,v:=range entryPoints {
+		err:=v.Stop()
+		if err!=nil{
+			panic(err)
+		}
+	}
 
 	return nil
 }
