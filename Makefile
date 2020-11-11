@@ -34,10 +34,10 @@ OUTPUT_DIR := $(CURDIR)/bin
 # INFINI framework
 INFINI_BASE_FOLDER := $(OLDGOPATH)/src/infini.sh/
 FRAMEWORK_FOLDER := $(INFINI_BASE_FOLDER)framework/
-FRAMEWORK_REPO := https://github.com/medcl/infini-framework.git
+FRAMEWORK_REPO := ssh://git@git.infini.ltd:64221/infini/framework.git
 FRAMEWORK_BRANCH := master
 FRAMEWORK_VENDOR_FOLDER := $(CURDIR)/../vendor/
-FRAMEWORK_VENDOR_REPO :=  https://github.com/medcl/infini-framework-vendor.git
+FRAMEWORK_VENDOR_REPO :=  ssh://git@git.infini.ltd:64221/infini/framework-vendor.git
 FRAMEWORK_VENDOR_BRANCH := master
 
 
