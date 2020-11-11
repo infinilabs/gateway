@@ -43,7 +43,7 @@ var appUI *web.UI
 
 func main() {
 
-	terminalHeader := ("\n   ___   _   _____  __  __    __  _       \n")
+	terminalHeader := ("   ___   _   _____  __  __    __  _       \n")
 	terminalHeader += ("  / _ \\ /_\\ /__   \\/__\\/ / /\\ \\ \\/_\\ /\\_/\\\n")
 	terminalHeader += (" / /_\\///_\\\\  / /\\/_\\  \\ \\/  \\/ //_\\\\\\_ _/\n")
 	terminalHeader += ("/ /_\\\\/  _  \\/ / //__   \\  /\\  /  _  \\/ \\ \n")

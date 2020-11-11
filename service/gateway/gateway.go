@@ -6,8 +6,10 @@ import (
 	"infini.sh/framework/core/env"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/config"
+	"infini.sh/gateway/api"
+	"infini.sh/gateway/common"
 	entry2 "infini.sh/gateway/proxy/entry"
+	"infini.sh/gateway/proxy/filter"
 )
 
 func ProxyHandler(ctx *fasthttp.RequestCtx) {
@@ -87,7 +89,6 @@ func (this GatewayModule) Name() string {
 //	}
 //)
 //var proxyServer *proxy.ReverseProxy
-
 //
 ////var proxyServer *proxy.ReverseProxy
 //
@@ -120,11 +121,14 @@ func (this GatewayModule) Name() string {
 //
 //}
 
-var entryConfigs []config.EntryConfig
+var entryConfigs []common.EntryConfig
 
 func (module GatewayModule) Setup(cfg *Config) {
 
-	entryConfigs=[]config.EntryConfig{}
+	api.Init()
+	filter.Init()
+
+	entryConfigs=[]common.EntryConfig{}
 	ok,err:=env.ParseConfig("entry",&entryConfigs)
 	if err!=nil{
 		panic(err)
@@ -132,8 +136,35 @@ func (module GatewayModule) Setup(cfg *Config) {
 
 	if ok{
 		//for _,v:=range entryConfigs{
-			//fmt.Println(v)
+		//	//if v.RouterConfig.Name==""{
+		//	//}
 		//}
+	}
+
+
+
+	flowConfigs:=[]common.FlowConfig{}
+	ok,err=env.ParseConfig("flow",&flowConfigs)
+	if err!=nil{
+		panic(err)
+	}
+
+	if ok{
+		for _,v:=range flowConfigs{
+			common.RegisterFlowConfig(v)
+		}
+	}
+
+	routerConfigs:=[]common.RouterConfig{}
+	ok,err=env.ParseConfig("router",&routerConfigs)
+	if err!=nil{
+		panic(err)
+	}
+
+	if ok{
+		for _,v:=range routerConfigs{
+			common.RegisterRouterConfig(v)
+		}
 	}
 
 
@@ -144,10 +175,7 @@ func (module GatewayModule) Setup(cfg *Config) {
 	//}
 	//
 	//config.SetProxyConfig(proxyConfig)
-	//
-	//api.Init()
-	//filter.Init()
-	//
+		//
 	//proxyServer = proxy.NewReverseProxy(&proxyConfig)
 	//
 	////init router, and default handler to

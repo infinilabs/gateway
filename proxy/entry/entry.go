@@ -15,22 +15,26 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/framework/lib/fasthttp/reuseport"
-	"infini.sh/gateway/config"
+	"infini.sh/gateway/common"
 	r "infini.sh/gateway/proxy/router"
 	"net"
+	"net/http"
 	"os"
 	"path"
 	"time"
 )
 
-func NewEntrypoint(config config.EntryConfig) *Entrypoint{
+func NewEntrypoint(config common.EntryConfig) *Entrypoint{
 	return &Entrypoint{
 		config: config,
 	}
 }
 
 type Entrypoint struct {
-	config config.EntryConfig
+
+	config       common.EntryConfig
+
+	routerConfig common.RouterConfig
 
 	certPool      *x509.CertPool
 	rootCert      *x509.Certificate
@@ -74,9 +78,45 @@ func (this *Entrypoint) Start() error {
 	}
 
 	this.router=r.New()
-	this.router.NotFound= func(ctx *fasthttp.RequestCtx) {
-		ctx.Response.SetBody([]byte("NOT FOUND"))
-		ctx.Response.SetStatusCode(404)
+
+	if this.config.RouterConfigName!=""{
+		this.routerConfig=common.GetRouter(this.config.RouterConfigName)
+	}
+
+	if len(this.routerConfig.Rules)>0{
+		for _,x:=range this.routerConfig.Rules{
+			flow:=common.FilterFlow{}
+			for _,y:=range x.Flow{
+				cfg:=common.GetFlowConfig(y)
+				for _,z:=range cfg.Filters{
+					f:=common.GetFilterWithConfig(&z)
+					flow.JoinFilter(f)
+				}
+			}
+			for _,v:=range x.Method{
+				for _,u:=range x.PathPattern{
+					log.Debugf("apply rule: [%s] [%s] [ %s ]",v,u,flow.ToString())
+					if v=="*"{
+						this.router.Handle(http.MethodGet,u,flow.Process)
+						this.router.Handle(http.MethodPost,u,flow.Process)
+						this.router.Handle(http.MethodPut,u,flow.Process)
+						this.router.Handle(http.MethodDelete,u,flow.Process)
+						this.router.Handle(http.MethodHead,u,flow.Process)
+					}else{
+						this.router.Handle(v,u,flow.Process)
+					}
+				}
+			}
+		}
+	}
+
+	if this.routerConfig.NotFoundFlow!=""{
+		this.router.NotFound=common.GetFlowProcess(this.routerConfig.NotFoundFlow)
+	}else{
+		this.router.NotFound= func(ctx *fasthttp.RequestCtx) {
+			ctx.Response.SetBody([]byte("NOT FOUND"))
+			ctx.Response.SetStatusCode(404)
+		}
 	}
 
 	this.server = &fasthttp.Server{

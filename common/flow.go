@@ -1,8 +1,11 @@
 package common
 
 import (
+	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/lib/fasthttp"
+	"reflect"
+	"strings"
 )
 
 /*
@@ -18,74 +21,129 @@ POST || PUT		/:index/_bulk || /_bulk 	name=sync_dual_writes flow=[ mirror_forwar
 GET				/audit/*operations			name=secured_audit_access flow=[ basic_auth >> flow{name=cache_first} ]
 */
 
-type RoutingRule struct {
-	Method      string
-	PathPattern string
-	FlowID      string
-}
-
 type FilterFlow struct {
-	FilterName string
-	Filters []func(ctx *fasthttp.RequestCtx)
+	ID string
+	Filters []RequestFilter
 }
 
-func NewFilterFlow(name string,filters ...func(ctx *fasthttp.RequestCtx)) FilterFlow {
-	flow:= FilterFlow{FilterName: name,Filters: filters}
+//func NewFilterFlow(name string, filters ...func(ctx *fasthttp.RequestCtx)) FilterFlow {
+//	flow := FilterFlow{FlowName: name, Filters: filters}
+//	return flow
+//}
+
+func (flow *FilterFlow) JoinFilter(filter ...RequestFilter) *FilterFlow {
+	for _,v:=range filter{
+		flow.Filters=append(flow.Filters,v)
+	}
 	return flow
 }
 
-func (flow FilterFlow)JoinFlows(flows ...FilterFlow) FilterFlow {
-	for _,v:=range flows{
-		for _,x:=range v.Filters{
-			flow.Filters=append(flow.Filters,x)
+func (flow *FilterFlow) JoinFlows(flows ...FilterFlow) *FilterFlow {
+	for _, v := range flows {
+		for _, x := range v.Filters {
+			flow.Filters = append(flow.Filters, x)
 		}
 	}
 	return flow
 }
 
-func (flow FilterFlow) Name() string{
-	return flow.FilterName
+func (flow *FilterFlow) ToString() string {
+	str:=strings.Builder{}
+	has:=false
+	for _,v:=range flow.Filters{
+		if has{
+			str.WriteString(" > ")
+		}
+		str.WriteString(v.Name())
+		has=true
+	}
+	return str.String()
 }
 
-func (flow FilterFlow)Process(ctx *fasthttp.RequestCtx){
-	for _,v:=range flow.Filters{
-		v(ctx)
+func (flow *FilterFlow) Process(ctx *fasthttp.RequestCtx) {
+	for _, v := range flow.Filters {
+		v.Process(ctx)
 	}
 }
 
 func GetFlowProcess(flowID string) func(ctx *fasthttp.RequestCtx) {
-	flow:= GetFlow(flowID)
+	flow := GetFlow(flowID)
 	return flow.Process
 }
 
 func GetFlow(flowID string) FilterFlow {
-	 v,ok:= flows[flowID]
-	 if ok{
-	 	return v
-	 }
-	 panic(errors.New("flow was not found"))
+	v, ok := flows[flowID]
+	if ok {
+		return v
+	}
+	panic(errors.New("flow was not found"))
 }
 
 func JoinFlows(flowID ...string) FilterFlow {
-	flow:= FilterFlow{}
-	for _,v:=range flowID{
-		temp:= GetFlow(v)
-		flow.JoinFlows(flow,temp)
+	flow := FilterFlow{}
+	for _, v := range flowID {
+		temp := GetFlow(v)
+		flow.JoinFlows(flow, temp)
 	}
 	return flow
 }
 
-func GetFilter(filterID string) func(ctx *fasthttp.RequestCtx) {
-	return filters[filterID]
+func GetFilter(name string) RequestFilter {
+	return filters[name]
 }
 
-var filters map[string]func(ctx *fasthttp.RequestCtx) = make(map[string]func(ctx *fasthttp.RequestCtx))
+
+
+func GetFilterWithConfig(cfg *FilterConfig) RequestFilter {
+	log.Tracef("get filter instances, %v", cfg.Name)
+	if filters[cfg.Name] != nil {
+		t := reflect.ValueOf(filters[cfg.Name]).Type()
+		v := reflect.New(t).Elem()
+
+		f := v.FieldByName("Data")
+		if f.IsValid() && f.CanSet() && f.Kind() == reflect.Map {
+			f.Set(reflect.ValueOf(cfg.Parameters))
+		}
+		return v.Interface().(RequestFilter)
+	}
+	panic(errors.New(cfg.Name + " not found"))
+}
+
+var filters map[string]RequestFilter = make(map[string]RequestFilter)
 var flows map[string]FilterFlow = make(map[string]FilterFlow)
 
+var filterConfigs map[string]FilterConfig = make(map[string]FilterConfig)
+var routingRules map[string]RoutingRule = make(map[string]RoutingRule)
+var flowConfigs map[string]FlowConfig = make(map[string]FlowConfig)
+var routerConfigs map[string]RouterConfig = make(map[string]RouterConfig)
+
 func RegisterFilter(filter RequestFilter) {
-	filters[filter.Name()] = filter.Process
+	filters[filter.Name()] = filter
 }
 
 func RegisterFlow(flow FilterFlow) {
-	flows[flow.Name()] = flow
+	flows[flow.ID] = flow
+}
+
+func RegisterFlowConfig(flow FlowConfig) {
+	flowConfigs[flow.Name] = flow
+}
+
+func RegisterRoutingRule(rule RoutingRule) {
+	routingRules[rule.ID] = rule
+}
+func RegisterRouterConfig(config RouterConfig) {
+	routerConfigs[config.Name] = config
+}
+
+func GetRouter(name string) RouterConfig {
+	return routerConfigs[name]
+}
+
+func GetRule(name string) RoutingRule {
+	return routingRules[name]
+}
+
+func GetFlowConfig(name string) FlowConfig {
+	return flowConfigs[name]
 }

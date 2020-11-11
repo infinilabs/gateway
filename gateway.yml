@@ -24,42 +24,53 @@ web:
 entry:
   - name: es_gateway
     enabled: true
+    router: default
     network:
       binding: 0.0.0.0:8000
+      reuse_port: true
   - name: es_secure_gateway
     enabled: true
+    router: default
     network:
       binding: 0.0.0.0:8001
+      reuse_port: true
     tls:
       enabled: true
-  - name: es_ingest_https
-    enabled: true
-    network:
-      binding: 0.0.0.0:8002
-  - name: es_search_https
-    enabled: true
-    network:
-      binding: 0.0.0.0:8003
-
-
-fiter:
-  - name: request_logging
-  - name: rate_limit
-  - name: request_cache
-  - name: save_translog
 
 flow:
-  - name: cache_first
+  - name: echo
     filter:
-      - get_cache
-      - forward
-      - set_cache
-  - name: forward
-    filter:
-      - forward
-  - name: async_indexing_via_translog
-    filter:
-      - save_translog
+      - name: echo_dot
+        parameters:
+          repeat: 1
+#  - name: cache_first
+#    filter:
+#      - get_cache
+#      - forward
+#      - set_cache
+#  - name: forward
+#    filter:
+#      - forward
+#  - name: async_indexing_via_translog
+#    filter:
+#      - save_translog
+
+
+router:
+  - name: default
+#    not_found: default
+    rules:
+      - id: 1
+        desc: "default HTTP flow"
+        method:
+          - "*"
+        pattern:
+          - /
+        priority: 1
+        flow:
+          - echo
+
+
 
 elasticsearch:
 - name: default
