@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/framework/lib/fasthttp/reuseport"
 	"log"
@@ -10,6 +11,7 @@ import (
 )
 
 var port = flag.Int("port", 8080, "listening port")
+var debug = flag.Bool("debug", false, "dump request")
 
 func main() {
 	runtime.GOMAXPROCS(1)
@@ -26,5 +28,16 @@ func main() {
 }
 
 func requestHandler(ctx *fasthttp.RequestCtx) {
+	if *debug{
+		fmt.Println(string(ctx.Request.URI().Scheme()))
+		fmt.Println(string(ctx.Request.URI().Host()))
+		fmt.Println(string(ctx.Request.URI().FullURI()))
+		fmt.Println(string(ctx.Request.URI().PathOriginal()))
+		fmt.Println(string(ctx.Request.URI().QueryString()))
+		fmt.Println(string(ctx.Request.URI().Hash()))
+		fmt.Println(string(ctx.Request.URI().Username()))
+		fmt.Println(string(ctx.Request.URI().Password()))
+		fmt.Println(util.ToJson(ctx.Request.Header,true))
+	}
 	fmt.Fprintf(ctx, ".")
 }
