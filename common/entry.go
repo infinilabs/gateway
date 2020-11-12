@@ -16,7 +16,7 @@ type EntryConfig struct {
 	RouterConfigName string               `config:"router"`
 }
 
-type RoutingRule struct {
+type RuleConfig struct {
 	ID          string   `config:"id"`
 	Description string   `config:"desc"`
 	Method      []string `config:"method"`
@@ -26,14 +26,13 @@ type RoutingRule struct {
 
 type FilterConfig struct {
 	Name       string                 `config:"name"`
-	//Enabled    bool                   `config:"enabled"`
 	Parameters map[string]interface{} `config:"parameters"`
 }
 
 type RouterConfig struct {
-	Name         string        `config:"name"`
-	NotFoundFlow string        `config:"not_found"`
-	Rules        []RoutingRule `config:"rules"`
+	Name         string       `config:"name"`
+	NotFoundFlow string       `config:"not_found"`
+	Rules        []RuleConfig `config:"rules"`
 }
 
 type FlowConfig struct {

@@ -3,7 +3,7 @@ path.logs: log
 #path.plugins: /Users/medcl/go/src/infini.sh/gateway/proxy/plugin
 
 web:
-  enabled: true
+  enabled: false
   ui:
     enabled: true
     path: .public
@@ -13,14 +13,6 @@ web:
     binding: 127.0.0.1:2900
     skip_occupied_port: true
 
-#api:
-#  enabled: true
-#  network:
-#    binding: 127.0.0.1:2900
-#    skip_occupied_port: true
-#  tls:
-#    enabled: false
-
 entry:
   - name: es_gateway
     enabled: true
@@ -28,21 +20,24 @@ entry:
     network:
       binding: 0.0.0.0:8000
       reuse_port: true
-  - name: es_secure_gateway
-    enabled: true
-    router: default
-    network:
-      binding: 0.0.0.0:8001
-      reuse_port: true
-    tls:
-      enabled: true
+#  - name: es_secure_gateway
+#    enabled: true
+#    router: default
+#    network:
+#      binding: 0.0.0.0:8001
+#      reuse_port: true
+#    tls:
+#      enabled: true
 
 flow:
   - name: echo
     filter:
-      - name: echo_dot
+      - name: elasticsearch
         parameters:
-          repeat: 1
+          direct: true
+#      - name: echo_dot
+#        parameters:
+#          repeat: 1
 #  - name: cache_first
 #    filter:
 #      - get_cache
@@ -58,14 +53,14 @@ flow:
 
 router:
   - name: default
-#    not_found: default
+#    not_found: echo
     rules:
       - id: 1
         desc: "default HTTP flow"
         method:
           - "*"
         pattern:
-          - /
+          - /*path
         priority: 1
         flow:
           - echo
@@ -75,19 +70,10 @@ router:
 elasticsearch:
 - name: default
   enabled: true
-  endpoint: http://192.168.3.201:9200
-#  endpoint: https://192.168.3.98:9200
-#  endpoint: http://127.0.0.1:9200
-#  version: 7.6.0
+  endpoint: http://localhost:9200
+#  endpoint: http://127.0.0.1:8080
+  version: 7.6.0
   index_prefix: proxy-
-  basic_auth:
-    username: elastic
-    password: pass
-- name: gateway
-  enabled: true
-  endpoint: https://medcl:pass@192.168.3.98:9200
-  version: auto
-  index_prefix: gateway-
   basic_auth:
     username: elastic
     password: pass
@@ -108,7 +94,7 @@ output:
         - host: 192.168.3.2:9200
           weight: 20
       discovery:
-        enabled: true
+        enabled: false
         node_roles:
           - "coordinating"
           - "ingest"
@@ -129,38 +115,35 @@ output:
 
 proxy:
   enabled: true
-#  async_write: false
-#  tracing_enabled: true
-#  max_concurrency: 5000
-#  network:
-#    binding: 0.0.0.0:8000
-#    skip_occupied_port: true
-#    reuse_port: true
-#  tls:
-#    enabled: false
-
+  async_write: false
+  tracing_enabled: true
+  max_concurrency: 5000
+  network:
+    binding: 0.0.0.0:8000
+    reuse_port: true
+  tls:
+    enabled: false
   cache:
     enabled: true
 #    type: redis
     type: ccache
     ttl: 60s #can be adjusted by avg query latency, + random 20%
     max_cached_item: 5000
-
   balancer: weight
   pass_through: ["_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"]
-#  upstream:
-#    - name: primary
-#      enabled: true
-#      weight: 10
-#      max_connection: 1000
-#      mode: pass_through
-#      rate_limit:
-#        max_qps: 20000
-##      queue_name: primary
-##      max_queue_depth: -1
-#      timeout: 60s
-#      elasticsearch: default
-#      discovery_nodes: true
+  upstream:
+    - name: primary
+      enabled: true
+      weight: 10
+      max_connection: 1000
+      mode: pass_through
+      rate_limit:
+        max_qps: 20000
+      queue_name: primary
+      max_queue_depth: -1
+      timeout: 60s
+      elasticsearch: default
+      discovery_nodes: false
 
 statsd:
   enabled: true
@@ -169,25 +152,25 @@ statsd:
   namespace: gateway.
 
 
-pipelines:
-- name: request_logging_index
-  start:
-    joint: json_indexing
-    enabled: true
-    parameters:
-      index_name: "gateway_requests"
-      elasticsearch: "gateway"
-      input_queue: "request_logging"
-      num_of_messages: 1
-      timeout: "10s"
-      worker_size: 6
-      bulk_size: 4
-  process: []
+#pipelines:
+#- name: request_logging_index
+#  start:
+#    joint: json_indexing
+#    enabled: true
+#    parameters:
+#      index_name: "gateway_requests"
+#      elasticsearch: "gateway"
+#      input_queue: "request_logging"
+#      num_of_messages: 1
+#      timeout: "10s"
+#      worker_size: 6
+#      bulk_size: 4
+#  process: []
 
 
 modules:
 - name: elastic
-  elasticsearch: gateway
+  elasticsearch: default
   enabled: true
   indexer_enabled: false
   store_enabled: false

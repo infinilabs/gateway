@@ -85,7 +85,8 @@ func NewReverseProxy(cfg *config.ProxyConfig) *ReverseProxy {
 
 	ccacheCache = ccache.Layered(ccache.Configure().MaxSize(cfg.CacheConfig.MaxCachedItem).ItemsToPrune(100))
 
-	ups := config.GetActiveUpstreamConfigs()
+	ups := config.GetUpstreamConfigs()
+	//ups := config.GetActiveUpstreamConfigs()
 
 	log.Trace("active upstream: ", ups)
 
@@ -165,7 +166,6 @@ func NewReverseProxy(cfg *config.ProxyConfig) *ReverseProxy {
 		panic(errors.New("upstream is not set"))
 	}
 
-	fmt.Println(len(p.clients))
 	p.bla = balancer.NewBalancer(ws)
 	return &p
 
@@ -664,20 +664,22 @@ func (p *ReverseProxy) DelegateRequest(req *fasthttp.Request, res *fasthttp.Resp
 	//使用算法来获取合适的 client
 	pc := p.getClient()
 
-	originalHost :=string(req.Host())
+	//originalHost :=string(req.Host())
+	//fmt.Println("proginal host",originalHost)
+	//fmt.Println("host",pc.Addr)
 
 	cleanHopHeaders(req)
 
 	// assign the host to support virtual hosting, aka shared web hosting (one IP, multiple domains)
-	req.SetHost(pc.Addr)
-	req.Header.Set("Host", pc.Addr)
+	//req.SetHost(pc.Addr)
+	//req.Header.Set("Host", pc.Addr)
 
 	if err := pc.Do(req, res); err != nil {
 		log.Errorf("failed to proxy request: %v, %v", err, string(res.Body()))
 		res.SetStatusCode(http.StatusInternalServerError)
 		res.SetBodyRaw([]byte(err.Error()))
 	}
-	req.SetHost(originalHost)
+	//req.SetHost(originalHost)
 
 }
 

@@ -26,6 +26,7 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/modules/api"
 	"infini.sh/framework/modules/boltdb"
+	"infini.sh/framework/modules/elastic"
 	"infini.sh/framework/modules/filter"
 	"infini.sh/framework/modules/pipeline"
 	"infini.sh/framework/modules/queue"
@@ -77,7 +78,7 @@ func main() {
 		appUI.InitUI()
 
 		//load core modules first
-		//module.RegisterSystemModule(elastic.ElasticModule{})
+		module.RegisterSystemModule(elastic.ElasticModule{})
 		module.RegisterSystemModule(boltdb.StorageModule{})
 		module.RegisterSystemModule(filter.FilterModule{})
 		module.RegisterSystemModule(queue.DiskQueue{})

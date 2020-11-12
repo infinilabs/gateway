@@ -16,8 +16,8 @@ func (filter EchoDot) Name() string {
 	return "echo_dot"
 }
 
-func (joint EchoDot) Process(ctx *fasthttp.RequestCtx) {
-	size:=joint.GetIntOrDefault("repeat",1)
+func (filter EchoDot) Process(ctx *fasthttp.RequestCtx) {
+	size:=filter.GetIntOrDefault("repeat",1)
 	for i:=0;i<size;i++{
 		ctx.WriteString(".")
 	}

@@ -8,8 +8,8 @@ import (
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/api"
 	"infini.sh/gateway/common"
+	"infini.sh/gateway/proxy"
 	entry2 "infini.sh/gateway/proxy/entry"
-	"infini.sh/gateway/proxy/filter"
 )
 
 func ProxyHandler(ctx *fasthttp.RequestCtx) {
@@ -88,8 +88,6 @@ func (this GatewayModule) Name() string {
 //		PassthroughPatterns: []string{"_cat", "scroll", "scroll_id", "_refresh", "_cluster", "_ccr", "_count", "_flush", "_ilm", "_ingest", "_license", "_migration", "_ml", "_nodes", "_rollup", "_data_stream", "_open", "_close"},
 //	}
 //)
-//var proxyServer *proxy.ReverseProxy
-//
 ////var proxyServer *proxy.ReverseProxy
 //
 //func LoadConfig() {
@@ -126,7 +124,7 @@ var entryConfigs []common.EntryConfig
 func (module GatewayModule) Setup(cfg *Config) {
 
 	api.Init()
-	filter.Init()
+	proxy.Init()
 
 	entryConfigs=[]common.EntryConfig{}
 	ok,err:=env.ParseConfig("entry",&entryConfigs)

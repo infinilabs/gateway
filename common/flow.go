@@ -73,10 +73,10 @@ func GetFlowProcess(flowID string) func(ctx *fasthttp.RequestCtx) {
 
 func GetFlow(flowID string) FilterFlow {
 	v, ok := flows[flowID]
-	if ok {
-		return v
+	if !ok {
+		panic(errors.Errorf("flow [%s] not found",flowID))
 	}
-	panic(errors.New("flow was not found"))
+	return v
 }
 
 func JoinFlows(flowID ...string) FilterFlow {
@@ -89,7 +89,12 @@ func JoinFlows(flowID ...string) FilterFlow {
 }
 
 func GetFilter(name string) RequestFilter {
-	return filters[name]
+
+	v, ok := filters[name]
+	if !ok{
+		panic(errors.Errorf("filter [%s] not found",name))
+	}
+	return v
 }
 
 
@@ -113,7 +118,7 @@ var filters map[string]RequestFilter = make(map[string]RequestFilter)
 var flows map[string]FilterFlow = make(map[string]FilterFlow)
 
 var filterConfigs map[string]FilterConfig = make(map[string]FilterConfig)
-var routingRules map[string]RoutingRule = make(map[string]RoutingRule)
+var routingRules map[string]RuleConfig = make(map[string]RuleConfig)
 var flowConfigs map[string]FlowConfig = make(map[string]FlowConfig)
 var routerConfigs map[string]RouterConfig = make(map[string]RouterConfig)
 
@@ -129,7 +134,7 @@ func RegisterFlowConfig(flow FlowConfig) {
 	flowConfigs[flow.Name] = flow
 }
 
-func RegisterRoutingRule(rule RoutingRule) {
+func RegisterRoutingRule(rule RuleConfig) {
 	routingRules[rule.ID] = rule
 }
 func RegisterRouterConfig(config RouterConfig) {
@@ -137,13 +142,25 @@ func RegisterRouterConfig(config RouterConfig) {
 }
 
 func GetRouter(name string) RouterConfig {
-	return routerConfigs[name]
+	v,ok:=  routerConfigs[name]
+	if !ok{
+		panic(errors.Errorf("router [%s] not found",name))
+	}
+	return v
 }
 
-func GetRule(name string) RoutingRule {
-	return routingRules[name]
+func GetRule(name string) RuleConfig {
+	v,ok:= routingRules[name]
+	if !ok{
+		panic(errors.Errorf("rule [%s] not found",name))
+	}
+	return v
 }
 
 func GetFlowConfig(name string) FlowConfig {
-	return flowConfigs[name]
+	v,ok:= flowConfigs[name]
+	if !ok{
+		panic(errors.Errorf("flow [%s] not found",name))
+	}
+	return v
 }
