@@ -10,7 +10,7 @@ entry:
 #      skip_occupied_port: false
       reuse_port: true #you can start multi gateway instance, they share same port, to full utilize system's resources
     tls:
-      enabled: true #if your es is using https, the gateway entrypoint should enable https too
+      enabled: false #if your es is using https, the gateway entrypoint should enable https too
 
 flow:
   - name: not_found #testing flow
@@ -44,7 +44,7 @@ flow:
           message: "Hey, You just reached our request limit!"
           rules: #configure match rules against request's PATH, eg: /_cluster/health, match the first rule and return
             - pattern: "/(?P<index_name>medcl)/_search" #use index name, will match: /medcl/_search, with limit medcl with max_qps ~=3
-              max_qps: 3 #setting max qps after match
+              max_qps: 100 #setting max qps after match
               group: index_name #use regex group name to extract the throttle bucket name
             - pattern: "/(?P<index_name>.*?)/_search" #use regex pattern to match index, will match any /$index/_search, and limit each index with max_qps ~=100
               max_qps: 100
