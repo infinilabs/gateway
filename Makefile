@@ -105,9 +105,10 @@ build-linux:
 	GOOS=linux  GOARCH=386    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-linux32
 
 build-arm:
+	#GOOS=linux  GOARCH=arm64    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-arm64
 	GOOS=linux  GOARCH=arm   GOARM=5    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-armv5
-	# for Raspberry Pi
-	#env GOOS=linux GOARCH=arm GOARM=5 go build
+	GOOS=linux  GOARCH=arm   GOARM=6    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-armv6
+	GOOS=linux  GOARCH=arm   GOARM=7    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-armv7
 
 build-darwin:
 	GOOS=darwin  GOARCH=amd64     $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-darwin64
@@ -203,7 +204,13 @@ package-linux-platform:
 	@echo "Packaging Linux"
 	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/linux64.tar.gz     $(APP_NAME)-linux64 $(APP_CONFIG)
 	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/linux32.tar.gz     $(APP_NAME)-linux32 $(APP_CONFIG)
+
+package-linux-arm-platform:
+	@echo "Packaging Linux (ARM)"
+	#cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/arm64.tar.gz       $(APP_NAME)-arm64   $(APP_CONFIG)
 	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/armv5.tar.gz       $(APP_NAME)-armv5   $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/armv6.tar.gz       $(APP_NAME)-armv6   $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/armv7.tar.gz       $(APP_NAME)-armv7   $(APP_CONFIG)
 
 package-windows-platform:
 	@echo "Packaging Windows"
