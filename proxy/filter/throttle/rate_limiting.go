@@ -6,7 +6,7 @@ import (
 	"infini.sh/framework/core/rate"
 	"infini.sh/framework/lib/fasthttp"
 	"regexp"
-	log "src/github.com/cihub/seelog"
+	log "github.com/cihub/seelog"
 )
 
 type RateLimitFilter struct {
@@ -21,7 +21,7 @@ var inited bool
 
 type MatchRules struct {
 	Pattern string //pattern
-	MaxQPS  int //max_qps
+	MaxQPS  int64 //max_qps
 	reg     *regexp.Regexp
 	ExtractGroup string
 }
@@ -43,6 +43,29 @@ func (this *MatchRules)Match(input string)bool  {
 	return this.reg.MatchString(input)
 }
 
+func (this *MatchRules) Valid()bool {
+
+	if this.MaxQPS<=0{
+		log.Warnf("invalid throttle rule, pattern:[%v] group:[%v] max_qps:[%v], reset max_qps to 10,000",this.Pattern,this.ExtractGroup,this.MaxQPS)
+		this.MaxQPS=10000
+	}
+
+	reg,err:= regexp.Compile(this.Pattern)
+	if err!=nil{
+		return false
+	}
+
+	if this.ExtractGroup==""{
+		return false
+	}
+
+	if this.reg==nil{
+		this.reg=reg
+	}
+
+	return true
+}
+
 func (filter RateLimitFilter) Process(ctx *fasthttp.RequestCtx) {
 
 	if !inited{
@@ -53,8 +76,12 @@ func (filter RateLimitFilter) Process(ctx *fasthttp.RequestCtx) {
 			x:=v.(map[string]interface{})
 			z:=MatchRules{}
 			z.Pattern=x["pattern"].(string)
-			z.MaxQPS = int(x["max_qps"].(uint64))
 			z.ExtractGroup = x["group"].(string)
+			z.MaxQPS,_= param.GetInt64OrDefault(x["max_qps"],-1024)
+			if !z.Valid(){
+				log.Warnf("invalid throttle rule, pattern:[%v] group:[%v] max_qps:[%v], skipping",z.Pattern,z.ExtractGroup,z.MaxQPS)
+				continue
+			}
 			results=append(results,z)
 		}
 		filter.Set("rules_obj",results)
