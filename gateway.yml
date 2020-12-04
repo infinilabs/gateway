@@ -2,15 +2,18 @@ path.data: data
 path.logs: log
 
 entry:
-  - name: es_gateway
+  - name: es_gateway #your gateway endpoint
     enabled: true
-    router: default
+    router: default #configure your gateway's routing flow
     network:
       binding: 0.0.0.0:8000
-      reuse_port: true
+#      skip_occupied_port: false
+      reuse_port: true #you can start multi gateway instance, they share same port, to full utilize system's resources
+    tls:
+      enabled: true #if your es is using https, the gateway entrypoint should enable https too
 
 flow:
-  - name: not_found
+  - name: not_found #testing flow
     filter:
       - name: not_found
         type: echo
@@ -18,12 +21,11 @@ flow:
           str: "404 not found\n"
           repeat: 1
   - name: cache_first
-    filter:
-#      - name: get_cache_1
-#        type: get_cache
-#        parameters:
-#          pass_patterns: ["_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"]
-#          max_response_size: 102400
+    filter: #comment out any filter sections, like you don't need cache or rate-limiter
+      - name: get_cache_1
+        type: get_cache
+        parameters:
+          pass_patterns: ["_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"]
 #          hash_factor:
 #            header:
 #              - "*"
@@ -40,22 +42,22 @@ flow:
         type: rate_limit
         parameters:
           message: "Hey, You just reached our request limit!"
-          rules:
-            - pattern: "/(?P<index_name>medcl)/_search" #use index name
-              max_qps: 3
-              group: index_name
-            - pattern: "/(?P<index_name>.*?)/_search" #use regex pattern to match index
+          rules: #configure match rules against request's PATH, eg: /_cluster/health, match the first rule and return
+            - pattern: "/(?P<index_name>medcl)/_search" #use index name, will match: /medcl/_search, with limit medcl with max_qps ~=3
+              max_qps: 3 #setting max qps after match
+              group: index_name #use regex group name to extract the throttle bucket name
+            - pattern: "/(?P<index_name>.*?)/_search" #use regex pattern to match index, will match any /$index/_search, and limit each index with max_qps ~=100
               max_qps: 100
               group: index_name
       - name: elasticsearch_1
         type: elasticsearch
         parameters:
-          elasticsearch: default
-          max_connection: 1000 #default for nodes
-          max_response_size: 104857600 #default for nodes
+          elasticsearch: default  #elasticsearch configure reference name
+          max_connection: 1000 #max tcp connection to upstream, default for all nodes
+          max_response_size: 104857600 #default for all nodes
           balancer: weight
-          weight:
-            - host: 192.168.3.1:9200
+          weight: #overwride host's weight, the default weight is 1
+            - host: 192.168.3.1:9200 #the format is host:port
               weight: 10
             - host: 192.168.3.2:9200
               weight: 20
@@ -63,28 +65,33 @@ flow:
             enabled: true
       - name: set_cache_1
         type: set_cache
+#        parameters:
+#          max_response_size: 102400
+#          cache_ttl: 10s
+#          max_cache_items: 100000
+
 
 
 router:
   - name: default
     default_flow: cache_first
-    rules:
-      - id: 1
+    rules: #rules can't be conflicted with each other, will be improved in the future
+      - id: 1 # this rule means match every requests, and sent to `cache_first` flow
         method:
           - "*"
         pattern:
           - /
-        priority: 1
+#        priority: 1
         flow:
-          - cache_first
+          - cache_first # after match, which processing flow will go through
 
 elasticsearch:
 - name: default
   enabled: true
-  endpoint: http://localhost:9200
-  version: 7.6.0
+  endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
+  version: 7.6.0 #optional, used to select es adaptor, can be done automatically after connect to es
   index_prefix: proxy-
-  basic_auth:
+  basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
     username: elastic
     password: pass
 
