@@ -17,10 +17,8 @@ limitations under the License.
 package main
 
 import (
-	"errors"
 	_ "expvar"
 	"infini.sh/framework"
-	"infini.sh/framework/core/env"
 	"infini.sh/framework/core/module"
 	pipe "infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
@@ -30,17 +28,15 @@ import (
 	"infini.sh/framework/modules/filter"
 	"infini.sh/framework/modules/pipeline"
 	"infini.sh/framework/modules/queue"
-	"infini.sh/framework/modules/ui"
 	stats "infini.sh/framework/plugins/stats_statsd"
 	"infini.sh/gateway/config"
 	"infini.sh/gateway/service/floating_ip"
 	"infini.sh/gateway/service/gateway"
 	"infini.sh/gateway/service/indexing"
-	"infini.sh/gateway/web"
+	"infini.sh/license"
 )
 
 var appConfig *config.AppConfig
-var appUI *web.UI
 
 func main() {
 
@@ -61,21 +57,7 @@ func main() {
 
 	app.Start(func() {
 
-		appConfig = &config.AppConfig{
-			UI: config.UIConfig{LocalPath: ".public", LocalEnabled: true, VFSEnabled: true,Enabled: true},
-		}
-
-		ok, err := env.ParseConfig("web", appConfig)
-		if err != nil {
-			panic(err)
-		}
-		if !ok {
-			panic(errors.New("config not exists"))
-		}
-
-		//load web UI files
-		appUI = &web.UI{Config: appConfig}
-		appUI.InitUI()
+		license.Verify()
 
 		//load core modules first
 		module.RegisterSystemModule(elastic.ElasticModule{})
@@ -83,7 +65,6 @@ func main() {
 		module.RegisterSystemModule(filter.FilterModule{})
 		module.RegisterSystemModule(queue.DiskQueue{})
 		module.RegisterSystemModule(api.APIModule{})
-		module.RegisterSystemModule(ui.UIModule{})
 		module.RegisterSystemModule(pipeline.PipeModule{})
 
 		module.RegisterUserPlugin(stats.StatsDModule{})

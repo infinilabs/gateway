@@ -1,52 +1,68 @@
 package elastic
 
 import (
-	"infini.sh/framework/core/env"
-	"infini.sh/framework/core/pipeline"
+	"infini.sh/framework/core/param"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/config"
-	proxy "infini.sh/gateway/proxy/reverse-proxy"
 )
 
 type Elasticsearch struct {
-	pipeline.Parameters
+	param.Parameters
 }
 
 func (filter Elasticsearch) Name() string {
 	return "elasticsearch"
 }
 
-var proxyServer *proxy.ReverseProxy
+var proxyServer *ReverseProxy
 var (
 	proxyConfig = config.ProxyConfig{
-		MaxConcurrency:      1000,
-		PassthroughPatterns: []string{"_cat", "scroll", "scroll_id", "_refresh", "_cluster", "_ccr", "_count", "_flush", "_ilm", "_ingest", "_license", "_migration", "_ml", "_nodes", "_rollup", "_data_stream", "_open", "_close"},
+		MaxConnection: 1000,
+		//PassPatterns:   []string{"_cat", "scroll", "scroll_id", "_refresh", "_cluster", "_ccr", "_count", "_flush", "_ilm", "_ingest", "_license", "_migration", "_ml", "_nodes", "_rollup", "_data_stream", "_open", "_close"},
 	}
 )
+
+//elasticsearch: default
+//pass_pattern: ["_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"]
+//max_connection: 1000 #default for nodes
+//timeout: 60s # default for nodes
+//balancer: weight
+//weight:
+//- host: 192.168.3.1:9200
+//weight: 10
+//- host: 192.168.3.2:9200
+//weight: 20
+//discovery:
+//enabled: false
+//node_filter:
+//- "coordinating"
+//- "ingest"
+//- "data"
+
+
 var inited bool
-var direct bool
 
 func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
+	//
+	//if !ctx.Continue(){
+	//	log.Trace("filter skipped due to process finished")
+	//	return
+	//}
 
 	if !inited {
-		ok, err := env.ParseConfig("proxy", &proxyConfig)
-		if err != nil {
-			panic(err)
-		}
-		if ok {
-			config.SetProxyConfig(proxyConfig)
-			proxyServer = proxy.NewReverseProxy(&proxyConfig)
-		}
+		proxyConfig.Elasticsearch=filter.GetStringOrDefault("elasticsearch","default")
+		proxyConfig.Balancer=filter.GetStringOrDefault("balancer","weight")
+		proxyConfig.MaxResponseBodySize=filter.GetIntOrDefault("max_response_size",100 * 1024 * 1024)
+		proxyConfig.MaxConnection=filter.GetIntOrDefault("max_connection",1000)
+		proxyServer = NewReverseProxy(&proxyConfig)
 		inited = true
-		direct = filter.GetBool("direct", true)
 	}
 
-	if direct {
+	//if direct {
 		proxyServer.DelegateRequest(&ctx.Request, &ctx.Response)
-		return
-	}
+		//return
+	//}
 
-	//size:=joint.GetIntOrDefault("repeat",1)
-	proxyServer.DelegateToUpstream(ctx)
+	//proxyServer.DelegateToUpstream(ctx)
 
 }

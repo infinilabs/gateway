@@ -82,43 +82,6 @@ func (this GatewayModule) Name() string {
 	return "gateway"
 }
 
-//var (
-//	proxyConfig = config.ProxyConfig{
-//		MaxConcurrency:      1000,
-//		PassthroughPatterns: []string{"_cat", "scroll", "scroll_id", "_refresh", "_cluster", "_ccr", "_count", "_flush", "_ilm", "_ingest", "_license", "_migration", "_ml", "_nodes", "_rollup", "_data_stream", "_open", "_close"},
-//	}
-//)
-////var proxyServer *proxy.ReverseProxy
-//
-//func LoadConfig() {
-//
-//	env.ParseConfig("proxy", &proxyConfig)
-//
-//	if !proxyConfig.Enabled {
-//		return
-//	}
-//
-//	config.SetProxyConfig(proxyConfig)
-//
-//	api.Init()
-//	filter.Init()
-//
-//	proxyServer = proxy.NewReverseProxy(&proxyConfig)
-//
-//	//init router, and default handler to
-//	router = r.New()
-//	router.NotFound = proxyServer.DelegateToUpstream
-//
-//	if global.Env().IsDebug{
-//		log.Trace("tracing enabled:", proxyConfig.TracingEnabled)
-//	}
-//
-//	if proxyConfig.TracingEnabled {
-//		router.OnFinishHandler = common.GetFlowProcess("request_logging")
-//	}
-//
-//}
-
 var entryConfigs []common.EntryConfig
 
 func (module GatewayModule) Setup(cfg *Config) {
@@ -131,15 +94,6 @@ func (module GatewayModule) Setup(cfg *Config) {
 	if err!=nil{
 		panic(err)
 	}
-
-	if ok{
-		//for _,v:=range entryConfigs{
-		//	//if v.RouterConfig.Name==""{
-		//	//}
-		//}
-	}
-
-
 
 	flowConfigs:=[]common.FlowConfig{}
 	ok,err=env.ParseConfig("flow",&flowConfigs)
@@ -165,28 +119,6 @@ func (module GatewayModule) Setup(cfg *Config) {
 		}
 	}
 
-
-	//env.ParseConfig("proxy", &proxyConfig)
-	//
-	//if !proxyConfig.Enabled {
-	//	return
-	//}
-	//
-	//config.SetProxyConfig(proxyConfig)
-		//
-	//proxyServer = proxy.NewReverseProxy(&proxyConfig)
-	//
-	////init router, and default handler to
-	//router.NotFound = proxyServer.DelegateToUpstream
-	//
-	//if global.Env().IsDebug{
-	//	log.Trace("tracing enabled:", proxyConfig.TracingEnabled)
-	//}
-	//
-	//if proxyConfig.TracingEnabled {
-	//	router.OnFinishHandler = common.GetFlowProcess("request_logging")
-	//}
-
 }
 var entryPoints= map[string]*entry2.Entrypoint{}
 func (module GatewayModule) Start() error {
@@ -207,10 +139,6 @@ func (module GatewayModule) Start() error {
 		}
 		entryPoints[v.Name]=entry
 	}
-
-
-
-
 
 	return nil
 }

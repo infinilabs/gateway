@@ -26,16 +26,17 @@ type RuleConfig struct {
 
 type FilterConfig struct {
 	Name       string                 `config:"name"`
+	Type       string                 `config:"type"`
 	Parameters map[string]interface{} `config:"parameters"`
 }
 
 type RouterConfig struct {
-	Name         string       `config:"name"`
-	NotFoundFlow string       `config:"not_found"`
-	Rules        []RuleConfig `config:"rules"`
+	Name        string       `config:"name"`
+	DefaultFlow string       `config:"default_flow"`
+	Rules       []RuleConfig `config:"rules"`
 }
 
 type FlowConfig struct {
-	Name    string   `config:"name"`
+	Name    string         `config:"name"`
 	Filters []FilterConfig `config:"filter"`
 }

@@ -62,34 +62,47 @@ func (flow *FilterFlow) ToString() string {
 
 func (flow *FilterFlow) Process(ctx *fasthttp.RequestCtx) {
 	for _, v := range flow.Filters {
+		if !ctx.Continue(){
+			log.Debug(v.Name()," not continued")
+			break
+		}
+		log.Debug("processing ",v.Name())
 		v.Process(ctx)
 	}
 }
 
-func GetFlowProcess(flowID string) func(ctx *fasthttp.RequestCtx) {
-	flow := GetFlow(flowID)
-	return flow.Process
+func MustGetFlow(flowID string) FilterFlow {
+	v, ok := flows[flowID]
+	if ok {
+		return v
+	}
+
+	v=FilterFlow{}
+	cfg:=GetFlowConfig(flowID)
+	for _,z:=range cfg.Filters{
+		f:= GetFilterInstanceWithConfig(&z)
+		v.JoinFilter(f)
+	}
+	flows[flowID]=v
+	return v
 }
 
-func GetFlow(flowID string) FilterFlow {
-	v, ok := flows[flowID]
-	if !ok {
-		panic(errors.Errorf("flow [%s] not found",flowID))
-	}
-	return v
+
+func GetFlowProcess(flowID string) func(ctx *fasthttp.RequestCtx) {
+	flow := MustGetFlow(flowID)
+	return flow.Process
 }
 
 func JoinFlows(flowID ...string) FilterFlow {
 	flow := FilterFlow{}
 	for _, v := range flowID {
-		temp := GetFlow(v)
+		temp := MustGetFlow(v)
 		flow.JoinFlows(flow, temp)
 	}
 	return flow
 }
 
 func GetFilter(name string) RequestFilter {
-
 	v, ok := filters[name]
 	if !ok{
 		panic(errors.Errorf("filter [%s] not found",name))
@@ -98,11 +111,12 @@ func GetFilter(name string) RequestFilter {
 }
 
 
+func GetFilterInstanceWithConfig(cfg *FilterConfig) RequestFilter {
 
-func GetFilterWithConfig(cfg *FilterConfig) RequestFilter {
-	log.Tracef("get filter instances, %v", cfg.Name)
-	if filters[cfg.Name] != nil {
-		t := reflect.ValueOf(filters[cfg.Name]).Type()
+		log.Tracef("get filter instance [%v]", cfg.Name)
+
+		filter:=GetFilter(cfg.Type)
+		t := reflect.ValueOf(filter).Type()
 		v := reflect.New(t).Elem()
 
 		f := v.FieldByName("Data")
@@ -110,8 +124,6 @@ func GetFilterWithConfig(cfg *FilterConfig) RequestFilter {
 			f.Set(reflect.ValueOf(cfg.Parameters))
 		}
 		return v.Interface().(RequestFilter)
-	}
-	panic(errors.New(cfg.Name + " not found"))
 }
 
 var filters map[string]RequestFilter = make(map[string]RequestFilter)
@@ -123,6 +135,7 @@ var flowConfigs map[string]FlowConfig = make(map[string]FlowConfig)
 var routerConfigs map[string]RouterConfig = make(map[string]RouterConfig)
 
 func RegisterFilter(filter RequestFilter) {
+	log.Trace("register filter: ",filter.Name())
 	filters[filter.Name()] = filter
 }
 

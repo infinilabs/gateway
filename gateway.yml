@@ -1,17 +1,5 @@
 path.data: data
 path.logs: log
-#path.plugins: /Users/medcl/go/src/infini.sh/gateway/proxy/plugin
-
-web:
-  enabled: false
-  ui:
-    enabled: true
-    path: .public
-    vfs: true
-    local: true
-  network:
-    binding: 127.0.0.1:2900
-    skip_occupied_port: true
 
 entry:
   - name: es_gateway
@@ -20,179 +8,87 @@ entry:
     network:
       binding: 0.0.0.0:8000
       reuse_port: true
-#  - name: es_secure_gateway
-#    enabled: true
-#    router: default
-#    network:
-#      binding: 0.0.0.0:8001
-#      reuse_port: true
-#    tls:
-#      enabled: true
 
 flow:
-  - name: echo
+  - name: not_found
     filter:
-      - name: elasticsearch
+      - name: not_found
+        type: echo
         parameters:
-          direct: true
-#      - name: echo_dot
+          str: "404 not found\n"
+          repeat: 1
+  - name: cache_first
+    filter:
+#      - name: get_cache_1
+#        type: get_cache
 #        parameters:
-#          repeat: 1
-#  - name: cache_first
-#    filter:
-#      - get_cache
-#      - forward
-#      - set_cache
-#  - name: forward
-#    filter:
-#      - forward
-#  - name: async_indexing_via_translog
-#    filter:
-#      - save_translog
+#          pass_patterns: ["_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"]
+#          max_response_size: 102400
+#          hash_factor:
+#            header:
+#              - "*"
+#            path: true
+#            query_args:
+#              - id
+#          must_cache:
+#            method:
+#              - GET
+#            path:
+#              - _search
+#              - _async_search
+      - name: rate_limit_1
+        type: rate_limit
+        parameters:
+          message: "Hey, You just reached our request limit!"
+          rules:
+            - pattern: "/(?P<index_name>medcl)/_search" #use index name
+              max_qps: 3
+              group: index_name
+            - pattern: "/(?P<index_name>.*?)/_search" #use regex pattern to match index
+              max_qps: 100
+              group: index_name
+      - name: elasticsearch_1
+        type: elasticsearch
+        parameters:
+          elasticsearch: default
+          max_connection: 1000 #default for nodes
+          max_response_size: 104857600 #default for nodes
+          balancer: weight
+          weight:
+            - host: 192.168.3.1:9200
+              weight: 10
+            - host: 192.168.3.2:9200
+              weight: 20
+          discovery:
+            enabled: true
+      - name: set_cache_1
+        type: set_cache
 
 
 router:
   - name: default
-#    not_found: echo
+    default_flow: cache_first
     rules:
       - id: 1
-        desc: "default HTTP flow"
         method:
           - "*"
         pattern:
-          - /*path
+          - /
         priority: 1
         flow:
-          - echo
-
-
+          - cache_first
 
 elasticsearch:
 - name: default
   enabled: true
   endpoint: http://localhost:9200
-#  endpoint: http://127.0.0.1:8080
   version: 7.6.0
   index_prefix: proxy-
   basic_auth:
     username: elastic
     password: pass
 
-output:
-  elasticsearch:
-    - name: primary
-      enabled: true
-      max_connection: 1000
-      mode: pass_through
-      rate_limit:
-        max_qps: 20000
-      timeout: 60s
-      elasticsearch: default
-      weight:
-        - host: 192.168.3.1:9200
-          weight: 10
-        - host: 192.168.3.2:9200
-          weight: 20
-      discovery:
-        enabled: false
-        node_roles:
-          - "coordinating"
-          - "ingest"
-          - "data"
-      balancer: weight
-  kafka:
-    - name: central_kafka
-      host: 192.168.3.100
-      port: 8031
-  disk_queue:
-    - name: request_logging
-      max_file_size: "1gb"
-      max_file_count: 10
-  translog:
-    - name: request_translog
-      max_file_size: "1gb"
-      max_file_count: 10
-
-proxy:
-  enabled: true
-  async_write: false
-  tracing_enabled: true
-  max_concurrency: 5000
-  network:
-    binding: 0.0.0.0:8000
-    reuse_port: true
-  tls:
-    enabled: false
-  cache:
-    enabled: true
-#    type: redis
-    type: ccache
-    ttl: 60s #can be adjusted by avg query latency, + random 20%
-    max_cached_item: 5000
-  balancer: weight
-  pass_through: ["_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"]
-  upstream:
-    - name: primary
-      enabled: true
-      weight: 10
-      max_connection: 1000
-      mode: pass_through
-      rate_limit:
-        max_qps: 20000
-      queue_name: primary
-      max_queue_depth: -1
-      timeout: 60s
-      elasticsearch: default
-      discovery_nodes: false
-
-statsd:
-  enabled: true
-  host: 192.168.3.98
-  port: 8125
-  namespace: gateway.
-
-
-#pipelines:
-#- name: request_logging_index
-#  start:
-#    joint: json_indexing
-#    enabled: true
-#    parameters:
-#      index_name: "gateway_requests"
-#      elasticsearch: "gateway"
-#      input_queue: "request_logging"
-#      num_of_messages: 1
-#      timeout: "10s"
-#      worker_size: 6
-#      bulk_size: 4
-#  process: []
-
-
 modules:
 - name: elastic
   elasticsearch: default
   enabled: true
-  indexer_enabled: false
-  store_enabled: false
-  orm_enabled: false
-
-#- name: pipeline
-#  enabled: true
-#  runners:
-#    - name: request_logging_index
-#      enabled: true
-#      max_go_routine: 3
-#      threshold_in_ms: 0
-#      timeout_in_ms: 5000
-#      pipeline_id: request_logging_index
-
-
-#services:
-#  enabled: true
-#  service:
-#    - name: request_logging_index
-#      enabled: true
-#      max_go_routine: 3
-#      threshold_in_ms: 0
-#      timeout_in_ms: 5000
-#      pipeline_id: request_logging_index

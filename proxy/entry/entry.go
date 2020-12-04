@@ -89,7 +89,8 @@ func (this *Entrypoint) Start() error {
 			for _,y:=range x.Flow{
 				cfg:=common.GetFlowConfig(y)
 				for _,z:=range cfg.Filters{
-					f:=common.GetFilterWithConfig(&z)
+					log.Tracef("get filter, %v\n",z)
+					f:=common.GetFilterInstanceWithConfig(&z)
 					flow.JoinFilter(f)
 				}
 			}
@@ -110,8 +111,8 @@ func (this *Entrypoint) Start() error {
 		}
 	}
 
-	if this.routerConfig.NotFoundFlow!=""{
-		this.router.NotFound=common.GetFlowProcess(this.routerConfig.NotFoundFlow)
+	if this.routerConfig.DefaultFlow !=""{
+		this.router.NotFound=common.GetFlowProcess(this.routerConfig.DefaultFlow)
 	}else{
 		this.router.NotFound= func(ctx *fasthttp.RequestCtx) {
 			ctx.Response.SetBody([]byte("NOT FOUND"))
@@ -254,6 +255,4 @@ func (this *Entrypoint) Stop() error {
 		return nil
 	}
 	return this.server.Shutdown()
-	//translog.Close()
-
 }

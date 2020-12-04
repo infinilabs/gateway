@@ -19,10 +19,6 @@ type HeaderFilter interface {
 	Filter
 }
 
-type GroupFilter interface {
-	Filter
-}
-
 type ServiceFilter interface {
 	Filter
 	Process(ctx *fasthttp.RequestCtx)

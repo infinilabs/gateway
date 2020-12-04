@@ -33,7 +33,7 @@ OUTPUT_DIR := $(CURDIR)/bin
 
 # INFINI framework
 INFINI_BASE_FOLDER := $(OLDGOPATH)/src/infini.sh/
-FRAMEWORK_FOLDER := $(INFINI_BASE_FOLDER)framework/
+FRAMEWORK_FOLDER := $(INFINI_BASE_FOLDER)/framework/
 FRAMEWORK_REPO := ssh://git@git.infini.ltd:64221/infini/framework.git
 FRAMEWORK_BRANCH := master
 FRAMEWORK_VENDOR_FOLDER := $(CURDIR)/../vendor/
@@ -63,9 +63,14 @@ endif
 
 default: build
 
+env:
+	@echo OLDGOPATH：$(OLDGOPATH)
+	@echo GOPATH：$(GOPATH)
+	@echo NEWGOPATH：$(NEWGOPATH)
+	@echo INFINI_BASE_FOLDER：$(INFINI_BASE_FOLDER)
+	@echo FRAMEWORK_FOLDER：$(FRAMEWORK_FOLDER)
+
 build: config
-	@#echo $(GOPATH)
-	@echo $(NEWGOPATH)
 	$(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)
 	@$(MAKE) restore-generated-file
 

@@ -244,7 +244,7 @@ package api
 //	//_update_by_query?
 //	//_reindex?
 //	//xxx?refresh=yy
-//	if util.ContainsAnyInArray(url, config.GetProxyConfig().PassthroughPatterns) ||
+//	if util.ContainsAnyInArray(url, config.GetProxyConfig().PassPatterns) ||
 //		(handler.GetParameter(req, "refresh") != "") {
 //		handler.handleRead(w, req, body)
 //		return

@@ -2,9 +2,13 @@ package translog
 
 import (
 	"bufio"
+	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
+	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/stats"
 	"infini.sh/framework/lib/fasthttp"
 	cap "infini.sh/gateway/trash/captn"
+	"net/http"
 	"os"
 	"path"
 	"sync"
@@ -82,6 +86,8 @@ func initBatch() {
 		panic(err)
 	}
 }
+
+
 
 func SaveRequest(ctx *fasthttp.RequestCtx) {
 	lock.Lock()
@@ -164,3 +170,40 @@ func bufWriteContent(data *[]byte) {
 	//	panic(err)
 	//}
 }
+
+
+
+
+var jsonOK = "{ \"took\" : 1, \"errors\" : false }"
+var bulkRequestOKBody = []byte(jsonOK)
+
+
+type TranslogOutput struct {
+	param.Parameters
+}
+
+func (filter TranslogOutput) Name() string {
+	return "translog"
+}
+
+func (filter TranslogOutput) Process(ctx *fasthttp.RequestCtx) {
+
+	//if p.proxyConfig.AsyncWrite && strings.Contains(ctx.URI().String(), "_bulk") {
+
+		stats.Increment("request", "action.bulk")
+
+		if global.Env().IsDebug {
+			log.Trace("saving bulk request")
+		}
+
+		SaveRequest(ctx)
+
+		ctx.Response.SetStatusCode(http.StatusOK)
+		ctx.Response.SetBodyRaw(bulkRequestOKBody)
+
+	//}
+
+}
+
+
+

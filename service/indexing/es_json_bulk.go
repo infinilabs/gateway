@@ -21,6 +21,7 @@ import (
 	"fmt"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/elastic"
+	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/stats"
@@ -30,7 +31,7 @@ import (
 )
 
 type JsonBulkIndexingJoint struct {
-	pipeline.Parameters
+	param.Parameters
 	inputQueueName string
 }
 

@@ -52,3 +52,9 @@
 - System capacity check
 - Circuit breaker check
 - Metrics collector
+
+
+# Routing Logic
+- 根据 Path 匹配 Trie 树，如果匹配则获取到 flow 定义，如果匹配不到则遍历规则库
+- 如果匹配到规则库，则保存匹配到的路径和规则到 Trie 树
+- 如果匹配不到也保存到规则库

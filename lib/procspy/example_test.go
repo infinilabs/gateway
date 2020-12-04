@@ -2,8 +2,7 @@ package procspy_test
 
 import (
 	"fmt"
-
-	"github.com/weaveworks/procspy"
+	"infini.sh/gateway/lib/procspy"
 )
 
 func Example() {

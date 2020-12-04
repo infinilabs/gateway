@@ -2,8 +2,7 @@ package main
 
 import (
 	"fmt"
-
-	"github.com/weaveworks/procspy"
+	"infini.sh/gateway/lib/procspy"
 )
 
 func main() {
