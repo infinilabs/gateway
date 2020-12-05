@@ -137,7 +137,7 @@ type Router struct {
 	// unrecovered panics.
 	PanicHandler func(*fasthttp.RequestCtx, interface{})
 
-	OnFinishHandler func(*fasthttp.RequestCtx)
+	OnFinishHandler fasthttp.RequestHandler
 }
 
 // New returns a new initialized Router.

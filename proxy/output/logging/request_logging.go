@@ -3,6 +3,7 @@ package logging
 import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
+	"infini.sh/framework/core/param"
 	"infini.sh/framework/lib/fastjson_marshal"
 	"infini.sh/gateway/common/model"
 	"strings"
@@ -15,16 +16,17 @@ import (
 )
 
 type RequestLogging struct {
+	param.Parameters
 }
 
-func (joint RequestLogging) Name() string {
+func (this RequestLogging) Name() string {
 	return "request_logging"
 }
 
 var w fastjson_marshal.Writer
 var lock sync.Mutex
 
-func (joint RequestLogging) Process(ctx *fasthttp.RequestCtx) {
+func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 
 	if global.Env().IsDebug {
 		log.Trace("start logging requests")
@@ -166,7 +168,7 @@ func (joint RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 
 	//fmt.Println("logging now", string(w.Bytes()))
 
-	err = queue.Push("request_logging", w.Bytes())
+	err = queue.Push(this.GetStringOrDefault("queue_name","request_logging"), w.Bytes())
 	lock.Unlock()
 	if err != nil {
 		panic(err)

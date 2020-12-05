@@ -34,6 +34,7 @@ type RouterConfig struct {
 	Name        string       `config:"name"`
 	DefaultFlow string       `config:"default_flow"`
 	Rules       []RuleConfig `config:"rules"`
+	TracingFlow string       `config:"tracing_flow"`
 }
 
 type FlowConfig struct {

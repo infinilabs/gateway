@@ -371,9 +371,8 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 			stats.Increment("cache", "hit")
 
 			ctx.Response.Cached=true
-
 			ctx.Response.Header.DisableNormalizing()
-			ctx.Response.Header.Add("INFINI-CACHED", "YES")
+			ctx.Response.Header.Add("INFINI-CACHE", "CACHED")
 
 			filter.Decode(item, &ctx.Request, &ctx.Response)
 
@@ -384,8 +383,12 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 
 			ctx.Finished()
 		}else{
+			//ctx.Response.Header.Add("INFINI-CACHE", "MISSED")
 			stats.Increment("cache", "miss")
 		}
+	}else{
+		stats.Increment("cache", "skip")
+		//ctx.Response.Header.Add("INFINI-CACHE", "SKIPPED")
 	}
 }
 

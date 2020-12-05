@@ -69,11 +69,17 @@ flow:
 #          max_response_size: 102400
 #          cache_ttl: 10s
 #          max_cache_items: 100000
-
+  - name: request_logging
+    filter:
+      - name: request_logging_1
+        type: request_logging
+        parameters:
+          queue_name: request_logging
 
 
 router:
   - name: default
+    tracing_flow: request_logging #a flow will execute after request finish
     default_flow: cache_first
     rules: #rules can't be conflicted with each other, will be improved in the future
       - id: 1 # this rule means match every requests, and sent to `cache_first` flow
@@ -90,12 +96,38 @@ elasticsearch:
   enabled: true
   endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
   version: 7.6.0 #optional, used to select es adaptor, can be done automatically after connect to es
-  index_prefix: proxy-
+  index_prefix: gateway_
   basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
     username: elastic
     password: pass
 
 modules:
 - name: elastic
-  elasticsearch: default
   enabled: true
+  elasticsearch: default
+  init_template: true
+- name: pipeline
+  enabled: true
+  runners:
+    - name: primary
+      enabled: true
+      max_go_routine: 1
+      threshold_in_ms: 0
+      timeout_in_ms: 5000
+      pipeline_id: request_logging_index
+
+
+pipelines:
+- name: request_logging_index
+  start:
+    joint: json_indexing
+    enabled: true
+    parameters:
+      index_name: "gateway_requests"
+      elasticsearch: "default"
+      input_queue: "request_logging"
+      num_of_messages: 1
+      timeout: "60s"
+      worker_size: 6
+      bulk_size: 4
+  process: []

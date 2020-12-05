@@ -89,7 +89,7 @@ func (this *Entrypoint) Start() error {
 			for _,y:=range x.Flow{
 				cfg:=common.GetFlowConfig(y)
 				for _,z:=range cfg.Filters{
-					log.Tracef("get filter, %v\n",z)
+					log.Tracef("get filter, %v",z)
 					f:=common.GetFilterInstanceWithConfig(&z)
 					flow.JoinFilter(f)
 				}
@@ -118,6 +118,13 @@ func (this *Entrypoint) Start() error {
 			ctx.Response.SetBody([]byte("NOT FOUND"))
 			ctx.Response.SetStatusCode(404)
 		}
+	}
+
+	if this.routerConfig.TracingFlow!=""{
+		if global.Env().IsDebug{
+			log.Debugf("tracing flow placed: %s",this.routerConfig.TracingFlow)
+		}
+		this.router.OnFinishHandler=common.GetFlowProcess(this.routerConfig.TracingFlow)
 	}
 
 	this.server = &fasthttp.Server{
