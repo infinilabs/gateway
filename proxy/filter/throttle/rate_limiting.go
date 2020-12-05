@@ -104,14 +104,14 @@ func (filter RateLimitFilter) Process(ctx *fasthttp.RequestCtx) {
 			item:=v.Extract(key)
 
 			if global.Env().IsDebug{
-				log.Debug(key," matches ",v.Pattern,"extract:",item)
+				log.Debug(key," matches ",v.Pattern,",extract:",item)
 			}
 
 			if item!=""{
 				if !rate.GetRaterWithDefine(v.Pattern,item, int(v.MaxQPS)).Allow(){
 
 					if global.Env().IsDebug{
-						log.Debug(key," reach limited ",v.Pattern,"extract:",item)
+						log.Debug(key," reach limited ",v.Pattern,",extract:",item)
 					}
 
 					ctx.SetStatusCode(429)

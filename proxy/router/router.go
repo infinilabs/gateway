@@ -293,7 +293,10 @@ func (r *Router) allowed(path, reqMethod string) (allow string) {
 func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 
 	if r.OnFinishHandler !=nil{
-		defer r.OnFinishHandler(ctx)
+		defer func() {
+			ctx.Resume()
+			r.OnFinishHandler(ctx)
+		}()
 	}
 
 	if r.PanicHandler != nil {

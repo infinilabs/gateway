@@ -62,7 +62,7 @@ func (flow *FilterFlow) ToString() string {
 
 func (flow *FilterFlow) Process(ctx *fasthttp.RequestCtx) {
 	for _, v := range flow.Filters {
-		if !ctx.Continue(){
+		if !ctx.ShouldContinue(){
 			log.Debug(v.Name()," not continued")
 			break
 		}

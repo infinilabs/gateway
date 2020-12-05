@@ -52,21 +52,27 @@ flow:
       - name: elasticsearch_1
         type: elasticsearch
         parameters:
+#          elasticsearch: prod  #elasticsearch configure reference name
           elasticsearch: default  #elasticsearch configure reference name
           max_connection: 1000 #max tcp connection to upstream, default for all nodes
-          max_response_size: 104857600 #default for all nodes
+          max_response_size: -1 #default for all nodes
           balancer: weight
-          weight: #overwride host's weight, the default weight is 1
-            - host: 192.168.3.1:9200 #the format is host:port
-              weight: 10
-            - host: 192.168.3.2:9200
-              weight: 20
+#          weight: #overwride host's weight, the default weight is 1
+#            - host: 192.168.3.201:9200 #the format is host:port
+#              weight: 10
+#            - host: 192.168.3.202:9200
+#              weight: 20
+#            - host: 192.168.3.203:9200
+#              weight: 30
+#            - host: 192.168.3.199:9200
+#              weight: 3
           discovery:
             enabled: true
       - name: set_cache_1
         type: set_cache
 #        parameters:
-#          max_response_size: 102400
+#          min_response_size: 100
+#          max_response_size: 1024000
 #          cache_ttl: 10s
 #          max_cache_items: 100000
   - name: request_logging
@@ -100,6 +106,12 @@ elasticsearch:
   basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
     username: elastic
     password: pass
+#- name: prod
+#  enabled: true
+#  endpoint: http://192.168.3.201:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
+#  basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
+#    username: elastic
+#    password: pass
 
 modules:
 - name: elastic
@@ -131,3 +143,12 @@ pipelines:
       worker_size: 6
       bulk_size: 4
   process: []
+
+
+queue:
+  min_msg_size: 1
+  max_msg_size: 500000000
+  max_bytes_per_file: 50*1024*1024*1024
+  sync_every_in_seconds: 10
+  sync_timeout_in_seconds: 10
+  read_chan_buffer: 0

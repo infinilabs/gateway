@@ -476,11 +476,7 @@ func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
 
 	method := string(ctx.Request.Header.Method())
 	url := string(ctx.Request.RequestURI())
-	args := ctx.Request.URI().QueryArgs()
-
-	if global.Env().IsDebug {
-		fmt.Println(method, ",", url, ",", args)
-	}
+	//args := ctx.Request.URI().QueryArgs()
 
 	//cache 200 only TODO allow configure to support: 404/200/201/500, also set TTL
 	if ctx.Response.StatusCode() == http.StatusOK {
