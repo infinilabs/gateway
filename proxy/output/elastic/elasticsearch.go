@@ -54,6 +54,7 @@ func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
 		proxyConfig.Balancer=filter.GetStringOrDefault("balancer","weight")
 		proxyConfig.MaxResponseBodySize=filter.GetIntOrDefault("max_response_size",100 * 1024 * 1024)
 		proxyConfig.MaxConnection=filter.GetIntOrDefault("max_connection",1000)
+		filter.Config("discovery",&proxyConfig.Discover)
 		proxyServer = NewReverseProxy(&proxyConfig)
 		inited = true
 	}

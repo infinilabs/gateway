@@ -10,6 +10,7 @@ import (
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/stats"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/config"
 	"infini.sh/gateway/proxy/balancer"
@@ -52,6 +53,7 @@ func NewReverseProxy(cfg *config.ProxyConfig) *ReverseProxy {
 			endpoint:=y.(map[string]interface{})["http"].(map[string]interface{})["publish_address"].(string)
 			endpoints=append(endpoints,endpoint)
 		}
+		log.Infof("discovery %v nodes: [%v]",len(nodes.Nodes),util.JoinArray(endpoints,", "))
 	}else{
 		endpoints=append(endpoints,esConfig.GetHost())
 	}
