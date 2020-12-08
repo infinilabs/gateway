@@ -1,9 +1,9 @@
 
-INFINIBYTE, a lightweight data gateway written in golang.
+INFINI-GATEWAY, a high performance and lightweight gateway written in golang, for elasticsearch and his friends.
 
 # Features
 - Auto handling upstream failure while indexing, aka nonstop indexing
-- Auto detect the upstream failure in search
+- Auto detect upstream failure in search
 - Multiple write mechanism, one indexing request map to multi remote elasticsearch clusters
 - Support TLS/HTTPS, generate the cert files automatically
 - Support run background as daemon mode(only available on linux and macOS)
@@ -14,9 +14,15 @@ INFINIBYTE, a lightweight data gateway written in golang.
 - Search throttling, limit concurrent connections to upstream(WIP)
 - Builtin stats API and management UI(WIP)
 - Builtin floating IP, support seamless failover and rolling upgrade
+- Request logging
 
+# Build
 
-# Benchmark Test
+```
+GOPATH="/Users/medcl/go" make build
+```
+
+# Benchmark
 
 ```
 [root@LINUX linux64]# ./esm -s https://elastic:pass@id.domain.cn:9343 -d https://elastic:pass@id.domain.cn:8000 -x medcl2 -y medcl23 -r -w 200 --sliced_scroll_size=40 -b 5 -t=30m
@@ -35,6 +41,10 @@ The docker image size is only 8.7 MB.
 Pull it from official docker hub
 ```
 docker pull medcl/infini-gateway:latest
+```
+Or build your own image locally
+```
+docker build -t medcl/infini-gateway:latest -f docker/Dockerfile .
 ```
 
 Customize your `proxy.yml`, place somewhere, eg: `/tmp/proxy.yml`
@@ -56,6 +66,4 @@ Rock with your proxy!
 docker run --publish 2900:2900  -v /tmp/gateway.yml:/gateway.yml medcl/infini-gateway:latest
 ```
 
-License
-=======
-Released under the [AGPL](https://infini.sh/LICENSE).
+# Who are using
