@@ -17,11 +17,12 @@ limitations under the License.
 package sample
 
 import (
+	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
-	"math/rand"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/lib/fasthttp"
-	log "github.com/cihub/seelog"
+	"math/rand"
+	"sync"
 )
 
 type SampleFilter struct {
@@ -32,11 +33,31 @@ type SampleFilter struct {
 func (filter SampleFilter) Name() string {
 	return "sample"
 }
-var seeds=rand.New(rand.NewSource(50))
+
+var randPool *sync.Pool
+
+func initPool() {
+	if randPool!=nil{
+		return
+	}
+	randPool = &sync.Pool {
+		New: func()interface{} {
+			return rand.New(rand.NewSource(100))
+		},
+	}
+}
 
 func (filter SampleFilter) Process(ctx *fasthttp.RequestCtx) {
+
+	initPool()
+
 	ratio:=filter.GetFloat32OrDefault("ratio",0.1)
+
 	v:=int(ratio*100)
+
+	seeds:=randPool.Get().(*rand.Rand)
+	defer randPool.Put(seeds)
+
 	r:=seeds.Intn(100)
 
 	if global.Env().IsDebug{
