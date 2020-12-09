@@ -4,6 +4,7 @@ import (
 	"infini.sh/gateway/common"
 	"infini.sh/gateway/proxy/filter/cache"
 	"infini.sh/gateway/proxy/filter/filters"
+	"infini.sh/gateway/proxy/filter/sample"
 	"infini.sh/gateway/proxy/filter/throttle"
 	"infini.sh/gateway/proxy/output/elastic"
 	"infini.sh/gateway/proxy/output/logging"
@@ -18,4 +19,6 @@ func Init()  {
 	common.RegisterFilter(cache.RequestCacheSet{})
 	common.RegisterFilter(throttle.RateLimitFilter{})
 	common.RegisterFilter(filters.RequestHeaderFilter{})
+	common.RegisterFilter(filters.RequestMethodFilter{})
+	common.RegisterFilter(sample.SampleFilter{})
 }
