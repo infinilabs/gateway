@@ -3,6 +3,7 @@ package common
 import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/errors"
+	"infini.sh/framework/core/global"
 	"infini.sh/framework/lib/fasthttp"
 	"reflect"
 	"strings"
@@ -63,10 +64,14 @@ func (flow *FilterFlow) ToString() string {
 func (flow *FilterFlow) Process(ctx *fasthttp.RequestCtx) {
 	for _, v := range flow.Filters {
 		if !ctx.ShouldContinue(){
-			log.Debug(v.Name()," not continued")
+			if global.Env().IsDebug{
+				log.Debugf("filter [%v] not continued",v.Name())
+			}
 			break
 		}
-		log.Debug("processing ",v.Name())
+		if global.Env().IsDebug{
+			log.Debugf("processing filter [%v]",v.Name())
+		}
 		v.Process(ctx)
 	}
 }
