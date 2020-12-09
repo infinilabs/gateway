@@ -96,7 +96,7 @@ func (this *Entrypoint) Start() error {
 			}
 			for _,v:=range x.Method{
 				for _,u:=range x.PathPattern{
-					log.Debugf("apply rule: [%s] [%s] [ %s ]",v,u,flow.ToString())
+					log.Debugf("apply filter flow: [%s] [%s] [ %s ]",v,u,flow.ToString())
 					if v=="*"{
 						this.router.Handle(http.MethodGet,u,flow.Process)
 						this.router.Handle(http.MethodPost,u,flow.Process)
@@ -124,6 +124,9 @@ func (this *Entrypoint) Start() error {
 		if global.Env().IsDebug{
 			log.Debugf("tracing flow placed: %s",this.routerConfig.TracingFlow)
 		}
+
+
+
 		this.router.OnFinishHandler=common.GetFlowProcess(this.routerConfig.TracingFlow)
 	}
 
