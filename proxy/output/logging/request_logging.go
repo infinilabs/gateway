@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"fmt"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
@@ -23,10 +24,24 @@ func (this RequestLogging) Name() string {
 	return "request_logging"
 }
 
-var w fastjson_marshal.Writer
-var lock sync.Mutex
+
+//var lock sync.Mutex
+var writerPool *sync.Pool
+
+func initPool() {
+	if writerPool!=nil{
+		return
+	}
+	writerPool = &sync.Pool {
+		New: func()interface{} {
+			return new(fastjson_marshal.Writer)
+		},
+	}
+}
 
 func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
+
+	initPool()
 
 	if global.Env().IsDebug {
 		log.Trace("start logging requests")
@@ -62,7 +77,6 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 
 	request.Request.RemoteAddr =ctx.RemoteAddr().String()
 	request.Request.LocalAddr =ctx.LocalAddr().String()
-
 
 
 	ce := string(ctx.Request.Header.Peek(fasthttp.HeaderContentEncoding))
@@ -145,10 +159,20 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 		request.Response.Header[strings.ToLower(string(key))] = string(value)
 	})
 
-	lock.Lock()
-	w.Reset()
+	//lock.Lock()
+	var w *fastjson_marshal.Writer
+	v:=writerPool.Get()
+	if v!=nil{
+		w=v.(*fastjson_marshal.Writer)
+		w.Reset()
+	}else{
+		w= &fastjson_marshal.Writer{}
+		fmt.Println("new writer from not pool")
+	}
 
-	err := request.MarshalFastJSON(&w)
+	defer writerPool.Put(w)
+
+	err := request.MarshalFastJSON(w)
 	if err != nil {
 		panic(err)
 	}
@@ -168,8 +192,8 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 
 	//fmt.Println("logging now", string(w.Bytes()))
 
-	err = queue.Push(this.GetStringOrDefault("queue_name","request_logging"), w.Bytes())
-	lock.Unlock()
+	err = queue.Push(this.GetStringOrDefault("queue_name","request_logging"),w.Bytes() )
+	//lock.Unlock()
 	if err != nil {
 		panic(err)
 	}
