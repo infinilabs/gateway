@@ -78,23 +78,29 @@ flow:
 #          max_response_size: 1024000
 #          cache_ttl: 10s
 #          max_cache_items: 100000
-  - name: request_logging
+  - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
-      - name: request_header_filter1
-        type: request_header_filter
-        parameters:
-          exclude: # any rule match will marked request as filtered
-          - ENV: test
+#      - name: request_header_filter1 # filter out the requests that we are not interested, reduce tracing pressure
+#        type: request_header_filter
+#        parameters:
+#          exclude: # any rule match will marked request as filtered
+#          - ENV: test #for example, requests for testing purpose can be filtered, eg: curl localhost:8000 -H "ENV: test"
+#          - INFINI-CACHE: CACHED # cached requests can be filtered safely
 #          include: # any match will marked as pass through, when include was specified but none of these rules are matched, the request will be mark as filtered, the next filters won't continue processing
 #          - TRACE: true # curl localhost:8000 -H "TRACE: true"
 ##          - TRACING: true # curl localhost:8000 -H "TRACING: true"
 #      - name: sample
 #        ratio: "10%"
-#      - name: method_filter
-#        include:
-#          - GET
-#          - HEAD
-#          - DELETE
+      - name: request_method_filter
+        type: request_method_filter
+        parameters:
+          exclude:
+            - PUT
+            - POST
+          include:
+            - GET
+            - HEAD
+            - DELETE
       - name: request_logging_1
         type: request_logging
         parameters:

@@ -38,7 +38,7 @@ func (filter RequestHeaderFilter) Process(ctx *fasthttp.RequestCtx) {
 				if util.ToString(v)==string(v1){
 					ctx.Finished()
 					if global.Env().IsDebug{
-						log.Debugf("this request has been filtered: %v",ctx.Request.URI().String())
+						log.Debugf("rule matched, this request has been filtered: %v",ctx.Request.URI().String())
 					}
 					return
 				}
@@ -55,13 +55,16 @@ func (filter RequestHeaderFilter) Process(ctx *fasthttp.RequestCtx) {
 					log.Debugf("include header [%v]: %v vs %v, match: %v",k,v,string(v1),util.ToString(v)==string(v1))
 				}
 				if util.ToString(v)==string(v1){
+					if global.Env().IsDebug{
+						log.Debugf("rule matched, this request has been marked as good one: %v",ctx.Request.URI().String())
+					}
 					return
 				}
 			}
 		}
 		ctx.Finished()
 		if global.Env().IsDebug{
-			log.Debugf("this request has been filtered: %v",ctx.Request.URI().String())
+			log.Debugf("no rule matched, this request has been filtered: %v",ctx.Request.URI().String())
 		}
 	}
 
@@ -71,6 +74,57 @@ func (filter RequestHeaderFilter) Process(ctx *fasthttp.RequestCtx) {
 type RequestMethodFilter struct {
 	RequestFilter
 }
+
+
+func (filter RequestMethodFilter) Name() string {
+	return "request_method_filter"
+}
+
+func (filter RequestMethodFilter) Process(ctx *fasthttp.RequestCtx) {
+
+	method:=string(ctx.Method())
+
+	if global.Env().IsDebug{
+		log.Debug("method:",method)
+	}
+
+	exclude,ok:=filter.GetStringArray("exclude")
+	if ok{
+		for _,x:=range exclude{
+				if global.Env().IsDebug{
+					log.Debugf("exclude method: %v vs %v, match: %v",x,method,util.ToString(x)==method)
+				}
+				if util.ToString(x)==method{
+					ctx.Finished()
+					if global.Env().IsDebug{
+						log.Debugf("rule matched, this request has been filtered: %v",ctx.Request.URI().String())
+					}
+					return
+				}
+		}
+	}
+
+	include,ok:=filter.GetStringArray("include")
+	if ok{
+		for _,x:=range include{
+				if global.Env().IsDebug{
+					log.Debugf("include method [%v]: %v vs %v, match: %v",x,method,util.ToString(x)==string(method))
+				}
+				if util.ToString(x)== method {
+					if global.Env().IsDebug{
+						log.Debugf("rule matched, this request has been marked as good one: %v",ctx.Request.URI().String())
+					}
+					return
+				}
+		}
+		ctx.Finished()
+		if global.Env().IsDebug{
+			log.Debugf("no rule matched, this request has been filtered: %v",ctx.Request.URI().String())
+		}
+	}
+
+}
+
 
 type RequestUrlPathFilter struct {
 	RequestFilter
