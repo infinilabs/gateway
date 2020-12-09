@@ -4,7 +4,8 @@ path.logs: log
 entry:
   - name: es_gateway #your gateway endpoint
     enabled: true
-    router: default #configure your gateway's routing flow
+#    router: default #configure your gateway's routing flow
+    router: not_found #configure your gateway's routing flow
     network:
       binding: 0.0.0.0:8000
 #      skip_occupied_port: false
@@ -18,7 +19,7 @@ flow:
       - name: not_found
         type: echo
         parameters:
-          str: "404 not found\n"
+          str: '404 not found\n'
           repeat: 1
   - name: cache_first
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
@@ -44,7 +45,7 @@ flow:
           message: "Hey, You just reached our request limit!"
           rules: #configure match rules against request's PATH, eg: /_cluster/health, match the first rule and return
             - pattern: "/(?P<index_name>medcl)/_search" #use index name, will match: /medcl/_search, with limit medcl with max_qps ~=3
-              max_qps: 100 #setting max qps after match
+              max_qps: 3 #setting max qps after match
               group: index_name #use regex group name to extract the throttle bucket name
             - pattern: "/(?P<index_name>.*?)/_search" #use regex pattern to match index, will match any /$index/_search, and limit each index with max_qps ~=100
               max_qps: 100
@@ -68,6 +69,8 @@ flow:
 #              weight: 3
           discovery:
             enabled: true
+#            auto_update: true
+#            auto_update_interval: 10s
       - name: set_cache_1
         type: set_cache
 #        parameters:
@@ -77,6 +80,21 @@ flow:
 #          max_cache_items: 100000
   - name: request_logging
     filter:
+      - name: request_header_filter1
+        type: request_header_filter
+        parameters:
+          exclude: # any rule match will marked request as filtered
+          - ENV: test
+#          include: # any match will marked as pass through, when include was specified but none of these rules are matched, the request will be mark as filtered, the next filters won't continue processing
+#          - TRACE: true # curl localhost:8000 -H "TRACE: true"
+##          - TRACING: true # curl localhost:8000 -H "TRACING: true"
+#      - name: sample
+#        ratio: "10%"
+#      - name: method_filter
+#        include:
+#          - GET
+#          - HEAD
+#          - DELETE
       - name: request_logging_1
         type: request_logging
         parameters:
@@ -96,6 +114,9 @@ router:
 #        priority: 1
         flow:
           - cache_first # after match, which processing flow will go through
+  - name: not_found
+    tracing_flow: request_logging
+    default_flow: not_found
 
 elasticsearch:
 - name: default
@@ -141,7 +162,7 @@ pipelines:
       num_of_messages: 1
       timeout: "60s"
       worker_size: 6
-      bulk_size: 4
+      bulk_size: 5000
   process: []
 
 
@@ -149,6 +170,12 @@ queue:
   min_msg_size: 1
   max_msg_size: 500000000
   max_bytes_per_file: 50*1024*1024*1024
-  sync_every_in_seconds: 10
+  sync_every_in_seconds: 30
   sync_timeout_in_seconds: 10
   read_chan_buffer: 0
+
+statsd:
+  enabled: true
+  host: 127.0.0.1
+  port: 8125
+  namespace: gateway.
