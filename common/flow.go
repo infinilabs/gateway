@@ -108,7 +108,7 @@ func JoinFlows(flowID ...string) FilterFlow {
 }
 
 func GetFilter(name string) RequestFilter {
-	v, ok := filters[name]
+	v, ok := filterTypes[name]
 	if !ok{
 		panic(errors.Errorf("filter [%s] not found",name))
 	}
@@ -116,9 +116,23 @@ func GetFilter(name string) RequestFilter {
 }
 
 
+//TODO check/get filter instance first
 func GetFilterInstanceWithConfig(cfg *FilterConfig) RequestFilter {
+		if global.Env().IsDebug {
+			log.Tracef("get filter instance [%v]", cfg.Name)
+		}
 
-		log.Tracef("get filter instance [%v]", cfg.Name)
+		v1,ok:=filterInstances[cfg.Name]
+		if ok{
+			if global.Env().IsDebug{
+				log.Debugf("hit filter instance [%v], return",cfg.Name)
+			}
+			return v1
+		}
+
+		if cfg.Type==""{
+			panic(errors.Errorf("the type of filter [%v] is not set",cfg.Name))
+		}
 
 		filter:=GetFilter(cfg.Type)
 		t := reflect.ValueOf(filter).Type()
@@ -128,10 +142,13 @@ func GetFilterInstanceWithConfig(cfg *FilterConfig) RequestFilter {
 		if f.IsValid() && f.CanSet() && f.Kind() == reflect.Map {
 			f.Set(reflect.ValueOf(cfg.Parameters))
 		}
-		return v.Interface().(RequestFilter)
+		x:= v.Interface().(RequestFilter)
+		filterInstances[cfg.Name]=x
+		return x
 }
 
-var filters map[string]RequestFilter = make(map[string]RequestFilter)
+var filterTypes map[string]RequestFilter = make(map[string]RequestFilter)
+var filterInstances map[string]RequestFilter = make(map[string]RequestFilter)
 var flows map[string]FilterFlow = make(map[string]FilterFlow)
 
 var filterConfigs map[string]FilterConfig = make(map[string]FilterConfig)
@@ -141,7 +158,7 @@ var routerConfigs map[string]RouterConfig = make(map[string]RouterConfig)
 
 func RegisterFilter(filter RequestFilter) {
 	log.Trace("register filter: ",filter.Name())
-	filters[filter.Name()] = filter
+	filterTypes[filter.Name()] = filter
 }
 
 func RegisterFlow(flow FilterFlow) {
