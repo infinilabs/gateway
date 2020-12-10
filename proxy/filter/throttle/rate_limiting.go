@@ -91,9 +91,7 @@ func (filter RateLimitFilter) Process(ctx *fasthttp.RequestCtx) {
 	rules:=filter.Get("rules_obj").([]MatchRules)
 
 
-
-	path:=ctx.URI().Path()
-	key:=string(path)
+	key:=string(ctx.Path())
 
 	if global.Env().IsDebug{
 		log.Debug(len(rules)," rules,",key)
