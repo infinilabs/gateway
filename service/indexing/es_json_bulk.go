@@ -65,7 +65,7 @@ func (joint JsonBulkIndexingJoint) Process(c *pipeline.Context) error {
 
 	duration := time.Now().Sub(start).Seconds()
 
-	log.Info("bulk duration: ", duration, "s, ", "qps: ", math.Ceil(float64(totalSize)/math.Ceil((duration))))
+	log.Trace("bulk finished: ", duration, "s, ", "qps: ", math.Ceil(float64(totalSize)/math.Ceil((duration))))
 
 	return nil
 }
@@ -73,7 +73,8 @@ func (joint JsonBulkIndexingJoint) Process(c *pipeline.Context) error {
 func (joint JsonBulkIndexingJoint) NewBulkWorker(count *int, bulkSizeInMB int, wg *sync.WaitGroup) {
 	defer func() {
 		if err := recover();err != nil {
-			log.Errorf("error in bulk worker: %s\n", err)
+			log.Errorf("error in bulk worker: %s", err)
+			//TODO failure and save logs for later recovery
 			wg.Done()
 		}
 	}()
