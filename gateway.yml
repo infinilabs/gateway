@@ -169,7 +169,7 @@ pipelines:
       input_queue: "request_logging"
       timeout: "60s"
       worker_size: 1
-      bulk_size: 5000
+      bulk_size_in_mb: 10 #in MB
   process: []
 
 

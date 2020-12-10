@@ -39,10 +39,16 @@ func (joint JsonBulkIndexingJoint) Name() string {
 	return "json_indexing"
 }
 
+//TODO 重启子进程，当子进程挂了之后
 func (joint JsonBulkIndexingJoint) Process(c *pipeline.Context) error {
+	defer func() {
+		if err := recover();err != nil {
+			log.Errorf("error in process: %s\n", err)
+		}
+	}()
 
 	workers, _ := joint.GetInt("worker_size", 1)
-	bulkSizeInMB, _ := joint.GetInt("bulk_size", 10)
+	bulkSizeInMB, _ := joint.GetInt("bulk_size_in_mb", 10)
 	joint.inputQueueName = joint.GetStringOrDefault("input_queue", "es_queue")
 	bulkSizeInMB = 1000000 * bulkSizeInMB
 
@@ -65,6 +71,12 @@ func (joint JsonBulkIndexingJoint) Process(c *pipeline.Context) error {
 }
 
 func (joint JsonBulkIndexingJoint) NewBulkWorker(count *int, bulkSizeInMB int, wg *sync.WaitGroup) {
+	defer func() {
+		if err := recover();err != nil {
+			log.Errorf("error in bulk worker: %s\n", err)
+			wg.Done()
+		}
+	}()
 
 	log.Trace("start bulk worker")
 
@@ -81,6 +93,7 @@ func (joint JsonBulkIndexingJoint) NewBulkWorker(count *int, bulkSizeInMB int, w
 READ_DOCS:
 	for {
 		select {
+
 		case pop := <-queue.ReadChan(joint.inputQueueName):
 
 			stats.IncrementBy("bulk", "event_received", int64(mainBuf.Len()))
