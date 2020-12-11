@@ -134,8 +134,6 @@ func (filter RequestUrlPathFilter) Name() string {
 	return "request_path_filter"
 }
 
-var patterns *radix.Pattern
-
 func (filter RequestUrlPathFilter) Process(ctx *fasthttp.RequestCtx) {
 
 	path := string(ctx.Path())
@@ -252,9 +250,7 @@ func (filter RequestUrlPathFilter) CheckMustNotRules(path string, ctx *fasthttp.
 	if ok {
 		if len(arr) > 0 {
 			hasRules = true
-			if patterns == nil {
-				patterns = radix.Compile(arr...)
-			}
+			patterns := radix.Compile(arr...)
 			ok := patterns.Match(path)
 			if ok {
 				if global.Env().IsDebug {
@@ -350,9 +346,7 @@ func (filter RequestUrlPathFilter) CheckMustRules(path string, ctx *fasthttp.Req
 	if ok {
 		if len(arr) > 0 {
 			hasRules = true
-			if patterns == nil {
-				patterns = radix.Compile(arr...) //TODO handle mutli wildcard rules
-			}
+			patterns := radix.Compile(arr...) //TODO handle mutli wildcard rules
 			ok := patterns.Match(path)
 			if !ok {
 				if global.Env().IsDebug {
@@ -443,9 +437,7 @@ func (filter RequestUrlPathFilter) CheckShouldRules(path string, ctx *fasthttp.R
 	if ok {
 		if len(arr) > 0 {
 			hasShouldRules = true
-			if patterns == nil {
-				patterns = radix.Compile(arr...)
-			}
+			patterns := radix.Compile(arr...)
 			ok := patterns.Match(path)
 			if ok {
 				if global.Env().IsDebug {
