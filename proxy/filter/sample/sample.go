@@ -71,4 +71,5 @@ func (filter SampleFilter) Process(ctx *fasthttp.RequestCtx) {
 		return
 	}
 	ctx.Finished()
+
 }

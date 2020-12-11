@@ -80,10 +80,10 @@ flow:
 ##          max_cache_items: 100000
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
-#      - name: sample_1
-#        type: sample
-#        parameters:
-#          ratio: 0.1
+      - name: sample_1
+        type: sample
+        parameters:
+          ratio: 0.1
       - name: request_path_filter_1
         type: request_path_filter
         parameters:
