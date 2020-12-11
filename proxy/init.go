@@ -21,4 +21,5 @@ func Init()  {
 	common.RegisterFilter(filters.RequestHeaderFilter{})
 	common.RegisterFilter(filters.RequestMethodFilter{})
 	common.RegisterFilter(sample.SampleFilter{})
+	common.RegisterFilter(filters.RequestUrlPathFilter{})
 }
