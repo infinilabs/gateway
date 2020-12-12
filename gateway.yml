@@ -14,70 +14,80 @@ entry:
       enabled: false #if your es is using https, the gateway entrypoint should enable https too
 
 flow:
-#  - name: not_found #testing flow
-#    filter:
-#      - name: not_found
-#        type: echo
+  - name: ingest_to_kafka #ingest to kafka
+    filter:
+      - name: kafka_produce
+        type: kafka_produce
+        parameters:
+          topic: 'gateway_bulk_requests'
+          group: "default"
+          batch_size: 1000
+          brokers:
+            - localhost:9092
+  - name: not_found #testing flow
+    filter:
+      - name: not_found
+        type: echo
+        parameters:
+          str: '404 not found\n'
+          repeat: 1
+  - name: cache_first
+    filter: #comment out any filter sections, like you don't need cache or rate-limiter
+      - name: get_cache_1
+        type: get_cache
+        parameters:
+          pass_patterns: ["_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"]
+#          hash_factor:
+#            header:
+#              - "*"
+#            path: true
+#            query_args:
+#              - id
+#          must_cache:
+#            method:
+#              - GET
+#            path:
+#              - _search
+#              - _async_search
+      - name: rate_limit_1
+        type: rate_limit
+        parameters:
+          message: "Hey, You just reached our request limit!"
+          rules: #configure match rules against request's PATH, eg: /_cluster/health, match the first rule and return
+            - pattern: "/(?P<index_name>medcl)/_search" #use index name, will match: /medcl/_search, with limit medcl with max_qps ~=3
+              max_qps: 3 #setting max qps after match
+              group: index_name #use regex group name to extract the throttle bucket name
+            - pattern: "/(?P<index_name>.*?)/_search" #use regex pattern to match index, will match any /$index/_search, and limit each index with max_qps ~=100
+              max_qps: 100
+              group: index_name
+      - name: elasticsearch_1
+        type: elasticsearch
+        parameters:
+#          elasticsearch: prod  #elasticsearch configure reference name
+          elasticsearch: default  #elasticsearch configure reference name
+          max_connection: 1000 #max tcp connection to upstream, default for all nodes
+          max_response_size: -1 #default for all nodes
+          balancer: weight
+#          weight: #overwride host's weight, the default weight is 1
+#            - host: 192.168.3.201:9200 #the format is host:port
+#              weight: 10
+#            - host: 192.168.3.202:9200
+#              weight: 20
+#            - host: 192.168.3.203:9200
+#              weight: 30
+#            - host: 192.168.3.199:9200
+#              weight: 3
+          discovery:
+            enabled: true
+#            auto_update: true
+#            auto_update_interval: 10s
+      - name: set_cache_1
+        type: set_cache
 #        parameters:
-#          str: '404 not found\n'
-#          repeat: 1
-#  - name: cache_first
-#    filter: #comment out any filter sections, like you don't need cache or rate-limiter
-#      - name: get_cache_1
-#        type: get_cache
-#        parameters:
-#          pass_patterns: ["_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"]
-##          hash_factor:
-##            header:
-##              - "*"
-##            path: true
-##            query_args:
-##              - id
-##          must_cache:
-##            method:
-##              - GET
-##            path:
-##              - _search
-##              - _async_search
-#      - name: rate_limit_1
-#        type: rate_limit
-#        parameters:
-#          message: "Hey, You just reached our request limit!"
-#          rules: #configure match rules against request's PATH, eg: /_cluster/health, match the first rule and return
-#            - pattern: "/(?P<index_name>medcl)/_search" #use index name, will match: /medcl/_search, with limit medcl with max_qps ~=3
-#              max_qps: 3 #setting max qps after match
-#              group: index_name #use regex group name to extract the throttle bucket name
-#            - pattern: "/(?P<index_name>.*?)/_search" #use regex pattern to match index, will match any /$index/_search, and limit each index with max_qps ~=100
-#              max_qps: 100
-#              group: index_name
-#      - name: elasticsearch_1
-#        type: elasticsearch
-#        parameters:
-##          elasticsearch: prod  #elasticsearch configure reference name
-#          elasticsearch: default  #elasticsearch configure reference name
-#          max_connection: 1000 #max tcp connection to upstream, default for all nodes
-#          max_response_size: -1 #default for all nodes
-#          balancer: weight
-##          weight: #overwride host's weight, the default weight is 1
-##            - host: 192.168.3.201:9200 #the format is host:port
-##              weight: 10
-##            - host: 192.168.3.202:9200
-##              weight: 20
-##            - host: 192.168.3.203:9200
-##              weight: 30
-##            - host: 192.168.3.199:9200
-##              weight: 3
-#          discovery:
-#            enabled: true
-##            auto_update: true
-##            auto_update_interval: 10s
-#      - name: set_cache_1
-#        type: set_cache
-##        parameters:
-##          min_response_size: 100
-##          max_response_size: 1024000
-##          cache_ttl: 10s
-##          max_cache_items: 100000
+#          min_response_size: 100
+#          max_response_size: 1024000
+#          cache_ttl: 10s
+#          max_cache_items: 100000
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
       - name: sample_1
@@ -163,8 +173,9 @@ router:
           - cache_first # after match, which processing flow will go through
   - name: not_found
 #    tracing_flow: request_logging
-#    default_flow: not_found
-    default_flow: request_logging
+    default_flow: not_found
+#    default_flow: request_logging
+#    default_flow: ingest_to_kafka
 
 elasticsearch:
 - name: default
