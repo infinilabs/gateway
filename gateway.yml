@@ -4,8 +4,8 @@ path.logs: log
 entry:
   - name: es_gateway #your gateway endpoint
     enabled: true
-#    router: default #configure your gateway's routing flow
-    router: not_found #configure your gateway's routing flow
+    router: default #configure your gateway's routing flow
+#    router: not_found #configure your gateway's routing flow
     network:
       binding: 0.0.0.0:8000
 #      skip_occupied_port: false
@@ -35,8 +35,8 @@ flow:
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
       - name: get_cache_1
         type: get_cache
-        parameters:
-          pass_patterns: ["_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"]
+#        parameters:
+#          pass_patterns: ["_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"]
 #          hash_factor:
 #            header:
 #              - "*"
@@ -49,17 +49,17 @@ flow:
 #            path:
 #              - _search
 #              - _async_search
-      - name: rate_limit_1
-        type: rate_limit
-        parameters:
-          message: "Hey, You just reached our request limit!"
-          rules: #configure match rules against request's PATH, eg: /_cluster/health, match the first rule and return
-            - pattern: "/(?P<index_name>medcl)/_search" #use index name, will match: /medcl/_search, with limit medcl with max_qps ~=3
-              max_qps: 3 #setting max qps after match
-              group: index_name #use regex group name to extract the throttle bucket name
-            - pattern: "/(?P<index_name>.*?)/_search" #use regex pattern to match index, will match any /$index/_search, and limit each index with max_qps ~=100
-              max_qps: 100
-              group: index_name
+#      - name: rate_limit_1
+#        type: rate_limit
+#        parameters:
+#          message: "Hey, You just reached our request limit!"
+#          rules: #configure match rules against request's PATH, eg: /_cluster/health, match the first rule and return
+#            - pattern: "/(?P<index_name>medcl)/_search" #use index name, will match: /medcl/_search, with limit medcl with max_qps ~=3
+#              max_qps: 3 #setting max qps after match
+#              group: index_name #use regex group name to extract the throttle bucket name
+#            - pattern: "/(?P<index_name>.*?)/_search" #use regex pattern to match index, will match any /$index/_search, and limit each index with max_qps ~=100
+#              max_qps: 100
+#              group: index_name
       - name: elasticsearch_1
         type: elasticsearch
         parameters:
@@ -88,15 +88,19 @@ flow:
 #          max_response_size: 1024000
 #          cache_ttl: 10s
 #          max_cache_items: 100000
+#      - name: dump_1
+#        type: dump_url
+#      - name: dump_3
+#        type: dump_header
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
       - name: sample_1
         type: sample
         parameters:
           ratio: 0.1
-      - name: request_path_filter_1
-        type: request_path_filter
-        parameters:
+#      - name: request_path_filter_1
+#        type: request_path_filter
+#        parameters:
 #          must: #must match all rules to continue
 #            prefix:
 #              - /medcl
@@ -121,12 +125,12 @@ flow:
 #              - /*/_refresh
 #            regex:
 #              - ^/m[\w]+dcl
-          should:
+#          should:
 #            prefix:
 #              - /medcl
-            contain:
-              - _search
-              - _async_search
+#            contain:
+#              - _search
+#              - _async_search
 #            suffix:
 #              - _refresh
 #            wildcard:
@@ -152,10 +156,10 @@ flow:
 #            - GET
 #            - HEAD
 #            - DELETE
-#      - name: request_logging_1
-#        type: request_logging
-#        parameters:
-#          queue_name: request_logging
+      - name: request_logging_1
+        type: request_logging
+        parameters:
+          queue_name: request_logging
 
 
 router:
@@ -172,7 +176,7 @@ router:
         flow:
           - cache_first # after match, which processing flow will go through
   - name: not_found
-#    tracing_flow: request_logging
+    tracing_flow: request_logging
     default_flow: not_found
 #    default_flow: request_logging
 #    default_flow: ingest_to_kafka

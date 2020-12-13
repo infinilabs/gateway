@@ -292,7 +292,7 @@ func (p *ReverseProxy) DelegateRequest(req *fasthttp.Request, res *fasthttp.Resp
 	cleanHopHeaders(req)
 
 	if err := pc.Do(req, res); err != nil {
-		log.Errorf("failed to proxy request: %v, %v", err, string(res.Body()))
+		log.Errorf("failed to proxy request: %v, %v", err, string(req.RequestURI()))
 		res.SetStatusCode(http.StatusInternalServerError)
 		res.SetBodyRaw([]byte(err.Error()))
 	}
