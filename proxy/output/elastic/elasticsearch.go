@@ -4,6 +4,7 @@ import (
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/config"
+	"sync"
 )
 
 type Elasticsearch struct {
@@ -41,15 +42,17 @@ var (
 
 
 var inited bool
+var initLock sync.Mutex
 
 func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
-	//
-	//if !ctx.Continue(){
-	//	log.Trace("filter skipped due to process finished")
-	//	return
-	//}
 
 	if !inited {
+		initLock.Lock()
+		defer initLock.Unlock()
+		if inited{
+			return
+		}
+
 		proxyConfig.Elasticsearch=filter.GetStringOrDefault("elasticsearch","default")
 		proxyConfig.Balancer=filter.GetStringOrDefault("balancer","weight")
 		proxyConfig.MaxResponseBodySize=filter.GetIntOrDefault("max_response_size",100 * 1024 * 1024)
@@ -57,13 +60,9 @@ func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
 		filter.Config("discovery",&proxyConfig.Discover)
 		proxyServer = NewReverseProxy(&proxyConfig)
 		inited = true
+
 	}
 
-	//if direct {
-		proxyServer.DelegateRequest(&ctx.Request, &ctx.Response)
-		//return
-	//}
-
-	//proxyServer.DelegateToUpstream(ctx)
+	proxyServer.DelegateRequest(&ctx.Request, &ctx.Response)
 
 }
