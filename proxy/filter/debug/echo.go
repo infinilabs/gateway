@@ -50,11 +50,12 @@ func (filter DumpUrl) Name() string {
 }
 
 func (filter DumpUrl) Process(ctx *fasthttp.RequestCtx) {
-	fmt.Println("request: ",ctx.Request.String())
-	fmt.Println("uri: ",string(ctx.Request.RequestURI()))
-	fmt.Println("uri: ",ctx.Request.URI().String())
-	fmt.Println("query_args: ",ctx.Request.URI().QueryArgs().String())
-	fmt.Println("query_string: ",string(ctx.Request.URI().QueryString()))
-	fmt.Println("username: ",string(ctx.Request.URI().Username()))
-	fmt.Println("password: ",string(ctx.Request.URI().Password()))
+	fmt.Println("request: ", ctx.Request.String())
+	fmt.Println("uri: ", string(ctx.Request.RequestURI()))
+	fmt.Println("uri: ", ctx.Request.URI().String())
+	fmt.Println("query_args: ", ctx.Request.URI().QueryArgs().String())
+	fmt.Println("query_string: ", string(ctx.Request.URI().QueryString()))
+	_,user,pass:=ctx.ParseBasicAuth()
+	fmt.Println("username: ", string(user) )
+	fmt.Println("password: ", string(pass) )
 }
