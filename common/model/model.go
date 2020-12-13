@@ -14,6 +14,7 @@ type Request struct {
 	QueryArgs  map[string]string `json:"query_args,omitempty"`
 	BodyLength int               `json:"body_length"`
 	Body       string            `json:"body,omitempty"`
+	User       string            `json:"user,omitempty"`
 }
 
 type Response struct {

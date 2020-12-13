@@ -78,6 +78,10 @@ func (v *Request) MarshalFastJSON(w *fastjson_marshal.Writer) error {
 		w.RawString(",\"uri\":")
 		w.String(v.URI)
 	}
+	if v.User != "" {
+		w.RawString(",\"user\":")
+		w.String(v.User)
+	}
 	w.RawByte('}')
 	return nil
 }

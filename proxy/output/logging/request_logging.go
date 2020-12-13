@@ -1,7 +1,6 @@
 package logging
 
 import (
-	"fmt"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
@@ -142,8 +141,6 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 
 	request.Response.BodyLength = len(request.Response.Body)
 
-
-
 	request.Request.Header = map[string]string{}
 	ctx.Request.Header.VisitAll(func(key, value []byte) {
 
@@ -152,6 +149,12 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 		//TODO header may need to keep original case, no need to lowercase
 		request.Request.Header[strings.ToLower(string(key))] = string(value)
 	})
+
+	exists,user,_:=ctx.ParseBasicAuth()
+	if exists{
+		request.Request.User=string(user)
+	}
+
 
 	request.Response.Header = map[string]string{}
 	ctx.Response.Header.VisitAll(func(key, value []byte) {
@@ -165,9 +168,6 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 	if v!=nil{
 		w=v.(*fastjson_marshal.Writer)
 		w.Reset()
-	}else{
-		w= &fastjson_marshal.Writer{}
-		fmt.Println("new writer from not pool")
 	}
 
 	defer writerPool.Put(w)
