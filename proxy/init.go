@@ -5,6 +5,7 @@ import (
 	"infini.sh/gateway/proxy/filter/cache"
 	"infini.sh/gateway/proxy/filter/debug"
 	"infini.sh/gateway/proxy/filter/filters"
+	"infini.sh/gateway/proxy/filter/routing"
 	"infini.sh/gateway/proxy/filter/sample"
 	"infini.sh/gateway/proxy/filter/throttle"
 	"infini.sh/gateway/proxy/output/elastic"
@@ -26,4 +27,5 @@ func Init()  {
 	common.RegisterFilter(sample.SampleFilter{})
 	common.RegisterFilter(filters.RequestUrlPathFilter{})
 	common.RegisterFilter(kafka.Kafka{})
+	common.RegisterFilter(routing.RatioRoutingFlowFilter{})
 }
