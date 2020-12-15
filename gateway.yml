@@ -21,7 +21,7 @@ flow:
         parameters:
           flows:
             - write_to_queue_a
-            - write_to_queue_b
+            - write_to_queue_b #last one's response will be output to client
   - name: write_to_queue_a
     filter:
       - name: elasticsearch_a
