@@ -69,11 +69,12 @@ flow:
           repeat: 1
   - name: cache_first
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
-      - name: ratio_traffic_split_1
-        type: ratio_routing
+      - name: ratio_traffic_1
+        type: ratio
         parameters:
           ratio: 0.5 # 50% of requests will routing to another flow: hello_world.
           flow: hello_world
+          continue: false # continue the following filters processing after match and executed the flow, set `false` to return ASAP.
       - name: get_cache_1
         type: get_cache
 #        parameters:

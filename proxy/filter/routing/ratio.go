@@ -18,7 +18,7 @@ type RatioRoutingFlowFilter struct {
 }
 
 func (filter RatioRoutingFlowFilter) Name() string {
-	return "ratio_routing"
+	return "ratio"
 }
 
 var randPool *sync.Pool
@@ -39,6 +39,7 @@ func (filter RatioRoutingFlowFilter) Process(ctx *fasthttp.RequestCtx) {
 	initPool()
 
 	ratio:=filter.GetFloat32OrDefault("ratio",0.1)
+	continueAfterMatch :=filter.GetBool("continue",false)
 
 	v:=int(ratio*100)
 
@@ -59,8 +60,9 @@ func (filter RatioRoutingFlowFilter) Process(ctx *fasthttp.RequestCtx) {
 			log.Debugf("request [%v] go on flow: [%s]",ctx.URI().String(),flow.ToString())
 		}
 		flow.Process(ctx)
-		ctx.Finished()
-		return
+		if continueAfterMatch {
+			ctx.Finished()
+		}
 	}
 
 }
