@@ -9,6 +9,7 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/errors"
+	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
@@ -290,6 +291,10 @@ func (p *ReverseProxy) DelegateRequest(req *fasthttp.Request, res *fasthttp.Resp
 	pc := p.getClient()
 
 	cleanHopHeaders(req)
+
+	if global.Env().IsDebug{
+		log.Tracef("send request [%v] to upstream [%v]",req.URI().String(),pc.Addr)
+	}
 
 	if err := pc.Do(req, res); err != nil {
 		log.Errorf("failed to proxy request: %v, %v", err, string(req.RequestURI()))

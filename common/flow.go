@@ -84,6 +84,11 @@ func MustGetFlow(flowID string) FilterFlow {
 
 	v=FilterFlow{}
 	cfg:=GetFlowConfig(flowID)
+
+	if global.Env().IsDebug{
+		log.Tracef("flow [%v] [%v]",flowID,cfg)
+	}
+
 	for _,z:=range cfg.Filters{
 		f:= GetFilterInstanceWithConfig(&z)
 		v.JoinFilter(f)

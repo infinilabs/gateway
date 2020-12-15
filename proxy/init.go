@@ -28,4 +28,5 @@ func Init()  {
 	common.RegisterFilter(filters.RequestUrlPathFilter{})
 	common.RegisterFilter(kafka.Kafka{})
 	common.RegisterFilter(routing.RatioRoutingFlowFilter{})
+	common.RegisterFilter(routing.CloneFlowFilter{})
 }
