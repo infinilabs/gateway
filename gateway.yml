@@ -24,6 +24,13 @@ flow:
           batch_size: 1000
           brokers:
             - localhost:9092
+  - name: hello_world #testing flow
+    filter:
+      - name: hello_world
+        type: echo
+        parameters:
+          str: 'hello gateway'
+          repeat: 1
   - name: not_found #testing flow
     filter:
       - name: not_found
@@ -33,6 +40,11 @@ flow:
           repeat: 1
   - name: cache_first
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
+      - name: ratio_traffic_split_1
+        type: ratio_routing
+        parameters:
+          ratio: 0.5 # 50% of requests will routing to another flow: hello_world.
+          flow: hello_world
       - name: get_cache_1
         type: get_cache
 #        parameters:
