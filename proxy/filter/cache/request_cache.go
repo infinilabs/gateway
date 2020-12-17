@@ -7,6 +7,7 @@ import (
 	log "github.com/cihub/seelog"
 	"github.com/dgraph-io/ristretto"
 	"github.com/go-redis/redis"
+	"math"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/stats"
@@ -80,7 +81,7 @@ func (p RequestCache) initCache() {
 		panic(err)
 	}
 
-	ccCache = ccache.Layered(ccache.Configure().MaxSize(p.GetInt64OrDefault("max_cache_item", 100000)).ItemsToPrune(100))
+	ccCache = ccache.Layered(ccache.Configure().MaxSize(p.GetInt64OrDefault("max_cache_items", 100000)).ItemsToPrune(100))
 	inited = true
 }
 
@@ -120,9 +121,23 @@ func (p RequestCache) GetCache(key string) ([]byte, bool) {
 }
 
 func (p RequestCache) SetCache(key string, data []byte, ttl time.Duration) {
+
+	if global.Env().IsDebug{
+		log.Trace("set cache:",key,", ttl:",ttl)
+	}
+
+	min,_:=p.GetInt("min_response_size",-1)
+	max,_:=p.GetInt("max_response_size",math.MaxInt32)
+	len:=len(data)
+	if len <min  || len > max{
+		if global.Env().IsDebug{
+			log.Tracef("invalid response size, %v not between %v and %v",len,min,max)
+		}
+		return
+	}
+
 	p.initCache()
 
-	log.Trace("set cache:",key,", ttl:",ttl)
 	switch p.GetStringOrDefault("cache_type", defaultCacheType) {
 	case cacheRedis:
 		err := p.getRedisClient().Set(key, data, ttl).Err()
@@ -408,44 +423,47 @@ type RequestCacheSet struct {
 
 
 
-func (config RequestCacheSet) GetChaosTTLDuration() time.Duration {
-	baseTTL := config.GetTTLDuration().Milliseconds()
+func (filter RequestCacheSet) GetChaosTTLDuration() time.Duration {
+	baseTTL := filter.GetTTLDuration().Milliseconds()
 	randomTTL := rand.Int63n(baseTTL / 5)
 	return (time.Duration(baseTTL + randomTTL)) * time.Millisecond
 }
 
-func (config RequestCacheSet) GetTTLDuration() time.Duration {
-	if config.generalTTLDuration > 0 {
-		return config.generalTTLDuration
+func (filter RequestCacheSet) GetTTLDuration() time.Duration {
+	if filter.generalTTLDuration > 0 {
+		return filter.generalTTLDuration
 	}
 
-	if config.TTL != "" {
-		dur, err := time.ParseDuration(config.TTL)
+	filter.TTL=filter.GetStringOrDefault("cache_ttl","10s")
+
+	if filter.TTL != "" {
+		dur, err := time.ParseDuration(filter.TTL)
 		if err != nil {
 			dur, _ = time.ParseDuration("10s")
 		}
-		config.generalTTLDuration = dur
+		filter.generalTTLDuration = dur
 	} else {
-		config.generalTTLDuration = time.Second * 10
+		filter.generalTTLDuration = time.Second * 10
 	}
-	return config.generalTTLDuration
+
+	return filter.generalTTLDuration
 }
 
-func (config RequestCacheSet) GetAsyncSearchTTLDuration() time.Duration {
-	if config.asyncSearchTTLDuration > 0 {
-		return config.asyncSearchTTLDuration
+func (filter RequestCacheSet) GetAsyncSearchTTLDuration() time.Duration {
+	if filter.asyncSearchTTLDuration > 0 {
+		return filter.asyncSearchTTLDuration
 	}
 
-	if config.AsyncSearchTTL != "" {
-		dur, err := time.ParseDuration(config.AsyncSearchTTL)
+	if filter.AsyncSearchTTL != "" {
+		dur, err := time.ParseDuration(filter.AsyncSearchTTL)
 		if err != nil {
 			dur, _ = time.ParseDuration("30m")
 		}
-		config.asyncSearchTTLDuration = dur
+		filter.asyncSearchTTLDuration = dur
 	} else {
-		config.asyncSearchTTLDuration = time.Minute * 30
+		filter.asyncSearchTTLDuration = time.Minute * 30
 	}
-	return config.asyncSearchTTLDuration
+	return filter.asyncSearchTTLDuration
 }
 
 
@@ -471,7 +489,7 @@ func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
 
 	hash,ok:=ctx.GetString(CACHEHASH)
 	if !ok{
-		hash=filter.getHash(&ctx.Request)
+		hash= filter.getHash(&ctx.Request)
 	}
 
 	method := string(ctx.Request.Header.Method())
