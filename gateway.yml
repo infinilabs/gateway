@@ -4,8 +4,8 @@ path.logs: log
 entry:
   - name: es_gateway #your gateway endpoint
     enabled: true
-    router: default #configure your gateway's routing flow
-#    router: not_found #configure your gateway's routing flow
+#    router: default #configure your gateway's routing flow
+    router: not_found #configure your gateway's routing flow
     network:
       binding: 0.0.0.0:8000
 #      skip_occupied_port: false
@@ -14,6 +14,35 @@ entry:
       enabled: true #if your es is using https, the gateway entrypoint should enable https too
 
 flow:
+  - name: double_write
+    filter:
+      - name: trafic_clone
+        type: clone
+        parameters:
+          flows:
+            - write_to_queue_a
+            - write_to_queue_b #last one's response will be output to client
+  - name: write_to_queue_a
+    filter:
+      - name: elasticsearch_a
+        type: elasticsearch
+        parameters:
+          elasticsearch: es1
+      - name: request_logging_a
+        type: request_logging
+        parameters:
+          queue_name: request_logging_a
+  - name: write_to_queue_b
+    filter:
+      - name: elasticsearch_b
+        type: elasticsearch
+        parameters:
+          elasticsearch: es2
+      - name: request_logging_b
+        type: request_logging
+        parameters:
+          queue_name: request_logging_b
+
   - name: ingest_to_kafka #ingest to kafka
     filter:
       - name: kafka_produce
@@ -24,6 +53,13 @@ flow:
           batch_size: 1000
           brokers:
             - localhost:9092
+  - name: hello_world #testing flow
+    filter:
+      - name: hello_world
+        type: echo
+        parameters:
+          str: 'hello gateway'
+          repeat: 1
   - name: not_found #testing flow
     filter:
       - name: not_found
@@ -33,6 +69,12 @@ flow:
           repeat: 1
   - name: cache_first
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
+      - name: ratio_traffic_1
+        type: ratio
+        parameters:
+          ratio: 0.5 # 50% of requests will routing to another flow: hello_world.
+          flow: hello_world
+          continue: false # continue the following filters processing after match and executed the flow, set `false` to return ASAP.
       - name: get_cache_1
         type: get_cache
 #        parameters:
@@ -182,8 +224,9 @@ router:
         flow:
           - cache_first # after match, which processing flow will go through
   - name: not_found
-    tracing_flow: request_logging
-    default_flow: not_found
+#    tracing_flow: request_logging
+    default_flow: double_write
+#    default_flow: not_found
 #    default_flow: request_logging
 #    default_flow: ingest_to_kafka
 
@@ -202,6 +245,15 @@ elasticsearch:
 #  basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
 #    username: elastic
 #    password: pass
+- name: es1
+  enabled: true
+  version: 7.6.0
+  endpoint: http://127.0.0.1:8081  # ./bin/echo_server -port 8081 -debug=true
+- name: es2
+  enabled: true
+  version: 7.6.0
+  endpoint: http://127.0.0.1:8082  #./bin/echo_server -port 8082 -debug=true
+
 
 modules:
 - name: elastic

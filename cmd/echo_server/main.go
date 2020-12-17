@@ -12,7 +12,7 @@ import (
 
 var port = flag.Int("port", 8080, "listening port")
 var debug = flag.Bool("debug", false, "dump request")
-
+var name =util.PickRandomName()
 func main() {
 	runtime.GOMAXPROCS(1)
 	flag.Parse()
@@ -21,7 +21,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("error in reuseport listener: %s", err)
 	}
-
 	if err = fasthttp.Serve(ln, requestHandler); err != nil {
 		log.Fatalf("error in fasthttp Server: %s", err)
 	}
@@ -39,5 +38,6 @@ func requestHandler(ctx *fasthttp.RequestCtx) {
 		fmt.Println(string(ctx.Request.URI().Password()))
 		fmt.Println(util.ToJson(ctx.Request.Header,true))
 	}
+	ctx.Response.Header.Set("SERVER",name)
 	fmt.Fprintf(ctx, ".")
 }
