@@ -33,6 +33,19 @@ Bulk 20375408 / 20387840 [======================================================
 [11-12 21:07:57] [INF] [main.go:492,main] data migration finished.
 ```
 
+```
+➜  ~ wrk   -c 1000 -d 10s -t 6 -H --latency  http://medcl:backsoon@localhost:8000
+Running 10s test @ http://medcl:backsoon@localhost:8000
+  6 threads and 1000 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     4.20ms    2.06ms  59.17ms   53.33%
+    Req/Sec    23.08k     5.13k   38.19k    75.50%
+  1378494 requests in 10.02s, 194.57MB read
+  Socket errors: connect 0, read 877, write 0, timeout 0
+Requests/sec: 137595.33
+Transfer/sec:     19.42MB
+```
+
 
 # Docker
 
