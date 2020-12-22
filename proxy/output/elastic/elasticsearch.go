@@ -3,7 +3,6 @@ package elastic
 import (
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/config"
 	"sync"
 )
 
@@ -18,7 +17,7 @@ func (filter Elasticsearch) Name() string {
 var proxyList=map[string]*ReverseProxy{}
 
 var (
-	proxyConfig = config.ProxyConfig{
+	proxyConfig = ProxyConfig{
 		MaxConnection: 1000,
 	}
 )

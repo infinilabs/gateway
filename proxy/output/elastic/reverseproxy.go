@@ -9,7 +9,6 @@ import (
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/config"
 	"infini.sh/gateway/proxy/balancer"
 	"math/rand"
 	"net/http"
@@ -19,10 +18,10 @@ type ReverseProxy struct {
 	oldAddr     string
 	bla         balancer.IBalancer
 	clients     []*fasthttp.HostClient
-	proxyConfig *config.ProxyConfig
+	proxyConfig *ProxyConfig
 }
 
-func NewReverseProxy(cfg *config.ProxyConfig) *ReverseProxy {
+func NewReverseProxy(cfg *ProxyConfig) *ReverseProxy {
 
 	p := ReverseProxy{
 		oldAddr:     "",
