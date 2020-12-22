@@ -14,7 +14,7 @@ type Kafka struct {
 }
 
 func (filter Kafka) Name() string {
-	return "kafka_produce"
+	return "to_kafka"
 }
 
 
@@ -45,12 +45,14 @@ func (filter Kafka) Process(ctx *fasthttp.RequestCtx) {
 	if !inited {
 		initPool()
 		batchSize=filter.GetIntOrDefault("batch_size",1000)
+		batchTimeout:=filter.GetIntOrDefault("batch_timeout_in_ms",500)
+		requiredAcks:=filter.GetIntOrDefault("required_acks",0)
 		w = kafka.NewWriter(kafka.WriterConfig{
 			Brokers: brokers,
 			Topic:   topic,
 			BatchSize: batchSize,
-			BatchTimeout: 500 * time.Millisecond,
-			RequiredAcks: 0,
+			BatchTimeout: time.Duration(batchTimeout) * time.Millisecond,
+			RequiredAcks: requiredAcks,
 		})
 		inited = true
 	}

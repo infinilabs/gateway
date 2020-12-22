@@ -45,8 +45,8 @@ flow:
 
   - name: ingest_to_kafka #ingest to kafka
     filter:
-      - name: kafka_produce
-        type: kafka_produce
+      - name: to_kafka
+        type: to_kafka
         parameters:
           topic: 'gateway_bulk_requests'
           group: "default"
