@@ -4,14 +4,14 @@ path.logs: log
 entry:
   - name: es_gateway #your gateway endpoint
     enabled: true
-#    router: default #configure your gateway's routing flow
-    router: not_found #configure your gateway's routing flow
+    router: default #configure your gateway's routing flow
+#    router: not_found #configure your gateway's routing flow
     network:
       binding: 0.0.0.0:8000
 #      skip_occupied_port: false
       reuse_port: true #you can start multi gateway instance, they share same port, to full utilize system's resources
     tls:
-      enabled: true #if your es is using https, the gateway entrypoint should enable https too
+      enabled: false #if your es is using https, the gateway entrypoint should enable https too
 
 flow:
   - name: double_write
@@ -105,8 +105,8 @@ flow:
       - name: elasticsearch_1
         type: elasticsearch
         parameters:
-#          elasticsearch: prod  #elasticsearch configure reference name
-          elasticsearch: default  #elasticsearch configure reference name
+#          elasticsearch: dev  #elasticsearch configure reference name
+          elasticsearch: prod  #elasticsearch configure reference name
           max_connection: 1000 #max tcp connection to upstream, default for all nodes
           max_response_size: -1 #default for all nodes
           balancer: weight
@@ -117,8 +117,6 @@ flow:
 #              weight: 20
 #            - host: 192.168.3.203:9200
 #              weight: 30
-#            - host: 192.168.3.199:9200
-#              weight: 3
           discovery:
             enabled: true
 #            auto_update: true
@@ -231,7 +229,7 @@ router:
 #    default_flow: ingest_to_kafka
 
 elasticsearch:
-- name: default
+- name: local
   enabled: true
   endpoint: https://127.0.0.1:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
   version: 7.6.0 #optional, used to select es adaptor, can be done automatically after connect to es
@@ -239,12 +237,19 @@ elasticsearch:
   basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
     username: elastic
     password: pass
-#- name: prod
-#  enabled: true
-#  endpoint: http://192.168.3.201:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
-#  basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
-#    username: elastic
-#    password: pass
+- name: dev
+  enabled: true
+  endpoint: https://192.168.3.98:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
+  index_prefix: gateway_
+  basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
+    username: elastic
+    password: pass
+- name: prod
+  enabled: true
+  endpoint: http://192.168.3.201:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
+  basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
+    username: elastic
+    password: pass
 - name: es1
   enabled: true
   version: 7.6.0
@@ -258,8 +263,8 @@ elasticsearch:
 modules:
 - name: elastic
   enabled: true
-  elasticsearch: default
-  init_template: false
+  elasticsearch: dev
+  init_template: true
 - name: pipeline
   enabled: true
   runners:
@@ -278,7 +283,7 @@ pipelines:
     enabled: true
     parameters:
       index_name: "gateway_requests"
-      elasticsearch: "default"
+      elasticsearch: "dev"
       input_queue: "request_logging"
       timeout: "60s"
       worker_size: 1
