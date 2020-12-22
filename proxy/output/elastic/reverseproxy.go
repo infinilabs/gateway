@@ -32,24 +32,24 @@ func NewReverseProxy(cfg *ProxyConfig) *ReverseProxy {
 	ws := []int{}
 
 	esConfig := elastic.GetConfig(cfg.Elasticsearch)
-	endpoints:=[]string{}
+	endpoints := []string{}
 
 	if cfg.Discover.Enabled {
 		nodes, err := elastic.GetClient(esConfig.Name).GetNodes()
-		if err!=nil{
+		if err != nil {
 			panic(err)
 		}
 
-		for _,y:=range nodes.Nodes{
-			endpoint:=y.(map[string]interface{})["http"].(map[string]interface{})["publish_address"].(string)
-			endpoints=append(endpoints,endpoint)
+		for _, y := range nodes.Nodes {
+			endpoint := y.(map[string]interface{})["http"].(map[string]interface{})["publish_address"].(string)
+			endpoints = append(endpoints, endpoint)
 		}
-		log.Infof("discovery %v nodes: [%v]",len(nodes.Nodes),util.JoinArray(endpoints,", "))
-	}else{
-		endpoints=append(endpoints,esConfig.GetHost())
+		log.Infof("discovery %v nodes: [%v]", len(nodes.Nodes), util.JoinArray(endpoints, ", "))
+	} else {
+		endpoints = append(endpoints, esConfig.GetHost())
 	}
 
-	for _,endpoint:=range endpoints{
+	for _, endpoint := range endpoints {
 
 		client := &fasthttp.HostClient{
 			Addr:                          endpoint,
@@ -57,34 +57,34 @@ func NewReverseProxy(cfg *ProxyConfig) *ReverseProxy {
 			DisablePathNormalizing:        true,
 			MaxConns:                      cfg.MaxConnection,
 			MaxResponseBodySize:           cfg.MaxResponseBodySize,
-			//TODO
-			//MaxConnWaitTimeout: cfg.MaxConnWaitTimeout,
-			//MaxConnDuration: cfg.MaxConnWaitTimeout,
-			//MaxIdleConnDuration: cfg.MaxIdleConnDuration,
-			//ReadTimeout: cfg.ReadTimeout,
-			//WriteTimeout: cfg.ReadTimeout,
-			//ReadBufferSize: cfg.ReadBufferSize,
-			//WriteBufferSize: cfg.WriteBufferSize,
+
+			MaxConnWaitTimeout:  cfg.MaxConnWaitTimeout,
+			MaxConnDuration:     cfg.MaxConnDuration,
+			MaxIdleConnDuration: cfg.MaxIdleConnDuration,
+			ReadTimeout:         cfg.ReadTimeout,
+			WriteTimeout:        cfg.WriteTimeout,
+			ReadBufferSize:      cfg.ReadBufferSize,
+			WriteBufferSize:     cfg.WriteBufferSize,
 			//RetryIf: func(request *fasthttp.Request) bool {
 			//
 			//},
-			IsTLS:                         esConfig.IsTLS(),
+			IsTLS: esConfig.IsTLS(),
 			TLSConfig: &tls.Config{
-				InsecureSkipVerify: true, //TODO
+				InsecureSkipVerify: cfg.TLSInsecureSkipVerify,
 			},
 		}
 
-		p.clients=append(p.clients,client)
+		p.clients = append(p.clients, client)
 
 		//get predefined weights
-		w,o:=cfg.Weights[endpoint]
-		if !o||w<=0{
-			w=1
+		w, o := cfg.Weights[endpoint]
+		if !o || w <= 0 {
+			w = 1
 		}
-		ws=append(ws,w)
+		ws = append(ws, w)
 	}
 
-	if len(p.clients)==0{
+	if len(p.clients) == 0 {
 		panic(errors.New("proxy upstream is empty"))
 	}
 
@@ -100,14 +100,14 @@ func (p *ReverseProxy) getClient() *fasthttp.HostClient {
 	if p.bla != nil {
 		// bla has been opened
 		idx := p.bla.Distribute()
-		c:= p.clients[idx]
+		c := p.clients[idx]
 		return c
 	}
 
 	//or go random way
-	max:=len(p.clients)
-	seed:=rand.Intn(max)
-	c:= p.clients[seed]
+	max := len(p.clients)
+	seed := rand.Intn(max)
+	c := p.clients[seed]
 	return c
 }
 
@@ -116,7 +116,6 @@ func cleanHopHeaders(req *fasthttp.Request) {
 		req.Header.Del(h)
 	}
 }
-
 
 func (p *ReverseProxy) DelegateRequest(req *fasthttp.Request, res *fasthttp.Response) {
 
@@ -127,10 +126,9 @@ func (p *ReverseProxy) DelegateRequest(req *fasthttp.Request, res *fasthttp.Resp
 
 	cleanHopHeaders(req)
 
-	if global.Env().IsDebug{
-		log.Tracef("send request [%v] to upstream [%v]",req.URI().String(),pc.Addr)
+	if global.Env().IsDebug {
+		log.Tracef("send request [%v] to upstream [%v]", req.URI().String(), pc.Addr)
 	}
-
 
 	if err := pc.Do(req, res); err != nil {
 		log.Errorf("failed to proxy request: %v, %v", err, string(req.RequestURI()))
@@ -138,7 +136,7 @@ func (p *ReverseProxy) DelegateRequest(req *fasthttp.Request, res *fasthttp.Resp
 		res.SetBodyRaw([]byte(err.Error()))
 	}
 
-	res.Header.Set("UPSTREAM",pc.Addr)
+	res.Header.Set("UPSTREAM", pc.Addr)
 
 }
 
