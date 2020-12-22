@@ -86,7 +86,6 @@ func (joint JsonBulkIndexingJoint) NewBulkWorker(count *int, bulkSizeInMB int, w
 
 	destIndex := joint.GetStringOrDefault("index_name", "")
 	destType := joint.GetStringOrDefault("index_type", "_doc")
-	//destType := joint.GetStringOrDefault("index_type", "")
 	esInstanceVal := joint.GetStringOrDefault("elasticsearch", "es_json_bulk")
 
 	client := elastic.GetClient(esInstanceVal)
@@ -131,7 +130,6 @@ READ_DOCS:
 		}
 
 		if mainBuf.Len() > 0 {
-			//fmt.Println(string(mainBuf.Bytes()))
 			client.Bulk(&mainBuf)
 			//TODO handle retry and fallback/over, dead letter queue
 			//set services to failure, need manual restart
