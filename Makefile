@@ -4,6 +4,7 @@ SHELL=/bin/bash
 APP_NAME := gateway
 APP_VERSION := 1.0.0_SNAPSHOT
 APP_CONFIG := $(APP_NAME).yml
+APP_EOLDate := "2021-12-31 10:10:10"
 APP_STATIC_FOLDER := .public
 APP_STATIC_PACKAGE := public
 APP_UI_FOLDER := ui
@@ -12,6 +13,10 @@ APP_PLUGIN_FOLDER := plugin
 # Get release version from environment
 ifneq "$(VERSION)" ""
    APP_VERSION := $(VERSION)
+endif
+
+ifneq "$(EOL)" ""
+   APP_EOLDate := $(EOL)
 endif
 
 # Ensure GOPATH is set before running build process.
@@ -152,13 +157,15 @@ init:
 
 update-generated-file:
 	@echo "update generated info"
-	@echo -e "package config\n\nconst LastCommitLog = \""`git log -1 --pretty=format:"%h, %ad, %an, %s"` "\"\nconst BuildDate = \"`date`\"" > config/generated.go
+	@echo -e "package config\n\nconst LastCommitLog = \""`git log -1 --pretty=format:"%h, %ad, %an, %s"` "\"\nconst BuildDate = \"`date "+%Y-%m-%d %H:%M:%S"`\"" > config/generated.go
+	@echo -e "\nconst EOLDate  = \"$(APP_EOLDate)\"" >> config/generated.go
 	@echo -e "\nconst Version  = \"$(APP_VERSION)\"" >> config/generated.go
 
 
 restore-generated-file:
 	@echo "restore generated info"
 	@echo -e "package config\n\nconst LastCommitLog = \"N/A\"\nconst BuildDate = \"N/A\"" > config/generated.go
+	@echo -e "\nconst EOLDate = \"N/A\"" >> config/generated.go
 	@echo -e "\nconst Version = \"0.0.1-SNAPSHOT\"" >> config/generated.go
 
 

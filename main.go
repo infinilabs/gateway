@@ -57,7 +57,7 @@ func main() {
 
 	app.Start(func() {
 
-		license.Verify()
+		license.VerifyEOL(config.EOLDate)
 
 		//load core modules first
 		module.RegisterSystemModule(elastic.ElasticModule{})
