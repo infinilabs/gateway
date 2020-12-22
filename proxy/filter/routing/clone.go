@@ -29,6 +29,9 @@ func (filter CloneFlowFilter) Process(ctx *fasthttp.RequestCtx) {
 		if global.Env().IsDebug {
 			log.Debugf("request [%v] go on flow: [%s] [%s]", ctx.URI().String(), v, flow.ToString())
 		}
+
+		//ctx.UpdateCurrentFlow(flow) //TODO, tracking flow
+
 		flow.Process(ctx)
 	}
 

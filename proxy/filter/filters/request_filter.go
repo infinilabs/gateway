@@ -195,7 +195,7 @@ func (filter RequestUrlPathFilter) Process(ctx *fasthttp.RequestCtx) {
 	//fmt.Println(util.ToJson(filter.Data,true))
 }
 
-func (filter RequestUrlPathFilter) CheckMustNotRules(path string, ctx *fasthttp.RequestCtx) (bool, bool) {
+func (filter RequestFilterBase) CheckMustNotRules(path string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool) {
 	var hasRules = false
 	arr, ok := filter.GetStringArray("must_not.prefix")
 	if ok {
@@ -286,7 +286,7 @@ func (filter RequestUrlPathFilter) CheckMustNotRules(path string, ctx *fasthttp.
 	return true, hasRules
 }
 
-func (filter RequestUrlPathFilter) CheckMustRules(path string, ctx *fasthttp.RequestCtx) (bool, bool) {
+func (filter RequestFilterBase) CheckMustRules(path string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool) {
 	var hasRules = false
 	arr, ok := filter.GetStringArray("must.prefix")
 	if ok {
@@ -382,7 +382,7 @@ func (filter RequestUrlPathFilter) CheckMustRules(path string, ctx *fasthttp.Req
 	return true, hasRules
 }
 
-func (filter RequestUrlPathFilter) CheckShouldRules(path string, ctx *fasthttp.RequestCtx) (bool, bool) {
+func (filter RequestFilterBase) CheckShouldRules(path string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool) {
 	var hasShouldRules bool
 	arr, ok := filter.GetStringArray("should.prefix")
 	if ok {
@@ -472,22 +472,28 @@ func (filter RequestUrlPathFilter) CheckShouldRules(path string, ctx *fasthttp.R
 	return false, hasShouldRules
 }
 
+
+//TODO
 type RequestUrlQueryArgsFilter struct {
 	RequestFilterBase
 }
 
+//TODO
 type RequestBodyFilter struct {
 	RequestFilterBase
 }
 
+//TODO
 type ResponseCodeFilter struct {
 	RequestFilterBase
 }
 
+//TODO
 type ResponseHeaderFilter struct {
 	RequestFilterBase
 }
 
+//TODO
 type ResponseBodyFilter struct {
 	RequestFilterBase
 }
