@@ -19,21 +19,25 @@ type ProxyConfig struct {
 	ReadBufferSize        int  `config:"read_buffer_size"`
 	WriteBufferSize       int  `config:"write_buffer_size"`
 	TLSInsecureSkipVerify bool `config:"tls_insecure_skip_verify"`
+	Weights  map[string]int `config:"weights"`
 
-	Weights  map[string]int `config:"weight"`
-	Discover struct {
-		Enabled bool `config:"enabled"`
-		Refresh struct {
-			Enabled  bool   `config:"enabled"`
-			Interval string `config:"interval"`
-		} `config:"refresh"`
-		Tags struct {
+	Refresh struct{
+		Enabled             bool   `config:"enabled"`
+		Interval            string `config:"interval"`
+	}`config:"refresh"`
+
+	Filter struct {
+		Hosts struct {
 			Exclude []string `config:"exclude"`
 			Include []string `config:"include"`
+		} `config:"hosts"`
+		Tags struct {
+			Exclude []map[string]interface{} `config:"exclude"`
+			Include []map[string]interface{} `config:"include"`
 		} `config:"tags"`
 		Roles struct {
 			Exclude []string `config:"exclude"`
 			Include []string `config:"include"`
 		} `config:"roles"`
-	} `config:"discovery"`
+	} `config:"filter"`
 }

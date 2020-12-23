@@ -28,6 +28,7 @@ import (
 	"infini.sh/framework/modules/filter"
 	"infini.sh/framework/modules/pipeline"
 	"infini.sh/framework/modules/queue"
+	"infini.sh/framework/modules/task"
 	stats "infini.sh/framework/plugins/stats_statsd"
 	"infini.sh/gateway/config"
 	"infini.sh/gateway/service/floating_ip"
@@ -66,6 +67,7 @@ func main() {
 		module.RegisterSystemModule(queue.DiskQueue{})
 		module.RegisterSystemModule(api.APIModule{})
 		module.RegisterSystemModule(pipeline.PipeModule{})
+		module.RegisterSystemModule(task.TaskModule{})
 
 		module.RegisterUserPlugin(stats.StatsDModule{})
 		module.RegisterUserPlugin(gateway.GatewayModule{})

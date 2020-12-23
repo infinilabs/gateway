@@ -69,12 +69,12 @@ flow:
           repeat: 1
   - name: cache_first
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
-      - name: ratio_traffic_1
-        type: ratio
-        parameters:
-          ratio: 0.5 # 50% of requests will routing to another flow: hello_world.
-          flow: hello_world
-          continue: false # continue the following filters processing after match and executed the flow, set `false` to return ASAP.
+#      - name: ratio_traffic_1
+#        type: ratio
+#        parameters:
+#          ratio: 0.5 # 50% of requests will routing to another flow: hello_world.
+#          flow: hello_world
+#          continue: false # continue the following filters processing after match and executed the flow, set `false` to return ASAP.
       - name: get_cache_1
         type: get_cache
 #        parameters:
@@ -110,24 +110,45 @@ flow:
           max_connection: 1000 #max tcp connection to upstream, default for all nodes
           max_response_size: -1 #default for all nodes
           balancer: weight
-#          weight: #overwride host's weight, the default weight is 1
+          refresh: # refresh upstream nodes list, need to enable this feature to use elasticsearch nodes auto discovery
+            enabled: true
+            interval: 30s
+#          weights: #overwride host's weight, the default weight is 1
 #            - host: 192.168.3.201:9200 #the format is host:port
 #              weight: 10
 #            - host: 192.168.3.202:9200
 #              weight: 20
 #            - host: 192.168.3.203:9200
 #              weight: 30
-          discovery:
-            enabled: true
-#            auto_update: true
-#            auto_update_interval: 10s
+#          filter:
+#            hosts:
+#              exclude: #exclude mode, you may need to filter out master nodes
+#                - 192.168.3.201:9200
+#              include: #specify endpoints to use, in case of that you may only want to forward traffic to coordinating nodes
+#                - 192.168.3.202:9200
+#                - 192.168.3.203:9200
+#            tags:
+#              exclude:
+#                - temp: cold
+#                - temp: hot
+#                - temp: warm
+#              include:
+#                - disk: sd
+#                - disk: sata
+#                - disk: ssd
+#            roles: # "data","ingest","master","ml","remote_cluster_client","transform"
+#              exclude:
+#                - master
+#              include:
+#                - data
+#                - ingest
       - name: set_cache_1
         type: set_cache
-        parameters:
-          min_response_size: 100
-          max_response_size: 1024000
-          cache_ttl: 30s
-          max_cache_items: 100000
+#        parameters:
+#          min_response_size: 100
+#          max_response_size: 1024000
+#          cache_ttl: 30s
+#          max_cache_items: 100000
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
 #      - name: sample_1
@@ -247,6 +268,11 @@ elasticsearch:
 - name: prod
   enabled: true
   endpoint: http://192.168.3.201:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
+  discovery: # auto discovery elasticsearch cluster nodes
+    enabled: true
+    refresh:
+      enabled: true
+#      interval: 10s
   basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
     username: elastic
     password: pass

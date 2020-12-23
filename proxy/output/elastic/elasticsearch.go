@@ -52,8 +52,12 @@ func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
 			proxyConfig.ReadTimeout = filter.GetDurationOrDefault("read_timeout", "0s")
 			proxyConfig.WriteTimeout = filter.GetDurationOrDefault("write_timeout", "0s")
 
-			if filter.Has("discovery") {
-				filter.Config("discovery", &proxyConfig.Discover)
+			if filter.Has("filter") {
+				filter.Config("filter", &proxyConfig.Filter)
+			}
+
+			if filter.Has("refresh") {
+				filter.Config("refresh", &proxyConfig.Refresh)
 			}
 
 			instance = NewReverseProxy(&proxyConfig)
