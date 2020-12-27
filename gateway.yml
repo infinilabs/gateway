@@ -4,7 +4,8 @@ path.logs: log
 entry:
   - name: es_gateway #your gateway endpoint
     enabled: true
-    router: default #configure your gateway's routing flow
+    router: default
+    #configure your gateway's routing flow
 #    router: not_found #configure your gateway's routing flow
     network:
       binding: 0.0.0.0:8000
@@ -16,37 +17,31 @@ entry:
 flow:
   - name: double_write
     filter:
-      - name: trafic_clone
-        type: clone
+      - name: clone
         parameters:
           flows:
             - write_to_queue_a
             - write_to_queue_b #last one's response will be output to client
   - name: write_to_queue_a
     filter:
-      - name: elasticsearch_a
-        type: elasticsearch
+      - name: elasticsearch
         parameters:
           elasticsearch: es1
-      - name: request_logging_a
-        type: request_logging
+      - name: request_logging
         parameters:
           queue_name: request_logging_a
   - name: write_to_queue_b
     filter:
-      - name: elasticsearch_b
-        type: elasticsearch
+      - name: elasticsearch
         parameters:
           elasticsearch: es2
-      - name: request_logging_b
-        type: request_logging
+      - name: request_logging
         parameters:
           queue_name: request_logging_b
 
   - name: ingest_to_kafka #ingest to kafka
     filter:
       - name: to_kafka
-        type: to_kafka
         parameters:
           topic: 'gateway_bulk_requests'
           group: "default"
@@ -55,28 +50,28 @@ flow:
             - localhost:9092
   - name: hello_world #testing flow
     filter:
-      - name: hello_world
-        type: echo
+      - name: echo
         parameters:
-          str: 'hello gateway'
+          str: "hello infini\n"
           repeat: 1
+      - name: echo
+        parameters:
+          str: "hello gateway\n"
+          repeat: 3
   - name: not_found #testing flow
     filter:
-      - name: not_found
-        type: echo
+      - name: echo
         parameters:
           str: '404 not found\n'
           repeat: 1
   - name: cache_first
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
-#      - name: ratio_traffic_1
-#        type: ratio
+#      - name: ratio
 #        parameters:
 #          ratio: 0.5 # 50% of requests will routing to another flow: hello_world.
 #          flow: hello_world
 #          continue: false # continue the following filters processing after match and executed the flow, set `false` to return ASAP.
-      - name: get_cache_1
-        type: get_cache
+      - name: get_cache
 #        parameters:
 #          pass_patterns: ["_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"]
 #          hash_factor:
@@ -91,8 +86,7 @@ flow:
 #            path:
 #              - _search
 #              - _async_search
-#      - name: rate_limit_1
-#        type: rate_limit
+#      - name: rate_limit
 #        parameters:
 #          message: "Hey, You just reached our request limit!"
 #          rules: #configure match rules against request's PATH, eg: /_cluster/health, match the first rule and return
@@ -102,8 +96,7 @@ flow:
 #            - pattern: "/(?P<index_name>.*?)/_search" #use regex pattern to match index, will match any /$index/_search, and limit each index with max_qps ~=100
 #              max_qps: 100
 #              group: index_name
-      - name: elasticsearch_1
-        type: elasticsearch
+      - name: elasticsearch
         parameters:
 #          elasticsearch: dev  #elasticsearch configure reference name
           elasticsearch: prod  #elasticsearch configure reference name
@@ -142,8 +135,7 @@ flow:
 #              include:
 #                - data
 #                - ingest
-      - name: set_cache_1
-        type: set_cache
+      - name: set_cache
 #        parameters:
 #          min_response_size: 100
 #          max_response_size: 1024000
@@ -151,12 +143,10 @@ flow:
 #          max_cache_items: 100000
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
-#      - name: sample_1
-#        type: sample
+#      - name: sample
 #        parameters:
 #          ratio: 0.2
-#      - name: request_path_filter_1
-#        type: request_path_filter
+#      - name: request_path_filter
 #        parameters:
 #          must: #must match all rules to continue
 #            prefix:
@@ -199,8 +189,7 @@ flow:
 #              - /*/_refresh
 #            regex:
 #              - ^/m[\w]+dcl
-      - name: request_header_filter1 # filter out the requests that we are not interested, reduce tracing pressure
-        type: request_header_filter
+      - name: request_header_filter # filter out the requests that we are not interested, reduce tracing pressure
         parameters:
           exclude: # any rule match will marked request as filtered
           - app: kibana # in order to filter kibana's access log, config `elasticsearch.customHeaders: { "app": "kibana" }` to your kibana's config `/config/kibana.yml`
@@ -219,12 +208,9 @@ flow:
 #            - GET
 #            - HEAD
 #            - DELETE
-#      - name: dump_1
-#        type: dump_url
-#      - name: dump_3
-#        type: dump_header
-      - name: request_logging_1
-        type: request_logging
+#      - name: dump_url
+#      - name: dump_header
+      - name: request_logging
         parameters:
           queue_name: request_logging
 
@@ -244,7 +230,8 @@ router:
           - cache_first # after match, which processing flow will go through
   - name: not_found
 #    tracing_flow: request_logging
-    default_flow: double_write
+#    default_flow: double_write
+    default_flow: hello_world
 #    default_flow: not_found
 #    default_flow: request_logging
 #    default_flow: ingest_to_kafka

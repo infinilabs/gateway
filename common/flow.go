@@ -4,6 +4,7 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"reflect"
 	"strings"
@@ -26,11 +27,6 @@ type FilterFlow struct {
 	ID string
 	Filters []RequestFilter
 }
-
-//func NewFilterFlow(name string, filters ...func(ctx *fasthttp.RequestCtx)) FilterFlow {
-//	flow := FilterFlow{FlowName: name, Filters: filters}
-//	return flow
-//}
 
 func (flow *FilterFlow) JoinFilter(filter ...RequestFilter) *FilterFlow {
 	for _,v:=range filter{
@@ -124,22 +120,26 @@ func GetFilter(name string) RequestFilter {
 //TODO check/get filter instance first
 func GetFilterInstanceWithConfig(cfg *FilterConfig) RequestFilter {
 		if global.Env().IsDebug {
-			log.Tracef("get filter instance [%v]", cfg.Name)
+			log.Tracef("get filter instance [%v] [%v]", cfg.Name,cfg.ID)
 		}
 
-		v1,ok:=filterInstances[cfg.Name]
+		if cfg.ID==""{
+			panic(errors.Errorf("invalid filter config [%v] [%v] is not set",cfg.Name,cfg.ID))
+		}
+
+		v1,ok:=filterInstances[cfg.ID]
 		if ok{
 			if global.Env().IsDebug{
-				log.Debugf("hit filter instance [%v], return",cfg.Name)
+				log.Debugf("hit filter instance [%v] [%v], return",cfg.Name,cfg.ID)
 			}
 			return v1
 		}
 
-		if cfg.Type==""{
-			panic(errors.Errorf("the type of filter [%v] is not set",cfg.Name))
+		if cfg.Name==""{
+			panic(errors.Errorf("the type of filter [%v] [%v] is not set",cfg.Name,cfg.ID))
 		}
 
-		filter:=GetFilter(cfg.Type)
+		filter:=GetFilter(cfg.Name)
 		t := reflect.ValueOf(filter).Type()
 		v := reflect.New(t).Elem()
 
@@ -148,7 +148,7 @@ func GetFilterInstanceWithConfig(cfg *FilterConfig) RequestFilter {
 			f.Set(reflect.ValueOf(cfg.Parameters))
 		}
 		x:= v.Interface().(RequestFilter)
-		filterInstances[cfg.Name]=x
+		filterInstances[cfg.ID]=x
 		return x
 }
 
@@ -171,6 +171,14 @@ func RegisterFlow(flow FilterFlow) {
 }
 
 func RegisterFlowConfig(flow FlowConfig) {
+	//make sure each filter have dedicated ID
+	for i,v:=range flow.Filters{
+		if v.ID==""{
+			v.ID=util.GetUUID()
+			flow.Filters[i]=v
+		}
+	}
+
 	flowConfigs[flow.Name] = flow
 }
 
@@ -197,10 +205,10 @@ func GetRule(name string) RuleConfig {
 	return v
 }
 
-func GetFlowConfig(name string) FlowConfig {
-	v,ok:= flowConfigs[name]
+func GetFlowConfig(id string) FlowConfig {
+	v,ok:= flowConfigs[id]
 	if !ok{
-		panic(errors.Errorf("flow [%s] not found",name))
+		panic(errors.Errorf("flow [%s] not found",id))
 	}
 	return v
 }

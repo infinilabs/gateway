@@ -25,8 +25,8 @@ type RuleConfig struct {
 }
 
 type FilterConfig struct {
+	ID         string                 `config:"id"`
 	Name       string                 `config:"name"`
-	Type       string                 `config:"type"`
 	Parameters map[string]interface{} `config:"parameters"`
 }
 

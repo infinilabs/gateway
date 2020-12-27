@@ -10,16 +10,3 @@ type RequestFilter interface {
 	Filter
 	Process(ctx *fasthttp.RequestCtx)
 }
-
-type TCPFilter interface {
-	Filter
-}
-
-type HeaderFilter interface {
-	Filter
-}
-
-type ServiceFilter interface {
-	Filter
-	Process(ctx *fasthttp.RequestCtx)
-}
