@@ -23,7 +23,9 @@ func (filter EchoMessage) Process(ctx *fasthttp.RequestCtx) {
 	for i := 0; i < size; i++ {
 		ctx.WriteString(str)
 	}
-	ctx.Finished()
+	if !filter.GetBool("continue",true){
+		ctx.Finished()
+	}
 }
 
 type DumpHeader struct {
