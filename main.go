@@ -30,6 +30,7 @@ import (
 	"infini.sh/framework/modules/queue"
 	"infini.sh/framework/modules/task"
 	stats "infini.sh/framework/plugins/stats_statsd"
+	api2 "infini.sh/gateway/api"
 	"infini.sh/gateway/config"
 	"infini.sh/gateway/service/floating_ip"
 	"infini.sh/gateway/service/gateway"
@@ -73,6 +74,7 @@ func main() {
 		module.RegisterUserPlugin(gateway.GatewayModule{})
 		module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
 
+		api2.Init()
 
 		//register pipeline joints
 		pipe.RegisterPipeJoint(indexing.JsonBulkIndexingJoint{})

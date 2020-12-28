@@ -6,7 +6,6 @@ import (
 	"infini.sh/framework/core/env"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/api"
 	"infini.sh/gateway/common"
 	"infini.sh/gateway/proxy"
 	entry2 "infini.sh/gateway/proxy/entry"
@@ -76,18 +75,17 @@ var entryConfigs []common.EntryConfig
 
 func (module GatewayModule) Setup(cfg *Config) {
 
-	api.Init()
 	proxy.Init()
 
 	entryConfigs=[]common.EntryConfig{}
 	ok,err:=env.ParseConfig("entry",&entryConfigs)
-	if err!=nil{
+	if ok&&err!=nil{
 		panic(err)
 	}
 
 	flowConfigs:=[]common.FlowConfig{}
 	ok,err=env.ParseConfig("flow",&flowConfigs)
-	if err!=nil{
+	if ok&&err!=nil{
 		panic(err)
 	}
 
@@ -99,7 +97,7 @@ func (module GatewayModule) Setup(cfg *Config) {
 
 	routerConfigs:=[]common.RouterConfig{}
 	ok,err=env.ParseConfig("router",&routerConfigs)
-	if err!=nil{
+	if ok&&err!=nil{
 		panic(err)
 	}
 
