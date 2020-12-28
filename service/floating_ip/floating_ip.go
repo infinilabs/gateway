@@ -20,7 +20,6 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/env"
-	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/net"
 )
 
@@ -36,7 +35,7 @@ type FloatingIPPlugin struct {
 }
 
 func (this FloatingIPPlugin) Name() string {
-	return "Floating_IP"
+	return "floating_ip"
 }
 
 var (
@@ -48,7 +47,10 @@ var (
 )
 
 func (module FloatingIPPlugin) Setup(cfg *config.Config) {
-	cfg.Unpack(&floatingIPConfig)
+	ok,err:=env.ParseConfig("floating_ip", &floatingIPConfig)
+	if ok&&err!=nil{
+		panic(err)
+	}
 }
 
 func (module FloatingIPPlugin) Start() error {
@@ -61,9 +63,8 @@ func (module FloatingIPPlugin) Start() error {
 		panic(err)
 	}
 
-	apiConfig := &global.Env().SystemConfig.APIConfig
-	env.ParseConfig("api", apiConfig)
-	log.Infof("high availability address: %s://%s:%s", apiConfig.GetSchema(), floatingIPConfig.IP, apiConfig.NetworkConfig.GetBindingPort())
+	log.Infof("high availability IP is listening at: %v", floatingIPConfig.IP)
+
 	return nil
 }
 
@@ -71,6 +72,9 @@ func (module FloatingIPPlugin) Stop() error {
 	if !floatingIPConfig.Enabled{
 		return nil
 	}
-	net.DisableAlias(floatingIPConfig.Interface, floatingIPConfig.IP, floatingIPConfig.Netmask)
+	err:=net.DisableAlias(floatingIPConfig.Interface, floatingIPConfig.IP, floatingIPConfig.Netmask)
+	if err!=nil{
+		panic(err)
+	}
 	return nil
 }
