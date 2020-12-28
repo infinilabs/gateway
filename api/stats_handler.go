@@ -18,7 +18,3 @@ func (handler *API) StatsAction(w http.ResponseWriter, req *http.Request, _ http
 	handler.WriteJSONHeader(w)
 	handler.Write(w, *m)
 }
-
-func (handler *API) FaviconAction(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	w.Write([]byte("."))
-}

@@ -21,10 +21,6 @@ func ProxyHandler(ctx *fasthttp.RequestCtx) {
 
 	//Phase: XDP based traffic control, forward 1%-100% to another node, can be used for warming up or a/b testing
 
-	//# Route Layer
-	//router:= router.NewRouter()
-	//reqFlowID,resFlowID:=router.GetFlow(ctx)
-
 	//Phase: Handle Parameters, remove customized parameters and setup context
 
 	//# DAG based Request Processing Flow
@@ -62,17 +58,11 @@ func ProxyHandler(ctx *fasthttp.RequestCtx) {
 	//Phase: Request Rewrite, reset @timestamp precision for Kibana
 
 	//# Response Processing Flow
-	//if resFlowID!=""{
-	//	flow.GetFlow(resFlowID).Process(ctx)
-	//}
 	//Phase: Recording
-	//TODO 记录所有请求,采样记录,按条件记录
 
 	//TODO 实时统计前后端 QPS, 出拓扑监控图
 	//TODO 后台可以上传替换和编辑文件内容到缓存库里面, 直接返回自定义内容,如: favicon.ico, 可用于常用请求的提前预热,按 RequestURI 进行选择, 而不是完整 Hash
 
-	//logging event
-	//TODO configure log req and response, by condition
 }
 
 type GatewayModule struct {
@@ -123,13 +113,6 @@ func (module GatewayModule) Setup(cfg *Config) {
 var entryPoints= map[string]*entry2.Entrypoint{}
 func (module GatewayModule) Start() error {
 
-	//
-	//if !proxyConfig.Enabled {
-	//	return nil
-	//}
-	//
-	//translog.Open()
-
 	for _,v:=range entryConfigs{
 		entry := entry2.NewEntrypoint(v)
 		log.Trace("start entry:",entry.Name())
@@ -144,12 +127,6 @@ func (module GatewayModule) Start() error {
 }
 
 func (module GatewayModule) Stop() error {
-
-	//if !proxyConfig.Enabled {
-	//	return nil
-	//}
-	//
-	//translog.Close()
 
 	for _,v:=range entryPoints {
 		err:=v.Stop()

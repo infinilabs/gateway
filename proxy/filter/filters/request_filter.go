@@ -185,14 +185,6 @@ func (filter RequestUrlPathFilter) Process(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	//	rules=&config.Rules{
-	//		Must: &config.Rule{},
-	//		MustNot: &config.Rule{},
-	//		Should: &config.Rule{},
-	//	}
-	//filter.Config("must",rules.Must)
-
-	//fmt.Println(util.ToJson(filter.Data,true))
 }
 
 func (filter RequestFilterBase) CheckMustNotRules(path string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool) {
@@ -472,6 +464,10 @@ func (filter RequestFilterBase) CheckShouldRules(path string, ctx *fasthttp.Requ
 	return false, hasShouldRules
 }
 
+//TODO
+type RequestIPFilter struct {
+	RequestFilterBase
+}
 
 //TODO
 type RequestUrlQueryArgsFilter struct {

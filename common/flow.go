@@ -117,7 +117,6 @@ func GetFilter(name string) RequestFilter {
 }
 
 
-//TODO check/get filter instance first
 func GetFilterInstanceWithConfig(cfg *FilterConfig) RequestFilter {
 		if global.Env().IsDebug {
 			log.Tracef("get filter instance [%v] [%v]", cfg.Name,cfg.ID)
