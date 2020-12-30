@@ -57,7 +57,8 @@ docker pull medcl/infini-gateway:latest
 ```
 Or build your own image locally
 ```
-docker build -t medcl/infini-gateway:latest -f docker/Dockerfile .
+cd ~/go/src/infini.sh/
+/home/go/src/infini.sh# docker build -t medcl/infini-gateway:latest -f gateway/docker/Dockerfile .
 ```
 
 Customize your `proxy.yml`, place somewhere, eg: `/tmp/proxy.yml`

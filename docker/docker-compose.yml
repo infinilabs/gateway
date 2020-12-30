@@ -10,7 +10,8 @@ services:
       - 2900:2900
     container_name: "infini-gateway"
     volumes:
-      - ../:/go/src/infini.sh/gateway
+      - ../../:/go/src/infini.sh/
+      - ./entrypoint.sh:/entrypoint.sh
 
 volumes:
   dist:
