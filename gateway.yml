@@ -303,6 +303,11 @@ pipelines:
       bulk_size_in_mb: 1 #in MB
   process: []
 
+floating_ip:
+  enabled: true
+#  ip: 192.168.3.234      #yep, it's optional, infini-gateway could detect one but maybe not the right one
+#  netmask: 255.255.255.0 #optional
+#  interface: en1         #optional
 
 queue:
   min_msg_size: 1
