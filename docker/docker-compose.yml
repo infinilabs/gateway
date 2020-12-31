@@ -2,16 +2,18 @@ version: "3.5"
 
 services:
   infini-gateway:
-    build:
-      context: .
-      dockerfile: ./Dockerfile
+    image: medcl/infini-gateway:latest
+#    build:
+#      context: .
+#      dockerfile: ./Dockerfile
 
     ports:
       - 2900:2900
+      - 8000:8000
+      - 61111:61111
     container_name: "infini-gateway"
     volumes:
-      - ../../:/go/src/infini.sh/
-      - ./entrypoint.sh:/entrypoint.sh
+      - ../gateway.yml:/gateway.yml
 
 volumes:
   dist:
