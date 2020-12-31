@@ -9,16 +9,12 @@ import (
 	"fmt"
 	log "github.com/cihub/seelog"
 	"github.com/j-keck/arping"
-	"infini.sh/framework/core/api"
-	"infini.sh/framework/core/api/router"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/env"
 	"infini.sh/framework/core/errors"
-	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/net"
 	"infini.sh/framework/core/util"
 	net1 "net"
-	"net/http"
 	"time"
 )
 
@@ -27,8 +23,8 @@ type FloatingIPConfig struct {
 	IP        string `config:"ip"`
 	Netmask   string `config:"netmask"`
 	Interface string `config:"interface"`
-	PingPort  string `config:"ping_port"` //61111
-	Priority  int `config:"priority"`
+	EchoPort  string `config:"echo_port"` //61111
+	Priority  int    `config:"priority"`
 }
 
 type FloatingIPPlugin struct {
@@ -42,11 +38,9 @@ var (
 	floatingIPConfig = FloatingIPConfig{
 		Enabled:  false,
 		Netmask:  "255.255.255.0",
-		PingPort: "61111",
+		EchoPort: "61111",
 	}
 )
-
-const whoisAPI = "/_framework/floating_ip/whois"
 
 func (module FloatingIPPlugin) Setup(cfg *config.Config) {
 	ok, err := env.ParseConfig("floating_ip", &floatingIPConfig)
@@ -54,15 +48,40 @@ func (module FloatingIPPlugin) Setup(cfg *config.Config) {
 		panic(err)
 	}
 
-	api.HandleAPIMethod(api.GET, whoisAPI, func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-		w.Write([]byte(global.Env().SystemConfig.APIConfig.NetworkConfig.GetPublishAddr()))
-		w.WriteHeader(200)
-	})
+	if floatingIPConfig.Interface==""||floatingIPConfig.IP==""{
+		//let's do some magic
+		dev,ip,mask,err:=util.GetPublishNetworkDeviceInfo()
+		if err!=nil{
+			panic(err)
+		}
+
+		if floatingIPConfig.Interface==""{
+			floatingIPConfig.Interface=dev
+		}
+
+		log.Tracef("local publish address: %v,%v,%v",dev,ip,mask)
+
+		//if mask is not setting, try guess
+		if floatingIPConfig.Netmask==""{
+			floatingIPConfig.Netmask=mask
+		}
+
+		if floatingIPConfig.IP==""{
+			prefix:=util.GetIPPrefix(ip)
+			floatingIPConfig.IP=prefix+".234"
+		}
+
+		log.Debugf("try to use floating ip address: %v,%v,%v",dev,floatingIPConfig.IP,mask)
+	}
+
+	if floatingIPConfig.IP==""||floatingIPConfig.Interface==""{
+		panic("invalid floating_ip config")
+	}
 
 }
 
 func connectActiveNode() bool {
-	conn, err := net1.DialTimeout("tcp", fmt.Sprintf("%s:%s", floatingIPConfig.IP, floatingIPConfig.PingPort), time.Millisecond*200)
+	conn, err := net1.DialTimeout("tcp", fmt.Sprintf("%s:%s", floatingIPConfig.IP, floatingIPConfig.EchoPort), time.Millisecond*200)
 	if conn != nil {
 		conn.Close()
 	}
@@ -99,10 +118,12 @@ func (module FloatingIPPlugin) SwitchToActiveMode() {
 		panic(err)
 	}
 
-	ln, err := net1.Listen("tcp", ":"+floatingIPConfig.PingPort)
+	ln, err := net1.Listen("tcp", ":"+floatingIPConfig.EchoPort)
 	if err != nil {
 		panic(err)
 	}
+
+	log.Tracef("floating_ip echo service :%v is up and running.",floatingIPConfig.EchoPort)
 
 	//start health check service
 	go func() {
@@ -135,6 +156,9 @@ func (module FloatingIPPlugin) SwitchToActiveMode() {
 				ip := net1.ParseIP(floatingIPConfig.IP)
 				err := arping.GratuitousArpOverIfaceByName(ip, floatingIPConfig.Interface)
 				if err != nil {
+					if util.ContainStr(err.Error(),"unable to open"){
+						panic("please make sure running as root user, or sudo")
+					}
 					panic(err)
 				}
 				time.Sleep(10 * time.Second)
@@ -143,7 +167,7 @@ func (module FloatingIPPlugin) SwitchToActiveMode() {
 	}()
 
 	actived = true
-	log.Infof("floating_ip listen at: %v", floatingIPConfig.IP)
+	log.Infof("floating_ip listen at: %v, echo port: %v", floatingIPConfig.IP,floatingIPConfig.EchoPort)
 }
 
 func (module FloatingIPPlugin) Deactivate() {
