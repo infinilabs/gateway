@@ -16,12 +16,6 @@ func (filter Elasticsearch) Name() string {
 
 var proxyList = map[string]*ReverseProxy{}
 
-var (
-	proxyConfig = ProxyConfig{
-		MaxConnection: 1000,
-	}
-)
-
 var initLock sync.Mutex
 
 func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
@@ -37,6 +31,7 @@ func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
 		//double check
 		if !ok || instance == nil {
 
+			var proxyConfig = ProxyConfig{}
 			proxyConfig.Elasticsearch = esRef
 			proxyConfig.Balancer = filter.GetStringOrDefault("balancer", "weight")
 			proxyConfig.MaxResponseBodySize = filter.GetIntOrDefault("max_response_size", 100*1024*1024)
