@@ -74,14 +74,15 @@ func (p RequestCache) initCache() {
 	var err error
 	cache, err = ristretto.NewCache(&ristretto.Config{
 		NumCounters: 1e7,     // Num keys to track frequency of (10M).
-		MaxCost:     1 << 30, // Maximum cost of cache (1GB).
+		MaxCost:     p.GetInt64OrDefault("max_cached_size", 1000000000), // Maximum cost of cache (1GB).
 		BufferItems: 64,      // Number of keys per Get buffer.
+		Metrics: false,
 	})
 	if err != nil {
 		panic(err)
 	}
 
-	ccCache = ccache.Layered(ccache.Configure().MaxSize(p.GetInt64OrDefault("max_cache_items", 100000)).ItemsToPrune(100))
+	ccCache = ccache.Layered(ccache.Configure().MaxSize(p.GetInt64OrDefault("max_cached_item", 1000000)).ItemsToPrune(100))
 	inited = true
 }
 
@@ -149,7 +150,7 @@ func (p RequestCache) SetCache(key string, data []byte, ttl time.Duration) {
 		ccCache.GetOrCreateSecondaryCache("default").Set(key, data, ttl)
 		return
 	default:
-		cache.SetWithTTL(key, data, 1, ttl)
+		cache.SetWithTTL(key, data, int64(len), ttl)
 	}
 }
 
@@ -338,7 +339,6 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 			})
 			if ok {
 				ctx.Request.SetBody(body)
-				//log.Trace("timestamp precision updated,", string(body))
 			}
 
 			//{"size":0,"query":{"bool":{"must":[{"range":{"@timestamp":{"gte":"2019-09-26T15:16:59.127Z","lte":"2020-09-26T15:16:59.127Z","format":"strict_date_optional_time"}}}],"filter":[{"match_all":{}}],"should":[],"must_not":[]}},"aggs":{"61ca57f1-469d-11e7-af02-69e470af7417":{"terms":{"field":"log.file.path","order":{"_count":"desc"}},"aggs":{"timeseries":{"date_histogram":{"field":"@timestamp","min_doc_count":0,"time_zone":"Asia/Shanghai","extended_bounds":{"min":1569511019127,"max":1601133419127},"fixed_interval":"86400s"},"aggs":{"61ca57f2-469d-11e7-af02-69e470af7417":{"bucket_script":{"buckets_path":{"count":"_count"},"script":{"source":"count * 1","lang":"expression"},"gap_policy":"skip"}}}}},"meta":{"timeField":"@timestamp","intervalString":"86400s","bucketSize":86400,"seriesId":"61ca57f1-469d-11e7-af02-69e470af7417"}}},"timeout":"30000ms"}
@@ -415,8 +415,6 @@ type RequestCacheSet struct {
 	Type                   string `config:"type"` //redis,local
 	TTL                    string `config:"ttl"`
 	AsyncSearchTTL         string `config:"async_search_ttl"`
-	MaxCachedItem          int64  `config:"max_cached_item"`
-
 	generalTTLDuration     time.Duration
 	asyncSearchTTLDuration time.Duration
 }
@@ -472,20 +470,8 @@ func (filter RequestCacheSet) Name() string {
 }
 
 func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
-	//
-	//if !ctx.Continue(){
-	//	return
-	//}
 
 	log.Trace("process cache set")
-
-	//stats.Increment("cache", "miss")
-
-	//if global.Env().IsDebug {
-	//	log.Trace("cache miss:", hash, ",", string(ctx.Request.Header.Method()), ",", string(ctx.Request.RequestURI()), ",", string(req.Body()))
-	//}
-
-	//.DelegateRequest(req,res)
 
 	hash,ok:=ctx.GetString(CACHEHASH)
 	if !ok{
