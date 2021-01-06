@@ -84,9 +84,14 @@ func (this *Entrypoint) Start() error {
 	}
 
 	if len(this.routerConfig.Rules)>0{
-		for _,x:=range this.routerConfig.Rules{
+		for i, rule :=range this.routerConfig.Rules{
+			if rule.ID==""{
+				rule.ID=util.GetUUID()
+				this.routerConfig.Rules[i]=rule
+			}
+
 			flow:=common.FilterFlow{}
-			for _,y:=range x.Flow{
+			for _,y:=range rule.Flow{
 				cfg:=common.GetFlowConfig(y)
 				for _,z:=range cfg.Filters{
 					log.Tracef("get filter, %v",z)
@@ -94,8 +99,8 @@ func (this *Entrypoint) Start() error {
 					flow.JoinFilter(f)
 				}
 			}
-			for _,v:=range x.Method{
-				for _,u:=range x.PathPattern{
+			for _,v:=range rule.Method{
+				for _,u:=range rule.PathPattern{
 					log.Debugf("apply filter flow: [%s] [%s] [ %s ]",v,u,flow.ToString())
 					if v=="*"{
 						this.router.Handle(http.MethodGet,u,flow.Process)

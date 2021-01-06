@@ -196,10 +196,10 @@ func GetRouter(name string) RouterConfig {
 	return v
 }
 
-func GetRule(name string) RuleConfig {
-	v,ok:= routingRules[name]
+func GetRule(id string) RuleConfig {
+	v,ok:= routingRules[id]
 	if !ok{
-		panic(errors.Errorf("rule [%s] not found",name))
+		panic(errors.Errorf("rule [%s] not found",id))
 	}
 	return v
 }
