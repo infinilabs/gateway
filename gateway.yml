@@ -74,18 +74,6 @@ flow:
       - name: get_cache
 #        parameters:
 #          pass_patterns: ["_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"]
-#          hash_factor:
-#            header:
-#              - "*"
-#            path: true
-#            query_args:
-#              - id
-#          must_cache:
-#            method:
-#              - GET
-#            path:
-#              - _search
-#              - _async_search
 #      - name: rate_limit
 #        parameters:
 #          message: "Hey, You just reached our request limit!"
@@ -140,7 +128,7 @@ flow:
 #          min_response_size: 100
 #          max_response_size: 1024000
 #          cache_ttl: 30s
-#          max_cache_items: 100000
+#          max_cached_item: 100000
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
 #      - name: sample
@@ -199,7 +187,6 @@ flow:
 #          - TRACE: true # curl localhost:8000 -H "TRACE: true"
 #          - TRACING: true # curl localhost:8000 -H "TRACING: true"
 #      - name: request_method_filter
-#        type: request_method_filter
 #        parameters:
 #          exclude:
 #            - PUT
@@ -229,12 +216,7 @@ router:
         flow:
           - cache_first # after match, which processing flow will go through
   - name: not_found
-#    tracing_flow: request_logging
-#    default_flow: double_write
     default_flow: hello_world
-#    default_flow: not_found
-#    default_flow: request_logging
-#    default_flow: ingest_to_kafka
 
 elasticsearch:
 - name: local
