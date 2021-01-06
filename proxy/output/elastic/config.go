@@ -3,10 +3,10 @@ package elastic
 import "time"
 
 type ProxyConfig struct {
-	Enabled             bool   `config:"enabled"`
+	//Enabled             bool   `config:"enabled"`
 	Elasticsearch       string `config:"elasticsearch"`
 	Balancer            string `config:"balancer"`
-	Timeout             string `config:"timeout"`
+	//Timeout             string `config:"timeout"`
 	MaxConnection       int    `config:"max_connection"`
 	MaxResponseBodySize int    `config:"max_response_size"`
 
