@@ -25,24 +25,24 @@ import (
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/stats"
-	"math"
 	"sync"
 	"time"
 )
 
-type JsonBulkIndexingJoint struct {
+type JsonIndexingJoint struct {
 	param.Parameters
 	inputQueueName string
 }
 
-func (joint JsonBulkIndexingJoint) Name() string {
+//处理纯 json 格式的消息索引
+func (joint JsonIndexingJoint) Name() string {
 	return "json_indexing"
 }
 
 //TODO 重启子进程，当子进程挂了之后
-func (joint JsonBulkIndexingJoint) Process(c *pipeline.Context) error {
+func (joint JsonIndexingJoint) Process(c *pipeline.Context) error {
 	defer func() {
-		if err := recover();err != nil {
+		if err := recover(); err != nil {
 			log.Errorf("error in process: %s\n", err)
 		}
 	}()
@@ -51,8 +51,6 @@ func (joint JsonBulkIndexingJoint) Process(c *pipeline.Context) error {
 	bulkSizeInMB, _ := joint.GetInt("bulk_size_in_mb", 10)
 	joint.inputQueueName = joint.GetStringOrDefault("input_queue", "es_queue")
 	bulkSizeInMB = 1000000 * bulkSizeInMB
-
-	start := time.Now()
 
 	wg := sync.WaitGroup{}
 	totalSize := 0
@@ -63,16 +61,12 @@ func (joint JsonBulkIndexingJoint) Process(c *pipeline.Context) error {
 
 	wg.Wait()
 
-	duration := time.Now().Sub(start).Seconds()
-
-	log.Trace("bulk finished: ", duration, "s, ", "qps: ", math.Ceil(float64(totalSize)/math.Ceil((duration))))
-
 	return nil
 }
 
-func (joint JsonBulkIndexingJoint) NewBulkWorker(count *int, bulkSizeInMB int, wg *sync.WaitGroup) {
+func (joint JsonIndexingJoint) NewBulkWorker(count *int, bulkSizeInMB int, wg *sync.WaitGroup) {
 	defer func() {
-		if err := recover();err != nil {
+		if err := recover(); err != nil {
 			log.Errorf("error in bulk worker: %s", err)
 			//TODO failure and save logs for later recovery
 			wg.Done()
@@ -88,25 +82,30 @@ func (joint JsonBulkIndexingJoint) NewBulkWorker(count *int, bulkSizeInMB int, w
 	destType := joint.GetStringOrDefault("index_type", "_doc")
 	esInstanceVal := joint.GetStringOrDefault("elasticsearch", "es_json_bulk")
 
+	timeOut := joint.GetIntOrDefault("idle_timeout_in_second", 5)
+	idleDuration := time.Duration(timeOut) * time.Second
+	idleTimeout := time.NewTimer(idleDuration)
+	defer idleTimeout.Stop()
+
 	client := elastic.GetClient(esInstanceVal)
 
 READ_DOCS:
 	for {
+		idleTimeout.Reset(idleDuration)
+
 		select {
 
 		case pop := <-queue.ReadChan(joint.inputQueueName):
 
-			stats.IncrementBy("bulk", "event_received", int64(mainBuf.Len()))
+			stats.IncrementBy("bulk", "received", int64(mainBuf.Len()))
 
 			//TODO record ingest time,	request.LoggingTime = time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 
-			docBuf.WriteString(fmt.Sprintf("{ \"index\" : { \"_index\" : \"%s\", \"_type\" : \"%s\" } }\n",destIndex,destType))
+			docBuf.WriteString(fmt.Sprintf("{ \"index\" : { \"_index\" : \"%s\", \"_type\" : \"%s\" } }\n", destIndex, destType))
 			docBuf.Write(pop)
 			docBuf.WriteString("\n")
 
 			mainBuf.Write(docBuf.Bytes())
-
-			stats.Increment("pipeline", "bulk.hit")
 
 			docBuf.Reset()
 			(*count)++
@@ -116,8 +115,8 @@ READ_DOCS:
 				goto CLEAN_BUFFER
 			}
 
-		case <-time.After(time.Second * 5):
-			log.Trace("5s no message input")
+		case <-idleTimeout.C:
+			log.Tracef("%v no message input", idleDuration)
 			goto CLEAN_BUFFER
 		}
 
@@ -135,7 +134,7 @@ READ_DOCS:
 			//set services to failure, need manual restart
 			//process dead letter queue first next round
 
-			stats.IncrementBy("bulk", "event_processed", int64(mainBuf.Len()))
+			stats.IncrementBy("bulk", "processed", int64(mainBuf.Len()))
 			log.Trace("clean buffer, and execute bulk insert")
 		}
 

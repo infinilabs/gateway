@@ -24,6 +24,7 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/modules/api"
 	"infini.sh/framework/modules/boltdb"
+	"infini.sh/framework/modules/cluster"
 	"infini.sh/framework/modules/elastic"
 	"infini.sh/framework/modules/filter"
 	"infini.sh/framework/modules/pipeline"
@@ -69,6 +70,7 @@ func main() {
 		module.RegisterSystemModule(api.APIModule{})
 		module.RegisterSystemModule(pipeline.PipeModule{})
 		module.RegisterSystemModule(task.TaskModule{})
+		module.RegisterSystemModule(cluster.ClusterModule{})
 
 		module.RegisterUserPlugin(stats.StatsDModule{})
 		module.RegisterUserPlugin(gateway.GatewayModule{})
@@ -77,7 +79,8 @@ func main() {
 		api2.Init()
 
 		//register pipeline joints
-		pipe.RegisterPipeJoint(indexing.JsonBulkIndexingJoint{})
+		pipe.RegisterPipeJoint(indexing.JsonIndexingJoint{})
+		pipe.RegisterPipeJoint(indexing.BulkIndexingJoint{})
 
 		//start each module, with enabled provider
 		module.Start()

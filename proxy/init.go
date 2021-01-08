@@ -4,6 +4,7 @@ import (
 	"infini.sh/gateway/common"
 	"infini.sh/gateway/proxy/filter/cache"
 	"infini.sh/gateway/proxy/filter/debug"
+	elastic2 "infini.sh/gateway/proxy/filter/elastic"
 	"infini.sh/gateway/proxy/filter/filters"
 	"infini.sh/gateway/proxy/filter/routing"
 	"infini.sh/gateway/proxy/filter/sample"
@@ -29,4 +30,5 @@ func Init()  {
 	common.RegisterFilter(kafka.Kafka{})
 	common.RegisterFilter(routing.RatioRoutingFlowFilter{})
 	common.RegisterFilter(routing.CloneFlowFilter{})
+	common.RegisterFilter(elastic2.BulkReshuffle{})
 }

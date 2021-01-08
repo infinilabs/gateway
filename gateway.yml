@@ -4,7 +4,8 @@ path.logs: log
 entry:
   - name: es_gateway #your gateway endpoint
     enabled: true
-    router: default
+    router: indexing
+#    router: default
     #configure your gateway's routing flow
 #    router: not_found #configure your gateway's routing flow
     network:
@@ -12,7 +13,7 @@ entry:
 #      skip_occupied_port: false
       reuse_port: true #you can start multi gateway instance, they share same port, to full utilize system's resources
     tls:
-      enabled: false #if your es is using https, the gateway entrypoint should enable https too
+      enabled: true #if your es is using https, the gateway entrypoint should enable https too
 
 flow:
   - name: double_write
@@ -200,15 +201,26 @@ flow:
       - name: request_logging
         parameters:
           queue_name: request_logging
-
-
+  - name: online_indexing_merge
+    filter:
+      - name: bulk_reshuffle
+        parameters:
+          elasticsearch: prod
+#          level: node #node or shard
+          level: shard #node or shard
+          mode: async # async or sync
+      - name: elasticsearch
+        parameters:
+          elasticsearch: prod
+          refresh:
+            enabled: true
+            interval: 30s
 router:
   - name: default
     tracing_flow: request_logging #a flow will execute after request finish
     default_flow: cache_first
     rules: #rules can't be conflicted with each other, will be improved in the future
-      - id: 1 # this rule means match every requests, and sent to `cache_first` flow
-        method:
+      - method:
           - "*"
         pattern:
           - /
@@ -217,48 +229,58 @@ router:
           - cache_first # after match, which processing flow will go through
   - name: not_found
     default_flow: hello_world
+  - name: indexing
+    default_flow: online_indexing_merge
 
 elasticsearch:
-- name: local
-  enabled: true
-  endpoint: https://127.0.0.1:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
-  version: 7.6.0 #optional, used to select es adaptor, can be done automatically after connect to es
-  index_prefix: gateway_
-  basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
-    username: elastic
-    password: pass
-- name: dev
+#- name: local
+#  enabled: true
+#  endpoint: https://127.0.0.1:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
+#  version: 7.6.0 #optional, used to select es adaptor, can be done automatically after connect to es
+#  index_prefix: gateway_
+#  basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
+#    username: elastic
+#    password: pass
+- name: prod
   enabled: true
   endpoint: https://192.168.3.98:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
   index_prefix: gateway_
   basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
     username: elastic
     password: pass
-- name: prod
-  enabled: true
-  endpoint: http://192.168.3.201:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
   discovery: # auto discovery elasticsearch cluster nodes
     enabled: true
     refresh:
       enabled: true
-#      interval: 10s
-  basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
-    username: elastic
-    password: pass
-- name: es1
-  enabled: true
-  version: 7.6.0
-  endpoint: http://127.0.0.1:8081  # ./bin/echo_server -port 8081 -debug=true
-- name: es2
-  enabled: true
-  version: 7.6.0
-  endpoint: http://127.0.0.1:8082  #./bin/echo_server -port 8082 -debug=true
+#- name: prod
+#  enabled: true
+#  endpoint: http://192.168.3.201:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
+#  discovery: # auto discovery elasticsearch cluster nodes
+#    enabled: true
+#    refresh:
+#      enabled: true
+#      module:
+#        - nodes
+#        - indices
+#        - shards
+##      interval: 10s
+#  basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
+#    username: elastic
+#    password: pass
+#- name: es1
+#  enabled: true
+#  version: 7.6.0
+#  endpoint: http://127.0.0.1:8081  # ./bin/echo_server -port 8081 -debug=true
+#- name: es2
+#  enabled: true
+#  version: 7.6.0
+#  endpoint: http://127.0.0.1:8082  #./bin/echo_server -port 8082 -debug=true
 
 
 modules:
 - name: elastic
   enabled: true
-  elasticsearch: dev
+  elasticsearch: prod
   init_template: true
 - name: pipeline
   enabled: true
@@ -269,6 +291,12 @@ modules:
       threshold_in_ms: 0
       timeout_in_ms: 5000
       pipeline_id: request_logging_index
+    - name: nodes_index
+      enabled: true
+      max_go_routine: 1
+      threshold_in_ms: 0
+      timeout_in_ms: 5000
+      pipeline_id: bulk_request_ingest
 
 
 pipelines:
@@ -283,7 +311,19 @@ pipelines:
       timeout: "60s"
       worker_size: 1
       bulk_size_in_mb: 1 #in MB
-  process: []
+- name: bulk_request_ingest
+  start:
+    joint: bulk_indexing
+    enabled: true
+    parameters:
+      elasticsearch: "prod"
+      index:
+        - logs-repeat-test
+        - logs100million
+        - medcl4
+      timeout: "60s"
+      worker_size: 10
+      bulk_size_in_mb: 10 #in MB
 
 floating_ip:
   enabled: true
@@ -300,7 +340,7 @@ queue:
   read_chan_buffer: 0
 
 statsd:
-  enabled: false
-  host: 127.0.0.1
+  enabled: true
+  host: 192.168.3.98
   port: 8125
   namespace: gateway.
