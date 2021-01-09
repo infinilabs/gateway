@@ -281,7 +281,14 @@ modules:
 - name: elastic
   enabled: true
   elasticsearch: prod
-  init_template: true
+  store:
+    enabled: true
+  orm:
+    enabled: true
+    init_template: true
+    template_name: ".infini-default"
+    index_prefix: ".infini-"
+
 - name: pipeline
   enabled: true
   runners:
