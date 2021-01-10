@@ -4,8 +4,8 @@ path.logs: log
 entry:
   - name: es_gateway #your gateway endpoint
     enabled: true
-    router: indexing
-#    router: default
+#    router: indexing
+    router: default
     #configure your gateway's routing flow
 #    router: not_found #configure your gateway's routing flow
     network:
@@ -187,16 +187,23 @@ flow:
 #          include: # any match will marked as pass through, when include was specified but none of these rules are matched, the request will be mark as filtered, the next filters won't continue processing
 #          - TRACE: true # curl localhost:8000 -H "TRACE: true"
 #          - TRACING: true # curl localhost:8000 -H "TRACING: true"
-#      - name: request_method_filter
-#        parameters:
-#          exclude:
-#            - PUT
-#            - POST
-#          include:
-#            - GET
-#            - HEAD
-#            - DELETE
-
+      - name: request_method_filter
+        parameters:
+          exclude:
+            - PUT
+            - POST
+          include:
+            - GET
+            - HEAD
+            - DELETE
+      - name: response_status_filter
+        parameters:
+          exclude:
+            - 200
+          include:
+            - 404
+            - 401
+#            - 403
       - name: request_body_truncate
         parameters:
           max_size: 1024

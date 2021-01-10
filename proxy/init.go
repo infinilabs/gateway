@@ -14,7 +14,7 @@ import (
 	"infini.sh/gateway/proxy/output/logging"
 )
 
-func Init()  {
+func Init() {
 	common.RegisterFilter(logging.RequestLogging{})
 	common.RegisterFilter(debug.EchoMessage{})
 	common.RegisterFilter(debug.DumpHeader{})
@@ -34,4 +34,5 @@ func Init()  {
 	common.RegisterFilter(debug.DumpRequestBody{})
 	common.RegisterFilter(filters.RequestBodyTruncate{})
 	common.RegisterFilter(filters.ResponseBodyTruncate{})
+	common.RegisterFilter(filters.ResponseStatusCodeFilter{})
 }
