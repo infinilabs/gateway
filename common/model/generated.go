@@ -137,7 +137,18 @@ func (v *DataFlow) MarshalFastJSON(w *fastjson_marshal.Writer) error {
 	w.RawString(",\"relay\":")
 	w.String(v.Relay)
 	w.RawString(",\"to\":")
-	w.String(v.To)
+	if v.To == nil {
+		w.RawString("null")
+	} else {
+		w.RawByte('[')
+		for i, v := range v.To {
+			if i != 0 {
+				w.RawByte(',')
+			}
+			w.String(v)
+		}
+		w.RawByte(']')
+	}
 	w.RawByte('}')
 	return nil
 }

@@ -95,7 +95,7 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 		request.Request.Body = string(ctx.Request.Body())
 	}
 
-	request.Request.BodyLength = len(request.Request.Body)
+	request.Request.BodyLength = ctx.Request.GetBodyLength()
 
 	request.Response.ElapsedTimeInMs = float32(float64(ctx.GetElapsedTime().Microseconds()) *0.001)
 
@@ -103,21 +103,21 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 		request.Response.LocalAddr = ctx.Response.LocalAddr().String()
 	}
 
-	if ctx.Response.RemoteAddr() != nil {
+	request.DataFlow=&model.DataFlow{}
+	request.DataFlow.From=request.RemoteIP
+
+	//TODO ,use gateway's uuid instead
+	request.DataFlow.Relay=request.Request.LocalAddr
+
+	if len(ctx.Response.Destination())>0{
+		request.DataFlow.To=ctx.Response.Destination()
+	}else if ctx.Response.RemoteAddr() != nil {
 		request.Response.RemoteAddr = ctx.Response.RemoteAddr().String()
+		request.DataFlow.To=[]string{request.Response.RemoteAddr}
 	}
 
 	request.Response.Cached = ctx.Response.Cached
 	request.Response.StatusCode = ctx.Response.StatusCode()
-
-	request.DataFlow=&model.DataFlow{}
-	request.DataFlow.From=request.RemoteIP
-	request.DataFlow.Relay=request.Request.LocalAddr
-	request.DataFlow.To=request.Response.RemoteAddr
-
-	if request.Response.Cached && request.Response.RemoteAddr==""{
-		request.DataFlow.To="cache"
-	}
 
 	ce = string(ctx.Response.Header.Peek(fasthttp.HeaderContentEncoding))
 	if ce ==""{

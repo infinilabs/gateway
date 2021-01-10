@@ -3,6 +3,7 @@ package elastic
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/queue"
@@ -234,11 +235,13 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		for x,y:=range docBuf{
 			if submitMode=="sync"{
 				client.Bulk(y)
+				ctx.Response.SetDestination(fmt.Sprintf("%v:%v","sync",x))
 			}else{
 				err:=queue.Push(x,y.Bytes())
 				if err!=nil{
 					panic(err)
 				}
+				ctx.Response.SetDestination(fmt.Sprintf("%v:%v","async",x))
 			}
 			y.Reset()
 			bufferPool.Put(y)
@@ -249,6 +252,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		ctx.Finished()
 		return
 	}
+
 	return
 
 

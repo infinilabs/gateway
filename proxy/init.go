@@ -31,4 +31,7 @@ func Init()  {
 	common.RegisterFilter(routing.RatioRoutingFlowFilter{})
 	common.RegisterFilter(routing.CloneFlowFilter{})
 	common.RegisterFilter(elastic2.BulkReshuffle{})
+	common.RegisterFilter(debug.DumpRequestBody{})
+	common.RegisterFilter(filters.RequestBodyTruncate{})
+	common.RegisterFilter(filters.ResponseBodyTruncate{})
 }

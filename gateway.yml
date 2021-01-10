@@ -196,8 +196,16 @@ flow:
 #            - GET
 #            - HEAD
 #            - DELETE
-#      - name: dump_url
-#      - name: dump_header
+
+      - name: request_body_truncate
+        parameters:
+          max_size: 1024
+      - name: response_body_truncate
+        parameters:
+          max_size: 1024
+#      - name: dump_request_body
+      #      - name: dump_url
+      #      - name: dump_header
       - name: request_logging
         parameters:
           queue_name: request_logging
@@ -206,9 +214,10 @@ flow:
       - name: bulk_reshuffle
         parameters:
           elasticsearch: prod
-#          level: node #node or shard
           level: shard #node or shard
-          mode: async # async or sync
+#          level: shard #node or shard
+          mode: sync # async or sync
+#          mode: async # async or sync
       - name: elasticsearch
         parameters:
           elasticsearch: prod
@@ -231,6 +240,7 @@ router:
     default_flow: hello_world
   - name: indexing
     default_flow: online_indexing_merge
+    tracing_flow: request_logging
 
 elasticsearch:
 #- name: local
@@ -313,7 +323,7 @@ pipelines:
     enabled: true
     parameters:
       index_name: "gateway_requests"
-      elasticsearch: "dev"
+      elasticsearch: "prod"
       input_queue: "request_logging"
       timeout: "60s"
       worker_size: 1
@@ -329,8 +339,8 @@ pipelines:
         - logs100million
         - medcl4
       timeout: "60s"
-      worker_size: 10
-      bulk_size_in_mb: 10 #in MB
+      worker_size: 1
+      bulk_size_in_mb: 1 #in MB
 
 floating_ip:
   enabled: true

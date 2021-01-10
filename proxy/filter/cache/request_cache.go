@@ -396,6 +396,7 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 				log.Trace("cache hit:", hash, ",", string(ctx.Request.Header.Method()), ",", string(ctx.Request.RequestURI()))
 			}
 
+			ctx.Response.SetDestination("cache")
 			ctx.Finished()
 		}else{
 			//ctx.Response.Header.Add("INFINI-CACHE", "MISSED")
