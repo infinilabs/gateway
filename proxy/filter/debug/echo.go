@@ -61,3 +61,17 @@ func (filter DumpUrl) Process(ctx *fasthttp.RequestCtx) {
 	fmt.Println("username: ", string(user) )
 	fmt.Println("password: ", string(pass) )
 }
+
+
+
+type DumpRequestBody struct {
+	param.Parameters
+}
+
+func (filter DumpRequestBody) Name() string {
+	return "dump_request_body"
+}
+
+func (filter DumpRequestBody) Process(ctx *fasthttp.RequestCtx) {
+	fmt.Println("request_body: ", string(ctx.Request.Body()))
+}
