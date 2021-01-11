@@ -205,6 +205,12 @@ flow:
 #            - "192.168.3.67"
 #          include:
 #            - 192.168.3.98
+#      - name: request_user_filter
+#        parameters:
+#          exclude:
+#            - "medcl"
+#          include:
+#            - "elastic"
 #      - name: response_status_filter
 #        parameters:
 #          exclude:
