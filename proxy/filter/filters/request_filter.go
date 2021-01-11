@@ -470,20 +470,6 @@ func (filter RequestFilterBase) CheckShouldRules(path string, ctx *fasthttp.Requ
 	return false, hasShouldRules
 }
 
-//TODO
-type RequestIPFilter struct {
-	RequestFilterBase
-}
-
-//TODO
-type RequestUrlQueryArgsFilter struct {
-	RequestFilterBase
-}
-
-//TODO
-type RequestBodyFilter struct {
-	RequestFilterBase
-}
 
 type ResponseStatusCodeFilter struct {
 	RequestFilterBase
@@ -604,6 +590,85 @@ func (filter ResponseHeaderFilter) Process(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
+}
+
+
+
+type RequestClientIPFilter struct {
+	RequestFilterBase
+}
+
+
+func (filter RequestClientIPFilter) Name() string {
+	return "request_client_ip_filter"
+}
+
+func (filter RequestClientIPFilter) Process(ctx *fasthttp.RequestCtx) {
+
+	clientIP:=ctx.RemoteIP().String()
+	if global.Env().IsDebug {
+		log.Debug("client_ip:", clientIP)
+	}
+
+	exclude, ok := filter.GetStringArray("exclude")
+	if global.Env().IsDebug {
+		log.Debug("exclude:", exclude)
+	}
+	if ok {
+		for _, x := range exclude {
+				match := x == clientIP
+				if global.Env().IsDebug {
+					log.Debugf("exclude clientIP %v vs %v, match: %v", x, clientIP, match)
+				}
+				if match {
+					ctx.Filtered()
+					if global.Env().IsDebug {
+						log.Debugf("rule matched, this request has been filtered: %v", ctx.Request.URI().String())
+					}
+					return
+				}
+		}
+	}
+
+	include, ok := filter.GetStringArray("include")
+	if global.Env().IsDebug {
+		log.Debug("include:", include)
+	}
+	if ok {
+		for _, x := range include {
+				match := x == clientIP
+				if global.Env().IsDebug {
+					log.Debugf("include clientIP %v vs %v, match: %v", x, clientIP, match)
+				}
+				if match {
+					if global.Env().IsDebug {
+						log.Debugf("rule matched, this request has been marked as good one: %v", ctx.Request.URI().String())
+					}
+					return
+				}
+		}
+		ctx.Filtered()
+		if global.Env().IsDebug {
+			log.Debugf("no rule matched, this request has been filtered: %v", ctx.Request.URI().String())
+		}
+	}
+
+}
+
+
+
+type RequestServerHostFilter struct {
+	RequestFilterBase
+}
+
+//TODO
+type RequestUrlQueryArgsFilter struct {
+	RequestFilterBase
+}
+
+//TODO
+type RequestBodyFilter struct {
+	RequestFilterBase
 }
 
 //TODO

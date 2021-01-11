@@ -199,6 +199,12 @@ flow:
 #            - GET
 #            - HEAD
 #            - DELETE
+#      - name: request_client_ip_filter
+#        parameters:
+#          exclude:
+#            - "192.168.3.67"
+#          include:
+#            - 192.168.3.98
 #      - name: response_status_filter
 #        parameters:
 #          exclude:
