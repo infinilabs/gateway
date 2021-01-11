@@ -35,4 +35,5 @@ func Init() {
 	common.RegisterFilter(filters.RequestBodyTruncate{})
 	common.RegisterFilter(filters.ResponseBodyTruncate{})
 	common.RegisterFilter(filters.ResponseStatusCodeFilter{})
+	common.RegisterFilter(filters.ResponseHeaderFilter{})
 }

@@ -183,27 +183,30 @@ flow:
           exclude: # any rule match will marked request as filtered
           - app: kibana # in order to filter kibana's access log, config `elasticsearch.customHeaders: { "app": "kibana" }` to your kibana's config `/config/kibana.yml`
 #          - ENV: test #for example, requests for testing purpose can be filtered, eg: curl localhost:8000 -H "ENV: test"
-#          - INFINI-CACHE: CACHED # cached requests can be filtered safely
 #          include: # any match will marked as pass through, when include was specified but none of these rules are matched, the request will be mark as filtered, the next filters won't continue processing
 #          - TRACE: true # curl localhost:8000 -H "TRACE: true"
 #          - TRACING: true # curl localhost:8000 -H "TRACING: true"
-      - name: request_method_filter
-        parameters:
-          exclude:
-            - PUT
-            - POST
-          include:
-            - GET
-            - HEAD
-            - DELETE
-      - name: response_status_filter
-        parameters:
-          exclude:
-            - 200
-          include:
-            - 404
-            - 401
-#            - 403
+#      - name: response_header_filter
+#        parameters:
+#          exclude:
+#            - INFINI-CACHE: CACHED
+#      - name: request_method_filter
+#        parameters:
+#          exclude:
+#            - PUT
+#            - POST
+#          include:
+#            - GET
+#            - HEAD
+#            - DELETE
+#      - name: response_status_filter
+#        parameters:
+#          exclude:
+#            - 200
+#          include:
+#            - 404
+#            - 401
+##            - 403
       - name: request_body_truncate
         parameters:
           max_size: 1024
@@ -364,7 +367,7 @@ queue:
   read_chan_buffer: 0
 
 statsd:
-  enabled: true
+  enabled: false
   host: 192.168.3.98
   port: 8125
   namespace: gateway.
