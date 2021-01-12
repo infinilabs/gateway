@@ -277,7 +277,7 @@ func (p *ReverseProxy) DelegateRequest(req *fasthttp.Request, res *fasthttp.Resp
 	}
 
 	if err := pc.Do(req, res); err != nil {
-		log.Warnf("failed to proxy request: %v, %v, retried %v times", err, string(req.RequestURI()),retry)
+		log.Warnf("failed to proxy request: %v, %v, retried #%v", err, string(req.RequestURI()),retry)
 		if util.ContainsAnyInArray(err.Error(),failureMessage){
 			retry++
 			if retry<10 {
