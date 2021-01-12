@@ -6,6 +6,7 @@
 package floating_ip
 
 import (
+	"context"
 	"fmt"
 	log "github.com/cihub/seelog"
 	"github.com/j-keck/arping"
@@ -15,6 +16,7 @@ import (
 	"infini.sh/framework/core/net"
 	"infini.sh/framework/core/util"
 	net1 "net"
+	"os/exec"
 	"time"
 )
 
@@ -76,6 +78,25 @@ func (module FloatingIPPlugin) Setup(cfg *config.Config) {
 
 	if floatingIPConfig.IP==""||floatingIPConfig.Interface==""{
 		panic("invalid floating_ip config")
+	}
+
+}
+
+var pingTimeout=[]string{"timeout","Unreachable","unreachable"}
+
+func pingActiveNode(ip string)bool  {
+	ctx := context.Background()
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(context.Background(), time.Duration(10)*time.Second)
+	defer cancel()
+
+	out, _ := exec.CommandContext(ctx,"ping", ip, "-i 3").Output()
+
+	//fmt.Println(string(out))
+	if util.ContainsAnyInArray(string(out), pingTimeout) {
+		return false
+	} else {
+		return true
 	}
 
 }
@@ -226,6 +247,13 @@ func (module FloatingIPPlugin) Start() error {
 
 	//check active status
 	alive := module.IsActiveStillAlive()
+
+	if !alive{
+		//target floating_ip can't connect, check ip address
+		if pingActiveNode(floatingIPConfig.IP){
+			panic(errors.Errorf("the floating_ip [%v] has already been used by someone, but the gateway service is not running.",floatingIPConfig.IP))
+		}
+	}
 
 	log.Tracef("active floating_ip node found: %v", alive)
 
