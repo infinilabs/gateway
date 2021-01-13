@@ -137,7 +137,7 @@ type Router struct {
 	// unrecovered panics.
 	PanicHandler func(*fasthttp.RequestCtx, interface{})
 
-	OnFinishHandler fasthttp.RequestHandler
+	TraceHandler fasthttp.RequestHandler
 }
 
 // New returns a new initialized Router.
@@ -289,15 +289,19 @@ func (r *Router) allowed(path, reqMethod string) (allow string) {
 	return
 }
 
-// Handler makes the router implement the fasthttp.ListenAndServe interface.
-func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
+//
+//// Handler makes the router implement the fasthttp.ListenAndServe interface.
+//func (r *Router) TraceHandler(ctx *fasthttp.RequestCtx) {
+//
+//	if r.OnTracingHandler !=nil{
+//		//defer func() {
+//			//ctx.Tracing()
+//			r.OnTracingHandler(ctx)
+//		//}()
+//	}
+//}
 
-	if r.OnFinishHandler !=nil{
-		defer func() {
-			ctx.Resume()
-			r.OnFinishHandler(ctx)
-		}()
-	}
+func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 
 	if r.PanicHandler != nil {
 		defer r.recv(ctx)

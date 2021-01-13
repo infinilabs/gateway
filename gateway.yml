@@ -236,9 +236,11 @@ flow:
       - name: bulk_reshuffle
         parameters:
           elasticsearch: prod
-          level: shard #node or shard
+          level: node #node or shard
 #          level: shard #node or shard
-          mode: sync # async or sync
+#          index:
+#            - medcl4new1245
+#          mode: async # async or sync
 #          mode: async # async or sync
       - name: elasticsearch
         parameters:
@@ -356,19 +358,19 @@ pipelines:
     enabled: true
     parameters:
       elasticsearch: "prod"
-      index:
-        - logs-repeat-test
-        - logs100million
-        - medcl4
+#      index:
+#        - logs-repeat-test
+#        - logs100million
+#        - medcl4
       timeout: "60s"
       worker_size: 1
       bulk_size_in_mb: 1 #in MB
 
-floating_ip:
-  enabled: true
-#  ip: 192.168.3.234      #yep, it's optional, infini-gateway could detect one but maybe not the right one
-#  netmask: 255.255.255.0 #optional
-#  interface: en1         #optional
+#floating_ip:
+#  enabled: true
+##  ip: 192.168.3.234      #yep, it's optional, infini-gateway could detect one but maybe not the right one
+##  netmask: 255.255.255.0 #optional
+##  interface: en1         #optional
 
 queue:
   min_msg_size: 1

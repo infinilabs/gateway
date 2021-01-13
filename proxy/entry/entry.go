@@ -132,13 +132,14 @@ func (this *Entrypoint) Start() error {
 
 
 
-		this.router.OnFinishHandler=common.GetFlowProcess(this.routerConfig.TracingFlow)
+		this.router.TraceHandler =common.GetFlowProcess(this.routerConfig.TracingFlow)
 	}
 
 	this.server = &fasthttp.Server{
 		Name:                          "INFINI",
 		DisableHeaderNamesNormalizing: true,
 		Handler:                       this.router.Handler,
+		TraceHandler:                  this.router.TraceHandler,
 		Concurrency:                   this.config.MaxConcurrency,
 		LogAllErrors:                  false,
 		MaxRequestBodySize:            200 * 1024 * 1024,
