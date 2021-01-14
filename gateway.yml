@@ -135,8 +135,8 @@ flow:
 #      - name: sample
 #        parameters:
 #          ratio: 0.2
-#      - name: request_path_filter
-#        parameters:
+      - name: request_path_filter
+        parameters:
 #          must: #must match all rules to continue
 #            prefix:
 #              - /medcl
@@ -149,8 +149,9 @@ flow:
 #              - /*/_refresh
 #            regex:
 #              - ^/m[\w]+dcl
-#          must_not: # any match will be filtered
-#            prefix:
+          must_not: # any match will be filtered
+            prefix:
+              - /favicon.ico
 #              - /.kibana
 #              - /_security
 #              - /_security
@@ -350,8 +351,8 @@ pipelines:
       elasticsearch: "prod"
       input_queue: "request_logging"
       timeout: "60s"
-      worker_size: 1
-      bulk_size_in_mb: 1 #in MB
+      worker_size: 10
+      bulk_size_in_mb: 10 #in MB
 - name: bulk_request_ingest
   start:
     joint: bulk_indexing
@@ -363,8 +364,8 @@ pipelines:
 #        - logs100million
 #        - medcl4
       timeout: "60s"
-      worker_size: 1
-      bulk_size_in_mb: 1 #in MB
+      worker_size: 10
+      bulk_size_in_mb: 10 #in MB
 
 #floating_ip:
 #  enabled: true
@@ -378,7 +379,8 @@ queue:
   max_bytes_per_file: 53687091200
   sync_every_records: 100000 # sync by records count
   sync_timeout_in_ms: 10000 # sync by time in million seconds
-  read_chan_buffer: 0
+  write_chan_buffer: 1000
+  read_chan_buffer: 1000
 
 statsd:
   enabled: false
