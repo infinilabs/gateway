@@ -22,9 +22,7 @@ func (this BulkReshuffle) Name() string {
 	return "bulk_reshuffle"
 }
 
-
 var bufferPool *sync.Pool
-
 func initPool() {
 	if bufferPool !=nil{
 		return
@@ -89,19 +87,13 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-
 	initPool()
 
 	path:=string(ctx.URI().Path())
 
-	///medcl/_doc/1
-	//fmt.Println(path)
-
+	//TODO 处理 {INDEX}/_bulk 的情况
 	//filebeat 等都是 bulk 结尾的请求了。
 	//需要拆解 bulk 请求，重新封装
-
-
-
 	if util.SuffixStr(path,"_bulk"){
 
 		reshuffleType:=this.GetStringOrDefault("level","node")
@@ -198,15 +190,10 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				}
 
 				shardInfo:=metadata.GetPrimaryShardInfo(index,shardID)
-				//nodeInfo:=metadata.GetNodeInfo(shardInfo.NodeID)
-
-				//fmt.Println(nodeInfo.Http.PublishAddress)
-
 				//write meta
 				bufferKey:=common.GetNodeLevelShuffleKey(clusterName,shardInfo.NodeID)
 				if reshuffleType=="shard"{
 					bufferKey=common.GetShardLevelShuffleKey(clusterName,index,shardID)
-					//bufferKey=common.GetShardLevelShuffleKey(clusterName,indexSettings.ID,shardID)
 				}
 
 				buff,ok=docBuf[bufferKey]
@@ -219,11 +206,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 			}else{
 				nextIsMeta =true
-
-				//if shardID!=4{
-				//	continue
-				//}
-
 				//handle request body
 				buff.Write(scannedByte)
 				buff.WriteString("\n")
