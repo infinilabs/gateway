@@ -25,6 +25,9 @@ func (this RequestLogging) Name() string {
 
 //var lock sync.Mutex
 var writerPool *sync.Pool
+var requstObjPool *sync.Pool
+var reqPool *sync.Pool
+var resPool *sync.Pool
 
 func initPool() {
 	if writerPool != nil {
@@ -33,6 +36,22 @@ func initPool() {
 	writerPool = &sync.Pool{
 		New: func() interface{} {
 			return new(fastjson_marshal.Writer)
+		},
+	}
+
+	requstObjPool = &sync.Pool {
+		New: func() interface{} {
+			return new(model.HttpRequest)
+		},
+	}
+	reqPool = &sync.Pool {
+		New: func() interface{} {
+			return new(model.Request)
+		},
+	}
+	resPool = &sync.Pool {
+		New: func() interface{} {
+			return new(model.Response)
 		},
 	}
 }
@@ -45,9 +64,13 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 		log.Trace("start logging requests")
 	}
 
-	request := model.HttpRequest{}
-	request.Request = &model.Request{}
-	request.Response = &model.Response{}
+	request := requstObjPool.Get().(*model.HttpRequest)
+	request.Request = reqPool.Get().(*model.Request)
+	request.Response = resPool.Get().(*model.Response)
+
+	defer requstObjPool.Put(request)
+	defer resPool.Put(request.Response)
+	defer reqPool.Put(request.Request)
 
 	request.ID = ctx.ID()
 	request.ConnTime = ctx.ConnTime().UTC().Format("2006-01-02T15:04:05.000Z")
