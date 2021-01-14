@@ -272,8 +272,6 @@ const CACHEHASH = "request_cache_hash"
 
 func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 
-	log.Trace("process cache get")
-
 	//TODO optimize scroll API, should always point to same IP, prefer to route to where index/shard located
 
 	cacheable:=ctx.GetFlag(CACHEABLE,false)
@@ -363,7 +361,9 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 		ctx.Request.URI().QueryArgs().Del("no_cache")
 	}
 
-	log.Trace("cacheable,",cacheable)
+	if global.Env().IsDebug {
+		log.Trace("cacheable,", cacheable)
+	}
 
 	if cacheable {
 
@@ -377,11 +377,11 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 
 		item, found := filter.GetCache(hash)
 
-		log.Trace("check cache:",hash,", found:",found)
+		if global.Env().IsDebug {
+			log.Trace("check cache:", hash, ", found:", found)
+		}
 
 		if found {
-
-			log.Trace("cache found")
 
 			stats.Increment("cache", "hit")
 
@@ -472,8 +472,6 @@ func (filter RequestCacheSet) Name() string {
 
 func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
 
-	log.Trace("process cache set")
-
 	hash,ok:=ctx.GetString(CACHEHASH)
 	if !ok{
 		hash= filter.getHash(&ctx.Request)
@@ -548,7 +546,9 @@ func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
 		} else {
 			cacheBytes := filter.Encode(ctx)
 			filter.SetCache(hash, cacheBytes, filter.GetChaosTTLDuration())
-			log.Trace("cache was stored")
+			if global.Env().IsDebug {
+				log.Trace("cache was stored")
+			}
 		}
 	}
 }
