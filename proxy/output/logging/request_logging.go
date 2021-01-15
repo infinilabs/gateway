@@ -4,6 +4,7 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fastjson_marshal"
 	"infini.sh/gateway/common/model"
 	"strings"
@@ -167,13 +168,21 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 	request.Response.BodyLength = len(request.Response.Body)
 
 	formatHeaderKey:=this.GetBool("format_header_keys",false)
+	removeAuthHeaderKey:=this.GetBool("remove_authorization",true)
 
 	m = map[string]string{}
 	ctx.Request.Header.VisitAll(func(key, value []byte) {
+
+		tempKey:=string(key)
+		if removeAuthHeaderKey{
+			if util.ContainsAnyInArray(tempKey,fasthttp.AuthHeaderKeys){
+				return
+			}
+		}
 		if formatHeaderKey{
-			m[strings.ToLower(string(key))] = string(value)
+			m[strings.ToLower(tempKey)] = string(value)
 		}else{
-			m[string(key)] = string(value)
+			m[tempKey] = string(value)
 		}
 	})
 
