@@ -452,6 +452,7 @@ func (filter RequestCacheSet) GetAsyncSearchTTLDuration() time.Duration {
 	if filter.asyncSearchTTLDuration > 0 {
 		return filter.asyncSearchTTLDuration
 	}
+	filter.AsyncSearchTTL=filter.GetStringOrDefault("async_search_cache_ttl","30m")
 
 	if filter.AsyncSearchTTL != "" {
 		dur, err := time.ParseDuration(filter.AsyncSearchTTL)
@@ -476,6 +477,8 @@ func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
 	if !ok{
 		hash= filter.getHash(&ctx.Request)
 	}
+
+	ctx.Response.Header.Add("CACHE-HASH",hash)
 
 	method := string(ctx.Request.Header.Method())
 	url := string(ctx.Request.RequestURI())
@@ -543,12 +546,12 @@ func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
 					}
 				}
 			}
-		} else {
-			cacheBytes := filter.Encode(ctx)
-			filter.SetCache(hash, cacheBytes, filter.GetChaosTTLDuration())
-			if global.Env().IsDebug {
-				log.Trace("cache was stored")
-			}
+		}
+
+		cacheBytes := filter.Encode(ctx)
+		filter.SetCache(hash, cacheBytes, filter.GetChaosTTLDuration())
+		if global.Env().IsDebug {
+			log.Trace("cache was stored")
 		}
 	}
 }
