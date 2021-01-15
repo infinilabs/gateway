@@ -38,4 +38,5 @@ func Init() {
 	common.RegisterFilter(filters.ResponseHeaderFilter{})
 	common.RegisterFilter(filters.RequestClientIPFilter{})
 	common.RegisterFilter(filters.RequestUserFilter{})
+	common.RegisterFilter(filters.RequestServerHostFilter{})
 }
