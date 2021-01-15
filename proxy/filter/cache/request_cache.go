@@ -175,7 +175,7 @@ func (p RequestCache) getHash(req *fasthttp.Request) string {
 
 	buffer := bytes.NewBuffer(data)
 	buffer.Write(req.Header.Method())
-	buffer.Write(req.Header.Peek("Authorization")) //TODO enable configure for this feature, may filter by user or share, add/remove Authorization header to hash factor
+	buffer.Write(req.Header.PeekAny(fasthttp.AuthHeaderKeys)) //TODO enable configure for this feature, may filter by user or share, add/remove Authorization header to hash factor
 	buffer.Write(req.RequestURI())
 	buffer.Write(req.URI().QueryArgs().QueryString())
 	buffer.Write(req.Body())

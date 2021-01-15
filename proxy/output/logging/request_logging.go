@@ -166,13 +166,15 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 
 	request.Response.BodyLength = len(request.Response.Body)
 
+	formatHeaderKey:=this.GetBool("format_header_keys",false)
+
 	m = map[string]string{}
 	ctx.Request.Header.VisitAll(func(key, value []byte) {
-
-		//TODO remove duplicated headers
-
-		//TODO header may need to keep original case, no need to lowercase
-		m[strings.ToLower(string(key))] = string(value)
+		if formatHeaderKey{
+			m[strings.ToLower(string(key))] = string(value)
+		}else{
+			m[string(key)] = string(value)
+		}
 	})
 
 	if len(m) > 0 {
@@ -186,8 +188,11 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 
 	m = map[string]string{}
 	ctx.Response.Header.VisitAll(func(key, value []byte) {
-		//TODO header may need to keep original case, no need to lowercase
-		m[strings.ToLower(string(key))] = string(value)
+		if formatHeaderKey {
+			m[strings.ToLower(string(key))] = string(value)
+		}else{
+			m[string(key)] = string(value)
+		}
 	})
 
 	if len(m) > 0 {

@@ -10,7 +10,7 @@ import (
 // Authorization header, if the request uses HTTP Basic Authentication.
 // See RFC 2617, Section 2.
 func basicAuth(ctx *fasthttp.RequestCtx) (username, password string, ok bool) {
-	auth := ctx.Request.Header.Peek("Authorization")
+	auth := ctx.Request.Header.PeekAny(fasthttp.AuthHeaderKeys)
 	if auth == nil {
 		return
 	}
