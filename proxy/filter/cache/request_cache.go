@@ -387,7 +387,7 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 
 			ctx.Response.Cached=true
 			ctx.Response.Header.DisableNormalizing()
-			ctx.Response.Header.Add("INFINI-CACHE", "CACHED")
+			ctx.Response.Header.Add("CACHED", "true")
 
 			filter.Decode(item, &ctx.Request, &ctx.Response)
 
