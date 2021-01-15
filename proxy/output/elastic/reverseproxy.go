@@ -291,6 +291,8 @@ func (p *ReverseProxy) DelegateRequest(req *fasthttp.Request, res *fasthttp.Resp
 	}
 
 	res.Header.Set("UPSTREAM", pc.Addr)
+	res.SetDestination(pc.Addr)
+
 
 }
 
