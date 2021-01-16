@@ -12,8 +12,8 @@ entry:
       binding: 0.0.0.0:8000
 #      skip_occupied_port: false
       reuse_port: true #you can start multi gateway instance, they share same port, to full utilize system's resources
-    tls:
-      enabled: true #if your es is using https, the gateway entrypoint should enable https too
+#    tls:
+#      enabled: true #if your es is using https, the gateway entrypoint should enable https too
 
 flow:
   - name: double_write
@@ -72,10 +72,17 @@ flow:
 #          ratio: 0.5 # 50% of requests will routing to another flow: hello_world.
 #          flow: hello_world
 #          continue: false # continue the following filters processing after match and executed the flow, set `false` to return ASAP.
+      - name: request_host_filter
+        parameters:
+          exclude:
+            - domain-test1.com:8000
+#          include:
+#            - domain-test2.com:8000
+#            - domain-test3.com:8000
       - name: get_cache
 #        parameters:
 #          pass_patterns: ["_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"]
-#      - name: rate_limit
+#      - name: request_path_limiter
 #        parameters:
 #          message: "Hey, You just reached our request limit!"
 #          rules: #configure match rules against request's PATH, eg: /_cluster/health, match the first rule and return
@@ -190,7 +197,7 @@ flow:
 #      - name: response_header_filter
 #        parameters:
 #          exclude:
-#            - INFINI-CACHE: CACHED
+#            - CACHED: true
 #      - name: request_method_filter
 #        parameters:
 #          exclude:
@@ -272,14 +279,12 @@ elasticsearch:
 #  enabled: true
 #  endpoint: https://127.0.0.1:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
 #  version: 7.6.0 #optional, used to select es adaptor, can be done automatically after connect to es
-#  index_prefix: gateway_
 #  basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
 #    username: elastic
 #    password: pass
-- name: prod
+- name: dev
   enabled: true
   endpoint: https://192.168.3.98:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
-  index_prefix: gateway_
   basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
     username: elastic
     password: pass
@@ -287,21 +292,17 @@ elasticsearch:
     enabled: true
     refresh:
       enabled: true
-#- name: prod
-#  enabled: true
-#  endpoint: http://192.168.3.201:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
-#  discovery: # auto discovery elasticsearch cluster nodes
-#    enabled: true
-#    refresh:
-#      enabled: true
-#      module:
-#        - nodes
-#        - indices
-#        - shards
-##      interval: 10s
-#  basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
-#    username: elastic
-#    password: pass
+- name: prod
+  enabled: true
+  endpoint: http://192.168.3.201:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
+  discovery: # auto discovery elasticsearch cluster nodes
+    enabled: true
+    refresh:
+      enabled: true
+#      interval: 10s
+  basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
+    username: elastic
+    password: pass
 #- name: es1
 #  enabled: true
 #  version: 7.6.0
@@ -348,23 +349,23 @@ pipelines:
     enabled: true
     parameters:
       index_name: "gateway_requests"
-      elasticsearch: "prod"
+      elasticsearch: "dev"
       input_queue: "request_logging"
       timeout: "60s"
-      worker_size: 10
+      worker_size: 1
       bulk_size_in_mb: 10 #in MB
 - name: bulk_request_ingest
   start:
     joint: bulk_indexing
     enabled: true
     parameters:
-      elasticsearch: "prod"
+      elasticsearch: "dev"
 #      index:
 #        - logs-repeat-test
 #        - logs100million
 #        - medcl4
       timeout: "60s"
-      worker_size: 10
+      worker_size: 1
       bulk_size_in_mb: 10 #in MB
 
 #floating_ip:
