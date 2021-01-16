@@ -1,14 +1,15 @@
-package filters
+package transform
 
 import (
 	"fmt"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
+	"infini.sh/framework/core/param"
 	"infini.sh/framework/lib/fasthttp"
 )
 
 type RequestBodyTruncate struct {
-	RequestFilterBase
+	param.Parameters
 }
 
 func (filter RequestBodyTruncate) Name() string {
