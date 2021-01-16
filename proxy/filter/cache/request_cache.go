@@ -276,11 +276,10 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 
 	cacheable:=ctx.GetFlag(CACHEABLE,false)
 
-	if string(ctx.Request.Header.Method()) == fasthttp.MethodGet {
+	if util.CompareStringAndBytes(ctx.Request.Header.Method(),fasthttp.MethodGet) {
 		cacheable = true
 	}
 
-	method := string(ctx.Request.Header.Method())
 	url := string(ctx.Request.RequestURI())
 	args := ctx.Request.URI().QueryArgs()
 
@@ -302,7 +301,7 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 		break
 	case util.ContainStr(url, "_async_search"):
 
-		if method == fasthttp.MethodPost {
+		if util.CompareStringAndBytes(ctx.Request.Header.Method(),fasthttp.MethodPost){
 			//request normalization
 			//timestamp precision processing, scale time from million seconds to seconds, for cache reuse, for search optimization purpose
 			//{"range":{"@timestamp":{"gte":"2019-09-26T08:21:12.152Z","lte":"2020-09-26T08:21:12.152Z","format":"strict_date_optional_time"}
