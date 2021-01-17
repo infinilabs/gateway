@@ -1,24 +1,23 @@
-package filters
+package filter
 
 import (
+	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/lib/fasthttp"
-	log "github.com/cihub/seelog"
 )
 
-type RequestClientIPFilter struct {
+
+type RequestServerHostFilter struct {
 	RequestFilterBase
 }
 
-func (filter RequestClientIPFilter) Name() string {
-	return "request_client_ip_filter"
+func (filter RequestServerHostFilter) Name() string {
+	return "request_host_filter"
 }
 
-func (filter RequestClientIPFilter) Process(ctx *fasthttp.RequestCtx) {
-
-	clientIP:=ctx.RemoteIP().String()
-
-	valid, hasRule:= filter.CheckExcludeStringRules(clientIP, ctx)
+func (filter RequestServerHostFilter) Process(ctx *fasthttp.RequestCtx) {
+	host:=string(ctx.Request.Host())
+	valid, hasRule:= filter.CheckExcludeStringRules(host, ctx)
 	if hasRule&&!valid {
 		ctx.Filtered()
 		if global.Env().IsDebug {
@@ -27,7 +26,7 @@ func (filter RequestClientIPFilter) Process(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	valid, hasRule= filter.CheckIncludeStringRules(clientIP, ctx)
+	valid, hasRule= filter.CheckIncludeStringRules(host, ctx)
 	if hasRule&&!valid {
 		ctx.Filtered()
 		if global.Env().IsDebug {
@@ -37,4 +36,3 @@ func (filter RequestClientIPFilter) Process(ctx *fasthttp.RequestCtx) {
 	}
 
 }
-

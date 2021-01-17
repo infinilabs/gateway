@@ -280,14 +280,11 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 		cacheable = true
 	}
 
-	url := string(ctx.Request.RequestURI())
+	url := string(ctx.Path())
 	args := ctx.Request.URI().QueryArgs()
 
 	//check special path
 	switch {
-	//case url == "/favicon.ico":
-	//	ctx.Response.SetStatusCode(http.StatusNotFound)
-	//	return
 	case util.ContainStr(url, "/_search"):
 		//if util.ContainStr(url, "*") {
 		//	//fmt.Println("hit index pattern")
@@ -301,46 +298,6 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 		break
 	case util.ContainStr(url, "_async_search"):
 
-		if util.CompareStringAndBytes(ctx.Request.Header.Method(),fasthttp.MethodPost){
-			//request normalization
-			//timestamp precision processing, scale time from million seconds to seconds, for cache reuse, for search optimization purpose
-			//{"range":{"@timestamp":{"gte":"2019-09-26T08:21:12.152Z","lte":"2020-09-26T08:21:12.152Z","format":"strict_date_optional_time"}
-			//==>
-			//{"range":{"@timestamp":{"gte":"2019-09-26T08:21:00.000Z","lte":"2020-09-26T08:21:00.000Z","format":"strict_date_optional_time"}
-			body := ctx.Request.Body()
-			//log.Debug("timestamp precision updaing,", string(body))
-
-			//TODO get time field from index pattern settings
-			ok := util.ProcessJsonData(&body, []byte("@timestamp"), []byte("strict_date_optional_time"), []byte("range"), true, func(start, end int) {
-				startProcess := false
-				precisionLimit := 4 //0-9: 时分秒微妙 00:00:00:000
-				precisionOffset := 0
-				for i, v := range body[start:end] {
-					if v == 84 {
-						startProcess = true
-						precisionOffset = 0
-						continue
-					}
-					if startProcess && v > 47 && v < 58 {
-						precisionOffset++
-						if precisionOffset <= precisionLimit {
-							continue
-						} else if precisionOffset > 9 {
-							startProcess = false
-							continue
-						}
-						body[start+i] = 48
-					}
-
-				}
-			})
-			if ok {
-				ctx.Request.SetBody(body)
-			}
-
-			//{"size":0,"query":{"bool":{"must":[{"range":{"@timestamp":{"gte":"2019-09-26T15:16:59.127Z","lte":"2020-09-26T15:16:59.127Z","format":"strict_date_optional_time"}}}],"filter":[{"match_all":{}}],"should":[],"must_not":[]}},"aggs":{"61ca57f1-469d-11e7-af02-69e470af7417":{"terms":{"field":"log.file.path","order":{"_count":"desc"}},"aggs":{"timeseries":{"date_histogram":{"field":"@timestamp","min_doc_count":0,"time_zone":"Asia/Shanghai","extended_bounds":{"min":1569511019127,"max":1601133419127},"fixed_interval":"86400s"},"aggs":{"61ca57f2-469d-11e7-af02-69e470af7417":{"bucket_script":{"buckets_path":{"count":"_count"},"script":{"source":"count * 1","lang":"expression"},"gap_policy":"skip"}}}}},"meta":{"timeField":"@timestamp","intervalString":"86400s","bucketSize":86400,"seriesId":"61ca57f1-469d-11e7-af02-69e470af7417"}}},"timeout":"30000ms"}
-
-		}
 		cacheable = true
 		break
 	}
@@ -398,12 +355,10 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 			ctx.Response.SetDestination("cache")
 			ctx.Finished()
 		}else{
-			//ctx.Response.Header.Add("INFINI-CACHE", "MISSED")
 			stats.Increment("cache", "miss")
 		}
 	}else{
 		stats.Increment("cache", "skip")
-		//ctx.Response.Header.Add("INFINI-CACHE", "SKIPPED")
 	}
 }
 
@@ -505,7 +460,6 @@ func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
 
 			//store cache_token
 			if method == fasthttp.MethodPost {
-				//TODO set the cache TTL, 30minutes
 				//if response contains:
 				//"id" : "FktyZXA2bklVU2VDeWIwVWdkVTlMcGcdMWpuRkM3SDZSWWVBSTdKT1hkRDNkdzoyNDY3MjY=",
 				//then it is a async task, store ID to cache, and if this task finished, associate that result to this same request

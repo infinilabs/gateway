@@ -1,4 +1,4 @@
-package filters
+package filter
 
 import (
 	log "github.com/cihub/seelog"

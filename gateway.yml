@@ -79,6 +79,12 @@ flow:
 #          include:
 #            - domain-test2.com:8000
 #            - domain-test3.com:8000
+      - name: date_range_precision_tuning
+        parameters:
+          time_precision: 4
+          path_keywords:
+            - _search
+            - _async_search
       - name: get_cache
 #        parameters:
 #          pass_patterns: ["_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"]
