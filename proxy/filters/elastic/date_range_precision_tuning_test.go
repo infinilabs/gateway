@@ -11,6 +11,7 @@ func TestDatePrecisionTuning(t *testing.T) {
 	filter:=DatePrecisionTuning{}
 	ctx:=&fasthttp.RequestCtx{}
 	ctx.Request=fasthttp.Request{}
+	ctx.Request.SetRequestURI("/_search")
 	ctx.Request.Header.SetMethod(fasthttp.MethodPost)
 
 	data:=[]byte("{\"range\":{\"@timestamp\":{\"gte\":\"2019-09-26T08:21:12.152Z\",\"lte\":\"2020-09-26T08:21:12.152Z\",\"format\":\"strict_date_optional_time\"}")
@@ -93,6 +94,7 @@ func TestDatePrecisionTuning1(t *testing.T) {
 	filter:=DatePrecisionTuning{}
 	ctx:=&fasthttp.RequestCtx{}
 	ctx.Request=fasthttp.Request{}
+	ctx.Request.SetRequestURI("/_search")
 	ctx.Request.Header.SetMethod(fasthttp.MethodPost)
 
 	data:=[]byte("{\"range\":{\"@timestamp\":{\"gte\":\"2019-09-26T22:21:12.152Z\",\"lte\":\"2020-09-26T22:21:12.152Z\",\"format\":\"strict_date_optional_time\"}")
