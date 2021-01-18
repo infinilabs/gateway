@@ -92,7 +92,6 @@ func pingActiveNode(ip string)bool  {
 
 	out, _ := exec.CommandContext(ctx,"ping", ip, "-i 3").Output()
 
-	//fmt.Println(string(out))
 	if util.ContainsAnyInArray(string(out), pingTimeout) {
 		return false
 	} else {
@@ -191,24 +190,23 @@ func (module FloatingIPPlugin) SwitchToActiveMode() {
 	log.Infof("floating_ip listen at: %v, echo port: %v", floatingIPConfig.IP,floatingIPConfig.EchoPort)
 }
 
-func (module FloatingIPPlugin) Deactivate() {
-	if actived{
+func (module FloatingIPPlugin) Deactivate(silence bool) {
+	if actived||silence{
 		log.Debugf("deactivating floating_ip at: %v", floatingIPConfig.IP)
 		err := net.DisableAlias(floatingIPConfig.Interface, floatingIPConfig.IP, floatingIPConfig.Netmask)
-		if err != nil {
+		if err != nil &&!silence {
 			log.Error(err)
 		}
 		srvSignal <- true
 		arpSignal <- true
 		log.Tracef("floating_ip at: %v deactivated", floatingIPConfig.IP)
-
 	}
 	actived = false
 }
 
 func (module FloatingIPPlugin) SwitchToStandbyMode() {
 
-	module.Deactivate()
+	module.Deactivate(false)
 
 	log.Debugf("floating IP enter standby mode")
 
@@ -245,6 +243,9 @@ func (module FloatingIPPlugin) Start() error {
 		return errors.New("root privilege are required to use floating ip.")
 	}
 
+	//stop previous unclean status
+	module.Deactivate(true)
+
 	//check active status
 	alive := module.IsActiveStillAlive()
 
@@ -275,7 +276,7 @@ func (module FloatingIPPlugin) Stop() error {
 	log.Tracef("stopping floating ip module")
 
 	if actived {
-		module.Deactivate()
+		module.Deactivate(false)
 	}else{
 		haCheckSignal <- true
 	}
