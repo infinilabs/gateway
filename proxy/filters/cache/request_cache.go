@@ -160,19 +160,19 @@ func (p RequestCache) SetCache(key string, data []byte, ttl time.Duration) {
 }
 
 
-var hashBufferPool = &sync.Pool{
-	New: func() interface{} {
-		return new(bytes.Buffer)
-	},
-}
+//var hashBufferPool = &sync.Pool{
+//	New: func() interface{} {
+//		return new(bytes.Buffer)
+//	},
+//}
 
 func (p RequestCache) getHash(req *fasthttp.Request) string {
 
 	//TODO configure, remove keys from hash factor
 	req.URI().QueryArgs().Del("preference")
 
-	//buffer:=bytes.Buffer{}
-	buffer:=hashBufferPool.Get().(*bytes.Buffer)
+	buffer:=bytes.Buffer{}
+	//buffer:=hashBufferPool.Get().(*bytes.Buffer)
 
 	if global.Env().IsDebug {
 		log.Trace("generate hash:", string(req.Header.Method()), string(req.RequestURI()), string(req.URI().QueryArgs().QueryString()), string(req.Body()), string(req.PostArgs().QueryString()))
@@ -189,8 +189,8 @@ func (p RequestCache) getHash(req *fasthttp.Request) string {
 
 	str:= util.MD5digestString(buffer.Bytes())
 
-	buffer.Reset()
-	hashBufferPool.Put(buffer)
+	//buffer.Reset()
+	//hashBufferPool.Put(buffer)
 
 	return str
 }
@@ -379,13 +379,13 @@ func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
 		body := ctx.Response.Body()
 		var id string
 
-		buffer := bytesBufferPool.Get().(*bytes.Buffer)
+		//buffer := bytesBufferPool.Get().(*bytes.Buffer)
 
-		cacheBytes := ctx.Response.Encode(buffer)
+		cacheBytes := ctx.Response.Encode()
 		//cacheBytes := ctx.Response.Encode()
 
-		buffer.Reset()
-		bytesBufferPool.Put(buffer)
+		//buffer.Reset()
+		//bytesBufferPool.Put(buffer)
 
 
 		if strings.Contains(url, "/_async_search") {
