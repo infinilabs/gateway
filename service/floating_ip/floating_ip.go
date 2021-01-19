@@ -13,10 +13,12 @@ import (
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/env"
 	"infini.sh/framework/core/errors"
+	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/net"
 	"infini.sh/framework/core/util"
 	net1 "net"
 	"os/exec"
+	"runtime"
 	"time"
 )
 
@@ -147,6 +149,27 @@ func (module FloatingIPPlugin) SwitchToActiveMode() {
 
 	//start health check service
 	go func() {
+		defer func() {
+			if !global.Env().IsDebug {
+				if r := recover(); r != nil {
+
+					if r == nil {
+						return
+					}
+					var v string
+					switch r.(type) {
+					case error:
+						v = r.(error).Error()
+					case runtime.Error:
+						v = r.(runtime.Error).Error()
+					case string:
+						v = r.(string)
+					}
+					log.Error("error to switch to active mode,", v)
+				}
+			}
+		}()
+
 		for {
 			select {
 			case quit := <-srvSignal:
@@ -165,6 +188,27 @@ func (module FloatingIPPlugin) SwitchToActiveMode() {
 
 	//announce floating_ip, do arping every 10s
 	go func() {
+		defer func() {
+			if !global.Env().IsDebug {
+				if r := recover(); r != nil {
+
+					if r == nil {
+						return
+					}
+					var v string
+					switch r.(type) {
+					case error:
+						v = r.(error).Error()
+					case runtime.Error:
+						v = r.(runtime.Error).Error()
+					case string:
+						v = r.(string)
+					}
+					log.Error("error to announce floating_ip,", v)
+				}
+			}
+		}()
+
 		for {
 			select {
 			case quit := <-arpSignal:
@@ -211,6 +255,28 @@ func (module FloatingIPPlugin) SwitchToStandbyMode() {
 	log.Debugf("floating IP enter standby mode")
 
 	go func() {
+
+		defer func() {
+			if !global.Env().IsDebug {
+				if r := recover(); r != nil {
+
+					if r == nil {
+						return
+					}
+					var v string
+					switch r.(type) {
+					case error:
+						v = r.(error).Error()
+					case runtime.Error:
+						v = r.(runtime.Error).Error()
+					case string:
+						v = r.(string)
+					}
+					log.Error("error to switch to stand mode,", v)
+				}
+			}
+		}()
+
 		for {
 			select {
 			case quit := <-haCheckSignal:

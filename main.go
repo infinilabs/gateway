@@ -39,8 +39,6 @@ import (
 	"infini.sh/license"
 )
 
-var appConfig *config.AppConfig
-
 func main() {
 
 	terminalHeader := ("   ___   _   _____  __  __    __  _       \n")
@@ -86,8 +84,6 @@ func main() {
 		module.Start()
 
 	}, func() {
-		//orm.RegisterSchema(&model.Request{})
-
 	})
 
 }

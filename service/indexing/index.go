@@ -25,7 +25,6 @@ func (this *ElasticIndexer) Start() error {
 
 	go func() {
 		defer func() {
-
 			if !global.Env().IsDebug {
 				if r := recover(); r != nil {
 
