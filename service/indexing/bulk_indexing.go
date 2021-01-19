@@ -6,6 +6,8 @@ import (
 	"fmt"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/elastic"
+	"infini.sh/framework/core/errors"
+	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
@@ -14,6 +16,7 @@ import (
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
 	"net/http"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -45,8 +48,23 @@ func (joint BulkIndexingJoint) Name() string {
 
 func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 	defer func() {
-		if err := recover(); err != nil {
-			log.Errorf("error in bulk_indexing process: %s", err)
+		if !global.Env().IsDebug {
+			if r := recover(); r != nil {
+
+				if r == nil {
+					return
+				}
+				var v string
+				switch r.(type) {
+				case error:
+					v = r.(error).Error()
+				case runtime.Error:
+					v = r.(runtime.Error).Error()
+				case string:
+					v = r.(string)
+				}
+				log.Error("error in bulk indexer,", v)
+			}
 		}
 	}()
 
@@ -57,6 +75,10 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 
 	meta := elastic.GetMetadata(elasticsearch)
 	wg := sync.WaitGroup{}
+
+	if meta==nil{
+		return errors.New("metadata is nil")
+	}
 
 	totalSize := 0
 	esInstanceVal := joint.MustGetString("elasticsearch")
@@ -77,6 +99,9 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 			}
 		}
 	} else { //node level
+		if meta.Nodes==nil{
+			return errors.New("nodes is nil")
+		}
 		for k, v := range meta.Nodes {
 			queueName := common.GetNodeLevelShuffleKey(esInstanceVal, k)
 			for i := 0; i < workers; i++ {
@@ -93,10 +118,24 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 
 func (joint BulkIndexingJoint) NewBulkWorker(count *int, bulkSizeInMB int, wg *sync.WaitGroup, queueName string, endpoint string) {
 	defer func() {
-		if err := recover(); err != nil {
-			log.Errorf("error in bulk worker: %s", err)
-			//TODO failure and save logs for later recovery
-			wg.Done()
+		if !global.Env().IsDebug {
+			if r := recover(); r != nil {
+
+				if r == nil {
+					return
+				}
+				var v string
+				switch r.(type) {
+				case error:
+					v = r.(error).Error()
+				case runtime.Error:
+					v = r.(runtime.Error).Error()
+				case string:
+					v = r.(string)
+				}
+				log.Error("error in indexer,", v)
+				wg.Done()
+			}
 		}
 	}()
 

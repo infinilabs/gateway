@@ -21,10 +21,12 @@ import (
 	"fmt"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/elastic"
+	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/stats"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -42,8 +44,23 @@ func (joint JsonIndexingJoint) Name() string {
 //TODO 重启子进程，当子进程挂了之后
 func (joint JsonIndexingJoint) Process(c *pipeline.Context) error {
 	defer func() {
-		if err := recover(); err != nil {
-			log.Errorf("error in process: %s\n", err)
+		if !global.Env().IsDebug {
+			if r := recover(); r != nil {
+
+				if r == nil {
+					return
+				}
+				var v string
+				switch r.(type) {
+				case error:
+					v = r.(error).Error()
+				case runtime.Error:
+					v = r.(runtime.Error).Error()
+				case string:
+					v = r.(string)
+				}
+				log.Error("error in json indexing,", v)
+			}
 		}
 	}()
 
@@ -65,11 +82,26 @@ func (joint JsonIndexingJoint) Process(c *pipeline.Context) error {
 }
 
 func (joint JsonIndexingJoint) NewBulkWorker(count *int, bulkSizeInMB int, wg *sync.WaitGroup) {
+
 	defer func() {
-		if err := recover(); err != nil {
-			log.Errorf("error in bulk worker: %s", err)
-			//TODO failure and save logs for later recovery
-			wg.Done()
+		if !global.Env().IsDebug {
+			if r := recover(); r != nil {
+
+				if r == nil {
+					return
+				}
+				var v string
+				switch r.(type) {
+				case error:
+					v = r.(error).Error()
+				case runtime.Error:
+					v = r.(runtime.Error).Error()
+				case string:
+					v = r.(string)
+				}
+				log.Error("error in json indexing worker,", v)
+				wg.Done()
+			}
 		}
 	}()
 
