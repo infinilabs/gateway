@@ -33,7 +33,7 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 	for _, v := range cfg.Filter.Hosts.Exclude {
 		hasExclude=true
 		if endpoint==v{
-			log.Errorf("host in exclude list, mark as invalid, %v",node.Http.PublishAddress)
+			log.Debugf("host in exclude list, mark as invalid, %v",node.Http.PublishAddress)
 			return false
 		}
 	}
@@ -41,7 +41,7 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 	for _, v := range cfg.Filter.Hosts.Include {
 		hasInclude=true
 		if endpoint==v{
-			log.Errorf("host in include list, mark as valid, %v",node.Http.PublishAddress)
+			log.Debugf("host in include list, mark as valid, %v",node.Http.PublishAddress)
 			return true
 		}
 	}
@@ -57,7 +57,7 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 	for _, v := range cfg.Filter.Roles.Exclude {
 		hasExclude=true
 		if util.ContainsAnyInArray(v,node.Roles){
-			log.Errorf("node role %v match exclude rule [%v], mark as invalid, %v",node.Roles,v,node.Http.PublishAddress)
+			log.Debugf("node role %v match exclude rule [%v], mark as invalid, %v",node.Roles,v,node.Http.PublishAddress)
 			return false
 		}
 	}
@@ -65,7 +65,7 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 	for _, v := range cfg.Filter.Roles.Include {
 		hasInclude=true
 		if util.ContainsAnyInArray(v,node.Roles){
-			log.Errorf("node role %v match include rule [%v], mark as valid, %v",node.Roles,v,node.Http.PublishAddress)
+			log.Debugf("node role %v match include rule [%v], mark as valid, %v",node.Roles,v,node.Http.PublishAddress)
 			return true
 		}
 	}
@@ -82,7 +82,7 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 			v1,ok:=node.Attributes[k]
 			if ok{
 				if v1==v{
-					log.Errorf("node tags [%v:%v] in exclude list, mark as invalid, %v",k,v,node.Http.PublishAddress)
+					log.Debugf("node tags [%v:%v] in exclude list, mark as invalid, %v",k,v,node.Http.PublishAddress)
 					return false
 				}
 			}
@@ -95,7 +95,7 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 			v1,ok:=node.Attributes[k]
 			if ok{
 				if v1==v{
-					log.Errorf("node tags [%v:%v] in include list, mark as valid, %v",k,v,node.Http.PublishAddress)
+					log.Debugf("node tags [%v:%v] in include list, mark as valid, %v",k,v,node.Http.PublishAddress)
 					return true
 				}
 			}
@@ -283,7 +283,7 @@ func (p *ReverseProxy) DelegateRequest(req *fasthttp.Request, res *fasthttp.Resp
 			if retry<10 {
 				goto START
 			}else{
-				log.Errorf("reached max retries, failed to proxy request: %v, %v", err, string(req.RequestURI()))
+				log.Debugf("reached max retries, failed to proxy request: %v, %v", err, string(req.RequestURI()))
 			}
 		}
 		res.SetStatusCode(http.StatusInternalServerError)
