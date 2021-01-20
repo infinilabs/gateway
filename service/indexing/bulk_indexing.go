@@ -50,10 +50,6 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 	defer func() {
 		if !global.Env().IsDebug {
 			if r := recover(); r != nil {
-
-				if r == nil {
-					return
-				}
 				var v string
 				switch r.(type) {
 				case error:
@@ -120,10 +116,6 @@ func (joint BulkIndexingJoint) NewBulkWorker(count *int, bulkSizeInMB int, wg *s
 	defer func() {
 		if !global.Env().IsDebug {
 			if r := recover(); r != nil {
-
-				if r == nil {
-					return
-				}
 				var v string
 				switch r.(type) {
 				case error:
