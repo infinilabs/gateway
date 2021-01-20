@@ -145,8 +145,9 @@ func (module FloatingIPPlugin) SwitchToActiveMode() {
 		panic(err)
 	}
 
-	ln, err := net1.Listen("tcp", ":"+floatingIPConfig.EchoPort)
+	ln, err := net1.Listen("tcp", "0.0.0.0:"+util.TrimSpaces(floatingIPConfig.EchoPort))
 	if err != nil {
+		log.Error(err)
 		panic(err)
 	}
 
