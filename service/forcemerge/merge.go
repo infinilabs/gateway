@@ -22,6 +22,7 @@ import (
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/env"
 	"infini.sh/framework/core/global"
+	"infini.sh/framework/core/util"
 	"runtime"
 	"time"
 )
@@ -88,7 +89,8 @@ func (module ForceMergeModule) Start() error {
 				err:=client.Forcemerge(v,mergeConfig.MaxSegmentCount)
 				if err!=nil{
 					log.Error(err)
-					continue
+					//continue
+					//TODO assume operation is send
 				}
 			}else{
 				log.Infof("index [%v] only has [%v] segments, skip forcemerge",v,stats.All.Primary.Segments.Count)
@@ -102,7 +104,17 @@ func (module ForceMergeModule) Start() error {
 			log.Debug(stats)
 			if err!=nil{
 				log.Error(err)
-				continue
+				if util.ContainStr(err.Error(),"Timeout"){
+					log.Error("wait 30s and try again.")
+					time.Sleep(30*time.Second)
+					goto WAIT_MERGE
+				}else{
+					log.Error("wait 60s and try again.")
+					time.Sleep(60*time.Second)
+					goto WAIT_MERGE
+				}
+				//continue
+				//TODO
 			}
 
 			if stats.All.Primary.Merges.Current>0{
