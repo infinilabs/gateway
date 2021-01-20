@@ -34,6 +34,7 @@ import (
 	api2 "infini.sh/gateway/api"
 	"infini.sh/gateway/config"
 	"infini.sh/gateway/service/floating_ip"
+	"infini.sh/gateway/service/forcemerge"
 	"infini.sh/gateway/service/gateway"
 	"infini.sh/gateway/service/indexing"
 	"infini.sh/license"
@@ -73,6 +74,7 @@ func main() {
 		module.RegisterUserPlugin(stats.StatsDModule{})
 		module.RegisterUserPlugin(gateway.GatewayModule{})
 		module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
+		module.RegisterUserPlugin(forcemerge.ForceMergeModule{})
 
 		api2.Init()
 
