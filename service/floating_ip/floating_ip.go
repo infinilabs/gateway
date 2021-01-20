@@ -85,6 +85,7 @@ func (module FloatingIPPlugin) Setup(cfg *config.Config) {
 }
 
 var pingTimeout=[]string{"timeout","Unreachable","unreachable"}
+var pingAlive=[]string{"ttl","time="}
 
 func pingActiveNode(ip string)bool  {
 	ctx := context.Background()
@@ -92,12 +93,16 @@ func pingActiveNode(ip string)bool  {
 	ctx, cancel = context.WithTimeout(context.Background(), time.Duration(10)*time.Second)
 	defer cancel()
 
-	out, _ := exec.CommandContext(ctx,"ping", ip, "-i 3").Output()
-
+	out, err := exec.CommandContext(ctx,"ping", ip, "-i 1").Output()
+	if err!=nil{
+		log.Debug(err,string(util.EscapeNewLine(out)))
+	}
 	if util.ContainsAnyInArray(string(out), pingTimeout) {
 		return false
-	} else {
+	} else if util.ContainsAnyInArray(string(out), pingAlive) {
 		return true
+	}else {
+		return false
 	}
 
 }
@@ -177,7 +182,11 @@ func (module FloatingIPPlugin) SwitchToActiveMode() {
 					return
 				}
 			default:
-				conn, _ := ln.Accept()
+				conn, err := ln.Accept()
+				if err!=nil{
+					log.Error(err)
+					continue
+				}
 				if conn != nil {
 					time.Sleep(200 * time.Millisecond)
 					conn.Close()
