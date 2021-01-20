@@ -118,7 +118,7 @@ func (module ForceMergeModule) Start() error {
 			}
 
 			if stats.All.Primary.Merges.Current>0{
-				log.Infof("index %v still have %v merges is running.",v,stats.All.Primary.Merges.Current)
+				log.Infof("index %v still have %v merges are running.",v,stats.All.Primary.Merges.Current)
 				if stats.All.Primary.Merges.Current>10{
 					time.Sleep(60 * time.Second)
 				}else{
@@ -126,7 +126,7 @@ func (module ForceMergeModule) Start() error {
 				}
 				goto WAIT_MERGE
 			}else{
-				log.Infof("index %v has finished the merges, continue.",v)
+				log.Infof("index %v has finished the forcemerge, continue.",v)
 			}
 
 		}
