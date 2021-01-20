@@ -52,6 +52,10 @@ func (module ForceMergeModule) Setup(cfg *config.Config) {
 }
 func (module ForceMergeModule) Start() error {
 
+	if !mergeConfig.Enabled{
+		return nil
+	}
+
 	go func() {
 		defer func() {
 			if !global.Env().IsDebug {
