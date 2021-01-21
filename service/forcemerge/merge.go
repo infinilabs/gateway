@@ -86,6 +86,7 @@ func (module ForceMergeModule) Start() error {
 				goto GET_STATS
 			}
 
+			FORCE_MERGE:
 			if stats.All.Primary.Segments.Count>mergeConfig.MinSegmentCount{
 				log.Infof("index [%v] has [%v] segments, going to do forcemerge",v,stats.All.Primary.Segments.Count)
 				err:=client.Forcemerge(v,mergeConfig.MaxSegmentCount)
@@ -121,6 +122,12 @@ func (module ForceMergeModule) Start() error {
 				}
 				//continue
 				//TODO
+			}
+
+			if stats.All.Primary.Segments.Count>mergeConfig.MaxSegmentCount+50{
+				//TODO, merge is not started
+				time.Sleep(30*time.Second)
+				goto FORCE_MERGE
 			}
 
 			if stats.All.Primary.Merges.Current>0{
