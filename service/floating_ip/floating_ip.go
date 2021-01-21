@@ -7,7 +7,6 @@ package floating_ip
 
 import (
 	"context"
-	"fmt"
 	log "github.com/cihub/seelog"
 	"github.com/j-keck/arping"
 	"infini.sh/framework/core/config"
@@ -212,10 +211,10 @@ func (module FloatingIPPlugin) SwitchToStandbyMode() {
 		aliveChan :=make(chan bool)
 		go func() {
 			heartbeat.StartClient(floatingIPConfig.IP,floatingIPConfig.EchoPort,func() {
-				println("connected")
+				//println("connected")
 				aliveChan <- true
 			}, func() {
-				println("disconnect")
+				//println("disconnect")
 				aliveChan <- false
 			})
 		}()
@@ -226,7 +225,7 @@ func (module FloatingIPPlugin) SwitchToStandbyMode() {
 		if !alive{
 			module.SwitchToActiveMode()
 		}else{
-			fmt.Println("alive, goto wait")
+			//fmt.Println("alive, goto wait")
 			goto WAIT
 		}
 
@@ -280,30 +279,33 @@ func (module FloatingIPPlugin) Start() error {
 		}
 	}()
 
-	fmt.Println("StartServer")
+	//fmt.Println("StartServer")
 
 	//stop previous unclean status
 	module.Deactivate(true)
-	fmt.Println("Deactivate")
+	//fmt.Println("Deactivate")
 
 	aliveChan :=make(chan bool)
 	go func() {
 		err:=heartbeat.StartClient(floatingIPConfig.IP,floatingIPConfig.EchoPort,func() {
-			println("connected")
+			//println("connected")
 			aliveChan <- true
 		}, func() {
-			println("disconnect")
+			//println("disconnect")
 			aliveChan <- false
 		})
-		fmt.Println(err)
+		//fmt.Println(err)
+		if err!=nil{
+			aliveChan <- false
+		}
 	}()
 
-	fmt.Println("aliveChan")
+	//fmt.Println("aliveChan")
 
 
 	alive := <-aliveChan
 
-	fmt.Println("alive",alive)
+	//fmt.Println("alive",alive)
 
 	if !alive{
 		//target floating_ip can't connect, check ip address
@@ -314,14 +316,14 @@ func (module FloatingIPPlugin) Start() error {
 
 	log.Tracef("active floating_ip node found: %v", alive)
 
-	fmt.Println("alive2",alive)
+	//fmt.Println("alive2",alive)
 
 	if alive {
-		fmt.Println("SwitchToStandbyMode",alive)
+		//fmt.Println("SwitchToStandbyMode",alive)
 
 		module.SwitchToStandbyMode()
 	} else {
-		fmt.Println("SwitchToActiveMode",alive)
+		//fmt.Println("SwitchToActiveMode",alive)
 
 		module.SwitchToActiveMode()
 	}

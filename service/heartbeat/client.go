@@ -5,7 +5,6 @@ package heartbeat
 import (
 	"fmt"
 	"net"
-	log "src/github.com/cihub/seelog"
 	"time"
 )
 
@@ -43,7 +42,7 @@ func StartClient(host string, port int, onConnect, onDisconnect func()) error {
 
 	conn, ok := coo.(*net.TCPConn)
 	if !ok {
-		log.Error("not ok")
+		//log.Error("not ok")
 		onDisconnect()
 		return err
 	}
@@ -51,7 +50,7 @@ func StartClient(host string, port int, onConnect, onDisconnect func()) error {
 	//log.Error("dial tcp",err)
 	//	conn, err := net.Dial("tcp", "127.0.0.1:6666")
 	if err != nil {
-		fmt.Println("server connection failed:", err.Error())
+		//fmt.Println("server connection failed:", err.Error())
 		//TODO server is down
 		onDisconnect()
 		return err
@@ -65,7 +64,7 @@ func StartClient(host string, port int, onConnect, onDisconnect func()) error {
 	go ClientHandler(conn)
 	select {
 	case <-Dch:
-		fmt.Println("close connection")
+		//fmt.Println("close connection")
 		onDisconnect()
 
 		//TODO remote closed
@@ -80,20 +79,24 @@ func ClientHandler(conn *net.TCPConn) {
 		conn.SetWriteDeadline(time.Now().Add(time.Duration(rwTimeoutInMs) * time.Millisecond))
 		_,err:=conn.Write([]byte{Req_REGISTER, '#', '2'})
 		if err!=nil{
-			log.Error(err)
+			//log.Error(err)
+			Dch <- true
+			break
 		}
 
 		conn.SetReadDeadline(time.Now().Add(time.Duration(rwTimeoutInMs) * time.Millisecond))
 		_,err=conn.Read(data)
 		if err!=nil{
-			log.Error(err)
+			//log.Error(err)
+			Dch <- true
+			break
 		}
-				fmt.Println(string(data))
+				//fmt.Println(string(data))
 		if data[0] == Res_REGISTER {
 			break
 		}
 	}
-		fmt.Println("i'm register")
+		//fmt.Println("i'm register")
 	go ClientRHandler(conn)
 	go ClientWHandler(conn)
 	go ClientWork()
@@ -107,7 +110,9 @@ func ClientRHandler(conn *net.TCPConn) {
 		conn.SetReadDeadline(time.Now().Add(time.Duration(rwTimeoutInMs) * time.Millisecond))
 		i, err := conn.Read(data)
 		if err!=nil{
-			log.Error(err)
+			//log.Error(err)
+			Dch <- true
+			return
 		}
 		if i == 0 {
 			Dch <- true
@@ -115,19 +120,23 @@ func ClientRHandler(conn *net.TCPConn) {
 		}
 		conn.SetWriteDeadline(time.Now().Add(time.Duration(rwTimeoutInMs) * time.Millisecond))
 		if data[0] == Req_HEARTBEAT {
-			fmt.Println("recv ht pack")
+			//fmt.Println("recv ht pack")
 			_,err=conn.Write([]byte{Res_REGISTER, '#', 'h'})
 			if err!=nil{
-				log.Error(err)
+				//log.Error(err)
+				Dch <- true
+				return
 			}
-			fmt.Println("send ht pack ack")
+			//fmt.Println("send ht pack ack")
 		} else if data[0] == Req {
-			fmt.Println("recv data pack")
-			fmt.Printf("%v\n", string(data[2:]))
+			//fmt.Println("recv data pack")
+			//fmt.Printf("%v\n", string(data[2:]))
 			Rch <- data[2:]
 			_,err=conn.Write([]byte{Res, '#'})
 			if err!=nil{
-				log.Error(err)
+				//log.Error(err)
+				Dch <- true
+				return
 			}
 		}
 	}
@@ -137,12 +146,14 @@ func ClientWHandler(conn net.Conn) {
 	for {
 		select {
 		case msg := <-Wch:
-			fmt.Println((msg[0]))
-			fmt.Println("send data after: " + string(msg[1:]))
+			//fmt.Println((msg[0]))
+			//fmt.Println("send data after: " + string(msg[1:]))
 			conn.SetWriteDeadline(time.Now().Add(time.Duration(rwTimeoutInMs) * time.Millisecond))
 			_,err:=conn.Write(msg)
 			if err!=nil{
-				log.Error(err)
+				//log.Error(err)
+				Dch <- true
+				return
 			}
 		}
 	}
@@ -154,7 +165,7 @@ func ClientWork() {
 		select {
 		case _ = <-Rch:
 			//fmt.Println("work recv " + string(msg))
-			fmt.Println("work recv ___")
+			//fmt.Println("work recv ___")
 
 			Wch <- []byte{Req, '#', 'x', 'x', 'x', 'x', 'x'}
 		}
