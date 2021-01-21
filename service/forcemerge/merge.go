@@ -77,11 +77,13 @@ func (module ForceMergeModule) Start() error {
 		client:=elastic.GetClient(mergeConfig.Elasticsearch)
 		for i,v:=range mergeConfig.Indices{
 			log.Infof("#%v - forcemerging index [%v]",i,v)
+			GET_STATS:
 			stats,err:=client.GetIndexStats(v)
 			log.Debug(stats)
 			if err!=nil{
-				log.Error(err)
-				continue
+				log.Errorf("index [%v] error on get index stats, retry, %v",v,err)
+				time.Sleep(30*time.Second)
+				goto GET_STATS
 			}
 
 			if stats.All.Primary.Segments.Count>mergeConfig.MinSegmentCount{
@@ -92,7 +94,11 @@ func (module ForceMergeModule) Start() error {
 					//continue
 					//TODO assume operation is send
 				}
-			}else{
+			}else if stats.All.Primary.Segments.Count==0{
+				log.Infof("index [%v] only has [%v] segments, retry",v,stats.All.Primary.Segments.Count)
+				time.Sleep(30*time.Second)
+				goto GET_STATS
+			} else{
 				log.Infof("index [%v] only has [%v] segments, skip forcemerge",v,stats.All.Primary.Segments.Count)
 				continue
 			}
