@@ -76,6 +76,7 @@ func (module ForceMergeModule) Start() error {
 		}()
 		client:=elastic.GetClient(mergeConfig.Elasticsearch)
 		for i,v:=range mergeConfig.Indices{
+			retry:=0
 			log.Infof("#%v - forcemerging index [%v]",i,v)
 			GET_STATS:
 			stats,err:=client.GetIndexStats(v)
@@ -83,21 +84,26 @@ func (module ForceMergeModule) Start() error {
 			if err!=nil{
 				log.Errorf("index [%v] error on get index stats, retry, %v",v,err)
 				time.Sleep(30*time.Second)
+				retry++
 				goto GET_STATS
 			}
 
 			FORCE_MERGE:
-			if stats.All.Primary.Segments.Count>mergeConfig.MinSegmentCount{
+			if stats.All.Primary.Segments.Count>mergeConfig.MinSegmentCount && stats.All.Primary.Merges.Current==0{
 				log.Infof("index [%v] has [%v] segments, going to do forcemerge",v,stats.All.Primary.Segments.Count)
 				err:=client.Forcemerge(v,mergeConfig.MaxSegmentCount)
 				if err!=nil{
 					log.Error(err)
 					//continue
 					//TODO assume operation is send
+					time.Sleep(90*time.Second)
+					retry++
+					goto GET_STATS
 				}
 			}else if stats.All.Primary.Segments.Count==0{
-				log.Infof("index [%v] only has [%v] segments, retry",v,stats.All.Primary.Segments.Count)
-				time.Sleep(30*time.Second)
+				log.Infof("error on get stats, index [%v] only has [%v] segments, retry",v,stats.All.Primary.Segments.Count)
+				time.Sleep(60*time.Second)
+				retry++
 				goto GET_STATS
 			} else{
 				log.Infof("index [%v] only has [%v] segments, skip forcemerge",v,stats.All.Primary.Segments.Count)
@@ -106,7 +112,14 @@ func (module ForceMergeModule) Start() error {
 
 			//let's wait
 			time.Sleep(10 * time.Second)
+			waitTime:=time.Now().Add(2*time.Hour)
 		WAIT_MERGE:
+
+			if time.Now().After(waitTime){
+				log.Warn("wait [%v] too long, go for next index",v)
+				continue
+			}
+
 			stats,err=client.GetIndexStats(v)
 			log.Debug(stats)
 			if err!=nil{
@@ -114,10 +127,12 @@ func (module ForceMergeModule) Start() error {
 				if util.ContainStr(err.Error(),"Timeout"){
 					log.Error("wait 30s and try again.")
 					time.Sleep(30*time.Second)
+					retry++
 					goto WAIT_MERGE
 				}else{
 					log.Error("wait 60s and try again.")
 					time.Sleep(60*time.Second)
+					retry++
 					goto WAIT_MERGE
 				}
 				//continue
@@ -127,6 +142,7 @@ func (module ForceMergeModule) Start() error {
 			if stats.All.Primary.Segments.Count>mergeConfig.MaxSegmentCount+50{
 				//TODO, merge is not started
 				time.Sleep(30*time.Second)
+				retry++
 				goto FORCE_MERGE
 			}
 
@@ -137,7 +153,8 @@ func (module ForceMergeModule) Start() error {
 				}else{
 					time.Sleep(10 * time.Second)
 				}
-				goto WAIT_MERGE
+				retry++
+				goto GET_STATS
 			}else{
 				log.Infof("index %v has finished the forcemerge, continue.",v)
 			}
