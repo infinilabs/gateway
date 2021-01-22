@@ -16,6 +16,7 @@ import (
 	"infini.sh/framework/core/net"
 	"infini.sh/framework/core/util"
 	"infini.sh/gateway/service/heartbeat"
+	"math/rand"
 	net1 "net"
 	"os/exec"
 	"runtime"
@@ -23,12 +24,14 @@ import (
 )
 
 type FloatingIPConfig struct {
-	Enabled   bool   `config:"enabled"`
-	IP        string `config:"ip"`
-	Netmask   string `config:"netmask"`
-	Interface string `config:"interface"`
-	EchoPort  int 	 `config:"echo_port"` //61111
-	Priority  int    `config:"priority"`
+	Enabled         bool                 `config:"enabled"`
+	IP              string               `config:"ip"`
+	LocalIP              string           `config:"local_ip"`
+	Netmask         string               `config:"netmask"`
+	Interface       string               `config:"interface"`
+	EchoPort        int                  `config:"echo_port"` //61111
+	Priority        int                  `config:"priority"`
+	BoradcastConfig config.NetworkConfig `config:"broadcast"`
 }
 
 type FloatingIPPlugin struct {
@@ -43,6 +46,9 @@ var (
 		Enabled:  false,
 		Netmask:  "255.255.255.0",
 		EchoPort: 61111,
+		BoradcastConfig: config.NetworkConfig{
+			Binding: "224.3.2.2:7654",
+		},
 	}
 )
 
@@ -52,64 +58,69 @@ func (module FloatingIPPlugin) Setup(cfg *config.Config) {
 		panic(err)
 	}
 
-	if floatingIPConfig.Interface==""||floatingIPConfig.IP==""{
+	if floatingIPConfig.Interface == "" || floatingIPConfig.IP == "" {
 		//let's do some magic
-		dev,ip,mask,err:=util.GetPublishNetworkDeviceInfo()
-		if err!=nil{
+		dev, ip, mask, err := util.GetPublishNetworkDeviceInfo()
+		if err != nil {
 			panic(err)
 		}
 
-		if floatingIPConfig.Interface==""{
-			floatingIPConfig.Interface=dev
+		floatingIPConfig.LocalIP=ip
+
+		if floatingIPConfig.Interface == "" {
+			floatingIPConfig.Interface = dev
 		}
 
-		log.Tracef("local publish address: %v,%v,%v",dev,ip,mask)
+		log.Tracef("local publish address: %v,%v,%v", dev, ip, mask)
 
 		//if mask is not setting, try guess
-		if floatingIPConfig.Netmask==""{
-			floatingIPConfig.Netmask=mask
+		if floatingIPConfig.Netmask == "" {
+			floatingIPConfig.Netmask = mask
 		}
 
-		if floatingIPConfig.IP==""{
-			prefix:=util.GetIPPrefix(ip)
-			floatingIPConfig.IP=prefix+".234"
+		if floatingIPConfig.IP == "" {
+			prefix := util.GetIPPrefix(ip)
+			floatingIPConfig.IP = prefix + ".234"
 		}
 
-		log.Debugf("try to use floating ip address: %v,%v,%v",dev,floatingIPConfig.IP,mask)
+		log.Debugf("try to use floating ip address: %v,%v,%v", dev, floatingIPConfig.IP, mask)
 	}
 
-	if floatingIPConfig.IP==""||floatingIPConfig.Interface==""{
+	if floatingIPConfig.IP == "" || floatingIPConfig.Interface == "" {
 		panic("invalid floating_ip config")
 	}
 
+	if floatingIPConfig.Priority < 1 {
+		floatingIPConfig.Priority = rand.Intn(1000)
+	}
 }
 
-var pingTimeout=[]string{"timeout","Unreachable","unreachable"}
-var pingAlive=[]string{"ttl","time="}
+var pingTimeout = []string{"timeout", "Unreachable", "unreachable"}
+var pingAlive = []string{"ttl", "time="}
 
-func pingActiveNode(ip string)bool  {
+func pingActiveNode(ip string) bool {
 	ctx := context.Background()
 	var cancel context.CancelFunc
 	ctx, cancel = context.WithTimeout(context.Background(), time.Duration(10)*time.Second)
 	defer cancel()
 
-	out, err := exec.CommandContext(ctx,"ping", ip, "-i 1").Output()
-	if err!=nil{
-		log.Debug(err,string(util.EscapeNewLine(out)))
+	out, err := exec.CommandContext(ctx, "ping", ip, "-i 1").Output()
+	if err != nil {
+		log.Debug(err, string(util.EscapeNewLine(out)))
 	}
 	if util.ContainsAnyInArray(string(out), pingTimeout) {
 		return false
 	} else if util.ContainsAnyInArray(string(out), pingAlive) {
 		return true
-	}else {
+	} else {
 		return false
 	}
-
 }
 
-var srvSignal = make(chan bool,10)
-var arpSignal = make(chan bool,10)
-var haCheckSignal = make(chan bool,10)
+var srvSignal = make(chan bool, 10)
+var arpSignal = make(chan bool, 10)
+var multicastSignal = make(chan bool, 10)
+var haCheckSignal = make(chan bool, 10)
 
 //TODO handle two active nodes
 //TODO support switch back to standby mode
@@ -122,7 +133,7 @@ func (module FloatingIPPlugin) SwitchToActiveMode() {
 		panic(err)
 	}
 
-	log.Tracef("floating_ip echo service :%v is up and running.",floatingIPConfig.EchoPort)
+	log.Tracef("floating_ip echo service :%v is up and running.", floatingIPConfig.EchoPort)
 
 	//announce floating_ip, do arping every 10s
 	go func() {
@@ -138,7 +149,7 @@ func (module FloatingIPPlugin) SwitchToActiveMode() {
 					case string:
 						v = r.(string)
 					}
-					log.Error("error to announce floating_ip,", v)
+					log.Tracef("error to announce floating_ip,", v)
 				}
 			}
 		}()
@@ -147,6 +158,7 @@ func (module FloatingIPPlugin) SwitchToActiveMode() {
 			select {
 			case quit := <-arpSignal:
 				if quit {
+					log.Tracef("quit arping")
 					return
 				}
 			default:
@@ -154,7 +166,7 @@ func (module FloatingIPPlugin) SwitchToActiveMode() {
 				ip := net1.ParseIP(floatingIPConfig.IP)
 				err := arping.GratuitousArpOverIfaceByName(ip, floatingIPConfig.Interface)
 				if err != nil {
-					if util.ContainStr(err.Error(),"unable to open"){
+					if util.ContainStr(err.Error(), "unable to open") {
 						panic("please make sure running as root user, or sudo")
 					}
 					panic(err)
@@ -164,19 +176,65 @@ func (module FloatingIPPlugin) SwitchToActiveMode() {
 		}
 	}()
 
+	//announce via broadcast
+	go func() {
+		defer func() {
+			if !global.Env().IsDebug {
+				if r := recover(); r != nil {
+					var v string
+					switch r.(type) {
+					case error:
+						v = r.(error).Error()
+					case runtime.Error:
+						v = r.(runtime.Error).Error()
+					case string:
+						v = r.(string)
+					}
+					log.Tracef("error to announce floating_ip,", v)
+				}
+			}
+		}()
+
+		req:=Request{
+			IP: floatingIPConfig.LocalIP,
+			Priority: floatingIPConfig.Priority,
+		}
+
+		for {
+			select {
+			case quit := <-multicastSignal:
+				if quit {
+					log.Tracef("quit broadcast")
+
+					return
+				}
+			default:
+				log.Trace("announce floating_ip, do broadcast every 10s")
+
+				Broadcast(floatingIPConfig.BoradcastConfig,&req)
+
+				time.Sleep(10 * time.Second)
+			}
+		}
+	}()
+
 	actived = true
-	log.Infof("floating_ip listen at: %v, echo port: %v", floatingIPConfig.IP,floatingIPConfig.EchoPort)
+	log.Infof("floating_ip listen at: %v , %v, %v", floatingIPConfig.IP, floatingIPConfig.EchoPort, floatingIPConfig.Priority)
 }
 
 func (module FloatingIPPlugin) Deactivate(silence bool) {
-	if actived||silence{
+	if actived || silence {
 		log.Debugf("deactivating floating_ip at: %v", floatingIPConfig.IP)
 		err := net.DisableAlias(floatingIPConfig.Interface, floatingIPConfig.IP, floatingIPConfig.Netmask)
-		if err != nil &&!silence {
+		if err != nil && !silence {
 			log.Error(err)
 		}
-		srvSignal <- true
-		arpSignal <- true
+
+		if actived{
+			srvSignal <- true
+			multicastSignal <- true
+		}
+
 		log.Tracef("floating_ip at: %v deactivated", floatingIPConfig.IP)
 	}
 	actived = false
@@ -186,7 +244,7 @@ func (module FloatingIPPlugin) SwitchToStandbyMode() {
 
 	module.Deactivate(false)
 
-	log.Debugf("floating IP enter standby mode")
+	log.Infof("floating IP enter standby mode")
 
 	go func() {
 
@@ -202,57 +260,28 @@ func (module FloatingIPPlugin) SwitchToStandbyMode() {
 					case string:
 						v = r.(string)
 					}
-					log.Error("error to switch to stand mode,", v)
+					log.Trace("error to switch to stand mode,", v)
 				}
 			}
 		}()
 
-
-		aliveChan :=make(chan bool)
+		aliveChan := make(chan bool)
 		go func() {
-			heartbeat.StartClient(floatingIPConfig.IP,floatingIPConfig.EchoPort,func() {
-				//println("connected")
+			heartbeat.StartClient(floatingIPConfig.IP, floatingIPConfig.EchoPort, func() {
 				aliveChan <- true
 			}, func() {
-				//println("disconnect")
 				aliveChan <- false
 			})
 		}()
 
-		WAIT:
+	WAIT:
 
 		alive := <-aliveChan
-		if !alive{
+		if !alive {
 			module.SwitchToActiveMode()
-		}else{
-			//fmt.Println("alive, goto wait")
+		} else {
 			goto WAIT
 		}
-
-		//go func() {
-		//	heartbeat.StartClient(floatingIPConfig.IP,floatingIPConfig.EchoPort,func() {
-		//		println("connected")
-		//	}, func() {
-		//		fmt.Println("disconnected")
-		//		module.SwitchToActiveMode()
-		//		log.Infof("floating_ip activated from standby mode")
-		//	})
-		//}()
-
-		//for {
-		//	select {
-		//	case quit := <-haCheckSignal:
-		//		if quit {
-		//			return
-		//		}
-		//	case <-time.After(time.Millisecond * 1000):
-		//		if !module.IsActiveStillAlive() {
-		//			log.Infof("floating_ip activated from standby mode")
-		//			module.SwitchToActiveMode()
-		//			return
-		//		}
-		//	}
-		//}
 	}()
 
 }
@@ -260,6 +289,7 @@ func (module FloatingIPPlugin) SwitchToStandbyMode() {
 var actived bool
 
 func (module FloatingIPPlugin) Start() error {
+
 	if !floatingIPConfig.Enabled {
 		log.Trace("floating ip disabled")
 		return nil
@@ -273,64 +303,109 @@ func (module FloatingIPPlugin) Start() error {
 
 	//start heart server
 	go func() {
-		err:=heartbeat.StartServer("0.0.0.0",floatingIPConfig.EchoPort)
-		if err!=nil{
+		err := heartbeat.StartServer("0.0.0.0", floatingIPConfig.EchoPort)
+		if err != nil {
 			panic(err)
 		}
 	}()
 
-	//fmt.Println("StartServer")
+	//start broadcast listener
+	go ServeMulticastDiscovery(floatingIPConfig.BoradcastConfig, func(addr *net1.UDPAddr, n int, bytes []byte) {
+
+		if !actived{
+			log.Tracef("i am standby, no bother multicast message")
+			return
+		}
+
+		//我是 master，别人也是 master
+		//我不是 master，忽略
+		//我是 master，忽略
+		v := Request{}
+
+		util.FromJSONBytes(bytes[:n], &v)
+
+		log.Tracef("received multicast message: %v", util.ToJson(v, false))
+
+		if v.IP==floatingIPConfig.LocalIP{
+			log.Tracef("received my message: %v", util.ToJson(v, false))
+			return
+		}else{
+			if v.Priority>=floatingIPConfig.Priority{
+				log.Tracef("received high priority message, switch to backup mode: %v", util.ToJson(v, false))
+
+				module.SwitchToStandbyMode()
+			}
+		}
+
+
+	})
 
 	//stop previous unclean status
 	module.Deactivate(true)
-	//fmt.Println("Deactivate")
 
-	aliveChan :=make(chan bool)
-	go func() {
-		err:=heartbeat.StartClient(floatingIPConfig.IP,floatingIPConfig.EchoPort,func() {
-			//println("connected")
-			aliveChan <- true
-		}, func() {
-			//println("disconnect")
-			aliveChan <- false
-		})
-		//fmt.Println(err)
-		if err!=nil{
-			aliveChan <- false
-		}
-	}()
-
-	//fmt.Println("aliveChan")
-
-
-	alive := <-aliveChan
-
-	//fmt.Println("alive",alive)
-
-	if !alive{
-		//target floating_ip can't connect, check ip address
-		if pingActiveNode(floatingIPConfig.IP){
-			panic(errors.Errorf("the floating_ip [%v] has already been used by someone, but the gateway service is not running.",floatingIPConfig.IP))
-		}
-	}
-
-	log.Tracef("active floating_ip node found: %v", alive)
-
-	//fmt.Println("alive2",alive)
-
-	if alive {
-		//fmt.Println("SwitchToStandbyMode",alive)
-
-		module.SwitchToStandbyMode()
-	} else {
-		//fmt.Println("SwitchToActiveMode",alive)
-
-		module.SwitchToActiveMode()
-	}
+	module.StateMachine()
 
 	return nil
 }
 
+type State string
+
+const Active State="Active"
+const Backup State="Backup"
+const Candidate State="Candidate"
+const PreviousActiveIsBack State="PreviousActiveIsBack"
+
+func (module FloatingIPPlugin) StateMachine() {
+
+	//go func() {
+	//
+	//	var state State
+	//	for {
+	//		switch state {
+	//		case Active:
+	//			//
+	//			break
+	//		case Backup:
+	//			break
+	//		case Candidate:
+	//			break
+	//		case PreviousActiveIsBack:
+	//			break
+	//		}
+
+
+			aliveChan := make(chan bool)
+			go func() {
+				err := heartbeat.StartClient(floatingIPConfig.IP, floatingIPConfig.EchoPort, func() {
+					aliveChan <- true
+				}, func() {
+					aliveChan <- false
+				})
+				if err != nil {
+					aliveChan <- false
+				}
+			}()
+
+			alive := <-aliveChan
+
+			if !alive {
+				//target floating_ip can't connect, check ip address
+				if pingActiveNode(floatingIPConfig.IP) {
+					panic(errors.Errorf("the floating_ip [%v] has already been used by someone, but the gateway service is not running.", floatingIPConfig.IP))
+				}
+			}
+
+			log.Tracef("active floating_ip node found: %v", alive)
+
+			if alive {
+				module.SwitchToStandbyMode()
+			} else {
+				module.SwitchToActiveMode()
+			}
+
+	//	}
+	//}()
+}
 
 func (module FloatingIPPlugin) Stop() error {
 	if !floatingIPConfig.Enabled {
@@ -341,7 +416,7 @@ func (module FloatingIPPlugin) Stop() error {
 
 	if actived {
 		module.Deactivate(false)
-	}else{
+	} else {
 		haCheckSignal <- true
 	}
 	log.Tracef("floating ip module stopped")

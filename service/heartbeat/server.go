@@ -4,6 +4,7 @@ package heartbeat
 // server
 import (
 	"net"
+	"sync"
 	"time"
 )
 
@@ -30,6 +31,8 @@ func NewCs(uid string) *CS {
 }
 
 var CMap map[string]*CS
+
+var lock sync.RWMutex
 
 func StartServer(host string,port int) error  {
 	CMap = make(map[string]*CS)
@@ -81,7 +84,9 @@ func ServerHandler(conn net.Conn) {
 			conn.Write([]byte{Res_REGISTER, '#', 'o', 'k'})
 			uid = string(data[2:])
 			C = NewCs(uid)
+			lock.Lock()
 			CMap[uid] = C
+			lock.Unlock()
 			//fmt.Println("register client")
 			//fmt.Println(uid)
 			break
@@ -156,7 +161,9 @@ func ServerRHandler(conn net.Conn, C *CS) {
 			// fmt.Println(string(data))
 			//fmt.Println("resv ht packet ack")
 		} else {
+			lock.Lock()
 			delete(CMap, C.u)
+			lock.Unlock()
 			//fmt.Println("delete user!")
 			return
 		}
