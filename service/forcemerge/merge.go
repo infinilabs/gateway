@@ -83,8 +83,11 @@ func (module ForceMergeModule) Start() error {
 			log.Debug(stats)
 			if err!=nil{
 				log.Errorf("index [%v] error on get index stats, retry, %v",v,err)
-				time.Sleep(30*time.Second)
+				time.Sleep(60*time.Second)
 				retry++
+				if retry> 120{
+					continue
+				}
 				goto GET_STATS
 			}
 
@@ -96,14 +99,29 @@ func (module ForceMergeModule) Start() error {
 					log.Error(err)
 					//continue
 					//TODO assume operation is send
-					time.Sleep(90*time.Second)
+					time.Sleep(60*time.Second)
 					retry++
+					if retry> 120{
+						continue
+					}
 					goto GET_STATS
 				}
-			}else if stats.All.Primary.Segments.Count==0{
-				log.Infof("error on get stats, index [%v] only has [%v] segments, retry",v,stats.All.Primary.Segments.Count)
+			}else if stats.All.Primary.Segments.Count==0 && stats.All.Primary.Store.SizeInBytes==0 {
+				log.Infof("error on get stats, index [%v] only has 0 segments, retry, %v",v,stats)
+				ok,err:=client.IndexExists(v)
+				if err!=nil{
+					log.Error(err)
+				}
+				if !ok{
+					log.Error("index not exists, ignore, ",v)
+					continue
+				}
+
 				time.Sleep(60*time.Second)
 				retry++
+				if retry> 120{
+					continue
+				}
 				goto GET_STATS
 			} else if stats.All.Primary.Merges.Current >0{
 				log.Infof("index [%v] has [%v] segments, are still merging",v,stats.All.Primary.Segments.Count)
@@ -145,8 +163,11 @@ func (module ForceMergeModule) Start() error {
 
 			if stats.All.Primary.Segments.Count>mergeConfig.MaxSegmentCount+50{
 				//TODO, merge is not started
-				time.Sleep(30*time.Second)
+				time.Sleep(60*time.Second)
 				retry++
+				if retry> 120{
+					continue
+				}
 				goto FORCE_MERGE
 			}
 
@@ -158,6 +179,9 @@ func (module ForceMergeModule) Start() error {
 					time.Sleep(10 * time.Second)
 				}
 				retry++
+				if retry> 120{
+					continue
+				}
 				goto GET_STATS
 			}else{
 				log.Infof("index %v has finished the forcemerge, continue.",v)
