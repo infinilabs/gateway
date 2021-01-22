@@ -105,7 +105,11 @@ func (module ForceMergeModule) Start() error {
 				time.Sleep(60*time.Second)
 				retry++
 				goto GET_STATS
-			} else{
+			} else if stats.All.Primary.Merges.Current >0{
+				log.Infof("index [%v] has [%v] segments, are still merging",v,stats.All.Primary.Segments.Count)
+			} else if stats.All.Primary.Segments.Count>mergeConfig.MinSegmentCount{
+				log.Infof("index [%v] has [%v] segments, are still merging",v,stats.All.Primary.Segments.Count)
+			} else {
 				log.Infof("index [%v] only has [%v] segments, skip forcemerge",v,stats.All.Primary.Segments.Count)
 				continue
 			}
