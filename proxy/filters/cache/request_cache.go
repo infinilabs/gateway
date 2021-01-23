@@ -2,6 +2,7 @@ package cache
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	log "github.com/cihub/seelog"
 	"github.com/dgraph-io/ristretto"
@@ -276,11 +277,12 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 		if found {
 
 			stats.Increment("cache", "hit")
-			err:=ctx.Response.Decode(item)
-			if err!=nil{
-				log.Debugf("error to decode response from cache %v - %v",url,err)
-				return
-			}
+			filter.Decode(item, &ctx.Request, &ctx.Response)
+			//err:=ctx.Response.Decode(item)
+			//if err!=nil{
+			//	log.Debugf("error to decode response from cache %v - %v",url,err)
+			//	return
+			//}
 
 			ctx.Response.Cached = true
 			ctx.Response.Header.DisableNormalizing()
@@ -381,7 +383,7 @@ func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
 
 		//buffer := bytesBufferPool.Get().(*bytes.Buffer)
 
-		cacheBytes := ctx.Response.Encode()
+		cacheBytes := filter.Encode(ctx)
 		//cacheBytes := ctx.Response.Encode()
 
 		//buffer.Reset()
@@ -450,3 +452,79 @@ func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
 		}
 	}
 }
+
+
+
+//TODO optimize memmove issue, buffer read
+func (p RequestCache) Decode(data []byte, req *fasthttp.Request, res *fasthttp.Response) {
+	readerHeaderLengthBytes := make([]byte, 4)
+	reader := bytes.NewBuffer(data)
+	_, err := reader.Read(readerHeaderLengthBytes)
+	if err != nil {
+		panic(err)
+	}
+
+	readerHeaderLength := binary.LittleEndian.Uint32(readerHeaderLengthBytes)
+	readerHeader := make([]byte, readerHeaderLength)
+	_, err = reader.Read(readerHeader)
+	if err != nil {
+		panic(err)
+	}
+
+	line := bytes.Split(readerHeader, newLine)
+	for _, l := range line {
+		kv := bytes.Split(l, colon)
+		if len(kv) == 2 {
+			res.Header.SetBytesKV(kv[0], kv[1])
+		}
+	}
+
+	readerBodyLengthBytes := make([]byte, 4)
+	_, err = reader.Read(readerBodyLengthBytes)
+	if err != nil {
+		panic(err)
+	}
+
+	readerBodyLength := binary.LittleEndian.Uint32(readerBodyLengthBytes)
+	readerBody := make([]byte, readerBodyLength)
+	_, err = reader.Read(readerBody)
+	if err != nil {
+		panic(err)
+	}
+
+	res.SetBodyRaw(readerBody)
+	res.SetStatusCode(fasthttp.StatusOK)
+}
+
+func (p RequestCache) Encode(ctx *fasthttp.RequestCtx)[]byte {
+
+	buffer := bytes.Buffer{}
+	ctx.Response.Header.VisitAll(func(key, value []byte) {
+		buffer.Write(key)
+		buffer.Write(colon)
+		buffer.Write(value)
+		buffer.Write(newLine)
+	})
+
+	header := buffer.Bytes()
+	body := ctx.Response.Body()
+
+	data := bytes.Buffer{}
+
+	headerLength := make([]byte, 4)
+	binary.LittleEndian.PutUint32(headerLength, uint32(len(header)))
+
+	bodyLength := make([]byte, 4)
+	binary.LittleEndian.PutUint32(bodyLength, uint32(len(body)))
+
+	//header length
+	data.Write(headerLength)
+	data.Write(header)
+
+	//body
+	data.Write(bodyLength)
+	data.Write(body)
+
+	return data.Bytes()
+}
+
