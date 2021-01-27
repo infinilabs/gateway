@@ -107,23 +107,16 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 	request.Request.RemoteAddr = ctx.RemoteAddr().String()
 	request.Request.LocalAddr = ctx.LocalAddr().String()
 
-	ce := string(ctx.Request.Header.Peek(fasthttp.HeaderContentEncoding))
-	if ce == "gzip" {
-		body, err := ctx.Request.BodyGunzip()
-		if err != nil {
-			panic(err)
+	reqBody:=string(ctx.Request.GetRawBody())
+
+	maxRequestBodySize,ok:=this.GetInt("max_request_body_size",1024)
+	if ok{
+		if len(reqBody)>maxRequestBodySize{
+			reqBody=reqBody[0:maxRequestBodySize]
 		}
-		request.Request.Body = string(body)
-	} else if ce == "deflate" {
-		body, err := ctx.Request.BodyInflate()
-		if err != nil {
-			panic(err)
-		}
-		request.Request.Body = string(body)
-	} else {
-		request.Request.Body = string(ctx.Request.Body())
 	}
 
+	request.Request.Body = reqBody
 	request.Request.BodyLength = ctx.Request.GetBodyLength()
 
 	request.Response.ElapsedTimeInMs = float32(float64(ctx.GetElapsedTime().Microseconds()) * 0.001)
@@ -150,27 +143,21 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 	request.Response.Cached = ctx.Response.Cached
 	request.Response.StatusCode = ctx.Response.StatusCode()
 
-	ce = string(ctx.Response.Header.Peek(fasthttp.HeaderContentEncoding))
-	if ce == "" {
-		ce = string(ctx.Response.Header.Peek("content-encoding"))
-	}
-	if ce == "gzip" {
-		body, err := ctx.Response.BodyGunzip()
-		if err != nil {
-			panic(err)
+	//ce = string(ctx.Response.Header.PeekAny([]string{fasthttp.HeaderContentEncoding,"Content-Encoding"}))
+
+	//log.Error(request.Request.URI,",",ce,",",string(util.EscapeNewLine(ctx.Response.Header.Header())))
+	//log.Error(ctx.Response.Header.String())
+
+	respBody:=string(ctx.Response.GetRawBody())
+	maxResponseBodySize,ok:=this.GetInt("max_response_body_size",1024)
+	if ok{
+		if len(respBody)>maxResponseBodySize{
+			respBody=respBody[0:maxResponseBodySize]
 		}
-		request.Response.Body = string(body)
-	} else if ce == "deflate" {
-		body, err := ctx.Response.BodyInflate()
-		if err != nil {
-			panic(err)
-		}
-		request.Response.Body = string(body)
-	} else {
-		request.Response.Body = string(ctx.Response.Body())
 	}
 
-	request.Response.BodyLength = len(request.Response.Body)
+	request.Response.Body=respBody
+	request.Response.BodyLength = ctx.Response.GetBodyLength()
 
 	formatHeaderKey:=this.GetBool("format_header_keys",false)
 	removeAuthHeaderKey:=this.GetBool("remove_authorization",true)

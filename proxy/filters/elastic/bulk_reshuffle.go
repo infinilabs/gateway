@@ -130,7 +130,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 		var body []byte
 		var err error
-		ce := string(ctx.Request.Header.Peek(fasthttp.HeaderContentEncoding))
+		ce := string(ctx.Request.Header.PeekAny([]string{fasthttp.HeaderContentEncoding,"Content-Encoding"}))
 		if ce == "gzip" {
 			body,err=ctx.Request.BodyGunzip()
 			if err!=nil{

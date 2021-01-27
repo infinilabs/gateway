@@ -182,12 +182,11 @@ func (p RequestCache) getHash(req *fasthttp.Request) string {
 	//TODO 后台可以按照请求路径来勾选 Hash 因子
 
 	buffer.Write(req.Header.Method())
-	buffer.Write(req.Header.PeekAny(fasthttp.AuthHeaderKeys)) //TODO enable configure for this feature, may filter by user or share, add/remove Authorization header to hash factor
-	buffer.Write(req.RequestURI())
-	buffer.Write(req.URI().QueryArgs().QueryString())
-	buffer.Write(req.Body())
-	buffer.Write(req.PostArgs().QueryString())
-
+	buffer.Write(req.Header.PeekAny(fasthttp.AuthHeaderKeys))
+	buffer.Write(req.URI().FullURI())
+	//TODO enable configure for this feature, may filter by user or share, add/remove Authorization header to hash factor
+	//fmt.Println(string(req.URI().FullURI()))
+	buffer.Write(req.GetRawBody())
 	str:= util.MD5digestString(buffer.Bytes())
 
 	//buffer.Reset()
@@ -207,7 +206,19 @@ func (filter RequestCacheGet) Name() string {
 const CACHEABLE = "request_cacheable"
 const CACHEHASH = "request_cache_hash"
 
+var faviconPath=[]byte("/favicon.ico")
+
 func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
+
+	if bytes.Equal(faviconPath,ctx.Request.URI().Path()){
+		if global.Env().IsDebug{
+			log.Tracef("skip to delegate favicon.io")
+		}
+		ctx.Finished()
+		return
+	}
+
+	//fmt.Println(ctx.Request.Header.String())
 
 	//TODO optimize scroll API, should always point to same IP, prefer to route to where index/shard located
 
@@ -265,7 +276,7 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 		//hash->count, hash->content
 
 		hash := filter.getHash(&ctx.Request)
-
+		//log.Error(hash," => ",string(ctx.Request.URI().Path()))
 		ctx.Set(CACHEHASH, hash)
 
 		item, found := filter.GetCache(hash)
