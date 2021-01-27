@@ -4,104 +4,26 @@ path.logs: log
 entry:
   - name: es_gateway #your gateway endpoint
     enabled: true
-#    router: indexing
     router: default
-    #configure your gateway's routing flow
-#    router: not_found #configure your gateway's routing flow
     network:
       binding: 0.0.0.0:8000
-#      skip_occupied_port: false
       reuse_port: true #you can start multi gateway instance, they share same port, to full utilize system's resources
 #    tls:
 #      enabled: true #if your es is using https, the gateway entrypoint should enable https too
 
 flow:
-  - name: double_write
-    filter:
-      - name: clone
-        parameters:
-          flows:
-            - write_to_queue_a
-            - write_to_queue_b #last one's response will be output to client
-  - name: write_to_queue_a
-    filter:
-      - name: elasticsearch
-        parameters:
-          elasticsearch: es1
-      - name: request_logging
-        parameters:
-          queue_name: request_logging_a
-  - name: write_to_queue_b
-    filter:
-      - name: elasticsearch
-        parameters:
-          elasticsearch: es2
-      - name: request_logging
-        parameters:
-          queue_name: request_logging_b
-
-  - name: ingest_to_kafka #ingest to kafka
-    filter:
-      - name: to_kafka
-        parameters:
-          topic: 'gateway_bulk_requests'
-          group: "default"
-          batch_size: 1000
-          brokers:
-            - localhost:9092
-  - name: hello_world #testing flow
-    filter:
-      - name: echo
-        parameters:
-          str: "hello infini\n"
-          repeat: 1
-      - name: echo
-        parameters:
-          str: "hello gateway\n"
-          repeat: 3
-  - name: not_found #testing flow
-    filter:
-      - name: echo
-        parameters:
-          str: '404 not found\n'
-          repeat: 1
   - name: cache_first
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
-#      - name: ratio
-#        parameters:
-#          ratio: 0.5 # 50% of requests will routing to another flow: hello_world.
-#          flow: hello_world
-#          continue: false # continue the following filters processing after match and executed the flow, set `false` to return ASAP.
-      - name: request_host_filter
-        parameters:
-          exclude:
-            - domain-test1.com:8000
-#          include:
-#            - domain-test2.com:8000
-#            - domain-test3.com:8000
+      - name: get_cache
       - name: date_range_precision_tuning
         parameters:
-          time_precision: 4
+          time_precision: 6
           path_keywords:
             - _search
             - _async_search
-      - name: get_cache
-#        parameters:
-#          pass_patterns: ["_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"]
-#      - name: request_path_limiter
-#        parameters:
-#          message: "Hey, You just reached our request limit!"
-#          rules: #configure match rules against request's PATH, eg: /_cluster/health, match the first rule and return
-#            - pattern: "/(?P<index_name>medcl)/_search" #use index name, will match: /medcl/_search, with limit medcl with max_qps ~=3
-#              max_qps: 3 #setting max qps after match
-#              group: index_name #use regex group name to extract the throttle bucket name
-#            - pattern: "/(?P<index_name>.*?)/_search" #use regex pattern to match index, will match any /$index/_search, and limit each index with max_qps ~=100
-#              max_qps: 100
-#              group: index_name
       - name: elasticsearch
         parameters:
-#          elasticsearch: dev  #elasticsearch configure reference name
-          elasticsearch: prod  #elasticsearch configure reference name
+          elasticsearch: dev  #elasticsearch configure reference name
           max_connection: 1000 #max tcp connection to upstream, default for all nodes
           max_response_size: -1 #default for all nodes
           balancer: weight
@@ -138,159 +60,43 @@ flow:
 #                - data
 #                - ingest
       - name: set_cache
-#        parameters:
-#          min_response_size: 100
-#          max_response_size: 1024000
-#          cache_ttl: 30s
-#          max_cached_item: 100000
-  - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
-    filter:
-#      - name: sample
-#        parameters:
-#          ratio: 0.2
-      - name: request_path_filter
         parameters:
-#          must: #must match all rules to continue
-#            prefix:
-#              - /medcl
-#            contain:
-#              - _search
-#            suffix:
-#              - _count
-#              - _refresh
-#            wildcard:
-#              - /*/_refresh
-#            regex:
-#              - ^/m[\w]+dcl
-          must_not: # any match will be filtered
-            prefix:
-              - /favicon.ico
-#              - /.kibana
-#              - /_security
-#              - /_security
-#              - /gateway_requests*
-#              - /.reporting
-#              - /_monitoring/bulk
-#            contain:
-#              - _search
-#            suffix:
-#              - _count
-#              - _refresh
-#            wildcard:
-#              - /*/_refresh
-#            regex:
-#              - ^/m[\w]+dcl
-#          should:
-#            prefix:
-#              - /medcl
-#            contain:
-#              - _search
-#              - _async_search
-#            suffix:
-#              - _refresh
-#            wildcard:
-#              - /*/_refresh
-#            regex:
-#              - ^/m[\w]+dcl
-      - name: request_header_filter # filter out the requests that we are not interested, reduce tracing pressure
-        parameters:
-          exclude: # any rule match will marked request as filtered
-          - app: kibana # in order to filter kibana's access log, config `elasticsearch.customHeaders: { "app": "kibana" }` to your kibana's config `/config/kibana.yml`
-#          - ENV: test #for example, requests for testing purpose can be filtered, eg: curl localhost:8000 -H "ENV: test"
-#          include: # any match will marked as pass through, when include was specified but none of these rules are matched, the request will be mark as filtered, the next filters won't continue processing
-#          - TRACE: true # curl localhost:8000 -H "TRACE: true"
-#          - TRACING: true # curl localhost:8000 -H "TRACING: true"
-#      - name: response_header_filter
-#        parameters:
-#          exclude:
-#            - CACHED: true
-#      - name: request_method_filter
-#        parameters:
-#          exclude:
-#            - PUT
-#            - POST
-#          include:
-#            - GET
-#            - HEAD
-#            - DELETE
-#      - name: request_client_ip_filter
-#        parameters:
-#          exclude:
-#            - "192.168.3.67"
-#          include:
-#            - 192.168.3.98
-#      - name: request_user_filter
-#        parameters:
-#          exclude:
-#            - "medcl"
-#          include:
-#            - "elastic"
-#      - name: response_status_filter
-#        parameters:
-#          exclude:
-#            - 200
-#          include:
-#            - 404
-#            - 401
-##            - 403
-      - name: request_body_truncate
-        parameters:
-          max_size: 1024
-      - name: response_body_truncate
-        parameters:
-          max_size: 1024
-#      - name: dump_request_body
-      #      - name: dump_url
-      #      - name: dump_header
-      - name: request_logging
-        parameters:
-          queue_name: request_logging
+          cache_ttl: 60s
   - name: online_indexing_merge
     filter:
       - name: bulk_reshuffle
         parameters:
-          elasticsearch: prod
-          level: node #node or shard
-#          level: shard #node or shard
-#          index:
-#            - medcl4new1245
-#          mode: async # async or sync
-#          mode: async # async or sync
+          elasticsearch: dev
+          level: node
+          mode: async
       - name: elasticsearch
         parameters:
-          elasticsearch: prod
+          elasticsearch: dev
           refresh:
             enabled: true
             interval: 30s
+  - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
+    filter:
+      - name: request_logging
+        parameters:
+          queue_name: request_logging
+          max_request_body_size: 1024
+          max_response_body_size: 1024
 router:
   - name: default
-    tracing_flow: request_logging #a flow will execute after request finish
-    default_flow: cache_first
-    rules: #rules can't be conflicted with each other, will be improved in the future
-      - method:
-          - "*"
-        pattern:
-          - /
-#        priority: 1
-        flow:
-          - cache_first # after match, which processing flow will go through
-  - name: not_found
-    default_flow: hello_world
-  - name: indexing
-    default_flow: online_indexing_merge
     tracing_flow: request_logging
-
+    default_flow: cache_first
+    rules:
+      - method:
+          - "POST"
+        pattern:
+          - /_bulk
+        flow:
+          - online_indexing_merge
 elasticsearch:
-#- name: local
-#  enabled: true
-#  endpoint: https://127.0.0.1:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
-#  version: 7.6.0 #optional, used to select es adaptor, can be done automatically after connect to es
-#  basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
-#    username: elastic
-#    password: pass
 - name: dev
   enabled: true
-  endpoint: https://192.168.3.98:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
+  endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
   basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
     username: elastic
     password: pass
@@ -298,38 +104,19 @@ elasticsearch:
     enabled: true
     refresh:
       enabled: true
-- name: prod
-  enabled: true
-  endpoint: http://192.168.3.201:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
-  discovery: # auto discovery elasticsearch cluster nodes
-    enabled: true
-    refresh:
-      enabled: true
-#      interval: 10s
-  basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
-    username: elastic
-    password: pass
-#- name: es1
-#  enabled: true
-#  version: 7.6.0
-#  endpoint: http://127.0.0.1:8081  # ./bin/echo_server -port 8081 -debug=true
-#- name: es2
-#  enabled: true
-#  version: 7.6.0
-#  endpoint: http://127.0.0.1:8082  #./bin/echo_server -port 8082 -debug=true
-
+      interval: 30s
 
 modules:
 - name: elastic
   enabled: true
-  elasticsearch: prod
+  elasticsearch: dev
   store:
     enabled: true
   orm:
     enabled: true
     init_template: true
-    template_name: ".infini-default"
-    index_prefix: ".infini-"
+    template_name: ".gateway-default"
+    index_prefix: "gateway_"
 
 - name: pipeline
   enabled: true
@@ -357,8 +144,8 @@ pipelines:
       index_name: "gateway_requests"
       elasticsearch: "dev"
       input_queue: "request_logging"
-      timeout: "60s"
-      worker_size: 1
+      timeout: "1s"
+      worker_size: 10
       bulk_size_in_mb: 10 #in MB
 - name: bulk_request_ingest
   start:
@@ -366,17 +153,13 @@ pipelines:
     enabled: true
     parameters:
       elasticsearch: "dev"
-#      index:
-#        - logs-repeat-test
-#        - logs100million
-#        - medcl4
-      timeout: "60s"
-      worker_size: 1
+      timeout: "1s"
+      worker_size: 10
       bulk_size_in_mb: 10 #in MB
 
 #floating_ip:
 #  enabled: true
-##  ip: 192.168.3.234      #yep, it's optional, infini-gateway could detect one but maybe not the right one
+#  ip: 192.168.3.234      #yep, it's optional, infini-gateway could detect one but maybe not the right one
 ##  netmask: 255.255.255.0 #optional
 ##  interface: en1         #optional
 
@@ -386,11 +169,36 @@ queue:
   max_bytes_per_file: 53687091200
   sync_every_records: 100000 # sync by records count
   sync_timeout_in_ms: 10000 # sync by time in million seconds
-  write_chan_buffer: 1000
-  read_chan_buffer: 1000
+  write_chan_buffer: 10000
+  read_chan_buffer: 10000
 
 statsd:
   enabled: false
   host: 192.168.3.98
   port: 8125
   namespace: gateway.
+
+
+forcemerge:
+  enabled: false
+  elasticsearch: dev
+  min_num_segments: 1
+  max_num_segments: 1
+  indices:
+    - goodluck
+    - .monitoring-es-7-2021.01.19
+    -  .kibana-event-log-7.9.2-000001
+    -  .monitoring-es-7-2021.01.18
+    -  .apm-agent-configuration
+    -  kibana_sample_data_flights
+    -  .kibana_1
+    -  .monitoring-kibana-7-2021.01.20
+    -  .security-7
+    -  .apm-custom-link
+    -  gateway_requests
+    -  kibana_sample_data_ecommerce
+    -  .kibana_task_manager_1
+    -  .monitoring-kibana-7-2021.01.19
+    -  kibana_sample_data_logs
+    -  .async-search
+    -  .monitoring-es-7-2021.01.20
