@@ -134,6 +134,19 @@ func (v *DataFlow) MarshalFastJSON(w *fastjson_marshal.Writer) error {
 	w.RawByte('{')
 	w.RawString("\"from\":")
 	w.String(v.From)
+	w.RawString(",\"process\":")
+	if v.Process == nil {
+		w.RawString("null")
+	} else {
+		w.RawByte('[')
+		for i, v := range v.Process {
+			if i != 0 {
+				w.RawByte(',')
+			}
+			w.String(v)
+		}
+		w.RawByte(']')
+	}
 	w.RawString(",\"relay\":")
 	w.String(v.Relay)
 	w.RawString(",\"to\":")

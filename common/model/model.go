@@ -31,9 +31,10 @@ type Response struct {
 }
 
 type DataFlow struct {
-	From  string `json:"from"`
-	Relay string `json:"relay"`
-	To    []string `json:"to"`
+	From    string   `json:"from"`
+	Relay   string   `json:"relay"`
+	To      []string `json:"to"`
+	Process []string `json:"process"`
 }
 
 type HttpRequest struct {

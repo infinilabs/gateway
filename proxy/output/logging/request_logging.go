@@ -73,7 +73,10 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 	defer resPool.Put(request.Response)
 	defer reqPool.Put(request.Request)
 
-	request.ID = ctx.ID()
+	//request.ID = ctx.ID()
+
+	request.ID= uint64(ctx.SequenceID)
+
 	request.ConnTime = ctx.ConnTime().UTC().Format("2006-01-02T15:04:05.000Z")
 	request.LoggingTime = time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	request.Request.StartTime = ctx.Time().UTC().Format("2006-01-02T15:04:05.000Z")
@@ -132,8 +135,10 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 	request.DataFlow = &model.DataFlow{}
 	request.DataFlow.From = request.RemoteIP
 
+	request.DataFlow.Process=ctx.GetRequestProcess()
+
 	//TODO ,use gateway's uuid instead
-	request.DataFlow.Relay = request.Request.LocalAddr
+	request.DataFlow.Relay = global.Env().SystemConfig.NodeConfig.ToString()
 
 	if len(ctx.Response.Destination()) > 0 {
 		request.DataFlow.To = ctx.Response.Destination()

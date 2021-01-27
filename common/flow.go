@@ -68,6 +68,7 @@ func (flow *FilterFlow) Process(ctx *fasthttp.RequestCtx) {
 		if global.Env().IsDebug{
 			log.Debugf("processing filter [%v]",v.Name())
 		}
+		ctx.AddFlowProcess(v.Name())
 		v.Process(ctx)
 	}
 }
