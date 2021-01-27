@@ -60,7 +60,7 @@ func (this *ElasticIndexer) Start() error {
 					panic(err)
 				}
 
-				resp, err := this.client.Index(doc.Index, doc.ID, doc.Source)
+				resp, err := this.client.Index(doc.Index, doc.Type, doc.ID, doc.Source)
 				if err != nil {
 					panic(errors.New(resp.Result))
 				}

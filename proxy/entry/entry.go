@@ -137,7 +137,7 @@ func (this *Entrypoint) Start() error {
 
 	this.server = &fasthttp.Server{
 		Name:                          "INFINI",
-		DisableHeaderNamesNormalizing: true,
+		DisableHeaderNamesNormalizing: false,
 		Handler:                       this.router.Handler,
 		TraceHandler:                  this.router.TraceHandler,
 		Concurrency:                   this.config.MaxConcurrency,

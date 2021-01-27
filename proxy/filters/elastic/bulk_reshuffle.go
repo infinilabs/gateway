@@ -10,6 +10,7 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
+	log "github.com/cihub/seelog"
 	"strings"
 	"sync"
 )
@@ -78,11 +79,39 @@ func parseActionMeta(data []byte) ( []byte,[]byte,[]byte) {
 	return action,index,id
 }
 
+func parseJson(scannedByte []byte)(action []byte,index,id string)  {
+	//use Json
+	var meta BulkActionMetadata
+	meta=BulkActionMetadata{}
+	util.FromJSONBytes(scannedByte,&meta)
+
+	if meta.Index!=nil{
+		index=meta.Index.Index
+		id=meta.Index.ID
+		action=actionIndex
+	}else if meta.Create!=nil{
+		index=meta.Create.Index
+		id=meta.Create.ID
+		action=actionCreate
+	}else if meta.Update!=nil{
+		index=meta.Update.Index
+		id=meta.Update.ID
+		action=actionUpdate
+	}else if meta.Delete!=nil{
+		index=meta.Delete.Index
+		action=actionDelete
+		id=meta.Delete.ID
+	}
+
+	return action,index,id
+}
+
 func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 	clusterName:=this.MustGetString("elasticsearch")
 	metadata:=elastic.GetMetadata(clusterName)
 	if metadata==nil{
+		log.Warnf("elasticsearch [%v] metadata is nil, skip reshuffle",clusterName)
 		//fmt.Println("metadta is nil")
 		return
 	}
@@ -94,7 +123,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 	//TODO 处理 {INDEX}/_bulk 的情况
 	//filebeat 等都是 bulk 结尾的请求了。
 	//需要拆解 bulk 请求，重新封装
-	if util.SuffixStr(path,"_bulk"){
+	if util.PrefixStr(path,"/_bulk"){
 
 		reshuffleType:=this.GetStringOrDefault("level","node")
 		submitMode:=this.GetStringOrDefault("mode","sync") //sync and async
@@ -136,33 +165,23 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				var id string
 				var action []byte
 
-				if false{
-					//use Json
-					var meta BulkActionMetadata
-					meta=BulkActionMetadata{}
-					util.FromJSONBytes(scannedByte,&meta)
-					if meta.Index!=nil{
-						index=meta.Index.Index
-						id=meta.Index.ID
-						action=actionIndex
-					}else if meta.Create!=nil{
-						index=meta.Create.Index
-						id=meta.Create.ID
-						action=actionCreate
-					}else if meta.Update!=nil{
-						index=meta.Update.Index
-						id=meta.Update.ID
-						action=actionUpdate
-					}else if meta.Delete!=nil{
-						index=meta.Delete.Index
-						action=actionDelete
-						id=meta.Delete.ID
-					}
+				if true{
+					//parse with json
+					action,index,id=parseJson(scannedByte)
 				}else{
 					var indexb,idb []byte
+
+					//TODO action: update ,index:  ,id: 1,_indextest
+					//{ "update" : {"_id" : "1", "_index" : "test"} }
+					//字段顺序换了。
 					action,indexb,idb=parseActionMeta(scannedByte)
 					index=string(indexb)
 					id=string(idb)
+
+					if len(action)==0||index==""||id==""{
+						log.Warn("invalid bulk action:",string(action),",index:",string(indexb),",id:",string(idb),", try json parse")
+						action,index,id=parseJson(scannedByte)
+					}
 				}
 
 				if  bytes.Equal(action,actionDelete){
@@ -174,7 +193,8 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 				if !ok{
 					metadata=elastic.GetMetadata(clusterName)
-					//fmt.Println("index setting not found,",index,string(scannedByte))
+					//fmt.Println(util.ToJson(metadata.Indices,true))
+					log.Warn("index setting not found,",index,",",string(scannedByte))
 					return
 				}
 

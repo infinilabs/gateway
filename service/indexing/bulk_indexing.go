@@ -242,9 +242,10 @@ func DoRequest(compress bool, method string, loadUrl string, user, password stri
 
 	if compress {
 		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set("content-encoding", "gzip")
 	}
 
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.SetContentType("application/json")
 
 	if user != "nil" {
 		req.URI().SetUsername(user)
@@ -262,32 +263,47 @@ func DoRequest(compress bool, method string, loadUrl string, user, password stri
 
 		}
 	}
-
 	err := fastHttpClient.Do(req, resp)
 
 	if err != nil {
-		panic(err)
+		if global.Env().IsDebug{
+			log.Error(err)
+		}
+		return nil, err
 	}
 
 	if resp == nil {
-		panic("empty response")
+		if global.Env().IsDebug{
+			log.Error(err)
+		}
+		return nil, err
 	}
 
-	//if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated {
-	//
-	//} else {
-	//	//fmt.Println("received status code", resp.StatusCode, "from", string(resp.Header.Header()), "content", string(resp.Body()), req)
-	//}
 
 	// Do we need to decompress the response?
 	contentEncoding := resp.Header.Peek("Content-Encoding")
 	var resbody []byte
-	if bytes.EqualFold(contentEncoding, []byte("gzip")) {
-		fmt.Println("Unzipping...")
-		resbody, _ = resp.BodyGunzip()
+	if bytes.Equal(contentEncoding, []byte("gzip")) {
+		resbody, err = resp.BodyGunzip()
+		if err!=nil{
+			log.Error(err)
+		}
 	} else {
 		resbody = resp.Body()
 	}
 
-	return resbody, nil
+	if global.Env().IsDebug{
+		log.Trace(string(resbody))
+	}
+
+	//TODO check respbody's error
+	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated {
+		return resbody, nil
+	} else {
+		return resbody,errors.New("invalid bulk response")
+	}
+
+
+
+	return nil, nil
 }
