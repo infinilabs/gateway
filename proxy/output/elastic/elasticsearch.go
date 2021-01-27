@@ -1,8 +1,11 @@
 package elastic
 
 import (
+	"bytes"
+	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/lib/fasthttp"
+	log "github.com/cihub/seelog"
 	"sync"
 )
 
@@ -18,7 +21,18 @@ var proxyList = map[string]*ReverseProxy{}
 
 var initLock sync.Mutex
 
+var faviconPath=[]byte("/favicon.ico")
 func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
+
+	if bytes.Equal(faviconPath,ctx.Request.URI().Path()){
+		if global.Env().IsDebug{
+			log.Tracef("skip to delegate favicon.io")
+		}
+		ctx.Finished()
+		return
+	}
+
+
 	var instance *ReverseProxy
 
 	esRef := filter.GetStringOrDefault("elasticsearch", "default")
