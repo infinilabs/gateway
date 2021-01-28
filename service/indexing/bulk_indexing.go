@@ -178,7 +178,7 @@ READ_DOCS:
 		}
 
 		if mainBuf.Len() > 0 {
-			success:=Bulk(&cfg, endpoint, &mainBuf)
+			success:=joint.Bulk(&cfg, endpoint, &mainBuf)
 
 			if !success{
 				queue.Push(queueName,mainBuf.Bytes())
@@ -194,7 +194,7 @@ READ_DOCS:
 	}
 }
 
-func Bulk(cfg *elastic.ElasticsearchConfig, endpoint string, data *bytes.Buffer) bool{
+func (joint BulkIndexingJoint) Bulk(cfg *elastic.ElasticsearchConfig, endpoint string, data *bytes.Buffer) bool{
 	if data == nil || data.Len() == 0 {
 		return true
 	}
@@ -220,7 +220,7 @@ func Bulk(cfg *elastic.ElasticsearchConfig, endpoint string, data *bytes.Buffer)
 
 	//_, err := util.ExecuteRequest(req)
 
-	_, err := DoRequest(true, http.MethodPost, url, cfg.BasicAuth.Username, cfg.BasicAuth.Password, data.Bytes(), "")
+	_, err := joint.DoRequest(true, http.MethodPost, url, cfg.BasicAuth.Username, cfg.BasicAuth.Password, data.Bytes(), "")
 
 	//TODO handle error, retry and send to deadlock queue
 
@@ -237,7 +237,7 @@ var fastHttpClient = &fasthttp.Client{
 	TLSConfig: &tls.Config{InsecureSkipVerify: true},
 }
 
-func DoRequest(compress bool, method string, loadUrl string, user, password string, body []byte, proxy string) ([]byte, error) {
+func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl string, user, password string, body []byte, proxy string) ([]byte, error) {
 	req := fasthttp.AcquireRequest()
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseRequest(req)   // <- do not forget to release
@@ -310,9 +310,11 @@ func DoRequest(compress bool, method string, loadUrl string, user, password stri
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated {
 		return resbody, nil
 	} else if resp.StatusCode()==429 {
-		time.Sleep(500*time.Millisecond)
 		log.Warnf("elasticsearch rejected, retried %v times, will try again",retryTimes)
-		time.Sleep(500*time.Millisecond)
+		delayTime := joint.GetIntOrDefault("retry_delay_in_second", 5)
+
+		time.Sleep(time.Duration(delayTime)*time.Second)
+
 		retryTimes++
 		if retryTimes>300{
 			log.Errorf("elasticsearch rejected, retried %v times, quit retry",retryTimes)
