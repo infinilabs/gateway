@@ -182,6 +182,7 @@ READ_DOCS:
 
 			if !success{
 				queue.Push(queueName,mainBuf.Bytes())
+				mainBuf.Reset()
 			}
 			//TODO handle retry and fallback/over, dead letter queue
 			//set services to failure, need manual restart
