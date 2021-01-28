@@ -178,7 +178,11 @@ READ_DOCS:
 		}
 
 		if mainBuf.Len() > 0 {
-			Bulk(&cfg, endpoint, &mainBuf)
+			success:=Bulk(&cfg, endpoint, &mainBuf)
+
+			if !success{
+				queue.Push(queueName,mainBuf.Bytes())
+			}
 			//TODO handle retry and fallback/over, dead letter queue
 			//set services to failure, need manual restart
 			//process dead letter queue first next round
@@ -190,9 +194,9 @@ READ_DOCS:
 	}
 }
 
-func Bulk(cfg *elastic.ElasticsearchConfig, endpoint string, data *bytes.Buffer) {
+func Bulk(cfg *elastic.ElasticsearchConfig, endpoint string, data *bytes.Buffer) bool{
 	if data == nil || data.Len() == 0 {
-		return
+		return true
 	}
 	data.WriteRune('\n')
 
@@ -222,9 +226,11 @@ func Bulk(cfg *elastic.ElasticsearchConfig, endpoint string, data *bytes.Buffer)
 
 	if err != nil {
 		log.Error(err)
+		return false
 	}
 
 	data.Reset()
+	return true
 }
 
 var fastHttpClient = &fasthttp.Client{
@@ -263,6 +269,10 @@ func DoRequest(compress bool, method string, loadUrl string, user, password stri
 
 		}
 	}
+	retryTimes:=0
+
+	DO:
+
 	err := fastHttpClient.Do(req, resp)
 
 	if err != nil {
@@ -299,11 +309,19 @@ func DoRequest(compress bool, method string, loadUrl string, user, password stri
 	//TODO check respbody's error
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated {
 		return resbody, nil
-	} else {
+	} else if resp.StatusCode()==429 {
+		log.Warnf("elasticsearch rejected, retried %v, will later",retryTimes)
+		time.Sleep(1*time.Second)
+		retryTimes++
+
+		if retryTimes>300{
+			log.Errorf("elasticsearch rejected, retried %v times, quit retry",retryTimes)
+			return resbody,errors.New("elasticsearch rejected")
+		}
+		goto DO
+	}else {
 		return resbody,errors.New("invalid bulk response")
 	}
-
-
 
 	return nil, nil
 }
