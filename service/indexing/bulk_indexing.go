@@ -178,18 +178,22 @@ READ_DOCS:
 		}
 
 		if mainBuf.Len() > 0 {
+
 			success:=joint.Bulk(&cfg, endpoint, &mainBuf)
+
+			log.Trace("clean buffer, and execute bulk insert")
 
 			if !success{
 				queue.Push(queueName,mainBuf.Bytes())
-				mainBuf.Reset()
+			}else{
+				stats.IncrementBy("bulk", "processed", int64(mainBuf.Len()))
 			}
+
+			mainBuf.Reset()
 			//TODO handle retry and fallback/over, dead letter queue
 			//set services to failure, need manual restart
 			//process dead letter queue first next round
 
-			stats.IncrementBy("bulk", "processed", int64(mainBuf.Len()))
-			log.Trace("clean buffer, and execute bulk insert")
 		}
 
 	}
