@@ -17,10 +17,11 @@ flow:
       - name: get_cache
       - name: date_range_precision_tuning
         parameters:
-          time_precision: 6
+          time_precision: 4
           path_keywords:
             - _search
             - _async_search
+      - name: get_cache # try handle cache after precision resize
       - name: elasticsearch
         parameters:
           elasticsearch: dev  #elasticsearch configure reference name
