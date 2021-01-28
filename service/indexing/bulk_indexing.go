@@ -314,15 +314,14 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 		delayTime := joint.GetIntOrDefault("retry_delay_in_second", 5)
 
 		time.Sleep(time.Duration(delayTime)*time.Second)
-
-		retryTimes++
 		if retryTimes>300{
 			log.Errorf("elasticsearch rejected, retried %v times, quit retry",retryTimes)
 			return resbody,errors.New("elasticsearch rejected")
 		}
+		retryTimes++
 		goto DO
 	}else {
-		return resbody,errors.New("invalid bulk response")
+		return resbody,errors.Errorf("invalid bulk response, %v",string(resbody))
 	}
 
 	return nil, nil
