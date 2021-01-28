@@ -310,10 +310,10 @@ func DoRequest(compress bool, method string, loadUrl string, user, password stri
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated {
 		return resbody, nil
 	} else if resp.StatusCode()==429 {
-		log.Warnf("elasticsearch rejected, retried %v, will later",retryTimes)
-		time.Sleep(1*time.Second)
+		time.Sleep(500*time.Millisecond)
+		log.Warnf("elasticsearch rejected, retried %v times, will try again",retryTimes)
+		time.Sleep(500*time.Millisecond)
 		retryTimes++
-
 		if retryTimes>300{
 			log.Errorf("elasticsearch rejected, retried %v times, quit retry",retryTimes)
 			return resbody,errors.New("elasticsearch rejected")

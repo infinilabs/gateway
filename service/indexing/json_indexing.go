@@ -41,6 +41,8 @@ func (joint JsonIndexingJoint) Name() string {
 	return "json_indexing"
 }
 
+
+//TODO 合并批量处理的操作，这里只用来合并请求和构造 bulk 请求。
 //TODO 重启子进程，当子进程挂了之后
 func (joint JsonIndexingJoint) Process(c *pipeline.Context) error {
 	defer func() {
