@@ -134,8 +134,6 @@ func (joint BulkIndexingJoint) NewBulkWorker(count *int, bulkSizeInMB int, wg *s
 	log.Debug("start worker:", queueName)
 
 	mainBuf := bytes.Buffer{}
-	docBuf := bytes.Buffer{}
-
 	esInstanceVal := joint.MustGetString("elasticsearch")
 	timeOut := joint.GetIntOrDefault("idle_timeout_in_second", 5)
 	idleDuration := time.Duration(timeOut) * time.Second
@@ -152,10 +150,7 @@ READ_DOCS:
 		//each message is complete bulk message, must be end with \n
 		case pop := <-queue.ReadChan(queueName):
 			stats.IncrementBy("bulk", "received", int64(mainBuf.Len()))
-			docBuf.Write(pop)
-			mainBuf.Write(docBuf.Bytes())
-
-			docBuf.Reset()
+			mainBuf.Write(pop)
 
 			(*count)++
 
@@ -172,10 +167,6 @@ READ_DOCS:
 		goto READ_DOCS
 
 	CLEAN_BUFFER:
-
-		if docBuf.Len() > 0 {
-			mainBuf.Write(docBuf.Bytes())
-		}
 
 		if mainBuf.Len() > 0 {
 
