@@ -204,6 +204,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				buff,ok=docBuf[bufferKey]
 				if!ok{
 					buff=bufferPool.Get().(*bytes.Buffer)
+					buff.Reset()
 					docBuf[bufferKey]=buff
 				}
 				buff.Write(scannedByte)
