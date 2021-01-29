@@ -65,9 +65,13 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 	}()
 
 	workers, _ := joint.GetInt("worker_size", 1)
+	bulkSizeInKB, _ := joint.GetInt("bulk_size_in_kb", 0)
 	bulkSizeInMB, _ := joint.GetInt("bulk_size_in_mb", 10)
 	elasticsearch := joint.GetStringOrDefault("elasticsearch", "default")
-	bulkSizeInMB = 1000000 * bulkSizeInMB
+	bulkSizeInByte:= 1048576 * bulkSizeInMB
+	if bulkSizeInKB>0{
+		bulkSizeInByte= 1024 * bulkSizeInKB
+	}
 
 	meta := elastic.GetMetadata(elasticsearch)
 	wg := sync.WaitGroup{}
@@ -90,7 +94,7 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 				nodeInfo := meta.GetNodeInfo(shardInfo.NodeID)
 				for i := 0; i < workers; i++ {
 					wg.Add(1)
-					go joint.NewBulkWorker(&totalSize, bulkSizeInMB, &wg, queueName, nodeInfo.Http.PublishAddress)
+					go joint.NewBulkWorker(&totalSize, bulkSizeInByte, &wg, queueName, nodeInfo.Http.PublishAddress)
 				}
 			}
 		}
@@ -102,7 +106,7 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 			queueName := common.GetNodeLevelShuffleKey(esInstanceVal, k)
 			for i := 0; i < workers; i++ {
 				wg.Add(1)
-				go joint.NewBulkWorker(&totalSize, bulkSizeInMB, &wg, queueName, v.Http.PublishAddress)
+				go joint.NewBulkWorker(&totalSize, bulkSizeInByte, &wg, queueName, v.Http.PublishAddress)
 			}
 		}
 	}
@@ -112,7 +116,7 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 	return nil
 }
 
-func (joint BulkIndexingJoint) NewBulkWorker(count *int, bulkSizeInMB int, wg *sync.WaitGroup, queueName string, endpoint string) {
+func (joint BulkIndexingJoint) NewBulkWorker(count *int, bulkSizeInByte int, wg *sync.WaitGroup, queueName string, endpoint string) {
 	defer func() {
 		if !global.Env().IsDebug {
 			if r := recover(); r != nil {
@@ -139,24 +143,21 @@ func (joint BulkIndexingJoint) NewBulkWorker(count *int, bulkSizeInMB int, wg *s
 	idleDuration := time.Duration(timeOut) * time.Second
 	idleTimeout := time.NewTimer(idleDuration)
 	defer idleTimeout.Stop()
-	lock:=sync.Mutex{}
 	cfg := elastic.GetConfig(esInstanceVal)
 
 READ_DOCS:
 	for {
+
 		idleTimeout.Reset(idleDuration)
+
 		select {
 
 		//each message is complete bulk message, must be end with \n
 		case pop := <-queue.ReadChan(queueName):
 			stats.IncrementBy("bulk", "received", int64(mainBuf.Len()))
-			lock.Lock()
 			mainBuf.Write(pop)
-			lock.Unlock()
-
 			(*count)++
-
-			if mainBuf.Len() > (bulkSizeInMB) {
+			if mainBuf.Len() > (bulkSizeInByte) {
 				log.Trace("hit buffer size, ", mainBuf.Len())
 				goto CLEAN_BUFFER
 			}
@@ -169,14 +170,8 @@ READ_DOCS:
 		goto READ_DOCS
 
 	CLEAN_BUFFER:
-
 		if mainBuf.Len() > 0 {
-
-			lock.Lock()
-
 			success:=joint.Bulk(&cfg, endpoint, &mainBuf)
-
-
 			log.Trace("clean buffer, and execute bulk insert")
 
 			if !success{
@@ -186,9 +181,6 @@ READ_DOCS:
 			}
 
 			mainBuf.Reset()
-
-			lock.Unlock()
-
 			//TODO handle retry and fallback/over, dead letter queue
 			//set services to failure, need manual restart
 			//process dead letter queue first next round
@@ -241,6 +233,7 @@ var fastHttpClient = &fasthttp.Client{
 
 func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl string, user, password string, body []byte, proxy string) ([]byte, error) {
 	req := fasthttp.AcquireRequest()
+	req.Reset()
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseRequest(req)   // <- do not forget to release
 	defer fasthttp.ReleaseResponse(resp) // <- do not forget to release
@@ -296,6 +289,10 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 	var resbody =resp.GetRawBody()
 	if global.Env().IsDebug{
 		log.Trace(string(resbody))
+	}
+
+	if resp.StatusCode()==400{
+		fmt.Println(string(body))
 	}
 
 	//TODO check respbody's error
