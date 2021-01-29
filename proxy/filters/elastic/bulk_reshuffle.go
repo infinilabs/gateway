@@ -128,22 +128,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		reshuffleType:=this.GetStringOrDefault("level","node")
 		submitMode:=this.GetStringOrDefault("mode","sync") //sync and async
 
-		var body []byte
-		var err error
-		ce := string(ctx.Request.Header.PeekAny([]string{fasthttp.HeaderContentEncoding,"Content-Encoding"}))
-		if ce == "gzip" {
-			body,err=ctx.Request.BodyGunzip()
-			if err!=nil{
-				panic(err)
-			}
-		}else if ce=="deflate"{
-			body,err=ctx.Request.BodyInflate()
-			if err!=nil{
-				panic(err)
-			}
-		}else{
-			body=ctx.Request.Body()
-		}
+		body:=ctx.Request.GetRawBody()
 
 		scanner := bufio.NewScanner(bytes.NewReader(body))
 		scanner.Split(util.GetSplitFunc([]byte("\n")))

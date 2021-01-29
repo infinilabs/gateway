@@ -296,17 +296,7 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 
 
 	// Do we need to decompress the response?
-	contentEncoding := resp.Header.Peek("Content-Encoding")
-	var resbody []byte
-	if bytes.Equal(contentEncoding, []byte("gzip")) {
-		resbody, err = resp.BodyGunzip()
-		if err!=nil{
-			log.Error(err)
-		}
-	} else {
-		resbody = resp.Body()
-	}
-
+	var resbody =resp.GetRawBody()
 	if global.Env().IsDebug{
 		log.Trace(string(resbody))
 	}
