@@ -139,7 +139,7 @@ func (joint BulkIndexingJoint) NewBulkWorker(count *int, bulkSizeInMB int, wg *s
 	idleDuration := time.Duration(timeOut) * time.Second
 	idleTimeout := time.NewTimer(idleDuration)
 	defer idleTimeout.Stop()
-
+	lock:=sync.Mutex{}
 	cfg := elastic.GetConfig(esInstanceVal)
 
 READ_DOCS:
@@ -150,7 +150,9 @@ READ_DOCS:
 		//each message is complete bulk message, must be end with \n
 		case pop := <-queue.ReadChan(queueName):
 			stats.IncrementBy("bulk", "received", int64(mainBuf.Len()))
+			lock.Lock()
 			mainBuf.Write(pop)
+			lock.Unlock()
 
 			(*count)++
 
@@ -170,7 +172,10 @@ READ_DOCS:
 
 		if mainBuf.Len() > 0 {
 
+			lock.Lock()
+
 			success:=joint.Bulk(&cfg, endpoint, &mainBuf)
+
 
 			log.Trace("clean buffer, and execute bulk insert")
 
@@ -181,6 +186,9 @@ READ_DOCS:
 			}
 
 			mainBuf.Reset()
+
+			lock.Unlock()
+
 			//TODO handle retry and fallback/over, dead letter queue
 			//set services to failure, need manual restart
 			//process dead letter queue first next round
@@ -224,8 +232,6 @@ func (joint BulkIndexingJoint) Bulk(cfg *elastic.ElasticsearchConfig, endpoint s
 		log.Error(err)
 		return false
 	}
-
-	data.Reset()
 	return true
 }
 
