@@ -13,6 +13,7 @@ import (
 	"infini.sh/framework/core/util"
 	ccache "infini.sh/framework/lib/cache"
 	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/gateway/common"
 	"math"
 	"math/rand"
 	"net/http"
@@ -203,14 +204,9 @@ func (filter RequestCacheGet) Name() string {
 	return "get_cache"
 }
 
-const CACHEABLE = "request_cacheable"
-const CACHEHASH = "request_cache_hash"
-
-var faviconPath=[]byte("/favicon.ico")
-
 func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 
-	if bytes.Equal(faviconPath,ctx.Request.URI().Path()){
+	if bytes.Equal(common.FaviconPath,ctx.Request.URI().Path()){
 		if global.Env().IsDebug{
 			log.Tracef("skip to delegate favicon.io")
 		}
@@ -222,7 +218,7 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 
 	//TODO optimize scroll API, should always point to same IP, prefer to route to where index/shard located
 
-	cacheable := ctx.GetFlag(CACHEABLE, false)
+	cacheable := ctx.GetFlag(common.CACHEABLE, false)
 
 	if util.CompareStringAndBytes(ctx.Request.Header.Method(), fasthttp.MethodGet) {
 		cacheable = true
@@ -250,7 +246,17 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 		break
 	}
 
+	if args.Has("no_cache") {
+		cacheable = false
+		ctx.Request.URI().QueryArgs().Del("no_cache")
+	}
+
+
+	//TODO fix parameter
 	patterns, ok := filter.GetStringArray("pass_patterns")
+	if !ok{
+		patterns=[]string{"_bulk","_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"}
+	}
 
 	//check bypass patterns
 	if ok && util.ContainsAnyInArray(url, patterns) {
@@ -260,10 +266,7 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 		cacheable = false
 	}
 
-	if args.Has("no_cache") {
-		cacheable = false
-		ctx.Request.URI().QueryArgs().Del("no_cache")
-	}
+	ctx.Set(common.CACHEABLE, cacheable)
 
 	if global.Env().IsDebug {
 		log.Trace("cacheable,", cacheable)
@@ -277,7 +280,7 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 
 		hash := filter.getHash(&ctx.Request)
 		//log.Error(hash," => ",string(ctx.Request.URI().Path()))
-		ctx.Set(CACHEHASH, hash)
+		ctx.Set(common.CACHEHASH, hash)
 
 		item, found := filter.GetCache(hash)
 
@@ -373,7 +376,12 @@ func (filter RequestCacheSet) Name() string {
 
 func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
 
-	hash, ok := ctx.GetString(CACHEHASH)
+	cacheable := ctx.GetFlag(common.CACHEABLE, false)
+	if !cacheable{
+		return
+	}
+
+	hash, ok := ctx.GetString(common.CACHEHASH)
 	if !ok {
 		hash = filter.getHash(&ctx.Request)
 	}

@@ -108,6 +108,8 @@ func parseJson(scannedByte []byte)(action []byte,index,id string)  {
 
 func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
+	ctx.Set(common.CACHEABLE, false)
+
 	clusterName:=this.MustGetString("elasticsearch")
 	metadata:=elastic.GetMetadata(clusterName)
 	if metadata==nil{
