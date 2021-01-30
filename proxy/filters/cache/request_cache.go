@@ -218,7 +218,7 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 
 	//TODO optimize scroll API, should always point to same IP, prefer to route to where index/shard located
 
-	cacheable := ctx.GetFlag(common.CACHEABLE, false)
+	var cacheable = false
 
 	if util.CompareStringAndBytes(ctx.Request.Header.Method(), fasthttp.MethodGet) {
 		cacheable = true
@@ -230,18 +230,13 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 	//check special path
 	switch {
 	case util.ContainStr(url, "/_search"):
-		//if util.ContainStr(url, "*") {
-		//	//fmt.Println("hit index pattern")
-		//	//GET _cat/indices/filebeat-*?s=index:desc
-		//}
 		cacheable = true
 		break
-	case util.ContainsAnyInArray(url, []string{"_mget", "/_security/user/_has_privileges", ".kibana_task_manager/_update_by_query", "/.kibana/_update/search-telemetry", "/.kibana/_update/ui-metric"}):
+	case util.ContainsAnyInArray(url, []string{"_mget", "/_security/user/_has_privileges"}):
 		//TODO get TTL config, various by request, throttle request from various clients, but doing same work
 		cacheable = true
 		break
 	case util.ContainStr(url, "_async_search"):
-
 		cacheable = true
 		break
 	}
@@ -251,8 +246,6 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 		ctx.Request.URI().QueryArgs().Del("no_cache")
 	}
 
-
-	//TODO fix parameter
 	patterns, ok := filter.GetStringArray("pass_patterns")
 	if !ok{
 		patterns=[]string{"_bulk","_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"}
@@ -299,7 +292,6 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 			//}
 
 			ctx.Response.Cached = true
-			ctx.Response.Header.DisableNormalizing()
 			ctx.Response.Header.Add("CACHED", "true")
 			ctx.Response.SetDestination("cache")
 
@@ -375,29 +367,42 @@ func (filter RequestCacheSet) Name() string {
 }
 
 func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
+	method :=  string(ctx.Request.Header.Method())
+	url := ctx.PathStr()
 
-	cacheable := ctx.GetFlag(common.CACHEABLE, false)
+	cacheable := ctx.GetBool(common.CACHEABLE, false)
 	if !cacheable{
+		log.Errorf("not cacheable",cacheable)
 		return
 	}
 
 	hash, ok := ctx.GetString(common.CACHEHASH)
+
 	if !ok {
 		hash = filter.getHash(&ctx.Request)
 	}
 
 	ctx.Response.Header.Add("CACHE-HASH", hash)
 
-	method :=  string(ctx.Request.Header.Method())
-	url := ctx.PathStr()
-	//args := ctx.Request.URI().QueryArgs()
+	//TODO handle status code none 200, should cache status code as well
+	arr,ok:=filter.GetInt64Array("status")
+	if !ok{
+		arr=[]int64{ http.StatusOK }
+	}
 
-	//cache 200 only TODO allow configure to support: 404/200/201/500, also set TTL
-	if ctx.Response.StatusCode() == http.StatusOK {
-
-		//TODO check max_response_size, skip if the response is too big
+	if util.ContainsInAnyIntArray(int64(ctx.Response.StatusCode()),arr){
 
 		body := ctx.Response.Body()
+
+		//check max_response_size, skip if the response is too big
+		maxSize,ok:=filter.GetInt("max_response_size",-1)
+		if ok{
+			if maxSize>0 && len(body)>maxSize{
+				log.Warnf("response is too big ( %v > %v ), skip to put into cache",len(body),maxSize)
+				return
+			}
+		}
+
 		var id string
 
 		//buffer := bytesBufferPool.Get().(*bytes.Buffer)
