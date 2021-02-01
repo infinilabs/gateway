@@ -154,7 +154,7 @@ READ_DOCS:
 
 		//each message is complete bulk message, must be end with \n
 		case pop := <-queue.ReadChan(queueName):
-			stats.IncrementBy("bulk", "received", int64(mainBuf.Len()))
+			stats.IncrementBy("bulk", "bytes_received", int64(mainBuf.Len()))
 			mainBuf.Write(pop)
 			(*count)++
 			if mainBuf.Len() > (bulkSizeInByte) {
@@ -177,7 +177,7 @@ READ_DOCS:
 			if !success{
 				queue.Push(queueName,mainBuf.Bytes())
 			}else{
-				stats.IncrementBy("bulk", "processed", int64(mainBuf.Len()))
+				stats.IncrementBy("bulk", "bytes_processed", int64(mainBuf.Len()))
 			}
 
 			mainBuf.Reset()

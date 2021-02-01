@@ -123,7 +123,7 @@ READ_DOCS:
 
 		case pop := <-queue.ReadChan(joint.inputQueueName):
 
-			stats.IncrementBy("bulk", "received", int64(mainBuf.Len()))
+			stats.IncrementBy("bulk", "bytes_received", int64(mainBuf.Len()))
 
 			//TODO record ingest time,	request.LoggingTime = time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 
@@ -160,7 +160,7 @@ READ_DOCS:
 			//set services to failure, need manual restart
 			//process dead letter queue first next round
 
-			stats.IncrementBy("bulk", "processed", int64(mainBuf.Len()))
+			stats.IncrementBy("bulk", "bytes_processed", int64(mainBuf.Len()))
 			log.Trace("clean buffer, and execute bulk insert")
 		}
 

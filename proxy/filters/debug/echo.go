@@ -75,3 +75,16 @@ func (filter DumpRequestBody) Name() string {
 func (filter DumpRequestBody) Process(ctx *fasthttp.RequestCtx) {
 	fmt.Println("request_body: ", string(ctx.Request.Body()))
 }
+
+
+type DumpResponseBody struct {
+	param.Parameters
+}
+
+func (filter DumpResponseBody) Name() string {
+	return "dump_response_body"
+}
+
+func (filter DumpResponseBody) Process(ctx *fasthttp.RequestCtx) {
+	fmt.Println("response_body: ", string(ctx.Response.GetRawBody()))
+}

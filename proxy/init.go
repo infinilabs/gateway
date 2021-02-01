@@ -33,6 +33,7 @@ func Init() {
 	common.RegisterFilter(routing.CloneFlowFilter{})
 	common.RegisterFilter(elastic2.BulkReshuffle{})
 	common.RegisterFilter(debug.DumpRequestBody{})
+	common.RegisterFilter(debug.DumpResponseBody{})
 	common.RegisterFilter(transform.RequestBodyTruncate{})
 	common.RegisterFilter(transform.ResponseBodyTruncate{})
 	common.RegisterFilter(filter.ResponseStatusCodeFilter{})
@@ -41,4 +42,6 @@ func Init() {
 	common.RegisterFilter(filter.RequestUserFilter{})
 	common.RegisterFilter(filter.RequestServerHostFilter{})
 	common.RegisterFilter(elastic2.DatePrecisionTuning{})
+	common.RegisterFilter(transform.ResponseHeaderFormatFilter{})
+	common.RegisterFilter(transform.ResponseBodyRegexReplace{})
 }

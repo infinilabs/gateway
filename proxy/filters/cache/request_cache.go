@@ -292,7 +292,7 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 	}
 
 	//check bypass patterns
-	if ok && util.ContainsAnyInArray(url, patterns) {
+	if len(patterns)>0&&util.ContainsAnyInArray(url, patterns) {
 		if global.Env().IsDebug {
 			log.Trace("url hit bypass pattern, will not be cached, ", url)
 		}
@@ -427,7 +427,9 @@ func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
 
 	cacheable := ctx.GetBool(common.CACHEABLE, false)
 	if !cacheable{
-		log.Error("not cacheable",cacheable,",",url)
+		if global.Env().IsDebug{
+			log.Trace("not cacheable ",cacheable,",",url)
+		}
 		return
 	}
 
