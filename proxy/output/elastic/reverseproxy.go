@@ -245,7 +245,7 @@ func (p *ReverseProxy) getClient() *fasthttp.HostClient {
 	max := len(p.clients)
 	seed := rand.Intn(max)
 	if seed >= len(p.clients) {
-		log.Tracef("invalid offset, reset to 0")
+		log.Warn("invalid upstream offset, reset to 0")
 		seed = 0
 	}
 	c := p.clients[seed]
@@ -287,12 +287,11 @@ func (p *ReverseProxy) DelegateRequest(req *fasthttp.Request, res *fasthttp.Resp
 			}
 		}
 		res.SetStatusCode(http.StatusInternalServerError)
-		res.SetBodyRaw([]byte(err.Error()))
+		res.SetBody([]byte(err.Error()))
 	}
 
 	res.Header.Set("UPSTREAM", pc.Addr)
 	res.SetDestination(pc.Addr)
-
 
 }
 

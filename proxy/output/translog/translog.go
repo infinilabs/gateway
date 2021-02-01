@@ -199,7 +199,7 @@ func (filter TranslogOutput) Process(ctx *fasthttp.RequestCtx) {
 		SaveRequest(ctx)
 
 		ctx.Response.SetStatusCode(http.StatusOK)
-		ctx.Response.SetBodyRaw(bulkRequestOKBody)
+		ctx.Response.SetBody(bulkRequestOKBody)
 
 	//}
 

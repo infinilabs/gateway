@@ -21,7 +21,7 @@ func (this DatePrecisionTuning) Process(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	path:=ctx.PathStr()
+	path:=string(ctx.RequestURI())
 	keywords,ok:=this.GetStringArray("path_keywords")
 	if !ok{
 		keywords=builtinKeywords

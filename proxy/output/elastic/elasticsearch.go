@@ -2,10 +2,11 @@ package elastic
 
 import (
 	"bytes"
+	log "github.com/cihub/seelog"
+	"golang.org/x/sync/singleflight"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/lib/fasthttp"
-	log "github.com/cihub/seelog"
 	"sync"
 )
 
@@ -22,6 +23,10 @@ var proxyList = map[string]*ReverseProxy{}
 var initLock sync.Mutex
 
 var faviconPath=[]byte("/favicon.ico")
+
+var singleSetCache singleflight.Group
+
+
 func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
 
 	if bytes.Equal(faviconPath,ctx.Request.URI().Path()){
@@ -31,7 +36,6 @@ func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
 		ctx.Finished()
 		return
 	}
-
 
 	var instance *ReverseProxy
 
