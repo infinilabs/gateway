@@ -7,7 +7,6 @@ import (
 	log "github.com/cihub/seelog"
 	"github.com/dgraph-io/ristretto"
 	"github.com/go-redis/redis"
-	"golang.org/x/sync/singleflight"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/stats"
@@ -212,8 +211,6 @@ type RequestCacheGet struct {
 func (filter RequestCacheGet) Name() string {
 	return "get_cache"
 }
-
-var singleSetCache singleflight.Group
 
 func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 	if bytes.Equal(common.FaviconPath,ctx.Request.URI().Path()){
