@@ -5,6 +5,7 @@ entry:
   - name: es_gateway #your gateway endpoint
     enabled: true
     router: default
+    max_concurrency: 100000
     network:
       binding: 0.0.0.0:8000
       reuse_port: true #you can start multi gateway instance, they share same port, to full utilize system's resources
@@ -15,13 +16,19 @@ flow:
   - name: cache_first
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
       - name: get_cache
+        parameters:
+          pass_patterns:
+            - _cat
       - name: date_range_precision_tuning
         parameters:
           time_precision: 4
           path_keywords:
             - _search
             - _async_search
-      - name: get_cache # try handle cache after precision resize
+      - name: get_cache
+        parameters:
+          pass_patterns:
+            - _cat
       - name: elasticsearch
         parameters:
           elasticsearch: dev  #elasticsearch configure reference name
@@ -60,6 +67,10 @@ flow:
 #              include:
 #                - data
 #                - ingest
+      - name: response_body_regex_replace
+        parameters:
+          pattern: '"took":\d+,'
+          to: '"took":123,'
       - name: set_cache
         parameters:
           cache_ttl: 60s
@@ -146,17 +157,18 @@ pipelines:
       elasticsearch: "dev"
       input_queue: "request_logging"
       timeout: "1s"
-      worker_size: 10
-      bulk_size_in_mb: 10 #in MB
+      worker_size: 1
+      bulk_size_in_mb: 1 #in MB
 - name: bulk_request_ingest
   start:
     joint: bulk_indexing
     enabled: true
     parameters:
       elasticsearch: "dev"
-      timeout: "1s"
-      worker_size: 10
-      bulk_size_in_mb: 10 #in MB
+      timeout: "5s"
+      worker_size: 1
+      bulk_size_in_kb: 1  #in KB
+      retry_delay_in_second: 1
 
 #floating_ip:
 #  enabled: true
@@ -169,9 +181,9 @@ queue:
   max_msg_size: 5000000000
   max_bytes_per_file: 53687091200
   sync_every_records: 100000 # sync by records count
-  sync_timeout_in_ms: 10000 # sync by time in million seconds
-  write_chan_buffer: 10000
-  read_chan_buffer: 10000
+  sync_timeout_in_ms: 1000 # sync by time in million seconds
+  write_chan_buffer: 1000
+  read_chan_buffer: 1000
 
 statsd:
   enabled: false
@@ -186,20 +198,4 @@ forcemerge:
   min_num_segments: 1
   max_num_segments: 1
   indices:
-    - goodluck
-    - .monitoring-es-7-2021.01.19
-    -  .kibana-event-log-7.9.2-000001
-    -  .monitoring-es-7-2021.01.18
-    -  .apm-agent-configuration
-    -  kibana_sample_data_flights
-    -  .kibana_1
-    -  .monitoring-kibana-7-2021.01.20
-    -  .security-7
-    -  .apm-custom-link
-    -  gateway_requests
-    -  kibana_sample_data_ecommerce
-    -  .kibana_task_manager_1
-    -  .monitoring-kibana-7-2021.01.19
-    -  kibana_sample_data_logs
-    -  .async-search
-    -  .monitoring-es-7-2021.01.20
+    - index_name
