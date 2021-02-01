@@ -99,10 +99,7 @@ func (p RequestCache) initCache() {
 }
 
 func (p RequestCache) GetCache(key string) ([]byte, bool) {
-
-	//retChan:=singleSetCache.DoChan(key, func()(ret interface{},err error) {
-		p.initCache()
-
+	p.initCache()
 	item := ccCache.GetOrCreateSecondaryCache("default").Get(key)
 	if item != nil {
 		data := item.Value().([]byte)
@@ -112,7 +109,6 @@ func (p RequestCache) GetCache(key string) ([]byte, bool) {
 		}
 		return data, true
 	}
-
 	switch p.GetStringOrDefault("cache_type", defaultCacheType) {
 		case cacheRedis:
 			b, err := p.getRedisClient().Get(key).Result()
@@ -139,25 +135,6 @@ func (p RequestCache) GetCache(key string) ([]byte, bool) {
 				return o.([]byte), true
 			}
 		}
-		//return nil, errors.New("not found")
-	//})
-
-	//timeout := time.After(60 * time.Second)
-	//
-	//select {//加入了超时机制
-	//case <-timeout:
-	//	return nil,false
-	//case ret =<- retChan:
-	//	if ret.Val==nil{
-	//		return nil,false
-	//	}
-	//	v,ok:=ret.Val.([]byte)
-	//	if!ok{
-	//		return nil,false
-	//	}
-	//	return v,len(v)>0
-	//}
-
 	return nil, false
 }
 
@@ -169,10 +146,10 @@ func (p RequestCache) SetCache(key string, data []byte, ttl time.Duration) {
 
 	min, _ := p.GetInt("min_response_size", -1)
 	max, _ := p.GetInt("max_response_size", math.MaxInt32)
-	len := len(data)
-	if len < min || (len > max) && max>0 {
+	dataLen := len(data)
+	if dataLen < min || (dataLen > max) && max>0 {
 		if global.Env().IsDebug {
-			log.Tracef("invalid response size, %v not between %v and %v", len, min, max)
+			log.Tracef("invalid response size, %v not between %v and %v", dataLen, min, max)
 		}
 		return
 	}
@@ -190,7 +167,7 @@ func (p RequestCache) SetCache(key string, data []byte, ttl time.Duration) {
 		ccCache.GetOrCreateSecondaryCache("default").Set(key, data, ttl)
 		return
 	default:
-		cache.SetWithTTL(key, data, int64(len), ttl)
+		cache.SetWithTTL(key, data, int64(dataLen), ttl)
 	}
 }
 
@@ -203,29 +180,24 @@ func (p RequestCache) SetCache(key string, data []byte, ttl time.Duration) {
 
 func (p RequestCache) getHash(ctx *fasthttp.RequestCtx) string {
 
-	req:=ctx.Request
 	//TODO configure, remove keys from hash factor
-	req.URI().QueryArgs().Del("preference")
+	ctx.Request.URI().QueryArgs().Del("preference")
 
 	buffer:=bytes.Buffer{}
 	//buffer:=hashBufferPool.Get().(*bytes.Buffer)
 
 	if global.Env().IsDebug {
-		log.Trace("generate hash:", string(req.Header.Method()), string(req.RequestURI()), string(req.URI().QueryArgs().QueryString()), string(req.Body()), string(req.PostArgs().QueryString()))
+		log.Trace("generate hash:", string(ctx.Request.Header.Method()), string(ctx.Request.RequestURI()), string(ctx.Request.URI().QueryArgs().QueryString()), string(ctx.Request.Body()), string(ctx.Request.PostArgs().QueryString()))
 	}
 
 	//TODO 后台可以按照请求路径来勾选 Hash 因子
 
-	buffer.Write(req.Header.Method())
-	buffer.Write(req.Header.PeekAny(fasthttp.AuthHeaderKeys))
-	buffer.Write(req.URI().FullURI())
+	buffer.Write(ctx.Request.Header.Method())
 	//TODO enable configure for this feature, may filter by user or share, add/remove Authorization header to hash factor
-	//fmt.Println(string(req.URI().FullURI()))
-	buffer.Write(req.GetRawBody())
+	buffer.Write(ctx.Request.Header.PeekAny(fasthttp.AuthHeaderKeys))
+	buffer.Write(ctx.Request.URI().FullURI())
+	buffer.Write(ctx.Request.GetRawBody())
 	str:= util.MD5digestString(buffer.Bytes())
-
-	//util.FileAppendNewLine("data/hash.log",fmt.Sprintf("%v-%v %v - %v",str,string(req.Header.Method()),ctx.SequenceID,string(req.URI().FullURI())))
-
 
 	//buffer.Reset()
 	//hashBufferPool.Put(buffer)
@@ -244,8 +216,6 @@ func (filter RequestCacheGet) Name() string {
 var singleSetCache singleflight.Group
 
 func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
-	//util.FileAppendNewLine("data/get-hash.log",fmt.Sprintf("%v- %v - %v",string(ctx.Request.Header.Method()),ctx.SequenceID,string(ctx.Request.URI().FullURI())))
-
 	if bytes.Equal(common.FaviconPath,ctx.Request.URI().Path()){
 		if global.Env().IsDebug{
 			log.Tracef("skip to delegate favicon.io")
@@ -253,8 +223,6 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 		ctx.Finished()
 		return
 	}
-
-	//fmt.Println(ctx.Request.Header.String())
 
 	//TODO optimize scroll API, should always point to same IP, prefer to route to where index/shard located
 
@@ -312,14 +280,9 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 		//hash->count, hash->content
 
 		hash := filter.getHash(ctx)
-		//log.Error(hash," => ",string(ctx.Request.URI().Path()))
 		ctx.Set(common.CACHEHASH, hash)
 
 		item, found := filter.GetCache(hash)
-
-		ctx.Request.Header.Add("REQ_G-CASH-found", fmt.Sprintf("%v",found))
-		ctx.Request.Header.Add("REQ_G-CASH-HASH", hash)
-		ctx.Request.Header.Add("REQ_G-CASH-URL", url)
 
 		if global.Env().IsDebug {
 			log.Trace("check cache:", hash, ", found:", found)
@@ -329,22 +292,8 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 
 			stats.Increment("cache", "hit")
 			Decode(item, &ctx.Response)
-
-			//cachedUrl:= ctx.Response.Header.Peek("Cachedviaurl")
-			//if strings.TrimSpace(string(cachedUrl))!=strings.TrimSpace(url){
-			//	util.FileAppendNewLine("data/invalid-req-res.log",fmt.Sprintf("URL:%v HASH: %v Header: %v Header: %v  Cache Body:\n %v \n",url,hash,ctx.Request.Header.String(),ctx.Response.Header.String(),string(item)))
-			//
-			//}
-
-			//err:=ctx.Response.Decode(item)
-			//if err!=nil{
-			//	log.Debugf("error to decode response from cache %v - %v",url,err)
-			//	return
-			//}
-
 			ctx.Response.Cached = true
 			ctx.Response.Header.Add("CACHED", "true")
-			ctx.Response.Header.Add("req-header", string(util.EscapeNewLine(ctx.Request.Header.Header())))
 			ctx.Response.SetDestination("cache")
 
 			if global.Env().IsDebug {
@@ -419,9 +368,6 @@ func (filter RequestCacheSet) Name() string {
 }
 
 func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
-	//util.FileAppendNewLine("data/set-hash.log",fmt.Sprintf("%v- %v - %v",string(ctx.Request.Header.Method()),ctx.SequenceID,string(ctx.Request.URI().FullURI())))
-
-
 	method :=  string(ctx.Request.Header.Method())
 	url := string(ctx.RequestURI())
 
@@ -436,19 +382,8 @@ func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
 	hash, ok := ctx.GetString(common.CACHEHASH)
 
 	if !ok {
-		//log.Error("new hash:",hash,",",url)
 		hash = filter.getHash(ctx)
 	}
-
-	ctx.Request.Header.Add("REQ_CASH-Reuse", fmt.Sprintf("%v",ok))
-	ctx.Request.Header.Add("REQ_CASH-HASH", hash)
-
-	//ctx.Response.Header.Add("REQ_CASH-HASH", hash)
-	ctx.Response.Header.Add("SequenceID", util.IntToString(int(ctx.SequenceID)))
-	ctx.Response.Header.Add("ReqURL", string(ctx.RequestURI()))
-
-	//util.FileAppendNewLine("data/url-hash.log",fmt.Sprintf("%v-%v - %v",hash,url,ctx.SequenceID))
-
 
 	//TODO handle status code none 200, should cache status code as well
 	arr,ok:=filter.GetInt64Array("status")
@@ -471,15 +406,7 @@ func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
 
 		var id string
 
-		//buffer := bytesBufferPool.Get().(*bytes.Buffer)
-		ctx.Response.Header.Add("CachedViaURL", string(ctx.RequestURI()))
-
 		cacheBytes := filter.Encode(ctx)
-		//cacheBytes := ctx.Response.Encode()
-
-		//buffer.Reset()
-		//bytesBufferPool.Put(buffer)
-
 
 		if strings.Contains(url, "/_async_search") {
 
