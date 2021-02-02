@@ -244,6 +244,7 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 
 	req.SetRequestURI(loadUrl)
 	req.Header.SetMethod(method)
+	req.Header.SetUserAgent("bulk_indexing")
 
 	if compress {
 		req.Header.Set("Accept-Encoding", "gzip")
