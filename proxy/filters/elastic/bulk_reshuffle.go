@@ -80,6 +80,19 @@ func parseActionMeta(data []byte) ( []byte,[]byte,[]byte) {
 	return action,index,id
 }
 
+func updateJsonWithUUID(scannedByte []byte)(newBytes []byte,id string)  {
+	var meta BulkActionMetadata
+	meta=BulkActionMetadata{}
+	util.FromJSONBytes(scannedByte,&meta)
+	id=util.GetUUID()
+	if meta.Index!=nil{
+		meta.Index.ID=id
+	}else if meta.Create!=nil{
+		meta.Create.ID=id
+	}
+	return util.ToJSONBytes(meta),id
+}
+
 func parseJson(scannedByte []byte)(action []byte,index,id string)  {
 	//use Json
 	var meta BulkActionMetadata
@@ -130,6 +143,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 		reshuffleType:=this.GetStringOrDefault("level","node")
 		submitMode:=this.GetStringOrDefault("mode","sync") //sync and async
+		fixNullID:=this.GetBool("fix_null_id",true) //sync and async
 
 		body:=ctx.Request.GetRawBody()
 
@@ -170,6 +184,18 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 						log.Warn("invalid bulk action:",string(action),",index:",string(indexb),",id:",string(idb),", try json parse")
 						action,index,id=parseJson(scannedByte)
 					}
+				}
+
+				if len(id)==0 && fixNullID {
+					scannedByte,id=updateJsonWithUUID(scannedByte)
+					if global.Env().IsDebug{
+						log.Debug("generated ID,",id,",",string(scannedByte))
+					}
+				}
+
+				if len(action)==0||index==""||id=="" {
+					log.Warn("invalid bulk action:",string(action),",index:",string(index),",id:",string(id))
+					return
 				}
 
 				if  bytes.Equal(action,actionDelete){
