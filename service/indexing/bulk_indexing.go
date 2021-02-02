@@ -16,6 +16,7 @@ import (
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
 	"net/http"
+	"path"
 	"runtime"
 	"sync"
 	"time"
@@ -218,14 +219,17 @@ func (joint BulkIndexingJoint) Bulk(cfg *elastic.ElasticsearchConfig, endpoint s
 		req.SetProxy(cfg.HttpProxy)
 	}
 
-	//_, err := util.ExecuteRequest(req)
-
-	_, err := joint.DoRequest(true, http.MethodPost, url, cfg.BasicAuth.Username, cfg.BasicAuth.Password, data.Bytes(), "")
+	compress:=false
+	_, err := joint.DoRequest(compress, http.MethodPost, url, cfg.BasicAuth.Username, cfg.BasicAuth.Password, data.Bytes(), "")
 
 	//TODO handle error, retry and send to deadlock queue
 
 	if err != nil {
 		log.Error(err)
+		path1:=path.Join(global.Env().GetWorkingDir(),"bulk_failure.log")
+		util.FileAppendNewLineWithByte(path1,[]byte(url))
+		util.FileAppendNewLineWithByte(path1,data.Bytes())
+		util.FileAppendNewLineWithByte(path1,[]byte(err.Error()))
 		return false
 	}
 	return true
@@ -297,7 +301,13 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 	}
 
 	if resp.StatusCode()==400{
-		fmt.Println(string(body))
+		//fmt.Println(string(body))
+		//log.Error(err)
+		path1:=path.Join(global.Env().GetWorkingDir(),"bulk_failure1.log")
+		util.FileAppendNewLineWithByte(path1,[]byte(loadUrl))
+		util.FileAppendNewLineWithByte(path1,body)
+		util.FileAppendNewLineWithByte(path1,resbody)
+		return nil, errors.New("400 error")
 	}
 
 	//TODO check respbody's error
