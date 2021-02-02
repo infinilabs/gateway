@@ -189,7 +189,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				if len(id)==0 && fixNullID {
 					scannedByte,id=updateJsonWithUUID(scannedByte)
 					if global.Env().IsDebug{
-						log.Debug("generated ID,",id,",",string(scannedByte))
+						log.Trace("generated ID,",id,",",string(scannedByte))
 					}
 				}
 
