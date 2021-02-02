@@ -111,7 +111,9 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 
 func (p *ReverseProxy) refreshNodes(force bool) {
 
-	log.Trace("elasticsearch client nodes refreshing")
+	if global.Env().IsDebug{
+		log.Trace("elasticsearch client nodes refreshing")
+	}
 	cfg := p.proxyConfig
 	metadata := elastic.GetMetadata(cfg.Elasticsearch)
 
@@ -131,7 +133,9 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		p.lastNodesTopologyVersion=metadata.NodesTopologyVersion
 
 		if oldV==p.lastNodesTopologyVersion {
-			log.Trace("metadata.NodesTopologyVersion is equal")
+			if global.Env().IsDebug{
+				log.Trace("metadata.NodesTopologyVersion is equal")
+			}
 			return
 		}
 
