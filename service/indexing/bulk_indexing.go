@@ -229,6 +229,7 @@ func (joint BulkIndexingJoint) Bulk(cfg *elastic.ElasticsearchConfig, endpoint s
 		path1:=path.Join(global.Env().GetWorkingDir(),"bulk_failure.log")
 		util.FileAppendNewLineWithByte(path1,[]byte(url))
 		util.FileAppendNewLineWithByte(path1,data.Bytes())
+		util.FileAppendNewLineWithByte(path1,[]byte("error:\n"))
 		util.FileAppendNewLineWithByte(path1,[]byte(err.Error()))
 		return false
 	}
@@ -297,13 +298,11 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 	// Do we need to decompress the response?
 	var resbody =resp.GetRawBody()
 	if global.Env().IsDebug{
-		log.Trace(string(resbody))
+		log.Trace(resp.StatusCode(),string(resbody))
 	}
 
 	if resp.StatusCode()==400{
-		//fmt.Println(string(body))
-		//log.Error(err)
-		path1:=path.Join(global.Env().GetWorkingDir(),"bulk_failure1.log")
+		path1:=path.Join(global.Env().GetWorkingDir(),"bulk_400_failure.log")
 		util.FileAppendNewLineWithByte(path1,[]byte(loadUrl))
 		util.FileAppendNewLineWithByte(path1,body)
 		util.FileAppendNewLineWithByte(path1,resbody)
@@ -312,11 +311,25 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 
 	//TODO check respbody's error
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated {
+
+		//200{"took":2,"errors":true,"items":[
+		if resp.StatusCode()==http.StatusOK{
+			//handle error items
+			//"errors":true
+			hit:=util.LimitedBytesSearch(resbody,[]byte("\"errors\":true"),64)
+			if hit{
+				log.Warnf("elasticsearch bulk error, retried %v times, will try again",retryTimes)
+				retryTimes++
+				delayTime := joint.GetIntOrDefault("retry_delay_in_second", 5)
+				time.Sleep(time.Duration(delayTime)*time.Second)
+				goto DO
+			}
+		}
+
 		return resbody, nil
 	} else if resp.StatusCode()==429 {
 		log.Warnf("elasticsearch rejected, retried %v times, will try again",retryTimes)
 		delayTime := joint.GetIntOrDefault("retry_delay_in_second", 5)
-
 		time.Sleep(time.Duration(delayTime)*time.Second)
 		if retryTimes>300{
 			log.Errorf("elasticsearch rejected, retried %v times, quit retry",retryTimes)
