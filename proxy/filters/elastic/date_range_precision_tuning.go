@@ -44,7 +44,7 @@ func (this DatePrecisionTuning) Process(ctx *fasthttp.RequestCtx) {
 			}
 
 			//TODO get time field from index pattern settings
-			ok := util.ProcessJsonData(&body, []byte("gte"), []byte("strict_date_optional_time"), []byte("range"), true, func(start, end int) {
+			ok := util.ProcessJsonData(&body, []byte("range"), []byte("gte"),false,[]byte("gte"), []byte("}"),128 , func(data []byte,start, end int) {
 				startProcess := false
 				precisionOffset := 0
 				matchCount:=0

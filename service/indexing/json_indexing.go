@@ -145,12 +145,16 @@ READ_DOCS:
 			(*count)++
 
 			if mainBuf.Len() > (bulkSizeInMB) {
-				log.Trace("hit buffer size, ", mainBuf.Len())
+				if global.Env().IsDebug {
+					log.Trace("hit buffer size, ", mainBuf.Len())
+				}
 				goto CLEAN_BUFFER
 			}
 
 		case <-idleTimeout.C:
-			log.Tracef("%v no message input", idleDuration)
+			if global.Env().IsDebug{
+				log.Tracef("%v no message input", idleDuration)
+			}
 			goto CLEAN_BUFFER
 		}
 

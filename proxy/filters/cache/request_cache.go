@@ -291,6 +291,7 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 			Decode(item, &ctx.Response)
 			ctx.Response.Cached = true
 			ctx.Response.Header.Add("CACHED", "true")
+			ctx.Response.Header.Add("CACHE-HASH", hash)
 			ctx.Response.SetDestination("cache")
 
 			if global.Env().IsDebug {

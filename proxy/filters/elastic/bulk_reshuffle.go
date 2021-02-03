@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"infini.sh/framework/core/elastic"
+	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/util"
@@ -79,6 +80,19 @@ func parseActionMeta(data []byte) ( []byte,[]byte,[]byte) {
 	return action,index,id
 }
 
+func updateJsonWithUUID(scannedByte []byte)(newBytes []byte,id string)  {
+	var meta BulkActionMetadata
+	meta=BulkActionMetadata{}
+	util.FromJSONBytes(scannedByte,&meta)
+	id=util.GetUUID()
+	if meta.Index!=nil{
+		meta.Index.ID=id
+	}else if meta.Create!=nil{
+		meta.Create.ID=id
+	}
+	return util.ToJSONBytes(meta),id
+}
+
 func parseJson(scannedByte []byte)(action []byte,index,id string)  {
 	//use Json
 	var meta BulkActionMetadata
@@ -129,6 +143,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 		reshuffleType:=this.GetStringOrDefault("level","node")
 		submitMode:=this.GetStringOrDefault("mode","sync") //sync and async
+		fixNullID:=this.GetBool("fix_null_id",true) //sync and async
 
 		body:=ctx.Request.GetRawBody()
 
@@ -171,6 +186,18 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					}
 				}
 
+				if len(id)==0 && fixNullID {
+					scannedByte,id=updateJsonWithUUID(scannedByte)
+					if global.Env().IsDebug{
+						log.Trace("generated ID,",id,",",string(scannedByte))
+					}
+				}
+
+				if len(action)==0||index==""||id=="" {
+					log.Warn("invalid bulk action:",string(action),",index:",string(index),",id:",string(id))
+					return
+				}
+
 				if  bytes.Equal(action,actionDelete){
 					//check metadata, if not delete, then is Meta is false
 					nextIsMeta =true
@@ -180,10 +207,50 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 				if !ok{
 					metadata=elastic.GetMetadata(clusterName)
+					if global.Env().IsDebug{
+						log.Trace("index was not found in index settings,",index,",",string(scannedByte))
+					}
+					alias,ok:=metadata.Aliases[index]
+					if ok{
+						if global.Env().IsDebug{
+							log.Trace("found index in alias settings,",index,",",string(scannedByte))
+						}
+						newIndex:=alias.WriteIndex
+						if alias.WriteIndex==""{
+							if len(alias.Index)==1{
+								newIndex=alias.Index[0]
+								if global.Env().IsDebug{
+									log.Trace("found index in alias settings, no write_index, but only have one index, will use it,",index,",",string(scannedByte))
+								}
+							}else{
+								log.Warn("writer_index was not found in alias settings,",index,",",alias)
+								return
+							}
+						}
+						indexSettings,ok=metadata.Indices[newIndex]
+						if ok{
+							if global.Env().IsDebug{
+								log.Trace("index was found in index settings,",index,"=>",newIndex,",",string(scannedByte),",",indexSettings)
+							}
+							index=newIndex
+							goto CONTINUE_RESHUFFLE
+						}else{
+							if global.Env().IsDebug{
+								log.Trace("writer_index was not found in index settings,",index,",",string(scannedByte))
+							}
+						}
+					}else{
+						if global.Env().IsDebug{
+							log.Trace("index was not found in alias settings,",index,",",string(scannedByte))
+						}
+					}
+
 					//fmt.Println(util.ToJson(metadata.Indices,true))
 					log.Warn("index setting not found,",index,",",string(scannedByte))
 					return
 				}
+
+				CONTINUE_RESHUFFLE:
 
 				if indexSettings.Shards!=1{
 					//如果 shards=1，则直接找主分片所在节点，否则计算一下。
@@ -197,6 +264,11 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				}
 
 				shardInfo:=metadata.GetPrimaryShardInfo(index,shardID)
+				if shardInfo==nil{
+					log.Warn("shardInfo was not found,",index,",",shardID)
+					return
+				}
+
 				//write meta
 				bufferKey:=common.GetNodeLevelShuffleKey(clusterName,shardInfo.NodeID)
 				if reshuffleType=="shard"{
