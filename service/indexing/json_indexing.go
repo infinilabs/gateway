@@ -105,7 +105,7 @@ func (joint JsonIndexingJoint) NewBulkWorker(count *int, bulkSizeInMB int, wg *s
 	docBuf := bytes.Buffer{}
 
 	destIndex := joint.GetStringOrDefault("index_name", "")
-	destType := joint.GetStringOrDefault("index_type", "_doc")
+	destType := joint.GetStringOrDefault("index_type", "")
 	esInstanceVal := joint.GetStringOrDefault("elasticsearch", "es_json_bulk")
 
 	timeOut := joint.GetIntOrDefault("idle_timeout_in_second", 5)
@@ -114,6 +114,14 @@ func (joint JsonIndexingJoint) NewBulkWorker(count *int, bulkSizeInMB int, wg *s
 	defer idleTimeout.Stop()
 
 	client := elastic.GetClient(esInstanceVal)
+
+	if destType==""{
+		if client.GetMajorVersion()<7{
+			destType="doc"
+		}else{
+			destType="_doc"
+		}
+	}
 
 READ_DOCS:
 	for {
