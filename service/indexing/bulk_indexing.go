@@ -225,7 +225,6 @@ func (joint BulkIndexingJoint) Bulk(cfg *elastic.ElasticsearchConfig, endpoint s
 	//TODO handle error, retry and send to deadlock queue
 
 	if err != nil {
-		log.Error(err)
 		path1:=path.Join(global.Env().GetWorkingDir(),"bulk_failure.log")
 		util.FileAppendNewLineWithByte(path1,[]byte(url))
 		util.FileAppendNewLineWithByte(path1,data.Bytes())
