@@ -296,13 +296,27 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 	}
 
 	if resp.StatusCode()==400{
-		path1:=path.Join(global.Env().GetWorkingDir(),"bulk_400_failure.log")
-		util.FileAppendNewLineWithByte(path1,[]byte("URL:"))
-		util.FileAppendNewLineWithByte(path1,[]byte(loadUrl))
-		util.FileAppendNewLineWithByte(path1,[]byte("Request:"))
-		util.FileAppendNewLineWithByte(path1,body[:10240])
-		util.FileAppendNewLineWithByte(path1,[]byte("Response:"))
-		util.FileAppendNewLineWithByte(path1,resbody[:10240])
+
+		if joint.GetBool("log_bulk_message",true) {
+			path1 := path.Join(global.Env().GetWorkingDir(), "bulk_400_failure.log")
+			truncateSize := joint.GetIntOrDefault("error_message_truncate_size", -1)
+			util.FileAppendNewLineWithByte(path1, []byte("URL:"))
+			util.FileAppendNewLineWithByte(path1, []byte(loadUrl))
+			util.FileAppendNewLineWithByte(path1, []byte("Request:"))
+			reqBody:=body
+			resBody1:=resbody
+			if truncateSize>0{
+				if len(body)>truncateSize{
+					reqBody=body[:truncateSize]
+				}
+				if len(body)>truncateSize{
+					resBody1=resBody1[:truncateSize]
+				}
+			}
+			util.FileAppendNewLineWithByte(path1,reqBody )
+			util.FileAppendNewLineWithByte(path1, []byte("Response:"))
+			util.FileAppendNewLineWithByte(path1, resBody1)
+		}
 		return nil, errors.New("400 error")
 	}
 
@@ -315,16 +329,30 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 			//"errors":true
 			hit:=util.LimitedBytesSearch(resbody,[]byte("\"errors\":true"),64)
 			if hit{
+				if joint.GetBool("log_bulk_message",true) {
+					path1 := path.Join(global.Env().GetWorkingDir(), "bulk_req_failure.log")
+					truncateSize := joint.GetIntOrDefault("error_message_truncate_size", -1)
+					util.FileAppendNewLineWithByte(path1, []byte("URL:"))
+					util.FileAppendNewLineWithByte(path1, []byte(loadUrl))
+					util.FileAppendNewLineWithByte(path1, []byte("Request:"))
+					reqBody:=body
+					resBody1:=resbody
+					if truncateSize>0{
+						if len(body)>truncateSize{
+							reqBody=body[:truncateSize]
+						}
+						if len(body)>truncateSize{
+							resBody1=resBody1[:truncateSize]
+						}
+					}
+					util.FileAppendNewLineWithByte(path1,reqBody )
+					util.FileAppendNewLineWithByte(path1, []byte("Response:"))
+					util.FileAppendNewLineWithByte(path1, resBody1)
+				}
+				if joint.GetBool("warm_retry_message",true){
+					log.Warnf("elasticsearch bulk error, retried %v times, will try again",retryTimes)
+				}
 
-				path1:=path.Join(global.Env().GetWorkingDir(),"bulk_req_failure.log")
-				util.FileAppendNewLineWithByte(path1,[]byte("URL:"))
-				util.FileAppendNewLineWithByte(path1,[]byte(loadUrl))
-				util.FileAppendNewLineWithByte(path1,[]byte("Request:"))
-				util.FileAppendNewLineWithByte(path1,body[:10240])
-				util.FileAppendNewLineWithByte(path1,[]byte("Response:"))
-				util.FileAppendNewLineWithByte(path1,resbody[:10240])
-
-				log.Warnf("elasticsearch bulk error, retried %v times, will try again",retryTimes)
 				retryTimes++
 				delayTime := joint.GetIntOrDefault("retry_delay_in_second", 5)
 				time.Sleep(time.Duration(delayTime)*time.Second)
@@ -338,19 +366,35 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 		delayTime := joint.GetIntOrDefault("retry_delay_in_second", 5)
 		time.Sleep(time.Duration(delayTime)*time.Second)
 		if retryTimes>300{
-			log.Errorf("elasticsearch rejected, retried %v times, quit retry",retryTimes)
+			if joint.GetBool("warm_retry_message",true){
+				log.Errorf("elasticsearch rejected, retried %v times, quit retry",retryTimes)
+			}
 			return resbody,errors.New("elasticsearch rejected")
 		}
 		retryTimes++
 		goto DO
 	}else {
-		path1:=path.Join(global.Env().GetWorkingDir(),"bulk_error_failure.log")
-		util.FileAppendNewLineWithByte(path1,[]byte("URL:"))
-		util.FileAppendNewLineWithByte(path1,[]byte(loadUrl))
-		util.FileAppendNewLineWithByte(path1,[]byte("Request:"))
-		util.FileAppendNewLineWithByte(path1,body[:10240])
-		util.FileAppendNewLineWithByte(path1,[]byte("Response:"))
-		util.FileAppendNewLineWithByte(path1,resbody[:10240])
+		if joint.GetBool("log_bulk_message",true){
+			path1:=path.Join(global.Env().GetWorkingDir(),"bulk_error_failure.log")
+			truncateSize := joint.GetIntOrDefault("error_message_truncate_size", -1)
+			util.FileAppendNewLineWithByte(path1, []byte("URL:"))
+			util.FileAppendNewLineWithByte(path1, []byte(loadUrl))
+			util.FileAppendNewLineWithByte(path1, []byte("Request:"))
+			reqBody:=body
+			resBody1:=resbody
+			if truncateSize>0{
+				if len(body)>truncateSize{
+					reqBody=body[:truncateSize]
+				}
+				if len(body)>truncateSize{
+					resBody1=resBody1[:truncateSize]
+				}
+			}
+			util.FileAppendNewLineWithByte(path1,reqBody )
+			util.FileAppendNewLineWithByte(path1, []byte("Response:"))
+			util.FileAppendNewLineWithByte(path1, resBody1)
+		}
+
 		return resbody,errors.Errorf("invalid bulk response, %v",string(resbody))
 	}
 
