@@ -312,6 +312,12 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 			//"errors":true
 			hit:=util.LimitedBytesSearch(resbody,[]byte("\"errors\":true"),64)
 			if hit{
+
+				path1:=path.Join(global.Env().GetWorkingDir(),"bulk_req_failure.log")
+				util.FileAppendNewLineWithByte(path1,[]byte(loadUrl))
+				util.FileAppendNewLineWithByte(path1,body)
+				util.FileAppendNewLineWithByte(path1,resbody)
+
 				log.Warnf("elasticsearch bulk error, retried %v times, will try again",retryTimes)
 				retryTimes++
 				delayTime := joint.GetIntOrDefault("retry_delay_in_second", 5)
