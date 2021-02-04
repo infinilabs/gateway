@@ -337,6 +337,10 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 		retryTimes++
 		goto DO
 	}else {
+		path1:=path.Join(global.Env().GetWorkingDir(),"bulk_error_failure.log")
+		util.FileAppendNewLineWithByte(path1,[]byte(loadUrl))
+		util.FileAppendNewLineWithByte(path1,body)
+		util.FileAppendNewLineWithByte(path1,resbody)
 		return resbody,errors.Errorf("invalid bulk response, %v",string(resbody))
 	}
 
