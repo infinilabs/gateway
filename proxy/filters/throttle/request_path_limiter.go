@@ -88,7 +88,10 @@ func (filter RateLimitFilter) Process(ctx *fasthttp.RequestCtx) {
 		inited=true
 	}
 
-	rules:=filter.Get("rules_obj").([]MatchRules)
+	rules,ok:=filter.Get("rules_obj").([]MatchRules)
+	if !ok{
+		return
+	}
 
 
 	key:=string(ctx.Path())
