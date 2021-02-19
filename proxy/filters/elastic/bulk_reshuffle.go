@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
@@ -11,10 +12,11 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
-	log "github.com/cihub/seelog"
 	"strings"
 	"sync"
 )
+
+var JSON_CONTENT_TYPE = "application/json"
 
 type BulkReshuffle struct {
 	param.Parameters
@@ -309,6 +311,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 			bufferPool.Put(y)
 		}
 
+		ctx.SetContentType(JSON_CONTENT_TYPE)
 		ctx.WriteString("{\n  \"took\" : 0,\n  \"errors\" : false,\n  \"items\" : []\n}")
 		ctx.Response.SetStatusCode(200)
 		ctx.Finished()
