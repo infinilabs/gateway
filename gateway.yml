@@ -169,8 +169,8 @@ pipelines:
 
 queue:
   min_msg_size: 1
-  max_msg_size: 5000000000
-  max_bytes_per_file: 53687091200
+  max_msg_size: 1000000000
+  max_bytes_per_file: 1073741824
   sync_every_records: 100000 # sync by records count
   sync_timeout_in_ms: 1000 # sync by time in million seconds
   write_chan_buffer: 100000
