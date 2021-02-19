@@ -1,16 +1,15 @@
 path.data: data
 path.logs: log
 
+#log.level: trace
+#log.debug: true
+
 entry:
-  - name: es_gateway #your gateway endpoint
+  - name: my_es_entry
     enabled: true
-    router: default
-    max_concurrency: 100000
+    router: my_router
     network:
       binding: 0.0.0.0:8000
-      reuse_port: true #you can start multi gateway instance, they share same port, to full utilize system's resources
-#    tls:
-#      enabled: true #if your es is using https, the gateway entrypoint should enable https too
 
 flow:
   - name: cache_first
@@ -37,43 +36,18 @@ flow:
           balancer: weight
           refresh: # refresh upstream nodes list, need to enable this feature to use elasticsearch nodes auto discovery
             enabled: true
-            interval: 30s
-#          weights: #overwride host's weight, the default weight is 1
-#            - host: 192.168.3.201:9200 #the format is host:port
-#              weight: 10
-#            - host: 192.168.3.202:9200
-#              weight: 20
-#            - host: 192.168.3.203:9200
-#              weight: 30
-#          filter:
-#            hosts:
-#              exclude: #exclude mode, you may need to filter out master nodes
-#                - 192.168.3.201:9200
-#              include: #specify endpoints to use, in case of that you may only want to forward traffic to coordinating nodes
-#                - 192.168.3.202:9200
-#                - 192.168.3.203:9200
-#            tags:
-#              exclude:
-#                - temp: cold
-#                - temp: hot
-#                - temp: warm
-#              include:
-#                - disk: sd
-#                - disk: sata
-#                - disk: ssd
-#            roles: # "data","ingest","master","ml","remote_cluster_client","transform"
-#              exclude:
-#                - master
-#              include:
-#                - data
-#                - ingest
-      - name: response_body_regex_replace
-        parameters:
-          pattern: '"took":\d+,'
-          to: '"took":123,'
+            interval: 60s
+          filter:
+            roles:
+              exclude:
+                - master
+#      - name: response_body_regex_replace
+#        parameters:
+#          pattern: '"took":\d+,'
+#          to: '"took":123,'
       - name: set_cache
         parameters:
-          cache_ttl: 60s
+          cache_ttl: 10s
   - name: online_indexing_merge
     filter:
       - name: bulk_reshuffle
@@ -95,9 +69,9 @@ flow:
           max_request_body_size: 1024
           max_response_body_size: 1024
 router:
-  - name: default
-    tracing_flow: request_logging
+  - name: my_router
     default_flow: cache_first
+    tracing_flow: request_logging
     rules:
       - method:
           - "POST"
@@ -116,7 +90,7 @@ elasticsearch:
     enabled: true
     refresh:
       enabled: true
-      interval: 30s
+      interval: 60s
 
 modules:
 - name: elastic
@@ -141,7 +115,7 @@ modules:
       pipeline_id: request_logging_index
     - name: nodes_index
       enabled: true
-      max_go_routine: 1
+      max_go_routine: 20
       threshold_in_ms: 0
       timeout_in_ms: 5000
       pipeline_id: bulk_request_ingest
@@ -166,15 +140,32 @@ pipelines:
     parameters:
       elasticsearch: "dev"
       timeout: "5s"
-      worker_size: 1
-      bulk_size_in_kb: 1  #in KB
-      retry_delay_in_second: 1
+      worker_size: 20
+      bulk_size_in_mb: 10  #in MB
+#      bulk_size_in_kb: 20  #in KB
+      retry_delay_in_second: 5
+      warm_retry_message: false
+      log_bulk_message: false
+#      error_message_truncate_size: 1024
 
 #floating_ip:
 #  enabled: true
 #  ip: 192.168.3.234      #yep, it's optional, infini-gateway could detect one but maybe not the right one
 ##  netmask: 255.255.255.0 #optional
 ##  interface: en1         #optional
+#statsd:
+#  enabled: false
+#  host: 192.168.3.98
+#  port: 8125
+#  namespace: gateway.
+#forcemerge:
+#  enabled: false
+#  elasticsearch: dev
+#  min_num_segments: 1
+#  max_num_segments: 1
+#  indices:
+#    - index_name
+
 
 queue:
   min_msg_size: 1
@@ -182,20 +173,5 @@ queue:
   max_bytes_per_file: 53687091200
   sync_every_records: 100000 # sync by records count
   sync_timeout_in_ms: 1000 # sync by time in million seconds
-  write_chan_buffer: 1000
-  read_chan_buffer: 1000
-
-statsd:
-  enabled: false
-  host: 192.168.3.98
-  port: 8125
-  namespace: gateway.
-
-
-forcemerge:
-  enabled: false
-  elasticsearch: dev
-  min_num_segments: 1
-  max_num_segments: 1
-  indices:
-    - index_name
+  write_chan_buffer: 100000
+  read_chan_buffer: 100000
