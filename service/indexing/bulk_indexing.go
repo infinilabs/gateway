@@ -136,7 +136,7 @@ func (joint BulkIndexingJoint) NewBulkWorker(count *int, bulkSizeInByte int, wg 
 		}
 	}()
 
-	log.Debug("start worker:", queueName)
+	log.Debug("start worker:", queueName,", endpoint:",endpoint)
 
 	mainBuf := bytes.Buffer{}
 	esInstanceVal := joint.MustGetString("elasticsearch")
