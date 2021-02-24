@@ -51,7 +51,7 @@ func Broadcast(config config.NetworkConfig, req *Request) {
 		return
 	}
 
-	payload := util.ToJSONBytes(req)
+	payload := util.MustToJSONBytes(req)
 
 	_,err=c.Write(payload)
 	if err != nil {

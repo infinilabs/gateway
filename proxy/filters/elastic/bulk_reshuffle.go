@@ -85,21 +85,21 @@ func parseActionMeta(data []byte) ( []byte,[]byte,[]byte) {
 func updateJsonWithUUID(scannedByte []byte)(newBytes []byte,id string)  {
 	var meta BulkActionMetadata
 	meta=BulkActionMetadata{}
-	util.FromJSONBytes(scannedByte,&meta)
+	util.MustFromJSONBytes(scannedByte,&meta)
 	id=util.GetUUID()
 	if meta.Index!=nil{
 		meta.Index.ID=id
 	}else if meta.Create!=nil{
 		meta.Create.ID=id
 	}
-	return util.ToJSONBytes(meta),id
+	return util.MustToJSONBytes(meta),id
 }
 
 func parseJson(scannedByte []byte)(action []byte,index,id string)  {
 	//use Json
 	var meta BulkActionMetadata
 	meta=BulkActionMetadata{}
-	util.FromJSONBytes(scannedByte,&meta)
+	util.MustFromJSONBytes(scannedByte,&meta)
 
 	if meta.Index!=nil{
 		index=meta.Index.Index

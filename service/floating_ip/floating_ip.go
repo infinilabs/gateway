@@ -322,7 +322,7 @@ func (module FloatingIPPlugin) Start() error {
 		//我是 master，忽略
 		v := Request{}
 
-		util.FromJSONBytes(bytes[:n], &v)
+		util.MustFromJSONBytes(bytes[:n], &v)
 
 		log.Tracef("received multicast message: %v", util.ToJson(v, false))
 

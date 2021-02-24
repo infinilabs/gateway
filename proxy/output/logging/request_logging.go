@@ -219,7 +219,7 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 	//if false {
 	//	data := w.Bytes()
 	//	v := model.HttpRequest{}
-	//	util.FromJSONBytes(data, &v)
+	//	util.MustFromJSONBytes(data, &v)
 	//}
 
 	//var json = jsoniter.ConfigCompatibleWithStandardLibrary
