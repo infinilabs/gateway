@@ -130,17 +130,19 @@ func parseJson(scannedByte []byte)(action []byte,index,id string)  {
 }
 
 var versions= map[string]int{}
+var versionLock=sync.Mutex{}
 
 func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 	ctx.Set(common.CACHEABLE, false)
 
 	clusterName:=this.MustGetString("elasticsearch")
-
 	esMajorVersion,ok:=versions[clusterName]
 	if !ok{
+		versionLock.Lock()
 		esMajorVersion:=elastic.GetClient(clusterName).GetMajorVersion()
 		versions[clusterName]=esMajorVersion
+		versionLock.Unlock()
 	}
 
 	metadata:=elastic.GetMetadata(clusterName)
