@@ -1,6 +1,7 @@
 package indexing
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/tls"
 	"fmt"
@@ -69,6 +70,7 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 	bulkSizeInKB, _ := joint.GetInt("bulk_size_in_kb", 0)
 	bulkSizeInMB, _ := joint.GetInt("bulk_size_in_mb", 10)
 	elasticsearch := joint.GetStringOrDefault("elasticsearch", "default")
+	enabledShards,checkShards := joint.GetStringArray("shards")
 	bulkSizeInByte:= 1048576 * bulkSizeInMB
 	if bulkSizeInKB>0{
 		bulkSizeInByte= 1024 * bulkSizeInKB
@@ -92,7 +94,21 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 			for i := 0; i < indexSettings.Shards; i++ {
 				queueName := common.GetShardLevelShuffleKey(esInstanceVal, v, i)
 				shardInfo := meta.GetPrimaryShardInfo(v, i)
+
+				if checkShards && len(enabledShards)>0{
+					if !util.ContainsAnyInArray(shardInfo.ShardID,enabledShards){
+						log.Debugf("%s-%s not enabled, skip processing",shardInfo.Index,shardInfo.ShardID)
+						continue
+					}
+				}
+
+
 				nodeInfo := meta.GetNodeInfo(shardInfo.NodeID)
+
+				if global.Env().IsDebug{
+					log.Debug(shardInfo.Index,",",shardInfo.ShardID,",",nodeInfo.Http.PublishAddress)
+				}
+
 				for i := 0; i < workers; i++ {
 					wg.Add(1)
 					go joint.NewBulkWorker(&totalSize, bulkSizeInByte, &wg, queueName, nodeInfo.Http.PublishAddress)
@@ -105,6 +121,11 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 		}
 		for k, v := range meta.Nodes {
 			queueName := common.GetNodeLevelShuffleKey(esInstanceVal, k)
+
+			if global.Env().IsDebug{
+				log.Debug(k,",",v.Http.PublishAddress)
+			}
+
 			for i := 0; i < workers; i++ {
 				wg.Add(1)
 				go joint.NewBulkWorker(&totalSize, bulkSizeInByte, &wg, queueName, v.Http.PublishAddress)
@@ -218,8 +239,7 @@ func (joint BulkIndexingJoint) Bulk(cfg *elastic.ElasticsearchConfig, endpoint s
 	if cfg.HttpProxy != "" {
 		req.SetProxy(cfg.HttpProxy)
 	}
-
-	compress:=false
+	compress := joint.GetBool("compress",false)
 	_, err := joint.DoRequest(compress, http.MethodPost, url, cfg.BasicAuth.Username, cfg.BasicAuth.Password, data.Bytes(), "")
 
 	//TODO handle error, retry and send to deadlock queue
@@ -264,7 +284,11 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 				panic(err)
 			}
 		} else {
-			req.SetBody(body)
+			//req.SetBody(body)
+			req.SetBodyStreamWriter(func(w *bufio.Writer) {
+				w.Write(body)
+				w.Flush()
+			})
 
 		}
 	}
@@ -384,10 +408,10 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 			resBody1:=resbody
 			if truncateSize>0{
 				if len(body)>truncateSize{
-					reqBody=body[:truncateSize]
+					reqBody=body[:truncateSize-1]
 				}
-				if len(body)>truncateSize{
-					resBody1=resBody1[:truncateSize]
+				if len(resBody1)>truncateSize{
+					resBody1=resBody1[:truncateSize-1]
 				}
 			}
 			util.FileAppendNewLineWithByte(path1,reqBody )
