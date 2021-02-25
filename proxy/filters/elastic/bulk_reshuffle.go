@@ -66,20 +66,27 @@ var actionStart=[]byte("\"")
 var actionEnd=[]byte("\"")
 
 var indexStart=[]byte("\"_index\"")
-var indexEnd=[]byte("\",")
+var indexEnd=[]byte("\"")
 
 var filteredFromValue=[]byte(": \"")
 
 var idStart=[]byte("\"_id\"")
-var idEnd=[]byte("}")
+var idEnd=[]byte("\"")
 
 func parseActionMeta(data []byte) ( []byte,[]byte,[]byte) {
 
 	action:=util.ExtractFieldFromBytes(&data,actionStart,actionEnd,nil)
-	index:=util.ExtractFieldFromBytes(&data,indexStart,indexEnd,filteredFromValue)
-	id:=util.ExtractFieldFromBytes(&data,idStart,idEnd,filteredFromValue)
+	index:=util.ExtractFieldFromBytesWitSkipBytes(&data,indexStart,[]byte("\""),indexEnd,filteredFromValue)
+	id:=util.ExtractFieldFromBytesWitSkipBytes(&data,idStart,[]byte("\""),idEnd,filteredFromValue)
 
 	return action,index,id
+}
+
+//"_index":"test" => "_index":"test", "_id":"id"
+func insertUUID(scannedByte []byte)(newBytes []byte,id string)   {
+	id=util.GetUUID()
+	newData:=util.InsertBytesAfterField(&scannedByte,[]byte("\"_index\""),[]byte("\""),[]byte("\""),[]byte(",\"_id\":\""+id+"\""))
+	return newData,id
 }
 
 func updateJsonWithUUID(scannedByte []byte)(newBytes []byte,id string)  {
@@ -122,11 +129,20 @@ func parseJson(scannedByte []byte)(action []byte,index,id string)  {
 	return action,index,id
 }
 
+var versions= map[string]int{}
+
 func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 	ctx.Set(common.CACHEABLE, false)
 
 	clusterName:=this.MustGetString("elasticsearch")
+
+	esMajorVersion,ok:=versions[clusterName]
+	if !ok{
+		esMajorVersion:=elastic.GetClient(clusterName).GetMajorVersion()
+		versions[clusterName]=esMajorVersion
+	}
+
 	metadata:=elastic.GetMetadata(clusterName)
 	if metadata==nil{
 		log.Warnf("elasticsearch [%v] metadata is nil, skip reshuffle",clusterName)
@@ -143,6 +159,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 	//需要拆解 bulk 请求，重新封装
 	if util.PrefixStr(path,"/_bulk"){
 
+		safetyParse:=this.GetBool("safety_parse",false)
 		reshuffleType:=this.GetStringOrDefault("level","node")
 		submitMode:=this.GetStringOrDefault("mode","sync") //sync and async
 		fixNullID:=this.GetBool("fix_null_id",true) //sync and async
@@ -169,7 +186,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				var id string
 				var action []byte
 
-				if true{
+				if safetyParse{
 					//parse with json
 					action,index,id=parseJson(scannedByte)
 				}else{
@@ -182,14 +199,18 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					index=string(indexb)
 					id=string(idb)
 
-					if len(action)==0||index==""||id==""{
-						log.Warn("invalid bulk action:",string(action),",index:",string(indexb),",id:",string(idb),", try json parse")
+					if len(action)==0||index==""{
+						log.Warn("invalid bulk action:",string(action),",index:",string(indexb),",id:",string(idb),", try json parse:",string(scannedByte))
 						action,index,id=parseJson(scannedByte)
 					}
 				}
 
-				if len(id)==0 && fixNullID {
-					scannedByte,id=updateJsonWithUUID(scannedByte)
+				if (bytes.Equal(action,[]byte("index"))||bytes.Equal(action,[]byte("create")))&&len(id)==0 && fixNullID {
+					if safetyParse{
+						scannedByte,id=updateJsonWithUUID(scannedByte)
+					}else{
+						scannedByte,id=insertUUID(scannedByte)
+					}
 					if global.Env().IsDebug{
 						log.Trace("generated ID,",id,",",string(scannedByte))
 					}
@@ -256,7 +277,11 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 				if indexSettings.Shards!=1{
 					//如果 shards=1，则直接找主分片所在节点，否则计算一下。
-					shardID=elastic.GetShardID([]byte(id),indexSettings.Shards)
+					shardID=elastic.GetShardID(esMajorVersion,[]byte(id),indexSettings.Shards)
+
+					if global.Env().IsDebug{
+						log.Tracef("%s/%s => %v",index,id,shardID)
+					}
 
 					//shardsInfo:=metadata.GetPrimaryShardInfo(index,shardID)
 					//nodeInfo:=metadata.GetNodeInfo(shardsInfo.NodeID)
@@ -277,6 +302,10 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					bufferKey=common.GetShardLevelShuffleKey(clusterName,index,shardID)
 				}
 
+				if global.Env().IsDebug{
+					log.Tracef("%s/%s => %v , %v",index,id,shardID,bufferKey)
+				}
+
 				buff,ok=docBuf[bufferKey]
 				if!ok{
 					buff=bufferPool.Get().(*bytes.Buffer)
@@ -284,12 +313,18 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					docBuf[bufferKey]=buff
 				}
 				buff.Write(scannedByte)
+				if global.Env().IsDebug{
+					log.Trace("metadata:",string(scannedByte))
+				}
 				buff.WriteString("\n")
 
 			}else{
 				nextIsMeta =true
 				//handle request body
 				buff.Write(scannedByte)
+				if global.Env().IsDebug{
+					log.Trace("data:",string(scannedByte))
+				}
 				buff.WriteString("\n")
 			}
 		}
