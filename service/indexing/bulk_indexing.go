@@ -202,8 +202,12 @@ READ_DOCS:
 
 			if !success{
 				queue.Push(queueName,mainBuf.Bytes())
+				if global.Env().IsDebug{
+					log.Warn("re-enqueue bulk messages")
+				}
+				stats.IncrementBy("bulk", "bytes_processed_failed", int64(mainBuf.Len()))
 			}else{
-				stats.IncrementBy("bulk", "bytes_processed", int64(mainBuf.Len()))
+				stats.IncrementBy("bulk", "bytes_processed_success", int64(mainBuf.Len()))
 			}
 
 			mainBuf.Reset()
@@ -228,41 +232,16 @@ func (joint BulkIndexingJoint) Bulk(cfg *elastic.ElasticsearchConfig, endpoint s
 		endpoint = "http://" + endpoint
 	}
 	url := fmt.Sprintf("%s/_bulk", endpoint)
-	req := util.NewPostRequest(url, data.Bytes())
-
-	req.SetContentType(util.ContentTypeJson)
-
-	if cfg.BasicAuth != nil {
-		req.SetBasicAuth(cfg.BasicAuth.Username, cfg.BasicAuth.Password)
-	}
-
-	if cfg.HttpProxy != "" {
-		req.SetProxy(cfg.HttpProxy)
-	}
 	compress := joint.GetBool("compress",false)
-	_, err := joint.DoRequest(compress, http.MethodPost, url, cfg.BasicAuth.Username, cfg.BasicAuth.Password, data.Bytes(), "")
 
-	//TODO handle error, retry and send to deadlock queue
-
-	if err != nil {
-		return false
-	}
-	return true
-}
-
-var fastHttpClient = &fasthttp.Client{
-	TLSConfig: &tls.Config{InsecureSkipVerify: true},
-}
-
-func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl string, user, password string, body []byte, proxy string) ([]byte, error) {
 	req := fasthttp.AcquireRequest()
 	req.Reset()
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseRequest(req)   // <- do not forget to release
 	defer fasthttp.ReleaseResponse(resp) // <- do not forget to release
 
-	req.SetRequestURI(loadUrl)
-	req.Header.SetMethod(method)
+	req.SetRequestURI(url)
+	req.Header.SetMethod(http.MethodPost)
 	req.Header.SetUserAgent("bulk_indexing")
 
 	if compress {
@@ -272,21 +251,21 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 
 	req.Header.SetContentType("application/json")
 
-	if user != "nil" {
-		req.URI().SetUsername(user)
-		req.URI().SetPassword(password)
+	if cfg.BasicAuth != nil{
+		req.URI().SetUsername(cfg.BasicAuth.Username)
+		req.URI().SetPassword(cfg.BasicAuth.Password)
 	}
 
-	if len(body) > 0 {
+	if data.Len() > 0 {
 		if compress {
-			_, err := fasthttp.WriteGzipLevel(req.BodyWriter(), body, fasthttp.CompressBestSpeed)
+			_, err := fasthttp.WriteGzipLevel(req.BodyWriter(), data.Bytes(), fasthttp.CompressBestSpeed)
 			if err != nil {
 				panic(err)
 			}
 		} else {
 			//req.SetBody(body)
 			req.SetBodyStreamWriter(func(w *bufio.Writer) {
-				w.Write(body)
+				w.Write(data.Bytes())
 				w.Flush()
 			})
 
@@ -294,7 +273,7 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 	}
 	retryTimes:=0
 
-	DO:
+DO:
 
 	err := fastHttpClient.Do(req, resp)
 
@@ -302,14 +281,14 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 		if global.Env().IsDebug{
 			log.Error(err)
 		}
-		return nil, err
+		return false
 	}
 
 	if resp == nil {
 		if global.Env().IsDebug{
 			log.Error(err)
 		}
-		return nil, err
+		return false
 	}
 
 
@@ -325,15 +304,15 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 			path1 := path.Join(global.Env().GetWorkingDir(), "bulk_400_failure.log")
 			truncateSize := joint.GetIntOrDefault("error_message_truncate_size", -1)
 			util.FileAppendNewLineWithByte(path1, []byte("URL:"))
-			util.FileAppendNewLineWithByte(path1, []byte(loadUrl))
+			util.FileAppendNewLineWithByte(path1, []byte(url))
 			util.FileAppendNewLineWithByte(path1, []byte("Request:"))
-			reqBody:=body
+			reqBody:=data.Bytes()
 			resBody1:=resbody
 			if truncateSize>0{
-				if len(body)>truncateSize{
-					reqBody=body[:truncateSize]
+				if len(reqBody)>truncateSize{
+					reqBody=reqBody[:truncateSize]
 				}
-				if len(body)>truncateSize{
+				if len(resBody1)>truncateSize{
 					resBody1=resBody1[:truncateSize]
 				}
 			}
@@ -341,7 +320,7 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 			util.FileAppendNewLineWithByte(path1, []byte("Response:"))
 			util.FileAppendNewLineWithByte(path1, resBody1)
 		}
-		return nil, errors.New("400 error")
+		return false
 	}
 
 	//TODO check respbody's error
@@ -357,15 +336,15 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 					path1 := path.Join(global.Env().GetWorkingDir(), "bulk_req_failure.log")
 					truncateSize := joint.GetIntOrDefault("error_message_truncate_size", -1)
 					util.FileAppendNewLineWithByte(path1, []byte("URL:"))
-					util.FileAppendNewLineWithByte(path1, []byte(loadUrl))
+					util.FileAppendNewLineWithByte(path1, []byte(url))
 					util.FileAppendNewLineWithByte(path1, []byte("Request:"))
-					reqBody:=body
+					reqBody:=data.Bytes()
 					resBody1:=resbody
 					if truncateSize>0{
-						if len(body)>truncateSize{
-							reqBody=body[:truncateSize]
+						if len(reqBody)>truncateSize{
+							reqBody=reqBody[:truncateSize]
 						}
-						if len(body)>truncateSize{
+						if len(resBody1)>truncateSize{
 							resBody1=resBody1[:truncateSize]
 						}
 					}
@@ -384,7 +363,7 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 			}
 		}
 
-		return resbody, nil
+		return true
 	} else if resp.StatusCode()==429 {
 		log.Warnf("elasticsearch rejected, retried %v times, will try again",retryTimes)
 		delayTime := joint.GetIntOrDefault("retry_delay_in_second", 5)
@@ -393,7 +372,7 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 			if joint.GetBool("warm_retry_message",true){
 				log.Errorf("elasticsearch rejected, retried %v times, quit retry",retryTimes)
 			}
-			return resbody,errors.New("elasticsearch rejected")
+			return false
 		}
 		retryTimes++
 		goto DO
@@ -402,13 +381,13 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 			path1:=path.Join(global.Env().GetWorkingDir(),"bulk_error_failure.log")
 			truncateSize := joint.GetIntOrDefault("error_message_truncate_size", -1)
 			util.FileAppendNewLineWithByte(path1, []byte("URL:"))
-			util.FileAppendNewLineWithByte(path1, []byte(loadUrl))
+			util.FileAppendNewLineWithByte(path1, []byte(url))
 			util.FileAppendNewLineWithByte(path1, []byte("Request:"))
-			reqBody:=body
+			reqBody:=data.Bytes()
 			resBody1:=resbody
 			if truncateSize>0{
-				if len(body)>truncateSize{
-					reqBody=body[:truncateSize-1]
+				if len(reqBody)>truncateSize{
+					reqBody=reqBody[:truncateSize-1]
 				}
 				if len(resBody1)>truncateSize{
 					resBody1=resBody1[:truncateSize-1]
@@ -417,10 +396,16 @@ func  (joint BulkIndexingJoint)DoRequest(compress bool, method string, loadUrl s
 			util.FileAppendNewLineWithByte(path1,reqBody )
 			util.FileAppendNewLineWithByte(path1, []byte("Response:"))
 			util.FileAppendNewLineWithByte(path1, resBody1)
+
 		}
-
-		return resbody,errors.Errorf("invalid bulk response, %v",string(resbody))
+		if joint.GetBool("warm_retry_message",true){
+			log.Errorf("invalid bulk response, %v - %v",resp.StatusCode(),string(resbody))
+		}
+		return false
 	}
+	return true
+}
 
-	return nil, nil
+var fastHttpClient = &fasthttp.Client{
+	TLSConfig: &tls.Config{InsecureSkipVerify: true},
 }

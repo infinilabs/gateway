@@ -33,6 +33,7 @@ import (
 	stats "infini.sh/framework/plugins/stats_statsd"
 	api2 "infini.sh/gateway/api"
 	"infini.sh/gateway/config"
+	indexing2 "infini.sh/gateway/service/bulk_reshuffle"
 	"infini.sh/gateway/service/floating_ip"
 	"infini.sh/gateway/service/forcemerge"
 	"infini.sh/gateway/service/gateway"
@@ -81,6 +82,7 @@ func main() {
 		//register pipeline joints
 		pipe.RegisterPipeJoint(indexing.JsonIndexingJoint{})
 		pipe.RegisterPipeJoint(indexing.BulkIndexingJoint{})
+		pipe.RegisterPipeJoint(indexing2.BulkReshuffleJoint{})
 
 		//start each module, with enabled provider
 		module.Start()
