@@ -294,6 +294,7 @@ func (p *ReverseProxy) DelegateRequest(req *fasthttp.Request, res *fasthttp.Resp
 		res.SetBody([]byte(err.Error()))
 	}
 
+	res.Header.Set("CLUSTER", p.proxyConfig.Elasticsearch)
 	res.Header.Set("UPSTREAM", pc.Addr)
 	res.SetDestination(pc.Addr)
 
