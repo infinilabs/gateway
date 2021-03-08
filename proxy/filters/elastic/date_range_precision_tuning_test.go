@@ -128,7 +128,7 @@ func TestDatePrecisionTuning2(t *testing.T) {
 	fmt.Println(string(data))
 
 	precisionLimit:=4
-	ok := util.ProcessJsonData(&data,  []byte("range"), []byte("gte"),false, []byte("gte"),[]byte("}"),128, func(data []byte,start, end int) {
+	ok := util.ProcessJsonData(&data,  []byte("range"),150,[][]byte{[]byte("gte"),[]byte("lte")},false, []byte("gte"),[]byte("}"),128, func(data []byte,start, end int) {
 		fmt.Println(string(data))
 		startProcess := false
 		precisionOffset := 0
@@ -207,5 +207,23 @@ func TestDatePrecisionTuning2(t *testing.T) {
 	rePrecisedBody:=string(ctx.Request.Body())
 	fmt.Println(rePrecisedBody)
 	//assert.Equal(t,rePrecisedBody,"{\"range\":{\"@timestamp\":{\"gte\":\"2019-09-26T00:00:00.000Z\",\"lte\":\"2020-09-26T23:59:59.999Z\",\"format\":\"strict_date_optional_time\"}")
+
+}
+
+func TestDatePrecisionTuning3(t *testing.T) {
+	filter:=DatePrecisionTuning{}
+	ctx:=&fasthttp.RequestCtx{}
+	ctx.Request=fasthttp.Request{}
+	ctx.Request.SetRequestURI("/_search")
+	ctx.Request.Header.SetMethod(fasthttp.MethodPost)
+
+	data:=[]byte("{\n  \"query\": {\n    \"query_string\": {\n      \"default_field\": \"title\",\n      \"query\": \"this range AND gte TO goodbye 2019-09-26T00:10:00.000Z thus\"\n    }\n  }\n}")
+	ctx.Request.SetBody(data)
+
+	filter.Set("time_precision",0)
+	filter.Process(ctx)
+	rePrecisedBody:=string(ctx.Request.Body())
+	fmt.Println(rePrecisedBody)
+	assert.Equal(t,rePrecisedBody,"{\n  \"query\": {\n    \"query_string\": {\n      \"default_field\": \"title\",\n      \"query\": \"this range AND gte TO goodbye 2019-09-26T00:10:00.000Z thus\"\n    }\n  }\n}")
 
 }
