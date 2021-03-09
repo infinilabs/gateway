@@ -38,7 +38,6 @@ import (
 	"infini.sh/gateway/service/forcemerge"
 	"infini.sh/gateway/service/gateway"
 	"infini.sh/gateway/service/indexing"
-	"infini.sh/license"
 )
 
 func main() {
@@ -49,18 +48,16 @@ func main() {
 	terminalHeader += ("/ /_\\\\/  _  \\/ / //__   \\  /\\  /  _  \\/ \\ \n")
 	terminalHeader += ("\\____/\\_/ \\_/\\/  \\__/    \\/  \\/\\_/ \\_/\\_/ \n\n")
 
-	terminalFooter := ("Thanks for using GATEWAY, have a good day!")
+	terminalFooter := ("Thanks for using INFINI GATEWAY, have a good day!")
 
 	app := framework.NewApp("gateway", "A light-weight, powerful and high-performance elasticsearch gateway.",
-		util.TrimSpaces(config.Version), util.TrimSpaces(config.LastCommitLog), util.TrimSpaces(config.BuildDate), terminalHeader, terminalFooter)
+		util.TrimSpaces(config.Version), util.TrimSpaces(config.LastCommitLog), util.TrimSpaces(config.BuildDate), util.TrimSpaces(config.EOLDate), terminalHeader, terminalFooter)
 
 	app.Init(nil)
 
 	defer app.Shutdown()
 
 	app.Start(func() {
-
-		license.VerifyEOL(config.EOLDate)
 
 		//load core modules first
 		module.RegisterSystemModule(elastic.ElasticModule{})
@@ -83,6 +80,7 @@ func main() {
 		pipe.RegisterPipeJoint(indexing.JsonIndexingJoint{})
 		pipe.RegisterPipeJoint(indexing.BulkIndexingJoint{})
 		pipe.RegisterPipeJoint(indexing2.BulkReshuffleJoint{})
+
 
 		//start each module, with enabled provider
 		module.Start()
