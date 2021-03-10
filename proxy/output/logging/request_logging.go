@@ -73,6 +73,14 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 	defer resPool.Put(request.Response)
 	defer reqPool.Put(request.Request)
 
+
+	minTimeElapsed,ok:=this.GetInt("min_elapsed_time_in_ms",-1)
+	if minTimeElapsed>0{
+		if minTimeElapsed >= int(request.Response.ElapsedTimeInMs) {
+			ctx.Finished()
+		}
+	}
+
 	//request.ID = ctx.ID()
 
 	request.ID= uint64(ctx.SequenceID)
