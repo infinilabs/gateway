@@ -20,29 +20,43 @@ func Init() {
 	common.RegisterFilter(debug.EchoMessage{})
 	common.RegisterFilter(debug.DumpHeader{})
 	common.RegisterFilter(debug.DumpUrl{})
+
+	common.RegisterFilter(debug.DumpRequestBody{})
+	common.RegisterFilter(debug.DumpResponseBody{})
+
+
 	common.RegisterFilter(elastic.Elasticsearch{})
+	common.RegisterFilter(elastic2.DatePrecisionTuning{})
+	common.RegisterFilter(elastic2.BulkReshuffle{})
+	common.RegisterFilter(elastic2.BulkToQueue{})
+
+
 	common.RegisterFilter(cache.RequestCacheGet{})
 	common.RegisterFilter(cache.RequestCacheSet{})
+
 	common.RegisterFilter(throttle.RateLimitFilter{})
+	common.RegisterFilter(throttle.SleepFilter{})
+
 	common.RegisterFilter(filter.RequestHeaderFilter{})
 	common.RegisterFilter(filter.RequestMethodFilter{})
 	common.RegisterFilter(sample.SampleFilter{})
 	common.RegisterFilter(filter.RequestUrlPathFilter{})
 	common.RegisterFilter(kafka.Kafka{})
+
 	common.RegisterFilter(routing.RatioRoutingFlowFilter{})
 	common.RegisterFilter(routing.CloneFlowFilter{})
-	common.RegisterFilter(elastic2.BulkReshuffle{})
-	common.RegisterFilter(elastic2.BulkToQueue{})
-	common.RegisterFilter(debug.DumpRequestBody{})
-	common.RegisterFilter(debug.DumpResponseBody{})
+
+
 	common.RegisterFilter(transform.RequestBodyTruncate{})
 	common.RegisterFilter(transform.ResponseBodyTruncate{})
+
 	common.RegisterFilter(filter.ResponseStatusCodeFilter{})
 	common.RegisterFilter(filter.ResponseHeaderFilter{})
 	common.RegisterFilter(filter.RequestClientIPFilter{})
 	common.RegisterFilter(filter.RequestUserFilter{})
 	common.RegisterFilter(filter.RequestServerHostFilter{})
-	common.RegisterFilter(elastic2.DatePrecisionTuning{})
+
 	common.RegisterFilter(transform.ResponseHeaderFormatFilter{})
+	common.RegisterFilter(transform.RequestBodyRegexReplace{})
 	common.RegisterFilter(transform.ResponseBodyRegexReplace{})
 }

@@ -16,6 +16,13 @@ entry:
 flow:
   - name: cache_first
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
+#      - name: sleep
+#        parameters:
+#          sleep_in_million_seconds: 1024
+#      - name: request_body_regex_replace
+#        parameters:
+#          pattern: '"size": 10000'
+#          to: '"size": 100'
       - name: get_cache
         parameters:
           pass_patterns:
@@ -81,6 +88,7 @@ flow:
           queue_name: request_logging
           max_request_body_size: 1024
           max_response_body_size: 1024
+          min_elapsed_time_in_ms: 500 # only record slow requests
 router:
   - name: my_router
     default_flow: cache_first
@@ -111,6 +119,8 @@ modules:
   elasticsearch: dev
   store:
     enabled: true
+  monitoring:
+    enabled: false
   orm:
     enabled: true
     init_template: true
@@ -203,7 +213,6 @@ pipelines:
 #  max_num_segments: 1
 #  indices:
 #    - index_name
-
 
 queue:
   min_msg_size: 1
