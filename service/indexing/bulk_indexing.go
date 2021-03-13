@@ -250,7 +250,7 @@ func (joint BulkIndexingJoint) Bulk(cfg *elastic.ElasticsearchConfig, endpoint s
 		req.Header.Set("content-encoding", "gzip")
 	}
 
-	req.Header.SetContentType("application/json")
+	req.Header.SetContentType("application/x-ndjson")
 
 	if cfg.BasicAuth != nil{
 		req.URI().SetUsername(cfg.BasicAuth.Username)

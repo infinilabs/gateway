@@ -59,6 +59,13 @@ type BulkIndexMetadata struct {
 	Index string  `json:"_index,omitempty"`
 	Type string  `json:"_type,omitempty"`
 	ID string  `json:"_id,omitempty"`
+	RequireAlias bool  `json:"require_alias,omitempty"`
+	Parent1 bool  `json:"_parent,omitempty"`
+	Parent2 bool  `json:"parent,omitempty"`
+	Routing1 bool  `json:"routing,omitempty"`
+	Routing2 bool  `json:"_routing,omitempty"`
+	Version1 bool  `json:"_version,omitempty"`
+	Version2 bool  `json:"version,omitempty"`
 }
 
 var actionIndex= []byte("index")
