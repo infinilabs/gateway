@@ -161,6 +161,7 @@ func (joint BulkIndexingJoint) NewBulkWorker(count *int, bulkSizeInByte int, wg 
 
 	mainBuf := bytes.Buffer{}
 	esInstanceVal := joint.MustGetString("elasticsearch")
+	deadLetterQueueName := joint.GetStringOrDefault("dead_letter_queue",queueName)
 	timeOut := joint.GetIntOrDefault("idle_timeout_in_second", 5)
 	idleDuration := time.Duration(timeOut) * time.Second
 	idleTimeout := time.NewTimer(idleDuration)
@@ -201,7 +202,7 @@ READ_DOCS:
 			log.Trace("clean buffer, and execute bulk insert")
 
 			if !success{
-				queue.Push(queueName,mainBuf.Bytes())
+				queue.Push(deadLetterQueueName,mainBuf.Bytes())
 				if global.Env().IsDebug{
 					log.Warn("re-enqueue bulk messages")
 				}

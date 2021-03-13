@@ -188,6 +188,7 @@ pipelines:
       warm_retry_message: false
       log_bulk_message: false
       error_message_truncate_size: 1024
+      dead_letter_queue: "failed_bulk_messages"
 #      shards:
 #        - "0"
 #        - "5"
