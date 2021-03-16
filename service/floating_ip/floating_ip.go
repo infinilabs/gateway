@@ -58,6 +58,10 @@ func (module FloatingIPPlugin) Setup(cfg *config.Config) {
 		panic(err)
 	}
 
+	if !floatingIPConfig.Enabled{
+		return
+	}
+
 	if floatingIPConfig.Interface == "" || floatingIPConfig.IP == "" {
 		//let's do some magic
 		dev, ip, mask, err := util.GetPublishNetworkDeviceInfo()
