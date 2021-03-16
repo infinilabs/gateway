@@ -12,6 +12,7 @@ import (
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
+	"infini.sh/framework/core/rate"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
@@ -233,7 +234,7 @@ func (joint BulkIndexingJoint) Bulk(cfg *elastic.ElasticsearchConfig, endpoint s
 		endpoint = "http://" + endpoint
 	}
 	url := fmt.Sprintf("%s/_bulk", endpoint)
-	compress := joint.GetBool("compress",false)
+	compress := joint.GetBool("compress",true)
 
 	req := fasthttp.AcquireRequest()
 	req.Reset()
@@ -275,6 +276,24 @@ func (joint BulkIndexingJoint) Bulk(cfg *elastic.ElasticsearchConfig, endpoint s
 	retryTimes:=0
 
 DO:
+
+	if cfg.TrafficControl!=nil{
+	RetryRateLimit:
+
+		if cfg.TrafficControl.MaxQpsPerNode>0{
+			if !rate.GetRaterWithDefine(cfg.Name,endpoint+"bulk_max_qps", int(cfg.TrafficControl.MaxQpsPerNode)).Allow(){
+				time.Sleep(10*time.Millisecond)
+				goto RetryRateLimit
+			}
+		}
+
+		if cfg.TrafficControl.MaxBytesPerNode>0{
+			if !rate.GetRaterWithDefine(cfg.Name,endpoint+"bulk_max_bps", int(cfg.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(),data.Len()){
+				time.Sleep(10*time.Millisecond)
+				goto RetryRateLimit
+			}
+		}
+	}
 
 	err := fastHttpClient.Do(req, resp)
 

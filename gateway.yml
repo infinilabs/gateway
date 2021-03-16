@@ -47,6 +47,9 @@ flow:
             enabled: true
             interval: 60s
           filter:
+            tags:
+                exclude:
+                - a: b
             roles:
               exclude:
                 - master
@@ -65,10 +68,10 @@ flow:
       - name: bulk_reshuffle
         parameters:
           elasticsearch: dev
-#          level: node
-          level: shard
-#          mode: async
-          mode: sync
+          level: node
+#          level: shard
+          mode: async
+#          mode: sync
           safety_parse: true
           valid_metadata: true
 #          shards:
@@ -92,7 +95,7 @@ flow:
 router:
   - name: my_router
     default_flow: cache_first
-    tracing_flow: request_logging
+#    tracing_flow: request_logging
     rules:
       - method:
           - "POST"
@@ -104,6 +107,9 @@ elasticsearch:
 - name: dev
   enabled: true
   endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
+  traffic_control:
+    max_bytes_per_node: 52428800 #50MB per node
+#    max_qps_per_node: 10 #max bulk requests per node
   basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
     username: elastic
     password: pass
@@ -137,7 +143,7 @@ modules:
       timeout_in_ms: 5000
       pipeline_id: request_logging_index
     - name: nodes_index
-      enabled: false
+      enabled: true
       max_go_routine: 1
       threshold_in_ms: 0
       timeout_in_ms: 5000
@@ -189,7 +195,7 @@ pipelines:
       log_bulk_message: false
       error_message_truncate_size: 1024
       dead_letter_queue: "failed_bulk_messages"
-#      shards:
+#      shards: #specify which shards are enabled
 #        - "0"
 #        - "5"
 #        - "9"
