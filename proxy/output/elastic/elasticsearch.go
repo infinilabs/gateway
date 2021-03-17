@@ -76,5 +76,5 @@ func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	instance.DelegateRequest(esRef,&ctx.Request, &ctx.Response)
+	instance.DelegateRequest(esRef,ctx)
 }

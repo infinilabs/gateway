@@ -453,6 +453,8 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 			ctx.Set("bulk_index_stats",indexStatsData)
 		}
 
+		ctx.Set("elastic_cluster_name",clusterName)
+
 		ctx.SetContentType(JSON_CONTENT_TYPE)
 		ctx.WriteString("{\n  \"took\" : 0,\n  \"errors\" : false,\n  \"items\" : []\n}")
 		ctx.Response.SetStatusCode(200)

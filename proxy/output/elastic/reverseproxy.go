@@ -268,7 +268,7 @@ func cleanHopHeaders(req *fasthttp.Request) {
 
 var failureMessage=[]string{"connection refused","no such host","timed out"}
 
-func (p *ReverseProxy) DelegateRequest(elasticsearch string,req *fasthttp.Request, res *fasthttp.Response) {
+func (p *ReverseProxy) DelegateRequest(elasticsearch string,myctx *fasthttp.RequestCtx) {
 
 	stats.Increment("cache", "strike")
 
@@ -277,6 +277,9 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string,req *fasthttp.Reques
 
 	//使用算法来获取合适的 client
 	pc,endpoint := p.getClient()
+
+	req:=&myctx.Request
+	res:=&myctx.Response
 
 	cleanHopHeaders(req)
 
@@ -321,6 +324,9 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string,req *fasthttp.Reques
 	}
 
 	res.Header.Set("CLUSTER", p.proxyConfig.Elasticsearch)
+
+	myctx.Set("elastic_cluster_name",elasticsearch)
+
 	res.Header.Set("UPSTREAM", pc.Addr)
 	res.SetDestination(pc.Addr)
 

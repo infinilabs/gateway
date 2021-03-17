@@ -141,6 +141,14 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 		request.Elastic["bulk_index_stats"]=stats
 	}
 
+	if ctx.Has("elastic_cluster_name"){
+		if request.Elastic==nil{
+			request.Elastic= map[string]interface{}{}
+		}
+		stats:=ctx.Get("elastic_cluster_name")
+		request.Elastic["cluster_name"]=stats
+	}
+
 	request.DataFlow = &model.DataFlow{}
 	request.DataFlow.From = request.RemoteIP
 
