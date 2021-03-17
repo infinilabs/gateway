@@ -6,6 +6,7 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/global"
+	"infini.sh/framework/core/rate"
 	"infini.sh/framework/core/stats"
 	task2 "infini.sh/framework/core/task"
 	"infini.sh/framework/core/util"
@@ -13,6 +14,7 @@ import (
 	"infini.sh/gateway/proxy/balancer"
 	"math/rand"
 	"net/http"
+	"time"
 )
 
 type ReverseProxy struct {
@@ -229,7 +231,7 @@ func NewReverseProxy(cfg *ProxyConfig) *ReverseProxy {
 	return &p
 }
 
-func (p *ReverseProxy) getClient() *fasthttp.HostClient {
+func (p *ReverseProxy) getClient() (client *fasthttp.HostClient,endpoint string) {
 	if p.clients == nil {
 		panic("ReverseProxy has been closed")
 	}
@@ -242,7 +244,8 @@ func (p *ReverseProxy) getClient() *fasthttp.HostClient {
 			idx = 0
 		}
 		c := p.clients[idx]
-		return c
+		e:=p.endpoints[idx]
+		return c,e
 	}
 
 	//or go random way
@@ -253,7 +256,8 @@ func (p *ReverseProxy) getClient() *fasthttp.HostClient {
 		seed = 0
 	}
 	c := p.clients[seed]
-	return c
+	e :=p.endpoints[seed]
+	return c,e
 }
 
 func cleanHopHeaders(req *fasthttp.Request) {
@@ -264,7 +268,7 @@ func cleanHopHeaders(req *fasthttp.Request) {
 
 var failureMessage=[]string{"connection refused","no such host","timed out"}
 
-func (p *ReverseProxy) DelegateRequest(req *fasthttp.Request, res *fasthttp.Response) {
+func (p *ReverseProxy) DelegateRequest(elasticsearch string,req *fasthttp.Request, res *fasthttp.Response) {
 
 	stats.Increment("cache", "strike")
 
@@ -272,12 +276,34 @@ func (p *ReverseProxy) DelegateRequest(req *fasthttp.Request, res *fasthttp.Resp
 	START:
 
 	//使用算法来获取合适的 client
-	pc := p.getClient()
+	pc,endpoint := p.getClient()
 
 	cleanHopHeaders(req)
 
 	if global.Env().IsDebug {
 		log.Tracef("send request [%v] to upstream [%v]", req.URI().String(), pc.Addr)
+	}
+
+	cfg:=elastic.GetConfig(elasticsearch)
+
+	if cfg.TrafficControl!=nil{
+	RetryRateLimit:
+
+		if cfg.TrafficControl.MaxQpsPerNode>0{
+			//fmt.Println("MaxQpsPerNode:",cfg.TrafficControl.MaxQpsPerNode)
+			if !rate.GetRaterWithDefine(cfg.Name,endpoint+"max_qps", int(cfg.TrafficControl.MaxQpsPerNode)).Allow(){
+				time.Sleep(10*time.Millisecond)
+				goto RetryRateLimit
+			}
+		}
+
+		if cfg.TrafficControl.MaxBytesPerNode>0{
+			//fmt.Println("MaxBytesPerNode:",cfg.TrafficControl.MaxQpsPerNode)
+			if !rate.GetRaterWithDefine(cfg.Name,endpoint+"max_bps", int(cfg.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(),req.GetBodyLength()){
+				time.Sleep(10*time.Millisecond)
+				goto RetryRateLimit
+			}
+		}
 	}
 
 	if err := pc.Do(req, res); err != nil {

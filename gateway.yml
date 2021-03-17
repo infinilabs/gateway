@@ -107,9 +107,9 @@ elasticsearch:
 - name: dev
   enabled: true
   endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
-  traffic_control:
-    max_bytes_per_node: 52428800 #50MB per node
-#    max_qps_per_node: 10 #max bulk requests per node
+  traffic_control: #global traffic control
+#    max_bytes_per_node: 102400 #max total bytes send to es per node
+    max_qps_per_node: 800 #max total requests send to es per node
   basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
     username: elastic
     password: pass
@@ -186,10 +186,10 @@ pipelines:
     parameters:
       elasticsearch: "dev"
       compress: true
-      timeout: "5s"
       worker_size: 1
       bulk_size_in_mb: 5  #in MB
-#      bulk_size_in_kb: 20  #in KB
+#      bulk_size_in_kb: 50  #in KB
+      idle_timeout_in_second: 5
       retry_delay_in_second: 5
       warm_retry_message: false
       log_bulk_message: false

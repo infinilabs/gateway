@@ -33,7 +33,6 @@ func ProxyHandler(ctx *fasthttp.RequestCtx) {
 	//TODO 慢查询,非法查询 主动检测和拒绝
 
 	//Phase: Throttle Requests
-
 	//Phase: Requests Decision
 	//Phase: DAG based Process
 	//自动学习请求网站来生成 FST 路由信息, 基于 FST 数来快速路由
@@ -108,7 +107,9 @@ func (module GatewayModule) Setup(cfg *Config) {
 	}
 
 }
+
 var entryPoints= map[string]*entry2.Entrypoint{}
+
 func (module GatewayModule) Start() error {
 
 	for _,v:=range entryConfigs{

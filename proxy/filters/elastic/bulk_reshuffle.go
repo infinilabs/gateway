@@ -32,6 +32,7 @@ func (this BulkReshuffle) Name() string {
 }
 
 var bufferPool *sync.Pool
+
 func initPool() {
 	if bufferPool !=nil{
 		return
@@ -145,35 +146,34 @@ var versionLock=sync.Mutex{}
 
 func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
-	ctx.Set(common.CACHEABLE, false)
-
-	clusterName:=this.MustGetString("elasticsearch")
-	esMajorVersion,ok:=versions[clusterName]
-	if !ok{
-		versionLock.Lock()
-		esMajorVersion:=elastic.GetClient(clusterName).GetMajorVersion()
-		versions[clusterName]=esMajorVersion
-		versionLock.Unlock()
-	}
-
-	metadata:=elastic.GetMetadata(clusterName)
-	if metadata==nil{
-		log.Warnf("elasticsearch [%v] metadata is nil, skip reshuffle",clusterName)
-		//fmt.Println("metadta is nil")
-		return
-	}
-
-	esConfig:=elastic.GetConfig(clusterName)
-
-
-	initPool()
-
 	path:=string(ctx.URI().Path())
 
 	//TODO 处理 {INDEX}/_bulk 的情况
 	//filebeat 等都是 bulk 结尾的请求了。
 	//需要拆解 bulk 请求，重新封装
 	if util.PrefixStr(path,"/_bulk"){
+
+		ctx.Set(common.CACHEABLE, false)
+
+		clusterName:=this.MustGetString("elasticsearch")
+		esMajorVersion,ok:=versions[clusterName]
+		if !ok{
+			versionLock.Lock()
+			esMajorVersion:=elastic.GetClient(clusterName).GetMajorVersion()
+			versions[clusterName]=esMajorVersion
+			versionLock.Unlock()
+		}
+
+		metadata:=elastic.GetMetadata(clusterName)
+		if metadata==nil{
+			log.Warnf("elasticsearch [%v] metadata is nil, skip reshuffle",clusterName)
+			//fmt.Println("metadta is nil")
+			return
+		}
+
+		esConfig:=elastic.GetConfig(clusterName)
+
+		initPool()
 
 		safetyParse:=this.GetBool("safety_parse",true)
 		validMetadata:=this.GetBool("valid_metadata",false)
@@ -401,6 +401,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					//TODO
 					return
 				}
+
 				ok=this.Bulk(&esConfig,endpoint,y)
 				if !ok{
 					log.Error("bulk failed on endpoint,",x,",",shardID)

@@ -51,6 +51,7 @@ func (module ForceMergeModule) Setup(cfg *config.Config) {
 	}
 
 }
+
 func (module ForceMergeModule) Start() error {
 
 	if !mergeConfig.Enabled{

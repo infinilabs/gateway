@@ -84,7 +84,6 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 		return errors.New("metadata is nil")
 	}
 
-	totalSize := 0
 	esInstanceVal := joint.MustGetString("elasticsearch")
 	indices, isIndex := joint.GetStringArray("index")
 
@@ -103,7 +102,6 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 					}
 				}
 
-
 				nodeInfo := meta.GetNodeInfo(shardInfo.NodeID)
 
 				if global.Env().IsDebug{
@@ -112,7 +110,7 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 
 				for i := 0; i < workers; i++ {
 					wg.Add(1)
-					go joint.NewBulkWorker(&totalSize, bulkSizeInByte, &wg, queueName, nodeInfo.Http.PublishAddress)
+					go joint.NewBulkWorker(bulkSizeInByte, &wg, queueName, nodeInfo.Http.PublishAddress)
 				}
 			}
 		}
@@ -129,7 +127,7 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 
 			for i := 0; i < workers; i++ {
 				wg.Add(1)
-				go joint.NewBulkWorker(&totalSize, bulkSizeInByte, &wg, queueName, v.Http.PublishAddress)
+				go joint.NewBulkWorker(bulkSizeInByte, &wg, queueName, v.Http.PublishAddress)
 			}
 		}
 	}
@@ -139,7 +137,7 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 	return nil
 }
 
-func (joint BulkIndexingJoint) NewBulkWorker(count *int, bulkSizeInByte int, wg *sync.WaitGroup, queueName string, endpoint string) {
+func (joint BulkIndexingJoint) NewBulkWorker( bulkSizeInByte int, wg *sync.WaitGroup, queueName string, endpoint string) {
 	defer func() {
 		if !global.Env().IsDebug {
 			if r := recover(); r != nil {
@@ -165,61 +163,68 @@ func (joint BulkIndexingJoint) NewBulkWorker(count *int, bulkSizeInByte int, wg 
 	deadLetterQueueName := joint.GetStringOrDefault("dead_letter_queue",queueName)
 	timeOut := joint.GetIntOrDefault("idle_timeout_in_second", 5)
 	idleDuration := time.Duration(timeOut) * time.Second
-	idleTimeout := time.NewTimer(idleDuration)
-	defer idleTimeout.Stop()
 	cfg := elastic.GetConfig(esInstanceVal)
 
-READ_DOCS:
+	READ_DOCS:
 	for {
-
-		idleTimeout.Reset(idleDuration)
-
-		select {
-
 		//each message is complete bulk message, must be end with \n
-		case pop := <-queue.ReadChan(queueName):
-			stats.IncrementBy("bulk", "bytes_received", int64(mainBuf.Len()))
-			mainBuf.Write(pop)
-			(*count)++
-			if mainBuf.Len() > (bulkSizeInByte) {
-				if global.Env().IsDebug {
-					log.Trace("hit buffer size, ", mainBuf.Len())
-				}
-				goto CLEAN_BUFFER
-			}
+		pop, ok, err := queue.PopTimeout(queueName, idleDuration)
+		if err != nil {
+			panic(err)
+		}
 
-		case <-idleTimeout.C:
-			if global.Env().IsDebug{
+		if ok {
+			if global.Env().IsDebug {
 				log.Tracef("%v no message input", idleDuration)
 			}
 			goto CLEAN_BUFFER
 		}
 
-		goto READ_DOCS
-
-	CLEAN_BUFFER:
-		if mainBuf.Len() > 0 {
-			success:=joint.Bulk(&cfg, endpoint, &mainBuf)
-			log.Trace("clean buffer, and execute bulk insert")
-
-			if !success{
-				queue.Push(deadLetterQueueName,mainBuf.Bytes())
-				if global.Env().IsDebug{
-					log.Warn("re-enqueue bulk messages")
-				}
-				stats.IncrementBy("bulk", "bytes_processed_failed", int64(mainBuf.Len()))
-			}else{
-				stats.IncrementBy("bulk", "bytes_processed_success", int64(mainBuf.Len()))
-			}
-
-			mainBuf.Reset()
-			//TODO handle retry and fallback/over, dead letter queue
-			//set services to failure, need manual restart
-			//process dead letter queue first next round
-
+		if len(pop)>0{
+			stats.IncrementBy("bulk", "bytes_received", int64(mainBuf.Len()))
+			mainBuf.Write(pop)
 		}
 
+		if mainBuf.Len() > (bulkSizeInByte) {
+			if global.Env().IsDebug {
+				log.Trace("hit buffer size, ", mainBuf.Len())
+			}
+			goto CLEAN_BUFFER
+		}else{
+			//fmt.Println("size too small",mainBuf.Len(),"vs",bulkSizeInByte)
+		}
 	}
+
+	CLEAN_BUFFER:
+
+	if mainBuf.Len() > 0 {
+
+		//fmt.Println("bulk CLEAN_BUFFER", mainBuf.Len())
+
+		success:=joint.Bulk(&cfg, endpoint, &mainBuf)
+		log.Trace("clean buffer, and execute bulk insert")
+
+		if !success{
+			queue.Push(deadLetterQueueName,mainBuf.Bytes())
+			if global.Env().IsDebug{
+				log.Warn("re-enqueue bulk messages")
+			}
+			stats.IncrementBy("bulk", "bytes_processed_failed", int64(mainBuf.Len()))
+		}else{
+			stats.IncrementBy("bulk", "bytes_processed_success", int64(mainBuf.Len()))
+		}
+
+		mainBuf.Reset()
+		//TODO handle retry and fallback/over, dead letter queue
+		//set services to failure, need manual restart
+		//process dead letter queue first next round
+
+	}else{
+		//fmt.Println("timeout but CLEAN_BUFFER", mainBuf.Len())
+	}
+
+	goto READ_DOCS
+
 }
 
 func (joint BulkIndexingJoint) Bulk(cfg *elastic.ElasticsearchConfig, endpoint string, data *bytes.Buffer) bool{
@@ -265,12 +270,10 @@ func (joint BulkIndexingJoint) Bulk(cfg *elastic.ElasticsearchConfig, endpoint s
 				panic(err)
 			}
 		} else {
-			//req.SetBody(body)
 			req.SetBodyStreamWriter(func(w *bufio.Writer) {
 				w.Write(data.Bytes())
 				w.Flush()
 			})
-
 		}
 	}
 	retryTimes:=0
@@ -281,18 +284,19 @@ DO:
 	RetryRateLimit:
 
 		if cfg.TrafficControl.MaxQpsPerNode>0{
-			if !rate.GetRaterWithDefine(cfg.Name,endpoint+"bulk_max_qps", int(cfg.TrafficControl.MaxQpsPerNode)).Allow(){
+			if !rate.GetRaterWithDefine(cfg.Name,endpoint+"max_qps", int(cfg.TrafficControl.MaxQpsPerNode)).Allow(){
 				time.Sleep(10*time.Millisecond)
 				goto RetryRateLimit
 			}
 		}
 
 		if cfg.TrafficControl.MaxBytesPerNode>0{
-			if !rate.GetRaterWithDefine(cfg.Name,endpoint+"bulk_max_bps", int(cfg.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(),data.Len()){
+			if !rate.GetRaterWithDefine(cfg.Name,endpoint+"max_bps", int(cfg.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(),data.Len()){
 				time.Sleep(10*time.Millisecond)
 				goto RetryRateLimit
 			}
 		}
+
 	}
 
 	err := fastHttpClient.Do(req, resp)

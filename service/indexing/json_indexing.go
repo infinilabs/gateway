@@ -65,7 +65,7 @@ func (joint JsonIndexingJoint) Process(c *pipeline.Context) error {
 	workers, _ := joint.GetInt("worker_size", 1)
 	bulkSizeInMB, _ := joint.GetInt("bulk_size_in_mb", 10)
 	joint.inputQueueName = joint.GetStringOrDefault("input_queue", "es_queue")
-	bulkSizeInMB = 1000000 * bulkSizeInMB
+	bulkSizeInMB = 1048576 * bulkSizeInMB
 
 	wg := sync.WaitGroup{}
 	totalSize := 0
@@ -167,6 +167,8 @@ READ_DOCS:
 		}
 
 		if mainBuf.Len() > 0 {
+
+			//TODO merge into bulk services
 			client.Bulk(&mainBuf)
 			//TODO handle retry and fallback/over, dead letter queue
 			//set services to failure, need manual restart
