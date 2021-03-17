@@ -73,6 +73,7 @@ flow:
           mode: async
 #          mode: sync
           safety_parse: true
+          index_stats: true #record bulk index stats info to request logging
           valid_metadata: true
 #          shards:
 #            - "0"
@@ -95,7 +96,7 @@ flow:
 router:
   - name: my_router
     default_flow: cache_first
-#    tracing_flow: request_logging
+    tracing_flow: request_logging
     rules:
       - method:
           - "POST"
@@ -109,7 +110,7 @@ elasticsearch:
   endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
   traffic_control: #global traffic control
 #    max_bytes_per_node: 102400 #max total bytes send to es per node
-    max_qps_per_node: 800 #max total requests send to es per node
+    max_qps_per_node: 1500 #max total requests send to es per node
   basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
     username: elastic
     password: pass

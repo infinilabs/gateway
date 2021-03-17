@@ -133,6 +133,14 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 		request.Response.LocalAddr = ctx.Response.LocalAddr().String()
 	}
 
+	if ctx.Has("bulk_index_stats"){
+		if request.Elastic==nil{
+			request.Elastic= map[string]interface{}{}
+		}
+		stats:=ctx.Get("bulk_index_stats")
+		request.Elastic["bulk_index_stats"]=stats
+	}
+
 	request.DataFlow = &model.DataFlow{}
 	request.DataFlow.From = request.RemoteIP
 

@@ -10,6 +10,7 @@ import (
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/queue"
+	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
@@ -180,6 +181,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		reshuffleType:=this.GetStringOrDefault("level","node")
 		submitMode:=this.GetStringOrDefault("mode","sync") //sync and async
 		fixNullID:=this.GetBool("fix_null_id",true) //sync and async
+		IndexAnalysis:=this.GetBool("index_stats",true) //sync and async
 		enabledShards,checkShards := this.GetStringArray("shards")
 
 		body:=ctx.Request.GetRawBody()
@@ -193,6 +195,8 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		buffEndpoints := map[string]string{}
 		skipNext:=false
 		var buff *bytes.Buffer
+		var indexStatsData map[string]int
+		var indexStatsLock sync.Mutex
 		shardID:=0
 		for scanner.Scan() {
 			scannedByte := scanner.Bytes()
@@ -230,6 +234,29 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 						log.Warn("invalid bulk action:",string(action),",index:",string(indexb),",id:",string(idb),", try json parse:",string(scannedByte))
 						action,index,id=parseJson(scannedByte)
 					}
+				}
+
+				//统计索引次数
+				stats.Increment("elasticsearch."+clusterName+".indexing",index)
+				if IndexAnalysis{
+					//init
+					if indexStatsData==nil{
+						indexStatsLock.Lock()
+						if indexStatsData==nil{
+							indexStatsData=map[string]int{}
+						}
+						indexStatsLock.Unlock()
+					}
+
+					//stats
+					indexStatsLock.Lock()
+					v,ok:=indexStatsData[index]
+					if !ok{
+						indexStatsData[index]=1
+					}else{
+						indexStatsData[index]=v+1
+					}
+					indexStatsLock.Unlock()
 				}
 
 				if (bytes.Equal(action,[]byte("index"))||bytes.Equal(action,[]byte("create")))&&len(id)==0 && fixNullID {
@@ -419,6 +446,11 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 			}
 			//y.Reset()
 			//bufferPool.Put(y) //TODO
+		}
+
+
+		if IndexAnalysis{
+			ctx.Set("bulk_index_stats",indexStatsData)
 		}
 
 		ctx.SetContentType(JSON_CONTENT_TYPE)

@@ -48,6 +48,7 @@ type HttpRequest struct {
 	Request      *Request  `json:"request,omitempty"`
 	Response     *Response `json:"response,omitempty"`
 	DataFlow     *DataFlow `json:"flow,omitempty"`
+	Elastic map[string]interface{} `json:"elastic,omitempty"`
 }
 
 //TODO elapsed time, domain(check), client->proxy->upstream make it works,

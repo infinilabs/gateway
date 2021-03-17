@@ -179,6 +179,26 @@ func (v *HttpRequest) MarshalFastJSON(w *fastjson_marshal.Writer) error {
 		w.RawString(",\"conn_time\":")
 		w.String(v.ConnTime)
 	}
+	if v.Elastic != nil {
+		w.RawString(",\"elastic\":")
+		w.RawByte('{')
+		{
+			first := true
+			for k, v := range v.Elastic {
+				if first {
+					first = false
+				} else {
+					w.RawByte(',')
+				}
+				w.String(k)
+				w.RawByte(':')
+				if err := fastjson_marshal.Marshal(w, v); err != nil && firstErr == nil {
+					firstErr = err
+				}
+			}
+		}
+		w.RawByte('}')
+	}
 	if v.DataFlow != nil {
 		w.RawString(",\"flow\":")
 		if err := v.DataFlow.MarshalFastJSON(w); err != nil && firstErr == nil {
