@@ -291,7 +291,7 @@ DO:
 		}
 
 		if cfg.TrafficControl.MaxBytesPerNode>0{
-			if !rate.GetRaterWithDefine(cfg.Name,endpoint+"max_bps", int(cfg.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(),data.Len()){
+			if !rate.GetRaterWithDefine(cfg.Name,endpoint+"max_bps", int(cfg.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(),req.GetRequestLength()){
 				time.Sleep(10*time.Millisecond)
 				goto RetryRateLimit
 			}

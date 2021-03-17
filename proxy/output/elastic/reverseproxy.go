@@ -299,7 +299,7 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string,req *fasthttp.Reques
 
 		if cfg.TrafficControl.MaxBytesPerNode>0{
 			//fmt.Println("MaxBytesPerNode:",cfg.TrafficControl.MaxQpsPerNode)
-			if !rate.GetRaterWithDefine(cfg.Name,endpoint+"max_bps", int(cfg.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(),req.GetBodyLength()){
+			if !rate.GetRaterWithDefine(cfg.Name,endpoint+"max_bps", int(cfg.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(),req.GetRequestLength()){
 				time.Sleep(10*time.Millisecond)
 				goto RetryRateLimit
 			}
