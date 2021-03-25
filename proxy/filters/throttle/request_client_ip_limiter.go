@@ -20,9 +20,6 @@ func (filter RequestClientIPLimitFilter) Name() string {
 func (filter RequestClientIPLimitFilter) Process(ctx *fasthttp.RequestCtx) {
 
 	ips, ok := filter.GetStringArray("ip")
-	if !ok {
-		return
-	}
 
 	clientIP := ctx.RemoteIP().String()
 
