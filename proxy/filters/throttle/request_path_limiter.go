@@ -9,11 +9,11 @@ import (
 	log "github.com/cihub/seelog"
 )
 
-type RateLimitFilter struct {
+type RequestPathLimitFilter struct {
 	param.Parameters
 }
 
-func (filter RateLimitFilter) Name() string {
+func (filter RequestPathLimitFilter) Name() string {
 	return "request_path_limiter"
 }
 
@@ -66,7 +66,7 @@ func (this *MatchRules) Valid()bool {
 	return true
 }
 
-func (filter RateLimitFilter) Process(ctx *fasthttp.RequestCtx) {
+func (filter RequestPathLimitFilter) Process(ctx *fasthttp.RequestCtx) {
 
 	if !inited{
 		results:=[]MatchRules{}
@@ -105,7 +105,7 @@ func (filter RateLimitFilter) Process(ctx *fasthttp.RequestCtx) {
 			item:=v.Extract(key)
 
 			if global.Env().IsDebug{
-				log.Debug(key," matches ",v.Pattern,",extract:",item)
+				log.Debug(key," matches ",v.Pattern,", extract:",item)
 			}
 
 			if item!=""{
