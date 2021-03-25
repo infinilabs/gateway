@@ -62,6 +62,11 @@ func (module FloatingIPPlugin) Setup(cfg *config.Config) {
 		return
 	}
 
+	if !util.IsRootUser(){
+		log.Error("floating_ip need to run with root user")
+		return
+	}
+
 	if floatingIPConfig.Interface == "" || floatingIPConfig.IP == "" {
 		//let's do some magic
 		dev, ip, mask, err := util.GetPublishNetworkDeviceInfo()
@@ -126,8 +131,6 @@ var arpSignal = make(chan bool, 10)
 var multicastSignal = make(chan bool, 10)
 var haCheckSignal = make(chan bool, 10)
 
-//TODO handle two active nodes
-//TODO support switch back to standby mode
 func (module FloatingIPPlugin) SwitchToActiveMode() {
 
 	log.Debugf("active floating_ip at: %v", floatingIPConfig.IP)
@@ -361,23 +364,6 @@ const PreviousActiveIsBack State="PreviousActiveIsBack"
 
 func (module FloatingIPPlugin) StateMachine() {
 
-	//go func() {
-	//
-	//	var state State
-	//	for {
-	//		switch state {
-	//		case Active:
-	//			//
-	//			break
-	//		case Backup:
-	//			break
-	//		case Candidate:
-	//			break
-	//		case PreviousActiveIsBack:
-	//			break
-	//		}
-
-
 			aliveChan := make(chan bool)
 			go func() {
 				err := heartbeat.StartClient(floatingIPConfig.IP, floatingIPConfig.EchoPort, func() {
@@ -406,9 +392,6 @@ func (module FloatingIPPlugin) StateMachine() {
 			} else {
 				module.SwitchToActiveMode()
 			}
-
-	//	}
-	//}()
 }
 
 func (module FloatingIPPlugin) Stop() error {
