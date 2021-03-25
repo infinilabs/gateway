@@ -350,7 +350,7 @@ func (filter RequestFilterBase) Filter(ctx *fasthttp.RequestCtx){
 
 	ctx.Response.Header.Set("FILTERED","true")
 
-	if filter.GetStringOrDefault("policy","deny") == "deny"{
+	if filter.GetStringOrDefault("action","deny") == "deny"{
 		ctx.Response.SetDestination("filtered")
 		ctx.WriteString(filter.GetStringOrDefault("message", "Request filtered!"))
 		ctx.Response.SetStatusCode(403)
@@ -358,7 +358,7 @@ func (filter RequestFilterBase) Filter(ctx *fasthttp.RequestCtx){
 		return
 	}
 
-	filterFlow,ok:= filter.GetString("matched_flow")
+	filterFlow,ok:= filter.GetString("flow")
 	if ok{
 		ctx.Resume()
 		flow := common.MustGetFlow(filterFlow)

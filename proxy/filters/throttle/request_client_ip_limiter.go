@@ -58,7 +58,7 @@ CHECK:
 				log.Warn("client_ip ",clientIP, " reached limit")
 			}
 
-			if filter.GetStringOrDefault("policy","retry") == "deny"{
+			if filter.GetStringOrDefault("action","retry") == "deny"{
 				ctx.SetStatusCode(429)
 				ctx.WriteString(filter.GetStringOrDefault("message", "Reach request limit!"))
 				ctx.Finished()

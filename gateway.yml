@@ -46,15 +46,15 @@ flow:
         parameters:
           exclude:
             - 127.0.0.1
-          policy: redirect_flow #deny
-          matched_flow: echo
+          action: redirect_flow #deny
+          flow: echo
       - name: request_client_ip_limiter
         parameters:
 #          ip: #only limit for specify ips
 #            - 127.0.0.1
 #            - 192.168.3.2
           max_qps: 100
-          policy: retry # retry or deny
+          action: retry # retry or deny
 #          max_retry: 1000
 #          retry_interval: 500 #100ms
 #          max_bps: 102400 #100k
