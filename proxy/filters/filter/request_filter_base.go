@@ -7,6 +7,7 @@ import (
 	"infini.sh/framework/core/radix"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/gateway/common"
 	"regexp"
 )
 
@@ -304,7 +305,6 @@ func (filter RequestFilterBase) CheckExcludeStringRules(val string, ctx *fasthtt
 				log.Debugf("check exclude rule: %v vs %v, match: %v", x, val, match)
 			}
 			if match {
-				ctx.Filtered()
 				if global.Env().IsDebug {
 					log.Debugf("rule matched, this request has been filtered: %v", ctx.Request.URI().String())
 				}
@@ -336,14 +336,38 @@ func (filter RequestFilterBase) CheckIncludeStringRules(val string, ctx *fasthtt
 				return true,hasRule
 			}
 		}
-		ctx.Filtered()
 		if global.Env().IsDebug {
 			log.Debugf("no rule matched, this request has been filtered: %v", ctx.Request.URI().String())
 		}
+		return false,hasRule
 	}
 
 	return !hasRule, hasRule
 
+}
+
+func (filter RequestFilterBase) Filter(ctx *fasthttp.RequestCtx){
+
+	ctx.Response.Header.Set("FILTERED","true")
+
+	if filter.GetStringOrDefault("policy","deny") == "deny"{
+		ctx.Response.SetDestination("filtered")
+		ctx.WriteString(filter.GetStringOrDefault("message", "Request filtered!"))
+		ctx.Response.SetStatusCode(403)
+		ctx.Finished()
+		return
+	}
+
+	filterFlow,ok:= filter.GetString("matched_flow")
+	if ok{
+		ctx.Resume()
+		flow := common.MustGetFlow(filterFlow)
+		if global.Env().IsDebug {
+			log.Debugf("request [%v] go on flow: [%s] [%s]", ctx.URI().String(), filterFlow, flow.ToString())
+		}
+		flow.Process(ctx)
+		ctx.Finished()
+	}
 }
 
 //TODO

@@ -20,19 +20,19 @@ func (filter RequestClientIPFilter) Process(ctx *fasthttp.RequestCtx) {
 
 	valid, hasRule:= filter.CheckExcludeStringRules(clientIP, ctx)
 	if hasRule&&!valid {
-		ctx.Filtered()
 		if global.Env().IsDebug {
 			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
 		}
+		filter.Filter(ctx)
 		return
 	}
 
 	valid, hasRule= filter.CheckIncludeStringRules(clientIP, ctx)
 	if hasRule&&!valid {
-		ctx.Filtered()
 		if global.Env().IsDebug {
 			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
 		}
+		filter.Filter(ctx)
 		return
 	}
 

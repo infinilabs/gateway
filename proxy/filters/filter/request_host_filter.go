@@ -19,7 +19,7 @@ func (filter RequestServerHostFilter) Process(ctx *fasthttp.RequestCtx) {
 	host:=string(ctx.Request.Host())
 	valid, hasRule:= filter.CheckExcludeStringRules(host, ctx)
 	if hasRule&&!valid {
-		ctx.Filtered()
+		filter.Filter(ctx)
 		if global.Env().IsDebug {
 			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
 		}
@@ -28,7 +28,7 @@ func (filter RequestServerHostFilter) Process(ctx *fasthttp.RequestCtx) {
 
 	valid, hasRule= filter.CheckIncludeStringRules(host, ctx)
 	if hasRule&&!valid {
-		ctx.Filtered()
+		filter.Filter(ctx)
 		if global.Env().IsDebug {
 			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
 		}

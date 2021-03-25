@@ -14,6 +14,11 @@ entry:
 #      enabled: true
 
 flow:
+  - name: echo
+    filter: #comment out any filter sections, like you don't need cache or rate-limiter
+      - name: echo
+        parameters:
+          str: "hello world\n"
   - name: cache_first
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
 #      - name: sleep
@@ -23,20 +28,36 @@ flow:
 #        parameters:
 #          pattern: '"size": 10000'
 #          to: '"size": 100'
-      - name: get_cache
+#      - name: get_cache
+#        parameters:
+#          pass_patterns:
+#            - _cat
+#      - name: date_range_precision_tuning
+#        parameters:
+#          time_precision: 4
+#          path_keywords:
+#            - _search
+#            - _async_search
+#      - name: get_cache
+#        parameters:
+#          pass_patterns:
+#            - _cat
+      - name: request_client_ip_filter
         parameters:
-          pass_patterns:
-            - _cat
-      - name: date_range_precision_tuning
+          exclude:
+            - 127.0.0.1
+          policy: redirect_flow #deny
+          matched_flow: echo
+      - name: request_client_ip_limiter
         parameters:
-          time_precision: 4
-          path_keywords:
-            - _search
-            - _async_search
-      - name: get_cache
-        parameters:
-          pass_patterns:
-            - _cat
+#          ip: #only limit for specify ips
+#            - 127.0.0.1
+#            - 192.168.3.2
+          max_qps: 100
+          policy: retry # retry or deny
+#          max_retry: 1000
+#          retry_interval: 500 #100ms
+#          max_bps: 102400 #100k
       - name: elasticsearch
         parameters:
           elasticsearch: dev  #elasticsearch configure reference name
@@ -49,7 +70,7 @@ flow:
           filter:
             tags:
                 exclude:
-                - a: b
+                - temp: cold
             roles:
               exclude:
                 - master
@@ -57,9 +78,9 @@ flow:
 #        parameters:
 #          pattern: '"took":\d+,'
 #          to: '"took":123,'
-      - name: set_cache
-        parameters:
-          cache_ttl: 10s
+#      - name: set_cache
+#        parameters:
+#          cache_ttl: 10s
   - name: online_indexing_merge
     filter:
 #      - name: bulk_to_queue
@@ -92,11 +113,11 @@ flow:
           queue_name: request_logging
           max_request_body_size: 1024
           max_response_body_size: 1024
-          min_elapsed_time_in_ms: 500 # only record slow requests
+#          min_elapsed_time_in_ms: 500 # only record slow requests
 router:
   - name: my_router
     default_flow: cache_first
-    tracing_flow: request_logging
+#    tracing_flow: request_logging
     rules:
       - method:
           - "POST"
@@ -204,8 +225,8 @@ pipelines:
 #        - test2
 #        - test6
 
-#floating_ip:
-#  enabled: true
+floating_ip:
+  enabled: false
 #  ip: 192.168.3.234      #yep, it's optional, infini-gateway could detect one but maybe not the right one
 ##  netmask: 255.255.255.0 #optional
 ##  interface: en1         #optional
@@ -214,11 +235,17 @@ pipelines:
 #  host: 192.168.3.98
 #  port: 8125
 #  namespace: gateway.
-#forcemerge:
-#  enabled: false
-#  elasticsearch: dev
-#  min_num_segments: 1
-#  max_num_segments: 1
+forcemerge:
+  enabled: false
+  elasticsearch: dev
+  min_num_segments: 1
+  max_num_segments: 1
+  discovery_rules:
+    - index_pattern: "*"
+      timestamp_fields:
+        - "@timestamp"
+        - "timestamp"
+      min_idle_time: "1d"
 #  indices:
 #    - index_name
 

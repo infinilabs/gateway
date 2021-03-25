@@ -33,7 +33,7 @@ func (filter ResponseStatusCodeFilter) Process(ctx *fasthttp.RequestCtx) {
 				log.Debugf("exclude code: %v vs %v, match: %v", x, code,  y== code)
 			}
 			if y == code {
-				ctx.Filtered()
+				filter.Filter(ctx)
 				if global.Env().IsDebug {
 					log.Debugf("rule matched, this request has been filtered: %v", ctx.Request.URI().String())
 				}
@@ -59,7 +59,7 @@ func (filter ResponseStatusCodeFilter) Process(ctx *fasthttp.RequestCtx) {
 				return
 			}
 		}
-		ctx.Filtered()
+		filter.Filter(ctx)
 		if global.Env().IsDebug {
 			log.Debugf("no rule matched, this request has been filtered: %v", ctx.Request.URI().String())
 		}

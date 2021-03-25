@@ -33,7 +33,7 @@ func (filter RequestMethodFilter) Process(ctx *fasthttp.RequestCtx) {
 				log.Debugf("exclude method: %v vs %v, match: %v", x, method, util.ToString(x) == method)
 			}
 			if util.ToString(x) == method {
-				ctx.Filtered()
+				filter.Filter(ctx)
 				if global.Env().IsDebug {
 					log.Debugf("rule matched, this request has been filtered: %v", ctx.Request.URI().String())
 				}
@@ -55,7 +55,7 @@ func (filter RequestMethodFilter) Process(ctx *fasthttp.RequestCtx) {
 				return
 			}
 		}
-		ctx.Filtered()
+		filter.Filter(ctx)
 		if global.Env().IsDebug {
 			log.Debugf("no rule matched, this request has been filtered: %v", ctx.Request.URI().String())
 		}

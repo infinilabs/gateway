@@ -26,7 +26,7 @@ func (filter RequestUserFilter) Process(ctx *fasthttp.RequestCtx) {
 	userStr:=string(user)
 	valid, hasRule:= filter.CheckExcludeStringRules(userStr, ctx)
 	if hasRule&&!valid {
-		ctx.Filtered()
+		filter.Filter(ctx)
 		if global.Env().IsDebug {
 			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
 		}
@@ -35,7 +35,7 @@ func (filter RequestUserFilter) Process(ctx *fasthttp.RequestCtx) {
 
 	valid, hasRule= filter.CheckIncludeStringRules(userStr, ctx)
 	if hasRule&&!valid {
-		ctx.Filtered()
+		filter.Filter(ctx)
 		if global.Env().IsDebug {
 			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
 		}

@@ -31,7 +31,7 @@ func (filter ResponseHeaderFilter) Process(ctx *fasthttp.RequestCtx) {
 					log.Debugf("exclude header [%v]: %v vs %v, match: %v", k, v, string(v1), match)
 				}
 				if match {
-					ctx.Filtered()
+					filter.Filter(ctx)
 					if global.Env().IsDebug {
 						log.Debugf("rule matched, this request has been filtered: %v", ctx.Request.URI().String())
 					}
@@ -58,7 +58,7 @@ func (filter ResponseHeaderFilter) Process(ctx *fasthttp.RequestCtx) {
 				}
 			}
 		}
-		ctx.Filtered()
+		filter.Filter(ctx)
 		if global.Env().IsDebug {
 			log.Debugf("no rule matched, this request has been filtered: %v", ctx.Request.URI().String())
 		}
