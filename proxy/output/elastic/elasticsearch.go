@@ -6,6 +6,7 @@ import (
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/gateway/common"
 	"sync"
 )
 
@@ -25,7 +26,7 @@ var faviconPath=[]byte("/favicon.ico")
 
 //var singleSetCache singleflight.Group
 
-func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
+func (filter Elasticsearch) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
 
 	if bytes.Equal(faviconPath,ctx.Request.URI().Path()){
 		if global.Env().IsDebug{

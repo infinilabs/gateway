@@ -5,6 +5,7 @@ import (
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/gateway/common"
 	"regexp"
 )
 
@@ -16,7 +17,7 @@ func (filter ResponseBodyRegexReplace) Name() string {
 	return "response_body_regex_replace"
 }
 
-func (filter ResponseBodyRegexReplace) Process(ctx *fasthttp.RequestCtx) {
+func (filter ResponseBodyRegexReplace) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
 	pattern:=filter.MustGetString("pattern")
 	to:=filter.MustGetString("to")
 

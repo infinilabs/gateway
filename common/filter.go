@@ -1,12 +1,10 @@
 package common
 
-import "infini.sh/framework/lib/fasthttp"
-
-type Filter interface {
-	Name() string
-}
+import (
+	"infini.sh/framework/lib/fasthttp"
+)
 
 type RequestFilter interface {
-	Filter
-	Process(ctx *fasthttp.RequestCtx)
+	Name() string
+	Process(filterCfg *FilterConfig,ctx *fasthttp.RequestCtx)
 }

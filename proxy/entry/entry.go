@@ -94,9 +94,8 @@ func (this *Entrypoint) Start() error {
 			for _,y:=range rule.Flow{
 				cfg:=common.GetFlowConfig(y)
 				for _,z:=range cfg.Filters{
-					log.Tracef("get filter, %v",z)
 					f:=common.GetFilterInstanceWithConfig(&z)
-					flow.JoinFilter(f)
+					flow.JoinFilter(&z,f)
 				}
 			}
 			for _,v:=range rule.Method{

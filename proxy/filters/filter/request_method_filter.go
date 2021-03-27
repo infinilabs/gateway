@@ -5,6 +5,7 @@ import (
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/gateway/common"
 )
 
 type RequestMethodFilter struct {
@@ -15,7 +16,7 @@ func (filter RequestMethodFilter) Name() string {
 	return "request_method_filter"
 }
 
-func (filter RequestMethodFilter) Process(ctx *fasthttp.RequestCtx) {
+func (filter RequestMethodFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
 
 	method := string(ctx.Method())
 

@@ -14,7 +14,6 @@ import (
 	ccache "infini.sh/framework/lib/cache"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
-	"math"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -144,7 +143,7 @@ func (p RequestCache) SetCache(key string, data []byte, ttl time.Duration) {
 	}
 
 	min, _ := p.GetInt("min_response_size", -1)
-	max, _ := p.GetInt("max_response_size", math.MaxInt32)
+	max, _ := p.GetInt("max_response_size", int(^uint(0) >> 1))
 	dataLen := len(data)
 	if dataLen < min || (dataLen > max) && max>0 {
 		if global.Env().IsDebug {
@@ -212,7 +211,7 @@ func (filter RequestCacheGet) Name() string {
 	return "get_cache"
 }
 
-func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
+func (filter RequestCacheGet) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
 	if bytes.Equal(common.FaviconPath,ctx.Request.URI().Path()){
 		if global.Env().IsDebug{
 			log.Tracef("skip to delegate favicon.io")
@@ -365,7 +364,7 @@ func (filter RequestCacheSet) Name() string {
 	return "set_cache"
 }
 
-func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
+func (filter RequestCacheSet) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
 	method :=  string(ctx.Request.Header.Method())
 	url := string(ctx.RequestURI())
 

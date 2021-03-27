@@ -4,6 +4,7 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/gateway/common"
 )
 
 type RequestUrlPathFilter struct {
@@ -14,7 +15,7 @@ func (filter RequestUrlPathFilter) Name() string {
 	return "request_path_filter"
 }
 
-func (filter RequestUrlPathFilter) Process(ctx *fasthttp.RequestCtx) {
+func (filter RequestUrlPathFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
 
 	path := string(ctx.Path())
 

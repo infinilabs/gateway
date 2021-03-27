@@ -4,6 +4,7 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/gateway/common"
 )
 
 type ResponseStatusCodeFilter struct {
@@ -14,7 +15,7 @@ func (filter ResponseStatusCodeFilter) Name() string {
 	return "response_status_filter"
 }
 
-func (filter ResponseStatusCodeFilter) Process(ctx *fasthttp.RequestCtx) {
+func (filter ResponseStatusCodeFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
 
 	code := ctx.Response.StatusCode()
 

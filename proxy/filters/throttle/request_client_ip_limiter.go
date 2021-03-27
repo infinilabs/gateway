@@ -6,6 +6,7 @@ import (
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/rate"
 	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/gateway/common"
 	"time"
 )
 
@@ -17,7 +18,7 @@ func (filter RequestClientIPLimitFilter) Name() string {
 	return "request_client_ip_limiter"
 }
 
-func (filter RequestClientIPLimitFilter) Process(ctx *fasthttp.RequestCtx) {
+func (filter RequestClientIPLimitFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
 
 	ips, ok := filter.GetStringArray("ip")
 
@@ -51,8 +52,7 @@ CHECK:
 		retryDeplyInMs:=time.Duration(filter.GetIntOrDefault("retry_delay_in_ms",10))*time.Millisecond
 
 		RetryRateLimit:
-		//TODO set limit category per cluster
-		if (ok && !rate.GetRaterWithDefine("request_client_ip_max_qps", clientIP, int(maxQps)).Allow()) || (ok1 && !rate.GetRaterWithDefine("request_client_ip_max_bps", clientIP, int(maxBps)).AllowN(time.Now(),ctx.Request.GetRequestLength())) {
+		if (ok && !rate.GetRaterWithDefine(filter.UUID()+"_max_qps", clientIP, int(maxQps)).Allow()) || (ok1 && !rate.GetRaterWithDefine(filter.UUID()+"_max_bps", clientIP, int(maxBps)).AllowN(time.Now(),ctx.Request.GetRequestLength())) {
 
 			if global.Env().IsDebug {
 				log.Warn("client_ip ",clientIP, " reached limit")

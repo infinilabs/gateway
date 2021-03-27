@@ -19,7 +19,7 @@ func (filter CloneFlowFilter) Name() string {
 	return "clone"
 }
 
-func (filter CloneFlowFilter) Process(ctx *fasthttp.RequestCtx) {
+func (filter CloneFlowFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
 	flows := filter.MustGetStringArray("flows")
 	continueAfterMatch := filter.GetBool("continue", false)
 

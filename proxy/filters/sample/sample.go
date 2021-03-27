@@ -21,6 +21,7 @@ import (
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/gateway/common"
 	"math/rand"
 	"sync"
 )
@@ -47,7 +48,7 @@ func initPool() {
 	}
 }
 
-func (filter SampleFilter) Process(ctx *fasthttp.RequestCtx) {
+func (filter SampleFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
 
 	initPool()
 

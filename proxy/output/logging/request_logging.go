@@ -6,6 +6,7 @@ import (
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fastjson_marshal"
+	"infini.sh/gateway/common"
 	"infini.sh/gateway/common/model"
 	"strings"
 	"sync"
@@ -57,7 +58,7 @@ func initPool() {
 	}
 }
 
-func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
+func (this RequestLogging) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
 
 	initPool()
 

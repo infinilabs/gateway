@@ -25,24 +25,24 @@ GET				/audit/*operations			name=secured_audit_access flow=[ basic_auth >> flow{
 
 type FilterFlow struct {
 	ID string
+	FilterConfigs []*FilterConfig
 	Filters []RequestFilter
 }
 
-func (flow *FilterFlow) JoinFilter(filter ...RequestFilter) *FilterFlow {
-	for _,v:=range filter{
-		flow.Filters=append(flow.Filters,v)
-	}
+func (flow *FilterFlow) JoinFilter(filterCfg *FilterConfig,filter RequestFilter) *FilterFlow {
+	flow.FilterConfigs=append(flow.FilterConfigs,filterCfg)
+	flow.Filters=append(flow.Filters,filter)
 	return flow
 }
 
-func (flow *FilterFlow) JoinFlows(flows ...FilterFlow) *FilterFlow {
-	for _, v := range flows {
-		for _, x := range v.Filters {
-			flow.Filters = append(flow.Filters, x)
-		}
-	}
-	return flow
-}
+//func (flow *FilterFlow) JoinFlows(flows ...FilterFlow) *FilterFlow {
+//	for _, v := range flows {
+//		for _, x := range v.Filters {
+//			flow.Filters = append(flow.Filters, x)
+//		}
+//	}
+//	return flow
+//}
 
 func (flow *FilterFlow) ToString() string {
 	str:=strings.Builder{}
@@ -58,7 +58,7 @@ func (flow *FilterFlow) ToString() string {
 }
 
 func (flow *FilterFlow) Process(ctx *fasthttp.RequestCtx) {
-	for _, v := range flow.Filters {
+	for i, v := range flow.Filters {
 		if !ctx.ShouldContinue(){
 			if global.Env().IsDebug{
 				log.Debugf("filter [%v] not continued",v.Name())
@@ -69,7 +69,8 @@ func (flow *FilterFlow) Process(ctx *fasthttp.RequestCtx) {
 			log.Debugf("processing filter [%v]",v.Name())
 		}
 		ctx.AddFlowProcess(v.Name())
-		v.Process(ctx)
+		cfg:=flow.FilterConfigs[i]
+		v.Process(cfg,ctx)
 	}
 }
 
@@ -88,7 +89,7 @@ func MustGetFlow(flowID string) FilterFlow {
 
 	for _,z:=range cfg.Filters{
 		f:= GetFilterInstanceWithConfig(&z)
-		v.JoinFilter(f)
+		v.JoinFilter(&z,f)
 	}
 	flows[flowID]=v
 	return v
@@ -100,14 +101,14 @@ func GetFlowProcess(flowID string) func(ctx *fasthttp.RequestCtx) {
 	return flow.Process
 }
 
-func JoinFlows(flowID ...string) FilterFlow {
-	flow := FilterFlow{}
-	for _, v := range flowID {
-		temp := MustGetFlow(v)
-		flow.JoinFlows(flow, temp)
-	}
-	return flow
-}
+//func JoinFlows(flowID ...string) FilterFlow {
+//	flow := FilterFlow{}
+//	for _, v := range flowID {
+//		temp := MustGetFlow(v)
+//		flow.JoinFlows(flow, temp)
+//	}
+//	return flow
+//}
 
 func GetFilter(name string) RequestFilter {
 	v, ok := filterTypes[name]

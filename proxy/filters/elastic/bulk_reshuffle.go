@@ -145,7 +145,7 @@ func parseJson(scannedByte []byte)(action []byte,index,id string)  {
 var versions= map[string]int{}
 var versionLock=sync.Mutex{}
 
-func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
+func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
 
 	path:=string(ctx.URI().Path())
 

@@ -1,12 +1,13 @@
 package throttle
 
 import (
+	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/rate"
 	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/gateway/common"
 	"regexp"
-	log "github.com/cihub/seelog"
 )
 
 type RequestPathLimitFilter struct {
@@ -16,8 +17,6 @@ type RequestPathLimitFilter struct {
 func (filter RequestPathLimitFilter) Name() string {
 	return "request_path_limiter"
 }
-
-var inited bool
 
 type MatchRules struct {
 	Pattern string //pattern
@@ -66,9 +65,9 @@ func (this *MatchRules) Valid()bool {
 	return true
 }
 
-func (filter RequestPathLimitFilter) Process(ctx *fasthttp.RequestCtx) {
-
-	if !inited{
+func (filter RequestPathLimitFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+	rules,ok:=filter.Get("rules_obj").([]MatchRules)
+	if !ok{
 		results:=[]MatchRules{}
 		rules:=filter.Get("rules")
 		objs:=rules.([]interface{})
@@ -85,11 +84,6 @@ func (filter RequestPathLimitFilter) Process(ctx *fasthttp.RequestCtx) {
 			results=append(results,z)
 		}
 		filter.Set("rules_obj",results)
-		inited=true
-	}
-
-	rules,ok:=filter.Get("rules_obj").([]MatchRules)
-	if !ok{
 		return
 	}
 

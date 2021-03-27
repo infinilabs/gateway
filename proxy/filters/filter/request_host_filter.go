@@ -4,6 +4,7 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/gateway/common"
 )
 
 
@@ -15,7 +16,7 @@ func (filter RequestServerHostFilter) Name() string {
 	return "request_host_filter"
 }
 
-func (filter RequestServerHostFilter) Process(ctx *fasthttp.RequestCtx) {
+func (filter RequestServerHostFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
 	host:=string(ctx.Request.Host())
 	valid, hasRule:= filter.CheckExcludeStringRules(host, ctx)
 	if hasRule&&!valid {

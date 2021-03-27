@@ -34,7 +34,7 @@ func initPool() {
 	}
 }
 
-func (filter RatioRoutingFlowFilter) Process(ctx *fasthttp.RequestCtx) {
+func (filter RatioRoutingFlowFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
 
 	initPool()
 

@@ -7,6 +7,7 @@ import (
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/gateway/common"
 	cap "infini.sh/gateway/trash/captn"
 	"net/http"
 	"os"
@@ -186,7 +187,7 @@ func (filter TranslogOutput) Name() string {
 	return "translog"
 }
 
-func (filter TranslogOutput) Process(ctx *fasthttp.RequestCtx) {
+func (filter TranslogOutput) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
 
 	//if p.proxyConfig.AsyncWrite && strings.Contains(ctx.URI().String(), "_bulk") {
 
