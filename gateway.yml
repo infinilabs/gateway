@@ -258,12 +258,17 @@ force_merge:
   elasticsearch: dev
   min_num_segments: 1
   max_num_segments: 1
-  discovery_rules:
-    - index_pattern: "*"
-      timestamp_fields:
-        - "@timestamp"
-        - "timestamp"
-      min_idle_time: "1d"
+  discovery: # auto discovery elasticsearch cluster nodes
+    enabled: true
+    interval: 60s
+    min_idle_time: "1d"
+    rules:
+      - index_pattern: "*"
+        timestamp_fields:
+          - "@timestamp"
+          - "timestamp"
+
+
 #  indices:
 #    - index_name
 
