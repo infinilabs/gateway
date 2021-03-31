@@ -12,7 +12,6 @@ import (
 	"sync"
 
 	"infini.sh/framework/core/queue"
-	//jsoniter "github.com/json-iterator/go"
 	"infini.sh/framework/lib/fasthttp"
 	"time"
 )
@@ -138,8 +137,28 @@ func (this RequestLogging) Process(filterCfg *common.FilterConfig,ctx *fasthttp.
 		if request.Elastic==nil{
 			request.Elastic= map[string]interface{}{}
 		}
-		stats:=ctx.Get("bulk_index_stats")
-		request.Elastic["bulk_index_stats"]=stats
+		indexStats:=ctx.Get("bulk_index_stats")
+		statsObj,ok:=indexStats.(map[string]int)
+		if ok{
+			docs:=0
+			for _,v:=range statsObj{
+				docs+=v
+			}
+
+			bulk_status:=map[string]interface{}{}
+			bulk_status["indices"]=len(statsObj)
+			bulk_status["documents"]=docs
+
+			if this.GetBool("bulk_stats_details",true){
+				actionStats:=ctx.Get("bulk_action_stats")
+				bulk_status["stats"]=util.MapStr{
+					"index":indexStats,
+					"action":actionStats,
+				}
+			}
+
+			request.Elastic["bulk_stats"]=bulk_status
+		}
 	}
 
 	if ctx.Has("elastic_cluster_name"){

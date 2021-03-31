@@ -16,6 +16,20 @@ entry:
 flow:
   - name: echo
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
+      - name: request_path_limiter
+        parameters:
+          max_qps: 3
+          rules:
+           - pattern: "/(?P<index_name>.*?)/_search"
+             max_qps: 100
+             group: index_name
+      - name: request_path_limiter
+        parameters:
+          max_qps: 4
+          rules:
+           - pattern: "/(?P<index_name>.*?)/_count"
+             max_qps: 200
+             group: index_name
       - name: echo
         parameters:
           str: "hello world\n"
@@ -94,7 +108,8 @@ flow:
           mode: async
 #          mode: sync
           safety_parse: true
-          index_stats: true #record bulk index stats info to request logging
+          index_stats_analysis: true
+          action_stats_analysis: true
           valid_metadata: true
 #          shards:
 #            - "0"
@@ -114,10 +129,11 @@ flow:
           max_request_body_size: 1024
           max_response_body_size: 1024
 #          min_elapsed_time_in_ms: 500 # only record slow requests
+          bulk_stats_details: false
 router:
   - name: my_router
     default_flow: cache_first
-#    tracing_flow: request_logging
+    tracing_flow: request_logging
     rules:
       - method:
           - "POST"
@@ -128,6 +144,7 @@ router:
 elasticsearch:
 - name: dev
   enabled: true
+#  endpoint: https://192.168.3.98:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
   endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
   traffic_control: #global traffic control
 #    max_bytes_per_node: 102400 #max total bytes send to es per node
@@ -199,7 +216,7 @@ pipelines:
       timeout: "1s"
       worker_size: 1
       bulk_size_in_mb: 1 #in MB
-      level: shard
+      level: node
       mode: async
 - name: bulk_request_ingest
   start:
@@ -235,8 +252,9 @@ floating_ip:
 #  host: 192.168.3.98
 #  port: 8125
 #  namespace: gateway.
-forcemerge:
-  enabled: false
+
+force_merge:
+  enabled: true
   elasticsearch: dev
   min_num_segments: 1
   max_num_segments: 1

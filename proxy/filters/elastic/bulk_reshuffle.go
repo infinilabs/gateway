@@ -180,8 +180,9 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 		validMetadata:=this.GetBool("valid_metadata",false)
 		reshuffleType:=this.GetStringOrDefault("level","node")
 		submitMode:=this.GetStringOrDefault("mode","sync") //sync and async
-		fixNullID:=this.GetBool("fix_null_id",true) //sync and async
-		IndexAnalysis:=this.GetBool("index_stats",true) //sync and async
+		fixNullID:=this.GetBool("fix_null_id",true)        //sync and async
+		indexAnalysis :=this.GetBool("index_stats_analysis",true)   //sync and async
+		actionAnalysis:=this.GetBool("action_stats_analysis",true)  //sync and async
 		enabledShards,checkShards := this.GetStringArray("shards")
 
 		body:=ctx.Request.GetRawBody()
@@ -196,6 +197,7 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 		skipNext:=false
 		var buff *bytes.Buffer
 		var indexStatsData map[string]int
+		var actionStatsData map[string]int
 		var indexStatsLock sync.Mutex
 		shardID:=0
 		for scanner.Scan() {
@@ -238,7 +240,7 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 
 				//统计索引次数
 				stats.Increment("elasticsearch."+clusterName+".indexing",index)
-				if IndexAnalysis{
+				if indexAnalysis {
 					//init
 					if indexStatsData==nil{
 						indexStatsLock.Lock()
@@ -255,6 +257,28 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 						indexStatsData[index]=1
 					}else{
 						indexStatsData[index]=v+1
+					}
+					indexStatsLock.Unlock()
+				}
+
+				if actionAnalysis {
+					//init
+					if actionStatsData==nil{
+						indexStatsLock.Lock()
+						if actionStatsData==nil{
+							actionStatsData=map[string]int{}
+						}
+						indexStatsLock.Unlock()
+					}
+
+					//stats
+					indexStatsLock.Lock()
+					actionStr:=string(action)
+					v,ok:=actionStatsData[actionStr]
+					if !ok{
+						actionStatsData[actionStr]=1
+					}else{
+						actionStatsData[actionStr]=v+1
 					}
 					indexStatsLock.Unlock()
 				}
@@ -449,8 +473,11 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 		}
 
 
-		if IndexAnalysis{
+		if indexAnalysis {
 			ctx.Set("bulk_index_stats",indexStatsData)
+		}
+		if actionAnalysis {
+			ctx.Set("bulk_action_stats",actionStatsData)
 		}
 
 		ctx.Set("elastic_cluster_name",clusterName)
