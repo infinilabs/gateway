@@ -291,7 +291,7 @@ func (filter RequestCacheGet) Process(filterCfg *common.FilterConfig,ctx *fastht
 			ctx.Response.Cached = true
 			ctx.Response.Header.Add("CACHED", "true")
 			ctx.Response.Header.Add("CACHE-HASH", hash)
-			ctx.Response.SetDestination("cache")
+			ctx.SetDestination("cache")
 
 			if global.Env().IsDebug {
 				log.Trace("cache hit:", hash, ",", string(ctx.Request.Header.Method()), ",", string(ctx.Request.RequestURI()))

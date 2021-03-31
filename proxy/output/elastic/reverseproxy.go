@@ -325,10 +325,16 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string,myctx *fasthttp.Requ
 
 	res.Header.Set("CLUSTER", p.proxyConfig.Elasticsearch)
 
-	myctx.Set("elastic_cluster_name",elasticsearch)
+	if myctx.Has("elastic_cluster_name"){
+		es1:=myctx.MustGetString("elastic_cluster_name")
+		myctx.Set("elastic_cluster_name",[]string{es1,elasticsearch})
+	}else{
+		myctx.Set("elastic_cluster_name",elasticsearch)
+	}
 
 	res.Header.Set("UPSTREAM", pc.Addr)
-	res.SetDestination(pc.Addr)
+
+	myctx.SetDestination(pc.Addr)
 
 }
 

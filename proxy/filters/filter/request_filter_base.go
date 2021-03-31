@@ -351,7 +351,7 @@ func (filter RequestFilterBase) Filter(ctx *fasthttp.RequestCtx){
 	ctx.Response.Header.Set("FILTERED","true")
 
 	if filter.GetStringOrDefault("action","deny") == "deny"{
-		ctx.Response.SetDestination("filtered")
+		ctx.SetDestination("filtered")
 		ctx.WriteString(filter.GetStringOrDefault("message", "Request filtered!"))
 		ctx.Response.SetStatusCode(403)
 		ctx.Finished()

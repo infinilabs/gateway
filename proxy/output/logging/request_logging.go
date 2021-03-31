@@ -177,8 +177,8 @@ func (this RequestLogging) Process(filterCfg *common.FilterConfig,ctx *fasthttp.
 	//TODO ,use gateway's uuid instead
 	request.DataFlow.Relay = global.Env().SystemConfig.NodeConfig.ToString()
 
-	if len(ctx.Response.Destination()) > 0 {
-		request.DataFlow.To = ctx.Response.Destination()
+	if len(ctx.Destination()) > 0 {
+		request.DataFlow.To = ctx.Destination()
 	} else if ctx.Response.RemoteAddr() != nil {
 		request.Response.RemoteAddr = ctx.Response.RemoteAddr().String()
 		request.DataFlow.To = []string{request.Response.RemoteAddr}

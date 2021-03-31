@@ -460,13 +460,13 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 					return
 				}
 
-				ctx.Response.SetDestination(fmt.Sprintf("%v:%v","sync",x))
+				ctx.SetDestination(fmt.Sprintf("%v:%v","sync",x))
 			}else{
 				err:=queue.Push(x,y.Bytes())
 				if err!=nil{
 					panic(err)
 				}
-				ctx.Response.SetDestination(fmt.Sprintf("%v:%v","async",x))
+				ctx.SetDestination(fmt.Sprintf("%v:%v","async",x))
 			}
 			//y.Reset()
 			//bufferPool.Put(y) //TODO

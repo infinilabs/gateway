@@ -32,7 +32,7 @@ func (this BulkToQueue) Process(filterCfg *common.FilterConfig,ctx *fasthttp.Req
 			return
 		}
 
-		ctx.Response.SetDestination(fmt.Sprintf("queue:%s",queueName))
+		ctx.SetDestination(fmt.Sprintf("queue:%s",queueName))
 
 		ctx.SetContentType(JSON_CONTENT_TYPE)
 		ctx.WriteString("{\n  \"took\" : 0,\n  \"errors\" : false,\n  \"items\" : []\n}")
