@@ -284,14 +284,14 @@ DO:
 	RetryRateLimit:
 
 		if cfg.TrafficControl.MaxQpsPerNode>0{
-			if !rate.GetRaterWithDefine(cfg.Name,endpoint+"max_qps", int(cfg.TrafficControl.MaxQpsPerNode)).Allow(){
+			if !rate.GetRateLimiterPerSecond(cfg.Name,endpoint+"max_qps", int(cfg.TrafficControl.MaxQpsPerNode)).Allow(){
 				time.Sleep(10*time.Millisecond)
 				goto RetryRateLimit
 			}
 		}
 
 		if cfg.TrafficControl.MaxBytesPerNode>0{
-			if !rate.GetRaterWithDefine(cfg.Name,endpoint+"max_bps", int(cfg.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(),req.GetRequestLength()){
+			if !rate.GetRateLimiterPerSecond(cfg.Name,endpoint+"max_bps", int(cfg.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(),req.GetRequestLength()){
 				time.Sleep(10*time.Millisecond)
 				goto RetryRateLimit
 			}

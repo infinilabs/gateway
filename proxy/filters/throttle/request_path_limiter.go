@@ -103,7 +103,7 @@ func (filter RequestPathLimitFilter) Process(filterCfg *common.FilterConfig,ctx 
 			}
 
 			if item!=""{
-				if !rate.GetRaterWithDefine(v.Pattern,item, int(v.MaxQPS)).Allow(){
+				if !rate.GetRateLimiterPerSecond(v.Pattern,item, int(v.MaxQPS)).Allow(){
 
 					if global.Env().IsDebug{
 						log.Debug(key," reach limited ",v.Pattern,",extract:",item)

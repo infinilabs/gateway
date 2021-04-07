@@ -14,6 +14,23 @@ entry:
 #      enabled: true
 
 flow:
+  - name: write-es1
+    filter:
+      - name: elasticsearch
+        parameters:
+          elasticsearch: es1
+  - name: write-es2
+    filter:
+      - name: elasticsearch
+        parameters:
+          elasticsearch: es2
+  - name: double-write
+    filter:
+      - name: clone
+        parameters:
+          flows:
+            - write-es1
+            - write-es2
   - name: echo
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
       - name: request_path_limiter
@@ -56,22 +73,22 @@ flow:
 #        parameters:
 #          pass_patterns:
 #            - _cat
-      - name: request_client_ip_filter
-        parameters:
-          exclude:
-            - 127.0.0.1
-          action: redirect_flow #deny
-          flow: echo
+#      - name: request_client_ip_filter
+#        parameters:
+#          exclude:
+#            - 127.0.0.1
+#          action: redirect_flow #deny
+#          flow: echo
       - name: request_client_ip_limiter
         parameters:
 #          ip: #only limit for specify ips
 #            - 127.0.0.1
-#            - 192.168.3.2
-          max_qps: 100
-          action: retry # retry or deny
-#          max_retry: 1000
-#          retry_interval: 500 #100ms
-#          max_bps: 102400 #100k
+#          max_requests: 321
+          max_bytes: 102400 #100k
+          action: retry # retry or drop
+          #          max_retry_times: 1000
+          #          retry_interval: 500 #100ms
+          message: "your ip reached our limit"
       - name: elasticsearch
         parameters:
           elasticsearch: dev  #elasticsearch configure reference name
@@ -140,14 +157,22 @@ router:
         pattern:
           - /_bulk
         flow:
-          - online_indexing_merge
+#          - online_indexing_merge
+          - double-write
 elasticsearch:
+- name: es1
+  enabled: true
+  endpoint: http://localhost:9200
+- name: es2
+  enabled: true
+#  endpoint: http://192.168.3.201:9200
+  endpoint: http://localhost:9200
 - name: dev
   enabled: true
 #  endpoint: https://192.168.3.98:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
   endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
   traffic_control: #global traffic control
-#    max_bytes_per_node: 102400 #max total bytes send to es per node
+#    max_bps_per_node: 102400 #max total bytes send to es per node
     max_qps_per_node: 1500 #max total requests send to es per node
   basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
     username: elastic
@@ -254,7 +279,7 @@ floating_ip:
 #  namespace: gateway.
 
 force_merge:
-  enabled: true
+  enabled: false
   elasticsearch: dev
   min_num_segments: 1
   max_num_segments: 1

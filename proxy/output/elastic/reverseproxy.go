@@ -154,7 +154,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 	if len(endpoints)==0{
 		endpoints = append(endpoints, esConfig.GetHost())
 		if checkMetadata{
-			log.Warnf("no valid endpoint for elasticsearch, fallback to use the seed endpoint: [%v], please check filter rules",endpoints)
+			log.Warnf("no valid endpoint for elasticsearch, fallback to seed: [%v]",endpoints)
 		}
 	}
 
@@ -294,7 +294,7 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string,myctx *fasthttp.Requ
 
 		if cfg.TrafficControl.MaxQpsPerNode>0{
 			//fmt.Println("MaxQpsPerNode:",cfg.TrafficControl.MaxQpsPerNode)
-			if !rate.GetRaterWithDefine(cfg.Name,endpoint+"max_qps", int(cfg.TrafficControl.MaxQpsPerNode)).Allow(){
+			if !rate.GetRateLimiterPerSecond(cfg.Name,endpoint+"max_qps", int(cfg.TrafficControl.MaxQpsPerNode)).Allow(){
 				time.Sleep(10*time.Millisecond)
 				goto RetryRateLimit
 			}
@@ -302,7 +302,7 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string,myctx *fasthttp.Requ
 
 		if cfg.TrafficControl.MaxBytesPerNode>0{
 			//fmt.Println("MaxBytesPerNode:",cfg.TrafficControl.MaxQpsPerNode)
-			if !rate.GetRaterWithDefine(cfg.Name,endpoint+"max_bps", int(cfg.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(),req.GetRequestLength()){
+			if !rate.GetRateLimiterPerSecond(cfg.Name,endpoint+"max_bps", int(cfg.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(),req.GetRequestLength()){
 				time.Sleep(10*time.Millisecond)
 				goto RetryRateLimit
 			}
