@@ -181,6 +181,7 @@ func (joint BulkIndexingJoint) NewBulkWorker( bulkSizeInByte int, wg *sync.WaitG
 		}
 
 		if len(pop)>0{
+			//log.Info("received message,",util.SubString(string(pop),0,100))
 			stats.IncrementBy("bulk", "bytes_received", int64(mainBuf.Len()))
 			mainBuf.Write(pop)
 		}
@@ -199,10 +200,8 @@ func (joint BulkIndexingJoint) NewBulkWorker( bulkSizeInByte int, wg *sync.WaitG
 
 	if mainBuf.Len() > 0 {
 
-		//fmt.Println("bulk CLEAN_BUFFER", mainBuf.Len())
-
 		success:=joint.Bulk(&cfg, endpoint, &mainBuf)
-		log.Trace("clean buffer, and execute bulk insert")
+		log.Debug("bulk result:",success)
 
 		if !success{
 			queue.Push(deadLetterQueueName,mainBuf.Bytes())
@@ -263,11 +262,12 @@ func (joint BulkIndexingJoint) Bulk(cfg *elastic.ElasticsearchConfig, endpoint s
 		req.URI().SetPassword(cfg.BasicAuth.Password)
 	}
 
+	//set body
 	if data.Len() > 0 {
 		if compress {
 			_, err := fasthttp.WriteGzipLevel(req.BodyWriter(), data.Bytes(), fasthttp.CompressBestSpeed)
 			if err != nil {
-				panic(err)
+				return false
 			}
 		} else {
 			req.SetBodyStreamWriter(func(w *bufio.Writer) {
@@ -276,6 +276,7 @@ func (joint BulkIndexingJoint) Bulk(cfg *elastic.ElasticsearchConfig, endpoint s
 			})
 		}
 	}
+
 	retryTimes:=0
 
 DO:
@@ -315,7 +316,6 @@ DO:
 		return false
 	}
 
-
 	// Do we need to decompress the response?
 	var resbody =resp.GetRawBody()
 	if global.Env().IsDebug{
@@ -347,11 +347,10 @@ DO:
 		return false
 	}
 
-	//TODO check respbody's error
+	//TODO check resp body's error
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated {
 
 		//200{"took":2,"errors":true,"items":[
-		if resp.StatusCode()==http.StatusOK{
 			//handle error items
 			//"errors":true
 			hit:=util.LimitedBytesSearch(resbody,[]byte("\"errors\":true"),64)
@@ -385,7 +384,6 @@ DO:
 				time.Sleep(time.Duration(delayTime)*time.Second)
 				goto DO
 			}
-		}
 
 		return true
 	} else if resp.StatusCode()==429 {
@@ -427,6 +425,7 @@ DO:
 		}
 		return false
 	}
+
 	return true
 }
 
