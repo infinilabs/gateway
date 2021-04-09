@@ -33,6 +33,8 @@ func Init() {
 	common.RegisterFilter(cache.RequestCacheGet{})
 	common.RegisterFilter(cache.RequestCacheSet{})
 
+	common.RegisterFilter(throttle.RequestUserLimitFilter{})
+	common.RegisterFilter(throttle.RequestHostLimitFilter{})
 	common.RegisterFilter(throttle.RequestClientIPLimitFilter{})
 	common.RegisterFilter(throttle.RequestPathLimitFilter{})
 	common.RegisterFilter(throttle.SleepFilter{})

@@ -3,11 +3,8 @@ package throttle
 import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
-	"infini.sh/framework/core/param"
-	"infini.sh/framework/core/rate"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
-	"time"
 )
 
 type RequestClientIPLimitFilter struct {
