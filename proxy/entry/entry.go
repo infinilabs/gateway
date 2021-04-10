@@ -138,6 +138,14 @@ func (this *Entrypoint) Start() error {
 		this.config.MaxConcurrency=10000
 	}
 
+	if this.config.ReadTimeout<=0{
+		this.config.ReadTimeout=120
+	}
+
+	if this.config.WriteTimeout<=0{
+		this.config.WriteTimeout=120
+	}
+
 	this.server = &fasthttp.Server{
 		Name:                          "INFINI",
 		DisableHeaderNamesNormalizing: true,
@@ -148,8 +156,10 @@ func (this *Entrypoint) Start() error {
 		MaxRequestBodySize:            200 * 1024 * 1024,
 		GetOnly:                       false,
 		ReduceMemoryUsage:             false,
-		ReadTimeout:                   30 * time.Second,
-		WriteTimeout:                  30 * time.Second,
+		//TCPKeepalivePeriod:  		   time.Duration(this.config.ReadTimeout) * time.Second,
+		//IdleTimeout:  				   time.Duration(this.config.ReadTimeout) * time.Second,
+		ReadTimeout:                   time.Duration(this.config.ReadTimeout) * time.Second,
+		WriteTimeout:                  time.Duration(this.config.WriteTimeout) * time.Second,
 		ReadBufferSize:                64 * 1024,
 	}
 

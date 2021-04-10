@@ -52,7 +52,7 @@ func (filter Elasticsearch) Process(filterCfg *common.FilterConfig,ctx *fasthttp
 			proxyConfig.Elasticsearch = esRef
 			proxyConfig.Balancer = filter.GetStringOrDefault("balancer", "weight")
 			proxyConfig.MaxResponseBodySize = filter.GetIntOrDefault("max_response_size", 100*1024*1024)
-			proxyConfig.MaxConnection = filter.GetIntOrDefault("max_connection", 1000)
+			proxyConfig.MaxConnection = filter.GetIntOrDefault("max_connection", 10000)
 			proxyConfig.TLSInsecureSkipVerify = filter.GetBool("tls_insecure_skip_verify", true)
 
 			proxyConfig.ReadBufferSize = filter.GetIntOrDefault("read_buffer_size", 4096*4)
