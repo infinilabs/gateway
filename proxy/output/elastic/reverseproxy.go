@@ -35,7 +35,7 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 	for _, v := range cfg.Filter.Hosts.Exclude {
 		hasExclude=true
 		if endpoint==v{
-			log.Debugf("host in exclude list, mark as invalid, %v",node.Http.PublishAddress)
+			log.Debugf("host [%v] in exclude list, mark as invalid",node.Http.PublishAddress)
 			return false
 		}
 	}
@@ -43,7 +43,7 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 	for _, v := range cfg.Filter.Hosts.Include {
 		hasInclude=true
 		if endpoint==v{
-			log.Debugf("host in include list, mark as valid, %v",node.Http.PublishAddress)
+			log.Debugf("host [%v] in include list, mark as valid",node.Http.PublishAddress)
 			return true
 		}
 	}
@@ -59,7 +59,7 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 	for _, v := range cfg.Filter.Roles.Exclude {
 		hasExclude=true
 		if util.ContainsAnyInArray(v,node.Roles){
-			log.Debugf("node role %v match exclude rule [%v], mark as invalid, %v",node.Roles,v,node.Http.PublishAddress)
+			log.Debugf("node [%v] role [%v] match exclude rule [%v], mark as invalid",node.Http.PublishAddress,node.Roles,v)
 			return false
 		}
 	}
@@ -67,7 +67,7 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 	for _, v := range cfg.Filter.Roles.Include {
 		hasInclude=true
 		if util.ContainsAnyInArray(v,node.Roles){
-			log.Debugf("node role %v match include rule [%v], mark as valid, %v",node.Roles,v,node.Http.PublishAddress)
+			log.Debugf("node [%v] role [%v] match include rule [%v], mark as valid",node.Http.PublishAddress,node.Roles,v)
 			return true
 		}
 	}
@@ -84,7 +84,7 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 			v1,ok:=node.Attributes[k]
 			if ok{
 				if v1==v{
-					log.Debugf("node tags [%v:%v] in exclude list, mark as invalid, %v",k,v,node.Http.PublishAddress)
+					log.Debugf("node [%v] tags [%v:%v] in exclude list, mark as invalid",node.Http.PublishAddress,k,v)
 					return false
 				}
 			}
@@ -97,7 +97,7 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 			v1,ok:=node.Attributes[k]
 			if ok{
 				if v1==v{
-					log.Debugf("node tags [%v:%v] in include list, mark as valid, %v",k,v,node.Http.PublishAddress)
+					log.Debugf("node [%v] tags [%v:%v] in include list, mark as valid",node.Http.PublishAddress,k,v)
 					return true
 				}
 			}
@@ -201,7 +201,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 	p.bla = balancer.NewBalancer(ws)
 	log.Infof("elasticsearch [%v] endpoints: [%v] => [%v]", esConfig.Name, util.JoinArray(p.endpoints, ", "), util.JoinArray(endpoints, ", "))
 	p.endpoints = endpoints
-	log.Trace("elasticsearch client nodes refreshed")
+	log.Trace(esConfig.Name," elasticsearch client nodes refreshed")
 }
 
 func NewReverseProxy(cfg *ProxyConfig) *ReverseProxy {
@@ -240,7 +240,7 @@ func (p *ReverseProxy) getClient() (client *fasthttp.HostClient,endpoint string)
 		// bla has been opened
 		idx := p.bla.Distribute()
 		if idx >= len(p.clients) {
-			log.Tracef("invalid offset, reset to 0")
+			log.Warnf("invalid offset, reset to 0")
 			idx = 0
 		}
 		c := p.clients[idx]
@@ -326,10 +326,10 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string,myctx *fasthttp.Requ
 	res.Header.Set("CLUSTER", p.proxyConfig.Elasticsearch)
 
 	if myctx.Has("elastic_cluster_name"){
-		es1:=myctx.MustGetString("elastic_cluster_name")
-		myctx.Set("elastic_cluster_name",[]string{es1,elasticsearch})
+		es1:=myctx.MustGetStringArray("elastic_cluster_name")
+		myctx.Set("elastic_cluster_name",append(es1,elasticsearch))
 	}else{
-		myctx.Set("elastic_cluster_name",elasticsearch)
+		myctx.Set("elastic_cluster_name",[]string{elasticsearch})
 	}
 
 	res.Header.Set("UPSTREAM", pc.Addr)
