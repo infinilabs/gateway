@@ -480,7 +480,12 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 			ctx.Set("bulk_action_stats",actionStatsData)
 		}
 
-		ctx.Set("elastic_cluster_name",clusterName)
+		if ctx.Has("elastic_cluster_name"){
+			es1:=ctx.MustGetStringArray("elastic_cluster_name")
+			ctx.Set("elastic_cluster_name",append(es1,clusterName))
+		}else{
+			ctx.Set("elastic_cluster_name",[]string{clusterName})
+		}
 
 		ctx.SetContentType(JSON_CONTENT_TYPE)
 		ctx.WriteString("{\n  \"took\" : 0,\n  \"errors\" : false,\n  \"items\" : []\n}")
