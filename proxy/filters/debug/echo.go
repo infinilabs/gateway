@@ -61,6 +61,9 @@ func (filter DumpUrl) Process(filterCfg *common.FilterConfig,ctx *fasthttp.Reque
 	_,user,pass:=ctx.ParseBasicAuth()
 	fmt.Println("username: ", string(user) )
 	fmt.Println("password: ", string(pass) )
+	_,apiID,apiKey:=ctx.ParseAPIKey()
+	fmt.Println("api_id: ", string(apiID) )
+	fmt.Println("api_key: ", string(apiKey) )
 }
 
 
