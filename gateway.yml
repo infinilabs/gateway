@@ -75,11 +75,11 @@ flow:
 #        parameters:
 #          pass_patterns:
 #            - _cat
-      - name: request_api_key_filter
-        parameters:
-          exclude:
-            - VuaCfGcBCdbkQm-e5aOx
-          action: deny #deny
+#      - name: request_api_key_filter
+#        parameters:
+#          exclude:
+#            - VuaCfGcBCdbkQm-e5aOx
+#          action: deny #deny
 #      - name: request_client_ip_filter
 #        parameters:
 #          exclude:
@@ -106,6 +106,13 @@ flow:
 #          #          max_retry_times: 1000
 #          #          retry_interval: 500 #100ms
 #          message: "your ip reached our limit"
+      - name: request_api_key_limiter
+        parameters:
+          id:
+            - VuaCfGcBCdbkQm-e5aOx
+          max_requests: 1
+          action: drop # retry or drop
+          message: "your api_key reached our limit"
       - name: elasticsearch
         parameters:
           elasticsearch: dev  #elasticsearch configure reference name

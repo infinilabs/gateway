@@ -35,6 +35,7 @@ func Init() {
 
 	common.RegisterFilter(throttle.RequestUserLimitFilter{})
 	common.RegisterFilter(throttle.RequestHostLimitFilter{})
+	common.RegisterFilter(throttle.RequestAPIKeyLimitFilter{})
 	common.RegisterFilter(throttle.RequestClientIPLimitFilter{})
 	common.RegisterFilter(throttle.RequestPathLimitFilter{})
 	common.RegisterFilter(throttle.SleepFilter{})
