@@ -52,6 +52,7 @@ func Init() {
 	common.RegisterFilter(filter.ResponseHeaderFilter{})
 	common.RegisterFilter(filter.RequestClientIPFilter{})
 	common.RegisterFilter(filter.RequestUserFilter{})
+	common.RegisterFilter(filter.RequestAPIKeyFilter{})
 	common.RegisterFilter(filter.RequestServerHostFilter{})
 
 	common.RegisterFilter(transform.RequestBodyTruncate{})

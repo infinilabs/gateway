@@ -370,10 +370,6 @@ func (filter RequestFilterBase) Filter(ctx *fasthttp.RequestCtx){
 	}
 }
 
-//TODO
-type RequestAPIKeyFilter struct {
-	RequestFilterBase
-}
 
 //TODO
 type RequestUrlQueryArgsFilter struct {

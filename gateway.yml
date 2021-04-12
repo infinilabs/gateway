@@ -8,6 +8,7 @@ entry:
   - name: my_es_entry
     enabled: true
     router: my_router
+    max_concurrency: 100000
     network:
       binding: 0.0.0.0:8000
 #    tls:
@@ -33,25 +34,26 @@ flow:
             - write-es2
   - name: echo
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
-      - name: request_path_limiter
-        parameters:
-          max_qps: 3
-          rules:
-           - pattern: "/(?P<index_name>.*?)/_search"
-             max_qps: 100
-             group: index_name
-      - name: request_path_limiter
-        parameters:
-          max_qps: 4
-          rules:
-           - pattern: "/(?P<index_name>.*?)/_count"
-             max_qps: 200
-             group: index_name
+#      - name: request_path_limiter
+#        parameters:
+#          max_qps: 3
+#          rules:
+#           - pattern: "/(?P<index_name>.*?)/_search"
+#             max_qps: 100
+#             group: index_name
+#      - name: request_path_limiter
+#        parameters:
+#          max_qps: 4
+#          rules:
+#           - pattern: "/(?P<index_name>.*?)/_count"
+#             max_qps: 200
+#             group: index_name
       - name: echo
         parameters:
           str: "hello world\n"
   - name: cache_first
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
+#      - name: dump_url
 #      - name: sleep
 #        parameters:
 #          sleep_in_million_seconds: 1024
@@ -73,26 +75,41 @@ flow:
 #        parameters:
 #          pass_patterns:
 #            - _cat
+      - name: request_api_key_filter
+        parameters:
+          exclude:
+            - VuaCfGcBCdbkQm-e5aOx
+          action: deny #deny
 #      - name: request_client_ip_filter
 #        parameters:
 #          exclude:
 #            - 127.0.0.1
 #          action: redirect_flow #deny
 #          flow: echo
-      - name: request_client_ip_limiter
-        parameters:
-#          ip: #only limit for specify ips
-#            - 127.0.0.1
-#          max_requests: 321
-          max_bytes: 102400 #100k
-          action: retry # retry or drop
-          #          max_retry_times: 1000
-          #          retry_interval: 500 #100ms
-          message: "your ip reached our limit"
+#      - name: request_user_limiter
+#        parameters:
+#          user: #only limit for specify ips
+#            - elastic
+#          interval: 10s
+#          max_requests: 500
+#          burst_requests: 1000
+##          max_bytes: 102400 #100k
+#          action: drop # retry or drop
+#          message: "you reached our limit"
+#      - name: request_client_ip_limiter
+#        parameters:
+##          ip: #only limit for specify ips
+##            - 127.0.0.1
+##          max_requests: 321
+#          max_bytes: 102400 #100k
+#          action: retry # retry or drop
+#          #          max_retry_times: 1000
+#          #          retry_interval: 500 #100ms
+#          message: "your ip reached our limit"
       - name: elasticsearch
         parameters:
           elasticsearch: dev  #elasticsearch configure reference name
-          max_connection: 1000 #max tcp connection to upstream, default for all nodes
+          max_connection: 10000 #max tcp connection to upstream, default for all nodes
           max_response_size: -1 #default for all nodes
           balancer: weight
           refresh: # refresh upstream nodes list, need to enable this feature to use elasticsearch nodes auto discovery
@@ -124,7 +141,7 @@ flow:
 #          level: shard
           mode: async
 #          mode: sync
-          safety_parse: true
+          fix_null_id: true
           index_stats_analysis: true
           action_stats_analysis: true
           valid_metadata: true
@@ -157,19 +174,18 @@ router:
         pattern:
           - /_bulk
         flow:
-#          - online_indexing_merge
-          - double-write
+          - online_indexing_merge
+#          - double-write
 elasticsearch:
-- name: es1
-  enabled: true
-  endpoint: http://localhost:9200
-- name: es2
-  enabled: true
-#  endpoint: http://192.168.3.201:9200
-  endpoint: http://localhost:9200
+#- name: es1
+#  enabled: true
+#  endpoint: http://localhost:9200
+#- name: es2
+#  enabled: true
+#  endpoint: http://localhost:9201
 - name: dev
   enabled: true
-#  endpoint: https://192.168.3.98:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
+#  endpoint: http://192.168.3.67:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
   endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
   traffic_control: #global traffic control
 #    max_bps_per_node: 102400 #max total bytes send to es per node
@@ -208,9 +224,9 @@ modules:
       pipeline_id: request_logging_index
     - name: nodes_index
       enabled: true
-      max_go_routine: 1
+      max_go_routine: 40
       threshold_in_ms: 0
-      timeout_in_ms: 5000
+      timeout_in_ms: 1000
       pipeline_id: bulk_request_ingest
     - name: bulk_reshuffle
       enabled: false
@@ -251,12 +267,12 @@ pipelines:
       elasticsearch: "dev"
       compress: true
       worker_size: 1
-      bulk_size_in_mb: 5  #in MB
+      bulk_size_in_mb: 1  #in MB
 #      bulk_size_in_kb: 50  #in KB
-      idle_timeout_in_second: 5
+      idle_timeout_in_second: 1
       retry_delay_in_second: 5
-      warm_retry_message: false
-      log_bulk_message: false
+      warm_retry_message: true
+      log_bulk_message: true
       error_message_truncate_size: 1024
       dead_letter_queue: "failed_bulk_messages"
 #      shards: #specify which shards are enabled
