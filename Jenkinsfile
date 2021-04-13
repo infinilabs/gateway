@@ -1,9 +1,5 @@
 pipeline {
 
-    parameters {
-        choice(name: 'PLATFORM_FILTER', choices: ['all', 'linux', 'windows', 'mac'], description: 'Run on specific platform')
-    }
-
     agent none
 
     environment { 
@@ -14,10 +10,7 @@ pipeline {
         stage('Build Linux Packages') {
             steps {
 
-               agent {
-                     label 'linux'
-                     reuseNode true
-               }
+                agent { node { label 'linux' } }
 
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE'){
                     sh 'cd /home/jenkins/go/src/infini.sh/gateway && make config build-linux tar'
