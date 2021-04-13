@@ -35,7 +35,7 @@ func (filter CloneFlowFilter) Process(filterCfg *common.FilterConfig,ctx *fastht
 		flow.Process(ctx)
 	}
 
-	if continueAfterMatch {
+	if len(flows)>0&&!continueAfterMatch {
 		ctx.Finished()
 	}
 

@@ -60,7 +60,7 @@ func (filter RatioRoutingFlowFilter) Process(filterCfg *common.FilterConfig,ctx 
 			log.Debugf("request [%v] go on flow: [%s]",ctx.URI().String(),flow.ToString())
 		}
 		flow.Process(ctx)
-		if continueAfterMatch {
+		if !continueAfterMatch {
 			ctx.Finished()
 		}
 	}
