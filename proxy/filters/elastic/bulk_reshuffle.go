@@ -61,13 +61,13 @@ type BulkIndexMetadata struct {
 	Index string  `json:"_index,omitempty"`
 	Type string  `json:"_type,omitempty"`
 	ID string  `json:"_id,omitempty"`
-	RequireAlias bool  `json:"require_alias,omitempty"`
-	Parent1 bool  `json:"_parent,omitempty"`
-	Parent2 bool  `json:"parent,omitempty"`
-	Routing1 bool  `json:"routing,omitempty"`
-	Routing2 bool  `json:"_routing,omitempty"`
-	Version1 bool  `json:"_version,omitempty"`
-	Version2 bool  `json:"version,omitempty"`
+	RequireAlias interface{}  `json:"require_alias,omitempty"`
+	Parent1 interface{}  `json:"_parent,omitempty"`
+	Parent2 interface{}  `json:"parent,omitempty"`
+	Routing1 interface{}  `json:"routing,omitempty"`
+	Routing2 interface{}  `json:"_routing,omitempty"`
+	Version1 interface{}  `json:"_version,omitempty"`
+	Version2 interface{}  `json:"version,omitempty"`
 }
 
 var actionIndex= []byte("index")
@@ -117,8 +117,7 @@ func updateJsonWithUUID(scannedByte []byte)(newBytes []byte,id string)  {
 
 func parseJson(scannedByte []byte)(action []byte,index,id string)  {
 	//use Json
-	var meta BulkActionMetadata
-	meta=BulkActionMetadata{}
+	var meta =BulkActionMetadata{}
 	util.MustFromJSONBytes(scannedByte,&meta)
 
 	if meta.Index!=nil{
