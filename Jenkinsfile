@@ -1,5 +1,10 @@
 pipeline {
-    agent any
+
+    parameters {
+        choice(name: 'PLATFORM_FILTER', choices: ['all', 'linux', 'windows', 'mac'], description: 'Run on specific platform')
+    }
+
+    agent none
 
     environment { 
         CI = 'true'
@@ -10,11 +15,8 @@ pipeline {
             steps {
 
                agent {
-                  node {
                      label 'linux'
-                     customWorkspace '/home/jenkins/'
                      reuseNode true
-                  }
                }
 
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE'){
