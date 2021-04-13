@@ -10,7 +10,7 @@ pipeline {
         stage('Build Linux Packages') {
             steps {
 
-                agent { node { label 'linux' } }
+                agent {  label 'linux' }
 
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE'){
                     sh 'cd /home/jenkins/go/src/infini.sh/gateway && make config build-linux tar'
