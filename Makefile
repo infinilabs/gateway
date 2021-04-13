@@ -81,8 +81,8 @@ build: config
 	@$(MAKE) restore-generated-file
 
 build-cmd: config
-	@$(MAKE) restore-generated-file
 	@for f in $(shell ls ${CMD_DIR}); do (cd $(CMD_DIR)/$${f} && $(GOBUILD) -o $(OUTPUT_DIR)/$${f}); done
+	@$(MAKE) restore-generated-file
 
 
 # used to build the binary for gdb debugging
@@ -101,31 +101,36 @@ cross-build: clean config update-vfs
 	@$(MAKE) restore-generated-file
 
 
-build-win:
+build-win: config
 	CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ GOOS=windows GOARCH=amd64     $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-windows64.exe
 	CC=i686-w64-mingw32-gcc   CXX=i686-w64-mingw32-g++ GOOS=windows GOARCH=386         $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-windows32.exe
+	@$(MAKE) restore-generated-file
 
 build-linux: config
 	GOOS=linux  GOARCH=amd64  $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-linux64
 	GOOS=linux  GOARCH=386    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-linux32
+	@$(MAKE) restore-generated-file
 
-build-arm:
+build-arm: config
 	GOOS=linux  GOARCH=arm64    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-arm64
 	GOOS=linux  GOARCH=arm   GOARM=5    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-armv5
 	GOOS=linux  GOARCH=arm   GOARM=6    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-armv6
 	GOOS=linux  GOARCH=arm   GOARM=7    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-armv7
+	@$(MAKE) restore-generated-file
 
-build-darwin:
+build-darwin: config
 	GOOS=darwin  GOARCH=amd64     $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-darwin64
 	#GOOS=darwin  GOARCH=386       $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-darwin32
+	@$(MAKE) restore-generated-file
 
-build-bsd:
+build-bsd: config
 	GOOS=freebsd  GOARCH=amd64    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-freebsd64
 	GOOS=freebsd  GOARCH=386      $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-freebsd32
 	GOOS=netbsd  GOARCH=amd64     $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-netbsd64
 	GOOS=netbsd  GOARCH=386       $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-netbsd32
 	GOOS=openbsd  GOARCH=amd64    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-openbsd64
 	GOOS=openbsd  GOARCH=386      $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-openbsd32
+	@$(MAKE) restore-generated-file
 
 all: clean config update-vfs cross-build restore-generated-file
 
