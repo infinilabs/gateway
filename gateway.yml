@@ -15,25 +15,33 @@ entry:
 #      enabled: true
 
 flow:
-  - name: write-es1
+  - name: es1-flow
     filter:
       - name: elasticsearch
         parameters:
           elasticsearch: es1
-  - name: write-es2
+#      - name: dump_url
+#      - name: dump_header
+#      - name: dump_request_body
+#      - name: dump_response_body
+  - name: es2-flow
     filter:
       - name: elasticsearch
         parameters:
           elasticsearch: es2
+#      - name: dump_url
+#      - name: dump_header
+#      - name: dump_request_body
+#      - name: dump_response_body
   - name: double-write
     filter:
       - name: clone
         parameters:
           flows:
-            - write-es1
-            - write-es2
+            - es1-flow
+            - es2-flow
   - name: echo
-    filter: #comment out any filter sections, like you don't need cache or rate-limiter
+    filter:
 #      - name: request_path_limiter
 #        parameters:
 #          max_qps: 3
@@ -53,6 +61,13 @@ flow:
           str: "hello world\n"
   - name: cache_first
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
+      - name: switch
+        parameters:
+          path_rules:
+            - prefix: "es1:"
+              flow: es1-flow
+            - prefix: "es2:"
+              flow: es2-flow
 #      - name: dump_url
 #      - name: sleep
 #        parameters:
@@ -184,12 +199,12 @@ router:
           - online_indexing_merge
 #          - double-write
 elasticsearch:
-#- name: es1
-#  enabled: true
-#  endpoint: http://localhost:9200
-#- name: es2
-#  enabled: true
-#  endpoint: http://localhost:9201
+- name: es1
+  enabled: true
+  endpoint: http://localhost:9200
+- name: es2
+  enabled: true
+  endpoint: http://localhost:9201
 - name: dev
   enabled: true
 #  endpoint: http://192.168.3.67:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well

@@ -48,6 +48,7 @@ func Init() {
 
 	common.RegisterFilter(routing.RatioRoutingFlowFilter{})
 	common.RegisterFilter(routing.CloneFlowFilter{})
+	common.RegisterFilter(routing.SwitchFlowFilter{})
 
 	common.RegisterFilter(filter.ResponseStatusCodeFilter{})
 	common.RegisterFilter(filter.ResponseHeaderFilter{})
