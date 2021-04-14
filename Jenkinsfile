@@ -15,9 +15,14 @@ pipeline {
 
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE'){
-                    sh 'cd /home/jenkins/go/src/infini.sh/gateway && make clean config build-linux'
-                    sh label: '', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux64.tar.gz gateway-linux64 gateway.yml'
-                    archiveArtifacts artifacts: 'gateway-$VERSION-$BUILD_NUMBER-linux64.tar.gz', fingerprint: true, followSymlinks: true, onlyIfSuccessful: true
+                    sh 'cd /home/jenkins/go/src/infini.sh/gateway && make clean config build-linux build-arm'
+                    sh label: 'package-linux64', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux64.tar.gz gateway-linux64 gateway.yml'
+                    sh label: 'package-linux32', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux32.tar.gz gateway-linux32 gateway.yml'
+                    sh label: 'package-arm5', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-arm5.tar.gz gateway-armv5 gateway.yml'
+                    sh label: 'package-arm6', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-arm6.tar.gz gateway-armv6 gateway.yml'
+                    sh label: 'package-arm7', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-arm7.tar.gz gateway-armv7 gateway.yml'
+                    sh label: 'package-arm64', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-arm64.tar.gz gateway-arm64 gateway.yml'
+                    archiveArtifacts artifacts: 'gateway-$VERSION-$BUILD_NUMBER-*.tar.gz', fingerprint: true, followSymlinks: true, onlyIfSuccessful: true
                 }
             }
         }
