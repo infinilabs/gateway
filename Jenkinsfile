@@ -16,7 +16,7 @@ pipeline {
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE'){
                     sh 'cd /home/jenkins/go/src/infini.sh/gateway && make config build-linux tar'
-                    archiveArtifacts artifacts: 'bin/gateway.tar.gz', fingerprint: true, followSymlinks: false, onlyIfSuccessful: true
+                    archiveArtifacts artifacts: 'bin/*.*', fingerprint: true, followSymlinks: true, onlyIfSuccessful: true
                 }
             }
         }
