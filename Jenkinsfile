@@ -16,8 +16,8 @@ pipeline {
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE'){
                     sh 'cd /home/jenkins/go/src/infini.sh/gateway && make clean config build-linux'
-                    sh label: '', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$BUILD_NUMBER-linux64.tar.gz gateway-linux64 gateway.yml'
-                    archiveArtifacts artifacts: 'gateway-$BUILD_NUMBER-linux64.tar.gz', fingerprint: true, followSymlinks: true, onlyIfSuccessful: true
+                    sh label: '', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$APP_VERSION-$BUILD_NUMBER-linux64.tar.gz gateway-linux64 gateway.yml'
+                    archiveArtifacts artifacts: 'gateway-$APP_VERSION-$BUILD_NUMBER-linux64.tar.gz', fingerprint: true, followSymlinks: true, onlyIfSuccessful: true
                 }
             }
         }
