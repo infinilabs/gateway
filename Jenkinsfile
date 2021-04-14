@@ -11,6 +11,7 @@ pipeline {
 
             agent {
                 label 'linux'
+                customWorkspace '/home/jenkins/go/src/infini.sh'
             }
 
             steps {
