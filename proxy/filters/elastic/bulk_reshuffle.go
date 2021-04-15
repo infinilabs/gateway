@@ -10,6 +10,7 @@ import (
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/queue"
+	"infini.sh/framework/core/radix"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
@@ -102,6 +103,7 @@ func insertUUID(scannedByte []byte)(newBytes []byte,id string)   {
 	return newData,id
 }
 
+//TODO performance
 func updateJsonWithUUID(scannedByte []byte)(newBytes []byte,id string)  {
 	var meta BulkActionMetadata
 	meta=BulkActionMetadata{}
@@ -113,6 +115,23 @@ func updateJsonWithUUID(scannedByte []byte)(newBytes []byte,id string)  {
 		meta.Create.ID=id
 	}
 	return util.MustToJSONBytes(meta),id
+}
+
+//TODO performance
+func updateJsonWithNewIndex(scannedByte []byte,index string)(newBytes []byte)  {
+	var meta BulkActionMetadata
+	meta=BulkActionMetadata{}
+	util.MustFromJSONBytes(scannedByte,&meta)
+	if meta.Index!=nil{
+		meta.Index.Index=index
+	}else if meta.Create!=nil{
+		meta.Create.Index=index
+	}else if meta.Update!=nil{
+		meta.Update.Index=index
+	}else if meta.Delete!=nil{
+		meta.Delete.Index=index
+	}
+	return util.MustToJSONBytes(meta)
 }
 
 func parseJson(scannedByte []byte)(action []byte,index,id string)  {
@@ -184,6 +203,8 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 		actionAnalysis:=this.GetBool("action_stats_analysis",true)  //sync and async
 		enabledShards,checkShards := this.GetStringArray("shards")
 
+		renameMapping,resolveIndexRename:=this.GetStringMap("index_rename")
+
 		body:=ctx.Request.GetRawBody()
 
 		scanner := bufio.NewScanner(bytes.NewReader(body))
@@ -234,6 +255,28 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 					if len(action)==0||index==""{
 						log.Warn("invalid bulk action:",string(action),",index:",string(indexb),",id:",string(idb),", try json parse:",string(scannedByte))
 						action,index,id=parseJson(scannedByte)
+					}
+				}
+
+				//index_rename
+				if resolveIndexRename{
+					for k,v:=range renameMapping{
+						if strings.Contains(k,"*"){
+							patterns := radix.Compile(k) //TODO performance
+							ok := patterns.Match(index)
+							if ok {
+								if global.Env().IsDebug {
+									log.Debug("wildcard matched: ", path)
+								}
+								index=v
+								scannedByte=updateJsonWithNewIndex(scannedByte,index)
+								break
+							}
+						}else if k==index{
+							index=v
+							scannedByte=updateJsonWithNewIndex(scannedByte,index)
+							break
+						}
 					}
 				}
 

@@ -166,6 +166,9 @@ flow:
           fix_null_id: true
           index_stats_analysis: true
           action_stats_analysis: true
+          index_rename: #only available for async mode
+            - lab-test-* -> lab-test
+            - lab-2018 -> lab-test-2018
           valid_metadata: true
 #          shards:
 #            - "0"
