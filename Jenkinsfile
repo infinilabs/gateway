@@ -24,7 +24,7 @@ pipeline {
                     sh label: 'package-arm64', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-arm64.tar.gz gateway-arm64 gateway.yml'
                     sh label: 'docker-build', script: 'cd /home/jenkins/go/src/infini.sh/ && docker build -t infini-gateway  -f gateway/docker/Dockerfile .'
                     sh label: 'docker-tagging', script: 'docker tag infini-gateway medcl/infini-gateway:latest && docker tag infini-gateway medcl/infini-gateway:$VERSION-$BUILD_NUMBER'
-                    sh label: 'docker-push', script: 'docker push medcl/infini-gateway:latest && medcl/infini-gateway:$VERSION-$BUILD_NUMBER'
+                    sh label: 'docker-push', script: 'docker push medcl/infini-gateway:latest && docker push medcl/infini-gateway:$VERSION-$BUILD_NUMBER'
                     archiveArtifacts artifacts: 'gateway-$VERSION-$BUILD_NUMBER-*.tar.gz', fingerprint: true, followSymlinks: true, onlyIfSuccessful: true
                 }
             }
