@@ -20,5 +20,4 @@ FROM alpine:latest
 WORKDIR /
 COPY  --from=0 /go/src/infini.sh/gateway/bin/gateway /gateway
 COPY  --from=0 /go/src/infini.sh/gateway/bin/gateway.yml /gateway.yml
-EXPOSE 2900
 CMD ["/gateway"]

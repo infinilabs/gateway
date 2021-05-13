@@ -22,7 +22,7 @@ pipeline {
                     sh label: 'package-arm6', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-arm6.tar.gz gateway-armv6 gateway.yml'
                     sh label: 'package-arm7', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-arm7.tar.gz gateway-armv7 gateway.yml'
                     sh label: 'package-arm64', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-arm64.tar.gz gateway-arm64 gateway.yml'
-                    sh label: 'docker-build', script: 'cd /home/jenkins/go/src/infini.sh/gateway/ && docker build -t infini-gateway ./docker'
+                    sh label: 'docker-build', script: 'cd /home/jenkins/go/src/infini.sh/ && docker build -t infini-gateway  -f gateway/docker/Dockerfile .'
                     sh label: 'docker-tagging', script: 'docker tag infini-gateway medcl/infini-gateway:latest && docker tag infini-gateway medcl/infini-gateway:$VERSION-$BUILD_NUMBER'
                     sh label: 'docker-push', script: 'docker push medcl/infini-gateway:latest && medcl/infini-gateway:$VERSION-$BUILD_NUMBER'
                     archiveArtifacts artifacts: 'gateway-$VERSION-$BUILD_NUMBER-*.tar.gz', fingerprint: true, followSymlinks: true, onlyIfSuccessful: true
