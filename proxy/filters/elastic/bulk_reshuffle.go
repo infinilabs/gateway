@@ -528,7 +528,14 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 		//fake results
 
 		ctx.SetContentType(JSON_CONTENT_TYPE)
-		ctx.WriteString("{\"took\":0,\"errors\":false,\"items\":[{\"index\":{\"_index\":\"fake-index\",\"_type\":\"doc\",\"_id\":\"1\",\"_version\":1,\"result\":\"created\",\"_shards\":{\"total\":1,\"successful\":1,\"failed\":0},\"_seq_no\":1,\"_primary_term\":1,\"status\":200}}]}")
+		ctx.WriteString("{\"took\":0,\"errors\":false,\"items\":[")
+		for i:=0;i<docCount;i++{
+			if i!=0{
+				ctx.WriteString(",")
+			}
+			ctx.WriteString("{\"index\":{\"_index\":\"fake-index\",\"_type\":\"doc\",\"_id\":\"1\",\"_version\":1,\"result\":\"created\",\"_shards\":{\"total\":1,\"successful\":1,\"failed\":0},\"_seq_no\":1,\"_primary_term\":1,\"status\":200}}")
+		}
+			ctx.WriteString("]}")
 		ctx.Response.SetStatusCode(200)
 		ctx.Finished()
 		return
