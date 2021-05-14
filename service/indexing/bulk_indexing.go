@@ -110,7 +110,9 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 
 				for i := 0; i < workers; i++ {
 					wg.Add(1)
-					go joint.NewBulkWorker(bulkSizeInByte, &wg, queueName, nodeInfo.Http.PublishAddress)
+					go joint.NewBulkWorker(bulkSizeInByte, &wg, queueName, func() string {
+						return nodeInfo.Http.PublishAddress
+					})
 				}
 			}
 		}
@@ -127,17 +129,29 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 
 			for i := 0; i < workers; i++ {
 				wg.Add(1)
-				go joint.NewBulkWorker(bulkSizeInByte, &wg, queueName, v.Http.PublishAddress)
+				go joint.NewBulkWorker(bulkSizeInByte, &wg, queueName, func() string {
+					return v.Http.PublishAddress
+				})
 			}
 		}
 	}
+
+	//start deadline ingest
+	deadLetterQueueName := joint.GetStringOrDefault("dead_letter_queue","failed_bulk_messages")
+	go joint.NewBulkWorker(bulkSizeInByte, &wg, deadLetterQueueName, func()string {
+		v:= meta.GetActiveNodeInfo()
+		if v!=nil{
+			return v.Http.PublishAddress
+		}
+		panic("no endpoint found")
+	})
 
 	wg.Wait()
 
 	return nil
 }
 
-func (joint BulkIndexingJoint) NewBulkWorker( bulkSizeInByte int, wg *sync.WaitGroup, queueName string, endpoint string) {
+func (joint BulkIndexingJoint) NewBulkWorker( bulkSizeInByte int, wg *sync.WaitGroup, queueName string, endpointFunc func()string) {
 	defer func() {
 		if !global.Env().IsDebug {
 			if r := recover(); r != nil {
@@ -156,11 +170,13 @@ func (joint BulkIndexingJoint) NewBulkWorker( bulkSizeInByte int, wg *sync.WaitG
 		}
 	}()
 
+	endpoint:=endpointFunc()
+
 	log.Debug("start worker:", queueName,", endpoint:",endpoint)
 
 	mainBuf := bytes.Buffer{}
 	esInstanceVal := joint.MustGetString("elasticsearch")
-	deadLetterQueueName := joint.GetStringOrDefault("dead_letter_queue",queueName)
+	deadLetterQueueName := joint.GetStringOrDefault("dead_letter_queue","failed_bulk_messages")
 	timeOut := joint.GetIntOrDefault("idle_timeout_in_second", 5)
 	idleDuration := time.Duration(timeOut) * time.Second
 	cfg := elastic.GetConfig(esInstanceVal)
@@ -243,7 +259,9 @@ func (joint BulkIndexingJoint) Bulk(cfg *elastic.ElasticsearchConfig, endpoint s
 
 	req := fasthttp.AcquireRequest()
 	req.Reset()
+	req.ResetBody()
 	resp := fasthttp.AcquireResponse()
+	resp.Reset()
 	defer fasthttp.ReleaseRequest(req)   // <- do not forget to release
 	defer fasthttp.ReleaseResponse(resp) // <- do not forget to release
 
@@ -278,7 +296,7 @@ func (joint BulkIndexingJoint) Bulk(cfg *elastic.ElasticsearchConfig, endpoint s
 		}
 	}
 
-	retryTimes:=0
+	retryTimes:=1
 
 DO:
 
@@ -328,7 +346,7 @@ DO:
 		if joint.GetBool("log_bulk_message",true) {
 			path1 := path.Join(global.Env().GetWorkingDir(), "bulk_400_failure.log")
 			truncateSize := joint.GetIntOrDefault("error_message_truncate_size", -1)
-			util.FileAppendNewLineWithByte(path1, []byte("URL:"))
+			util.FileAppendNewLineWithByte(path1, []byte("\nURL:"))
 			util.FileAppendNewLineWithByte(path1, []byte(url))
 			util.FileAppendNewLineWithByte(path1, []byte("Request:"))
 			reqBody:=data.Bytes()
@@ -341,7 +359,7 @@ DO:
 					resBody1=resBody1[:truncateSize]
 				}
 			}
-			util.FileAppendNewLineWithByte(path1,reqBody )
+			util.FileAppendNewLineWithByte(path1,util.EscapeNewLine(reqBody) )
 			util.FileAppendNewLineWithByte(path1, []byte("Response:"))
 			util.FileAppendNewLineWithByte(path1, resBody1)
 		}
@@ -359,7 +377,7 @@ DO:
 				if joint.GetBool("log_bulk_message",true) {
 					path1 := path.Join(global.Env().GetWorkingDir(), "bulk_req_failure.log")
 					truncateSize := joint.GetIntOrDefault("error_message_truncate_size", -1)
-					util.FileAppendNewLineWithByte(path1, []byte("URL:"))
+					util.FileAppendNewLineWithByte(path1, []byte("\nURL:"))
 					util.FileAppendNewLineWithByte(path1, []byte(url))
 					util.FileAppendNewLineWithByte(path1, []byte("Request:"))
 					reqBody:=data.Bytes()
@@ -372,7 +390,7 @@ DO:
 							resBody1=resBody1[:truncateSize]
 						}
 					}
-					util.FileAppendNewLineWithByte(path1,reqBody )
+					util.FileAppendNewLineWithByte(path1,util.EscapeNewLine(reqBody))
 					util.FileAppendNewLineWithByte(path1, []byte("Response:"))
 					util.FileAppendNewLineWithByte(path1, resBody1)
 				}
@@ -380,8 +398,16 @@ DO:
 					log.Warnf("elasticsearch bulk error, retried %v times, will try again",retryTimes)
 				}
 
+				if retryTimes>=joint.GetIntOrDefault("failed_retry_times", 3){
+					if joint.GetBool("warm_retry_message",true){
+						log.Errorf("elasticsearch failed, retried %v times, quit retry",retryTimes)
+						log.Errorf(string(resbody))
+					}
+					return false
+				}
+
 				retryTimes++
-				delayTime := joint.GetIntOrDefault("retry_delay_in_second", 5)
+				delayTime := joint.GetIntOrDefault("failed_retry_delay_in_second", 5)
 				time.Sleep(time.Duration(delayTime)*time.Second)
 				goto DO
 			}
@@ -389,11 +415,12 @@ DO:
 		return true
 	} else if resp.StatusCode()==429 {
 		log.Warnf("elasticsearch rejected, retried %v times, will try again",retryTimes)
-		delayTime := joint.GetIntOrDefault("retry_delay_in_second", 5)
+		delayTime := joint.GetIntOrDefault("reject_retry_delay_in_second", 5)
 		time.Sleep(time.Duration(delayTime)*time.Second)
-		if retryTimes>300{
+		if retryTimes>=joint.GetIntOrDefault("reject_retry_times", 60){
 			if joint.GetBool("warm_retry_message",true){
 				log.Errorf("elasticsearch rejected, retried %v times, quit retry",retryTimes)
+				log.Errorf(string(resbody))
 			}
 			return false
 		}
@@ -403,7 +430,7 @@ DO:
 		if joint.GetBool("log_bulk_message",true){
 			path1:=path.Join(global.Env().GetWorkingDir(),"bulk_error_failure.log")
 			truncateSize := joint.GetIntOrDefault("error_message_truncate_size", -1)
-			util.FileAppendNewLineWithByte(path1, []byte("URL:"))
+			util.FileAppendNewLineWithByte(path1, []byte("\nURL:"))
 			util.FileAppendNewLineWithByte(path1, []byte(url))
 			util.FileAppendNewLineWithByte(path1, []byte("Request:"))
 			reqBody:=data.Bytes()
@@ -416,7 +443,7 @@ DO:
 					resBody1=resBody1[:truncateSize-1]
 				}
 			}
-			util.FileAppendNewLineWithByte(path1,reqBody )
+			util.FileAppendNewLineWithByte(path1,util.EscapeNewLine(reqBody) )
 			util.FileAppendNewLineWithByte(path1, []byte("Response:"))
 			util.FileAppendNewLineWithByte(path1, resBody1)
 

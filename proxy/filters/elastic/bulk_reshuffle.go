@@ -47,29 +47,6 @@ func initPool() {
 	}
 }
 
-//{ "index" : { "_index" : "test", "_id" : "1" } }
-//{ "delete" : { "_index" : "test", "_id" : "2" } }
-//{ "create" : { "_index" : "test", "_id" : "3" } }
-//{ "update" : {"_id" : "1", "_index" : "test"} }
-type BulkActionMetadata struct {
-	Index *BulkIndexMetadata`json:"index,omitempty"`
-	Delete *BulkIndexMetadata `json:"delete,omitempty"`
-	Create *BulkIndexMetadata `json:"create,omitempty"`
-	Update *BulkIndexMetadata `json:"update,omitempty"`
-}
-
-type BulkIndexMetadata struct {
-	Index string  `json:"_index,omitempty"`
-	Type string  `json:"_type,omitempty"`
-	ID string  `json:"_id,omitempty"`
-	RequireAlias interface{}  `json:"require_alias,omitempty"`
-	Parent1 interface{}  `json:"_parent,omitempty"`
-	Parent2 interface{}  `json:"parent,omitempty"`
-	Routing1 interface{}  `json:"routing,omitempty"`
-	Routing2 interface{}  `json:"_routing,omitempty"`
-	Version1 interface{}  `json:"_version,omitempty"`
-	Version2 interface{}  `json:"version,omitempty"`
-}
 
 var actionIndex= []byte("index")
 var actionDelete= []byte("delete")
@@ -105,8 +82,8 @@ func insertUUID(scannedByte []byte)(newBytes []byte,id string)   {
 
 //TODO performance
 func updateJsonWithUUID(scannedByte []byte)(newBytes []byte,id string)  {
-	var meta BulkActionMetadata
-	meta=BulkActionMetadata{}
+	var meta elastic.BulkActionMetadata
+	meta=elastic.BulkActionMetadata{}
 	util.MustFromJSONBytes(scannedByte,&meta)
 	id=util.GetUUID()
 	if meta.Index!=nil{
@@ -119,8 +96,8 @@ func updateJsonWithUUID(scannedByte []byte)(newBytes []byte,id string)  {
 
 //TODO performance
 func updateJsonWithNewIndex(scannedByte []byte,index string)(newBytes []byte)  {
-	var meta BulkActionMetadata
-	meta=BulkActionMetadata{}
+	var meta elastic.BulkActionMetadata
+	meta=elastic.BulkActionMetadata{}
 	util.MustFromJSONBytes(scannedByte,&meta)
 	if meta.Index!=nil{
 		meta.Index.Index=index
@@ -136,7 +113,7 @@ func updateJsonWithNewIndex(scannedByte []byte,index string)(newBytes []byte)  {
 
 func parseJson(scannedByte []byte)(action []byte,index,id string)  {
 	//use Json
-	var meta =BulkActionMetadata{}
+	var meta =elastic.BulkActionMetadata{}
 	util.MustFromJSONBytes(scannedByte,&meta)
 
 	if meta.Index!=nil{
@@ -186,7 +163,6 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 		metadata:=elastic.GetMetadata(clusterName)
 		if metadata==nil{
 			log.Warnf("elasticsearch [%v] metadata is nil, skip reshuffle",clusterName)
-			//fmt.Println("metadta is nil")
 			return
 		}
 
@@ -219,16 +195,25 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 		var indexStatsData map[string]int
 		var actionStatsData map[string]int
 		var indexStatsLock sync.Mutex
-		shardID:=0
+
+		var actionMeta []byte
+		var actionBody []byte
+		var needActionBody =true
+		var bufferKey string
+		var docCount=0
+
 		for scanner.Scan() {
+			shardID:=0
 			scannedByte := scanner.Bytes()
 			if scannedByte ==nil||len(scannedByte)<=0{
+				log.Debug("invalid scanned byte, continue")
 				continue
 			}
 
 			if skipNext{
 				skipNext=false
 				nextIsMeta =true
+				log.Debug("skip body processing")
 				continue
 			}
 
@@ -240,7 +225,6 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 				var action []byte
 
 				if safetyParse{
-					//parse with json
 					action,index,id=parseJson(scannedByte)
 				}else{
 					var indexb,idb []byte
@@ -343,17 +327,12 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 						log.Error("error on validate action metadata")
 						panic(err)
 					}
-
 				}
+
 
 				if len(action)==0||index==""||id=="" {
 					log.Warn("invalid bulk action:",string(action),",index:",string(index),",id:",string(id),",",string(scannedByte))
 					return
-				}
-
-				if  bytes.Equal(action,actionDelete){
-					//check metadata, if not delete, then is Meta is false
-					nextIsMeta =true
 				}
 
 				indexSettings,ok:=metadata.Indices[index]
@@ -398,7 +377,6 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 						}
 					}
 
-					//fmt.Println(util.ToJson(metadata.Indices,true))
 					log.Warn("index setting not found,",index,",",string(scannedByte))
 					return
 				}
@@ -419,9 +397,9 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 					//TODO cache index-shard -> endpoint, 10s
 
 					//save endpoint for bufferkey
-					if checkShards && len(enabledShards)>0{
+					if checkShards && len(enabledShards)>0 &&needActionBody{
 						if !util.ContainsAnyInArray(strconv.Itoa(shardID),enabledShards){
-							log.Debugf("%s-%s not enabled, skip processing",index,shardID)
+							log.Debugf("shard %s-%s not enabled, skip processing",index,shardID)
 							skipNext=true
 							continue
 						}
@@ -436,7 +414,7 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 				}
 
 				//write meta
-				bufferKey:=common.GetNodeLevelShuffleKey(clusterName,shardInfo.NodeID)
+				bufferKey=common.GetNodeLevelShuffleKey(clusterName,shardInfo.NodeID)
 				if reshuffleType=="shard"{
 					bufferKey=common.GetShardLevelShuffleKey(clusterName,index,shardID)
 				}
@@ -445,59 +423,77 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 					log.Tracef("%s/%s => %v , %v",index,id,shardID,bufferKey)
 				}
 
+				////update actionItem
 				buff,ok=docBuf[bufferKey]
 				if!ok{
-					//buff=bufferPool.Get().(*bytes.Buffer)
 					buff=&bytes.Buffer{}
-					//buff=bufferPool.Get().(*bytes.Buffer)
-					//buff.Reset()
 					docBuf[bufferKey]=buff
-
 					nodeInfo := metadata.GetNodeInfo(shardInfo.NodeID)
 					if nodeInfo==nil{
 						log.Warn("nodeInfo not found,",shardID,",",shardInfo.NodeID)
 						return
 					}
 					buffEndpoints[bufferKey]=nodeInfo.Http.PublishAddress
-					//if global.Env().IsDebug{
-					//	log.Debug(shardInfo.Index,",",shardInfo.ShardID,",",nodeInfo.Http.PublishAddress)
-					//}
-
+					if global.Env().IsDebug{
+						log.Debug(shardInfo.Index,",",shardInfo.ShardID,",",nodeInfo.Http.PublishAddress)
+					}
+				//
+				//}
+				//buff.Write(scannedByte)
+				//
+				//if global.Env().IsDebug{
+				//	log.Trace("metadata:",string(scannedByte))
 				}
-				buff.Write(scannedByte)
 
-
-
-				if global.Env().IsDebug{
-					log.Trace("metadata:",string(scannedByte))
+				//保存临时变量
+				actionMeta=scannedByte
+				actionBody=nil
+				if  bytes.Equal(action,actionDelete){
+					nextIsMeta =true
+					needActionBody=false
 				}
-				buff.WriteString("\n")
-
+				docCount++
 			}else{
 				nextIsMeta =true
-				//handle request body
-				buff.Write(scannedByte)
-				if global.Env().IsDebug{
-					log.Trace("data:",string(scannedByte))
+
+				if needActionBody{
+					actionBody=scannedByte
 				}
-				buff.WriteString("\n")
+
+				if actionMeta!=nil{
+					buff,ok=docBuf[bufferKey]
+					if!ok{
+						buff=&bytes.Buffer{}
+						docBuf[bufferKey]=buff
+					}
+					if global.Env().IsDebug{
+						log.Trace("metadata:",string(scannedByte))
+					}
+					buff.Write(actionMeta)
+					buff.WriteString("\n")
+					if needActionBody{
+						buff.Write(actionBody)
+						buff.WriteString("\n")
+					}
+				}
+
 			}
 		}
 
-		//client:=elastic.GetClient(clusterName)
+		log.Debugf("total [%v] operations in bulk requests",docCount)
 
 		for x,y:=range docBuf{
 			if submitMode=="sync"{
 				endpoint,ok:=buffEndpoints[x]
 				if !ok{
-					log.Error("shard endpoint was not found,",x,",",shardID)
+					log.Error("shard endpoint was not found,",x)
 					//TODO
 					return
 				}
 
 				ok=this.Bulk(&esConfig,endpoint,y)
 				if !ok{
-					log.Error("bulk failed on endpoint,",x,",",shardID)
+					log.Error("bulk failed on endpoint,",x)
 					//TODO
 					return
 				}
@@ -514,7 +510,6 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 			//bufferPool.Put(y) //TODO
 		}
 
-
 		if indexAnalysis {
 			ctx.Set("bulk_index_stats",indexStatsData)
 		}
@@ -529,8 +524,11 @@ func (this BulkReshuffle) Process(filterCfg *common.FilterConfig,ctx *fasthttp.R
 			ctx.Set("elastic_cluster_name",[]string{clusterName})
 		}
 
+
+		//fake results
+
 		ctx.SetContentType(JSON_CONTENT_TYPE)
-		ctx.WriteString("{\n  \"took\" : 0,\n  \"errors\" : false,\n  \"items\" : []\n}")
+		ctx.WriteString("{\n  \"took\" : 0,\n  \"errors\" : false,\n  \"items\" : [{\n      \"index\": {\n        \"_index\": \"fake-index\",\n        \"_type\": \"doc\",\n        \"_id\": \"1\",\n        \"_version\": 1,\n        \"result\": \"created\",\n        \"_shards\": {\n          \"total\": 1,\n          \"successful\": 1,\n          \"failed\": 0\n        },\n        \"_seq_no\": 1,\n        \"_primary_term\": 1,\n        \"status\": 200\n      }\n    }]\n}")
 		ctx.Response.SetStatusCode(200)
 		ctx.Finished()
 		return
@@ -615,6 +613,7 @@ func (joint BulkReshuffle) Bulk(cfg *elastic.ElasticsearchConfig, endpoint strin
 
 	req := fasthttp.AcquireRequest()
 	req.Reset()
+	req.ResetBody()
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseRequest(req)   // <- do not forget to release
 	defer fasthttp.ReleaseResponse(resp) // <- do not forget to release
