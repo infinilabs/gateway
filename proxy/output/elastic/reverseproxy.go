@@ -236,13 +236,22 @@ func (p *ReverseProxy) getClient() (client *fasthttp.HostClient,endpoint string)
 		panic("ReverseProxy has been closed")
 	}
 
+	if len(p.clients)==0{
+		log.Error("no upstream found")
+	}
+
 	if p.bla != nil {
 		// bla has been opened
 		idx := p.bla.Distribute()
 		if idx >= len(p.clients) {
-			log.Warnf("invalid offset, reset to 0")
+			log.Warnf("invalid offset, reset to 0, ",idx," vs ",len(p.clients))
 			idx = 0
 		}
+
+		if len(p.clients)!=len(p.endpoints){
+			log.Warnf("clients != endpoints, reset to 0, ",len(p.clients)," vs ",len(p.endpoints))
+		}
+
 		c := p.clients[idx]
 		e:=p.endpoints[idx]
 		return c,e
