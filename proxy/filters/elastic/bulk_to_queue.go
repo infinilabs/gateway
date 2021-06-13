@@ -18,7 +18,7 @@ func (this BulkToQueue) Name() string {
 	return "bulk_to_queue"
 }
 
-func (this BulkToQueue) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (this BulkToQueue) Process(ctx *fasthttp.RequestCtx) {
 	ctx.Set(common.CACHEABLE, false)
 	clusterName:=this.MustGetString("elasticsearch")
 	path:=string(ctx.URI().Path())

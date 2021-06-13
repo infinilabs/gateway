@@ -2,12 +2,15 @@ package elastic
 
 import (
 	"bytes"
+	"fmt"
 	log "github.com/cihub/seelog"
+	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/rate"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/common"
 	"sync"
+	"time"
 )
 
 type Elasticsearch struct {
@@ -26,7 +29,7 @@ var faviconPath=[]byte("/favicon.ico")
 
 //var singleSetCache singleflight.Group
 
-func (filter Elasticsearch) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
 
 	if bytes.Equal(faviconPath,ctx.Request.URI().Path()){
 		if global.Env().IsDebug{
@@ -38,7 +41,10 @@ func (filter Elasticsearch) Process(filterCfg *common.FilterConfig,ctx *fasthttp
 
 	var instance *ReverseProxy
 
-	esRef := filter.GetStringOrDefault("elasticsearch", "default")
+	esRef := filter.MustGetString("elasticsearch")
+
+	cfg:=elastic.GetConfig(esRef)
+
 
 	instance, ok := proxyList[esRef]
 	if !ok || instance == nil {
@@ -53,6 +59,8 @@ func (filter Elasticsearch) Process(filterCfg *common.FilterConfig,ctx *fasthttp
 			proxyConfig.Balancer = filter.GetStringOrDefault("balancer", "weight")
 			proxyConfig.MaxResponseBodySize = filter.GetIntOrDefault("max_response_size", 100*1024*1024)
 			proxyConfig.MaxConnection = filter.GetIntOrDefault("max_connection", 10000)
+			proxyConfig.maxRetryTimes = filter.GetIntOrDefault("max_retry_times", 10)
+			proxyConfig.retryDelayInMs = filter.GetIntOrDefault("retry_delay_in_ms", 1000)
 			proxyConfig.TLSInsecureSkipVerify = filter.GetBool("tls_insecure_skip_verify", true)
 
 			proxyConfig.ReadBufferSize = filter.GetIntOrDefault("read_buffer_size", 4096*4)
@@ -77,5 +85,23 @@ func (filter Elasticsearch) Process(filterCfg *common.FilterConfig,ctx *fasthttp
 		}
 	}
 
-	instance.DelegateRequest(esRef,ctx)
+
+	if !cfg.IsAvailable(){
+		//log.Error(fmt.Sprintf("cluster [%v] is not available",esRef))
+
+		if rate.GetRateLimiter("cluster_check_health",cfg.Name,1,1,time.Second*1).Allow(){
+			result:=elastic.GetClient(cfg.Name).ClusterHealth()
+			if result.StatusCode==200{
+				cfg.ReportSuccess()
+			}
+		}
+
+		ctx.Response.SwapBody([]byte(fmt.Sprintf("cluster [%v] is not available",esRef)))
+		ctx.SetStatusCode(500)
+		ctx.Finished()
+		time.Sleep(1*time.Second)
+		return
+	}
+
+	instance.DelegateRequest(esRef,cfg,ctx)
 }

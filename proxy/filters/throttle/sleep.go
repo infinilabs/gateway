@@ -1,9 +1,10 @@
 package throttle
 
 import (
+	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/rate"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/common"
 	"time"
 )
 
@@ -15,10 +16,43 @@ func (filter SleepFilter) Name() string {
 	return "sleep"
 }
 
-func (filter SleepFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (filter SleepFilter) Process(ctx *fasthttp.RequestCtx) {
 	sleepInMs,ok:=filter.GetInt64("sleep_in_million_seconds",-1)
 	if !ok{
 		return
 	}
 	time.Sleep(time.Duration(sleepInMs)*time.Millisecond)
+}
+
+type DropFilter struct {
+	param.Parameters
+}
+
+func (filter DropFilter) Name() string {
+	return "drop"
+}
+
+func (filter DropFilter) Process(ctx *fasthttp.RequestCtx) {
+	ctx.Finished()
+}
+
+type ElasticsearchHealthCheckFilter struct {
+	param.Parameters
+}
+
+func (filter ElasticsearchHealthCheckFilter) Name() string {
+	return "elasticsearch_health_check"
+}
+
+func (filter ElasticsearchHealthCheckFilter) Process(ctx *fasthttp.RequestCtx) {
+	esName:=filter.MustGetString("elasticsearch")
+	if rate.GetRateLimiter("cluster_check_health",esName,1,1,time.Second*1).Allow(){
+		result:=elastic.GetClient(esName).ClusterHealth()
+		if result.StatusCode==200{
+			cfg:=elastic.GetConfig(esName)
+			if cfg!=nil{
+				cfg.ReportSuccess()
+			}
+		}
+	}
 }

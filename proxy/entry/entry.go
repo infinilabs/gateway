@@ -92,12 +92,27 @@ func (this *Entrypoint) Start() error {
 
 			flow:=common.FilterFlow{}
 			for _,y:=range rule.Flow{
+
 				cfg:=common.GetFlowConfig(y)
-				for _,z:=range cfg.Filters{
-					f:=common.GetFilterInstanceWithConfig(&z)
-					flow.JoinFilter(&z,f)
+				//for _,z:=range cfg.Filters{
+				//	f:=common.GetFilterInstanceWithConfig(&z)
+				//	flow.JoinFilter(&z,f)
+				//}
+
+				if len(cfg.FiltersV2)>0{
+					flow1, err := common.New(cfg.FiltersV2)
+					if err != nil {
+						panic(err)
+					}
+					flow.JoinFilter(flow1)
+				}else{
+					for _,z:=range cfg.Filters{
+						f:= common.GetFilterInstanceWithConfig(&z)
+						flow.JoinFilter(f)
+					}
 				}
 			}
+
 			for _,v:=range rule.Method{
 				for _,u:=range rule.PathPattern{
 					log.Debugf("apply filter flow: [%s] [%s] [ %s ]",v,u,flow.ToString())

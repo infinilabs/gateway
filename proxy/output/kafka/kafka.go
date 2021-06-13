@@ -4,7 +4,6 @@ import (
 	"context"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/common"
 	"src/github.com/segmentio/kafka-go"
 	"sync"
 	"time"
@@ -39,7 +38,7 @@ var messages=[]kafka.Message{}
 var batchSize int
 var lock sync.Mutex
 
-func (filter Kafka) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (filter Kafka) Process(ctx *fasthttp.RequestCtx) {
 
 	topic:=filter.GetStringOrDefault("topic","infini-gateway")
 	brokers:=filter.MustGetStringArray("brokers")

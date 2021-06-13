@@ -8,38 +8,96 @@ entry:
   - name: my_es_entry
     enabled: true
     router: my_router
-    max_concurrency: 100000
+#    max_concurrency: 10000
     network:
-      binding: 0.0.0.0:8000
-#    tls:
-#      enabled: true
-
+      binding: 0.0.0.0:8001
+    tls:
+      enabled: true
 flow:
-  - name: es1-flow
-    filter:
-      - name: elasticsearch
-        parameters:
-          elasticsearch: es1
-#      - name: dump_url
-#      - name: dump_header
-#      - name: dump_request_body
-#      - name: dump_response_body
-  - name: es2-flow
-    filter:
-      - name: elasticsearch
-        parameters:
-          elasticsearch: es2
-#      - name: dump_url
-#      - name: dump_header
-#      - name: dump_request_body
-#      - name: dump_response_body
-  - name: double-write
-    filter:
-      - name: clone
-        parameters:
-          flows:
-            - es1-flow
-            - es2-flow
+  - name: prod-flow
+    filter_v2:
+      - set_basic_auth:
+          username: elastic
+          password: changeme
+      - if:
+          and:
+            - queue_has_lag: [ "prod" ]
+            - cluster_available: ["prod"]
+        then: #集群可用但是集群有堆积的情况，先入队列，追加队伍，确保操作顺序的一致性
+          - disk_enqueue:
+              queue_name: "prod"
+          - set_basic_auth:
+              username: test
+              password: testtest
+          - disk_enqueue:
+              queue_name: "dev"
+          - set_response:
+              status: 202
+              message: "202 Accepted"
+        else: # 集群不可用或者集群可用且没有堆积的情况，都直接转发给集群先处理
+          - if: #集群如果已经变成不可用状态，则直接丢弃请求，让客户端选择处理，或者也可落地队列确保不丢数据
+              not:
+                cluster_available: ["prod"]
+            then:
+              - set_response:
+                 status: 503
+                 message: "503 Service Unavailable"
+              - elasticsearch_health_check: #由请求触发的限速模式下的主动检查后端监控情况
+                  elasticsearch: "prod"
+              - drop:
+          - elasticsearch:
+              elasticsearch: "prod"
+              max_connection: 1000
+          - if:
+              in:
+                _ctx.response.status: [ "200" , "201" ]
+            then: #仅正常处理的集群才转发给后端集群，集群不可用的情况不转发给后端也不入队列
+              - set_basic_auth:
+                  username: test
+                  password: testtest
+              - disk_enqueue:
+                  queue_name: "dev"
+            else: #可能存在脏写，将请求放入写入失败队列，后续可以选择两边集群都重做一次，最终确保一致性，写 translog，提供 UI 可以检查三方：主、备集群和本地日志
+              - translog:
+                  name: ""
+              - disk_enqueue:
+                  queue_name: "prod-500"
+
+
+
+  #    filter:
+##      - name: translog
+#      - name: disk_enqueue
+#        parameters:
+#          queue_name: "dev"
+#          depth_threshold: 1
+###      - name: dump_header
+###      - name: set_basic_auth
+###        parameters:
+###          username: medcl
+###          password: backsoon
+#      - name: elasticsearch
+#        parameters:
+#          elasticsearch: dev
+##      - name: response_status_filter
+##        parameters:
+##          include:
+##            - 200
+##            - 201
+###      - name: dump_url
+###      - name: dump_header
+###      - name: dump_request_body
+#      - name: set_basic_auth
+#        parameters:
+#          username: elastic
+#          password: changeme
+#      - name: disk_enqueue
+#        parameters:
+#          queue_name: prod
+#          depth_threshold: 0
+###      - name: dump_url
+###      - name: dump_header
+###      - name: dump_request_body
   - name: echo
     filter:
 #      - name: request_path_limiter
@@ -61,13 +119,13 @@ flow:
           str: "hello world\n"
   - name: cache_first
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
-      - name: switch
-        parameters:
-          path_rules:
-            - prefix: "es1:"
-              flow: es1-flow
-            - prefix: "es2:"
-              flow: es2-flow
+#      - name: switch
+#        parameters:
+#          path_rules:
+#            - prefix: "es1:"
+#              flow: es1-flow
+#            - prefix: "es2:"
+#              flow: es2-flow
 #      - name: dump_url
 #      - name: sleep
 #        parameters:
@@ -86,10 +144,10 @@ flow:
 #          path_keywords:
 #            - _search
 #            - _async_search
-#      - name: get_cache
-#        parameters:
-#          pass_patterns:
-#            - _cat
+      - name: get_cache
+        parameters:
+          pass_patterns:
+            - _cat
 #      - name: request_api_key_filter
 #        parameters:
 #          exclude:
@@ -99,6 +157,7 @@ flow:
 #        parameters:
 #          exclude:
 #            - 127.0.0.1
+##          action: deny
 #          action: redirect_flow #deny
 #          flow: echo
 #      - name: request_user_limiter
@@ -119,19 +178,18 @@ flow:
 #          max_bytes: 102400 #100k
 #          action: retry # retry or drop
 #          #          max_retry_times: 1000
-#          #          retry_interval: 500 #100ms
 #          message: "your ip reached our limit"
-      - name: request_api_key_limiter
-        parameters:
-          id:
-            - VuaCfGcBCdbkQm-e5aOx
-          max_requests: 1
-          action: drop # retry or drop
-          message: "your api_key reached our limit"
+#      - name: request_api_key_limiter
+#        parameters:
+#          id:
+#            - VuaCfGcBCdbkQm-e5aOx
+#          max_requests: 1
+#          action: drop # retry or drop
+#          message: "your api_key reached our limit"
       - name: elasticsearch
         parameters:
           elasticsearch: dev  #elasticsearch configure reference name
-          max_connection: 10000 #max tcp connection to upstream, default for all nodes
+          max_connection: 1000 #max tcp connection to upstream, default for all nodes
           max_response_size: -1 #default for all nodes
           balancer: weight
           refresh: # refresh upstream nodes list, need to enable this feature to use elasticsearch nodes auto discovery
@@ -148,9 +206,9 @@ flow:
 #        parameters:
 #          pattern: '"took":\d+,'
 #          to: '"took":123,'
-#      - name: set_cache
-#        parameters:
-#          cache_ttl: 10s
+      - name: set_cache
+        parameters:
+          cache_ttl: 30s
   - name: online_indexing_merge
     filter:
 #      - name: bulk_to_queue
@@ -166,9 +224,9 @@ flow:
           fix_null_id: true
           index_stats_analysis: true
           action_stats_analysis: true
-          index_rename: #only available for async mode
-            - lab-test-* -> lab-test
-            - lab-2018 -> lab-test-2018
+#          index_rename: #only available for async mode
+#            - lab-test-* -> lab-test
+#            - lab-2018 -> lab-test-2018
           valid_metadata: true
 #          shards:
 #            - "0"
@@ -177,6 +235,7 @@ flow:
       - name: elasticsearch
         parameters:
           elasticsearch: dev
+          max_connection: 1000
           refresh:
             enabled: true
             interval: 30s
@@ -188,41 +247,52 @@ flow:
           max_request_body_size: 1024
           max_response_body_size: 1024
 #          min_elapsed_time_in_ms: 500 # only record slow requests
-          bulk_stats_details: false
+          bulk_stats_details: true
 router:
   - name: my_router
-    default_flow: cache_first
-    tracing_flow: request_logging
-    rules:
-      - method:
-          - "POST"
-        pattern:
-          - /_bulk
-        flow:
-          - online_indexing_merge
-#          - double-write
+#    default_flow: dev-flow
+    default_flow: prod-flow
+#    default_flow: cache_first
+#    tracing_flow: request_logging
+#    rules:
+#      - method:
+#          - "POST"
+#        pattern:
+#          - /_bulk
+#        flow:
+##          - online_indexing_merge
+##          - dev-flow
+#          - prod-flow
 elasticsearch:
-- name: es1
+- name: prod
   enabled: true
-  endpoint: http://localhost:9200
-- name: es2
-  enabled: true
-  endpoint: http://localhost:9201
+  endpoint: https://localhost:9200
+  basic_auth:
+    username: elastic
+    password: changeme
+#  traffic_control: #global traffic control
+    #    max_bps_per_node: 102400 #max total bytes send to es per node
+#    max_qps_per_node: 100 #max total requests send to es per node
+#  discovery: # auto discovery elasticsearch cluster nodes
+#    enabled: true
+#    refresh:
+#      enabled: true
+#      interval: 60s
 - name: dev
   enabled: true
-#  endpoint: http://192.168.3.67:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
-  endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
-  traffic_control: #global traffic control
+  endpoint: https://192.168.3.98:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
+#  endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
+#  traffic_control: #global traffic control
 #    max_bps_per_node: 102400 #max total bytes send to es per node
-    max_qps_per_node: 1500 #max total requests send to es per node
+#    max_qps_per_node: 100 #max total requests send to es per node
   basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
-    username: elastic
-    password: pass
-  discovery: # auto discovery elasticsearch cluster nodes
-    enabled: true
-    refresh:
-      enabled: true
-      interval: 60s
+    username: test
+    password: testtest
+#  discovery: # auto discovery elasticsearch cluster nodes
+#    enabled: true
+#    refresh:
+#      enabled: true
+#      interval: 60s
 
 modules:
 - name: elastic
@@ -259,9 +329,56 @@ modules:
       threshold_in_ms: 0
       timeout_in_ms: 5000
       pipeline_id: bulk_reshuffle
+    - name: disk_queue_consumer-dev
+      enabled: true
+      max_go_routine: 1
+      threshold_in_ms: 0
+      timeout_in_ms: 5000
+      pipeline_id: disk_queue_consumer-dev
+    - name: disk_queue_consumer-prod
+      enabled: true
+      max_go_routine: 1
+      threshold_in_ms: 0
+      timeout_in_ms: 5000
+      pipeline_id: disk_queue_consumer-prod
+#    - name: disk_queue_consumer-prod-500
+#      enabled: true
+#      max_go_routine: 1
+#      threshold_in_ms: 0
+#      timeout_in_ms: 5000
+#      pipeline_id: disk_queue_consumer-prod-500
 
 
 pipelines:
+- name: disk_queue_consumer-dev
+  start:
+    joint: disk_queue_consumer
+    enabled: true
+    parameters:
+      input_queue: "dev"
+      elasticsearch: "dev"
+      waiting_after: [ "dev-500"]
+      timeout: "1s"
+      worker_size: 1
+- name: disk_queue_consumer-prod-500 #故障过程中产生的脏数据，可能写成功但是 es 没有返回，也有可能没有发送给 es，如果重做，需要同时发送给两个 Elasticsearch 集群
+  start:
+    joint: disk_queue_consumer
+    enabled: true
+    parameters:
+      input_queue: "prod-500"
+      elasticsearch: "prod"
+      timeout: "1s"
+      worker_size: 1
+- name: disk_queue_consumer-prod
+  start:
+    joint: disk_queue_consumer
+    enabled: true
+    parameters:
+      input_queue: "prod"
+      elasticsearch: "prod"
+      waiting_after: [ "prod-500" ]
+      timeout: "1s"
+      worker_size: 1
 - name: request_logging_index
   start:
     joint: json_indexing

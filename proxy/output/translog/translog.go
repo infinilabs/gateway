@@ -5,15 +5,10 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
-	"infini.sh/framework/core/stats"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/common"
-	cap "infini.sh/gateway/trash/captn"
-	"net/http"
 	"os"
 	"path"
 	"sync"
-	"zombiezen.com/go/capnproto2"
 )
 
 var f *os.File
@@ -62,65 +57,69 @@ func Sync() {
 	}
 }
 
-var batch = 1000
-var hit = 0
-
-var msg *capnp.Message
-var docs cap.Request_List
-
-func initBatch() {
-
-	a := capnp.MultiSegment(nil)
-	var seg *capnp.Segment
-	msg, seg, err = capnp.NewMessage(a)
-	if err != nil {
-		panic(err)
-	}
-
-	root, err := cap.NewRootRequestGroup(seg)
-	if err != nil {
-		panic(err)
-	}
-
-	docs, err = root.NewRequests(int32(batch))
-	if err != nil {
-		panic(err)
-	}
-}
-
+//var batch = 1000
+//var hit = 0
+//
+//var msg *capnp.Message
+//var docs cap.Request_List
+//
+//func initBatch() {
+//
+//	a := capnp.MultiSegment(nil)
+//	var seg *capnp.Segment
+//	msg, seg, err = capnp.NewMessage(a)
+//	if err != nil {
+//		panic(err)
+//	}
+//
+//	root, err := cap.NewRootRequestGroup(seg)
+//	if err != nil {
+//		panic(err)
+//	}
+//
+//	docs, err = root.NewRequests(int32(batch))
+//	if err != nil {
+//		panic(err)
+//	}
+//}
+//
 
 
 func SaveRequest(ctx *fasthttp.RequestCtx) {
 	lock.Lock()
 
-	if hit == 0 {
-		initBatch()
-	}
+	data:=ctx.Request.Encode()
+	bufWriteContent(&data)
 
-	if hit < batch {
-		d := docs.At(hit)
-		err = d.SetMethod(ctx.Method())
-		if err != nil {
-			panic(err)
-		}
-		err = d.SetUrl(ctx.Request.URI().RequestURI())
-		if err != nil {
-			panic(err)
-		}
-		err = d.SetBody(ctx.Request.Body())
-		if err != nil {
-			panic(err)
-		}
-		hit++
-	} else {
-		d, err := msg.Marshal()
-		if err != nil {
-			panic(err)
-		}
-		bufWriteContent(&d)
-		hit = 0
-
-	}
+	//if hit == 0 {
+	//	initBatch()
+	//}
+	//
+	//if hit < batch {
+	//	d := docs.At(hit)
+	//	err = d.SetMethod(ctx.Method())
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//
+	//	err = d.SetUrl(ctx.Request.URI().RequestURI())
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//	err = d.SetBody(ctx.Request.Body())
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//	hit++
+	//} else {
+	//	d, err := msg.Marshal()
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//	bufWriteContent(&d)
+	//	hit = 0
+	//
+	//}
 
 	lock.Unlock()
 }
@@ -166,17 +165,17 @@ func bufWriteContent(data *[]byte) {
 	if err != nil {
 		panic(err)
 	}
-	//err=w.Flush()
-	//if err != nil {
-	//	panic(err)
-	//}
+	err=w.Flush()
+	if err != nil {
+		panic(err)
+	}
 }
 
 
 
 
-var jsonOK = "{ \"took\" : 1, \"errors\" : false }"
-var bulkRequestOKBody = []byte(jsonOK)
+//var jsonOK = "{ \"took\" : 1, \"errors\" : false }"
+//var bulkRequestOKBody = []byte(jsonOK)
 
 
 type TranslogOutput struct {
@@ -187,11 +186,12 @@ func (filter TranslogOutput) Name() string {
 	return "translog"
 }
 
-func (filter TranslogOutput) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (filter TranslogOutput) Process(ctx *fasthttp.RequestCtx) {
 
 	//if p.proxyConfig.AsyncWrite && strings.Contains(ctx.URI().String(), "_bulk") {
 
-		stats.Increment("request", "action.bulk")
+
+		//stats.Increment("request", "action.bulk")
 
 		if global.Env().IsDebug {
 			log.Trace("saving bulk request")
@@ -199,8 +199,9 @@ func (filter TranslogOutput) Process(filterCfg *common.FilterConfig,ctx *fasthtt
 
 		SaveRequest(ctx)
 
-		ctx.Response.SetStatusCode(http.StatusOK)
-		ctx.Response.SetBody(bulkRequestOKBody)
+		//
+		//ctx.Response.SetStatusCode(http.StatusOK)
+		//ctx.Response.SetBody(bulkRequestOKBody)
 
 	//}
 

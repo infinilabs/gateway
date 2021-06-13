@@ -33,11 +33,14 @@ import (
 	stats "infini.sh/framework/plugins/stats_statsd"
 	api2 "infini.sh/gateway/api"
 	"infini.sh/gateway/config"
+	"infini.sh/gateway/proxy/output/translog"
 	indexing2 "infini.sh/gateway/service/bulk_reshuffle"
 	"infini.sh/gateway/service/floating_ip"
 	"infini.sh/gateway/service/forcemerge"
 	"infini.sh/gateway/service/gateway"
+	index_diff "infini.sh/gateway/service/index_diff"
 	"infini.sh/gateway/service/indexing"
+	"infini.sh/gateway/service/queue_consumer"
 )
 
 func main() {
@@ -56,6 +59,7 @@ func main() {
 	app.Init(nil)
 
 	defer app.Shutdown()
+	defer translog.Close()
 
 	app.Start(func() {
 
@@ -73,6 +77,7 @@ func main() {
 		module.RegisterUserPlugin(gateway.GatewayModule{})
 		module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
 		module.RegisterUserPlugin(forcemerge.ForceMergeModule{})
+		module.RegisterUserPlugin(index_diff.IndexDiffModule{})
 
 		api2.Init()
 
@@ -80,7 +85,9 @@ func main() {
 		pipe.RegisterPipeJoint(indexing.JsonIndexingJoint{})
 		pipe.RegisterPipeJoint(indexing.BulkIndexingJoint{})
 		pipe.RegisterPipeJoint(indexing2.BulkReshuffleJoint{})
+		pipe.RegisterPipeJoint(queue_consumer.DiskQueueConsumer{})
 
+		translog.Open()
 
 		//start each module, with enabled provider
 		module.Start()

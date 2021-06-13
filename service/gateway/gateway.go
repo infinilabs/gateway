@@ -76,50 +76,49 @@ func (module GatewayModule) Setup(cfg *Config) {
 
 	proxy.Init()
 
-	entryConfigs=[]common.EntryConfig{}
-	ok,err:=env.ParseConfig("entry",&entryConfigs)
-	if ok&&err!=nil{
+	entryConfigs = []common.EntryConfig{}
+	ok, err := env.ParseConfig("entry", &entryConfigs)
+	if ok && err != nil {
 		panic(err)
 	}
 
-	flowConfigs:=[]common.FlowConfig{}
-	ok,err=env.ParseConfig("flow",&flowConfigs)
-	if ok&&err!=nil{
+	flowConfigs := []common.FlowConfig{}
+	ok, err = env.ParseConfig("flow", &flowConfigs)
+	if err != nil {
 		panic(err)
 	}
-
-	if ok{
-		for _,v:=range flowConfigs{
+	if ok {
+		for _, v := range flowConfigs {
 			common.RegisterFlowConfig(v)
 		}
 	}
 
-	routerConfigs:=[]common.RouterConfig{}
-	ok,err=env.ParseConfig("router",&routerConfigs)
-	if ok&&err!=nil{
+	routerConfigs := []common.RouterConfig{}
+	ok, err = env.ParseConfig("router", &routerConfigs)
+	if ok && err != nil {
 		panic(err)
 	}
 
-	if ok{
-		for _,v:=range routerConfigs{
+	if ok {
+		for _, v := range routerConfigs {
 			common.RegisterRouterConfig(v)
 		}
 	}
 
 }
 
-var entryPoints= map[string]*entry2.Entrypoint{}
+var entryPoints = map[string]*entry2.Entrypoint{}
 
 func (module GatewayModule) Start() error {
 
-	for _,v:=range entryConfigs{
+	for _, v := range entryConfigs {
 		entry := entry2.NewEntrypoint(v)
-		log.Trace("start entry:",entry.Name())
-		err:=entry.Start()
-		if err!=nil{
+		log.Trace("start entry:", entry.Name())
+		err := entry.Start()
+		if err != nil {
 			panic(err)
 		}
-		entryPoints[v.Name]=entry
+		entryPoints[v.Name] = entry
 	}
 
 	return nil
@@ -127,9 +126,9 @@ func (module GatewayModule) Start() error {
 
 func (module GatewayModule) Stop() error {
 
-	for _,v:=range entryPoints {
-		err:=v.Stop()
-		if err!=nil{
+	for _, v := range entryPoints {
+		err := v.Stop()
+		if err != nil {
 			panic(err)
 		}
 	}

@@ -13,7 +13,6 @@ import (
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/proxy/balancer"
 	"math/rand"
-	"net/http"
 	"time"
 )
 
@@ -192,7 +191,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 
 	if len(clients) == 0 {
 		log.Error("proxy upstream is empty")
-		//panic(errors.New("proxy upstream is empty"))
+		esConfig.ReportFailure()
 		return
 	}
 
@@ -231,32 +230,36 @@ func NewReverseProxy(cfg *ProxyConfig) *ReverseProxy {
 	return &p
 }
 
-func (p *ReverseProxy) getClient() (client *fasthttp.HostClient,endpoint string) {
+func (p *ReverseProxy) getClient() (clientAvailable bool,client *fasthttp.HostClient,endpoint string) {
 	if p.clients == nil {
 		panic("ReverseProxy has been closed")
 	}
 
 	if len(p.clients)==0{
 		log.Error("no upstream found")
+		return false,nil,""
 	}
 
 	if p.bla != nil {
 		// bla has been opened
 		idx := p.bla.Distribute()
 		if idx >= len(p.clients) {
-			log.Warnf("invalid offset, reset to 0, ",idx," vs ",len(p.clients))
+			log.Warn("invalid offset, ",idx," vs ",len(p.clients),p.clients,p.endpoints,", random pick now")
 			idx = 0
+			goto RANDOM
 		}
 
 		if len(p.clients)!=len(p.endpoints){
-			log.Warnf("clients != endpoints, reset to 0, ",len(p.clients)," vs ",len(p.endpoints))
+			log.Warn("clients != endpoints, ",len(p.clients)," vs ",len(p.endpoints),", random pick now")
+			goto RANDOM
 		}
 
 		c := p.clients[idx]
 		e:=p.endpoints[idx]
-		return c,e
+		return true,c,e
 	}
 
+	RANDOM:
 	//or go random way
 	max := len(p.clients)
 	seed := rand.Intn(max)
@@ -266,7 +269,7 @@ func (p *ReverseProxy) getClient() (client *fasthttp.HostClient,endpoint string)
 	}
 	c := p.clients[seed]
 	e :=p.endpoints[seed]
-	return c,e
+	return true,c,e
 }
 
 func cleanHopHeaders(req *fasthttp.Request) {
@@ -275,9 +278,9 @@ func cleanHopHeaders(req *fasthttp.Request) {
 	}
 }
 
-var failureMessage=[]string{"connection refused","no such host","timed out"}
+var failureMessage=[]string{"connection refused","connection reset","no such host","timed out","Connection: close"}
 
-func (p *ReverseProxy) DelegateRequest(elasticsearch string,myctx *fasthttp.RequestCtx) {
+func (p *ReverseProxy) DelegateRequest(elasticsearch string,cfg *elastic.ElasticsearchConfig,myctx *fasthttp.RequestCtx) {
 
 	stats.Increment("cache", "strike")
 
@@ -285,7 +288,10 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string,myctx *fasthttp.Requ
 	START:
 
 	//使用算法来获取合适的 client
-	pc,endpoint := p.getClient()
+	ok,pc,endpoint := p.getClient()
+	if !ok{
+		//TODO no client available, throw error directly
+	}
 
 	req:=&myctx.Request
 	res:=&myctx.Response
@@ -296,7 +302,6 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string,myctx *fasthttp.Requ
 		log.Tracef("send request [%v] to upstream [%v]", req.URI().String(), pc.Addr)
 	}
 
-	cfg:=elastic.GetConfig(elasticsearch)
 
 	if cfg.TrafficControl!=nil{
 	RetryRateLimit:
@@ -319,16 +324,32 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string,myctx *fasthttp.Requ
 	}
 
 	if err := pc.Do(req, res); err != nil {
-		log.Warnf("failed to proxy request: %v, %v, retried #%v", err, string(req.RequestURI()),retry)
-		if util.ContainsAnyInArray(err.Error(),failureMessage){
-			retry++
-			if retry<10 {
-				goto START
-			}else{
-				log.Debugf("reached max retries, failed to proxy request: %v, %v", err, string(req.RequestURI()))
-			}
+		if global.Env().IsDebug{
+			log.Warnf("failed to proxy request: %v, %v, retried #%v", err, string(req.RequestURI()),retry)
 		}
-		res.SetStatusCode(http.StatusInternalServerError)
+
+		if util.ContainsAnyInArray(err.Error(),failureMessage){
+			//record translog, update failure ticket
+			if global.Env().IsDebug {
+				log.Errorf("elasticsearch [%v] is on fire now", p.proxyConfig.Elasticsearch)
+			}
+			cfg.ReportFailure()
+
+			//server failure flow
+
+		}else if  res.StatusCode()==429{
+				retry++
+				if p.proxyConfig.maxRetryTimes>0 && retry<p.proxyConfig.maxRetryTimes {
+					if p.proxyConfig.retryDelayInMs>0{
+						time.Sleep(time.Duration(p.proxyConfig.retryDelayInMs)*time.Millisecond)
+					}
+					goto START
+				}else{
+					log.Debugf("reached max retries, failed to proxy request: %v, %v", err, string(req.RequestURI()))
+				}
+		}
+		//TODO if backend failure and after reached max retry, should save translog and mark the elasticsearch cluster to downtime, deny any new requests
+		// the translog file should consider to contain dirty writes, could be used to do cross cluster check or manually operations recovery.
 		res.SetBody([]byte(err.Error()))
 	}
 

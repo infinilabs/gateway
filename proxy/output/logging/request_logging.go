@@ -6,7 +6,6 @@ import (
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fastjson_marshal"
-	"infini.sh/gateway/common"
 	"infini.sh/gateway/common/model"
 	"strings"
 	"sync"
@@ -57,7 +56,7 @@ func initPool() {
 	}
 }
 
-func (this RequestLogging) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 
 	initPool()
 
@@ -85,7 +84,7 @@ func (this RequestLogging) Process(filterCfg *common.FilterConfig,ctx *fasthttp.
 
 	request.ID= uint64(ctx.SequenceID)
 
-	request.ConnTime = ctx.ConnTime().UTC().Format("2006-01-02T15:04:05.000Z")
+	//request.ConnTime = ctx.ConnTime().UTC().Format("2006-01-02T15:04:05.000Z")
 	request.LoggingTime = time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	request.Request.StartTime = ctx.Time().UTC().Format("2006-01-02T15:04:05.000Z")
 
@@ -201,6 +200,7 @@ func (this RequestLogging) Process(filterCfg *common.FilterConfig,ctx *fasthttp.
 	}
 
 	request.Response.Body=respBody
+
 	request.Response.BodyLength = ctx.Response.GetBodyLength()
 
 	formatHeaderKey:=this.GetBool("format_header_keys",false)
@@ -273,6 +273,9 @@ func (this RequestLogging) Process(filterCfg *common.FilterConfig,ctx *fasthttp.
 	//}
 
 	//fmt.Println("logging now", string(w.Bytes()))
+
+	//fmt.Println(string(w.Bytes()))
+
 
 	err = queue.Push(this.GetStringOrDefault("queue_name", "request_logging"), w.Bytes())
 	//lock.Unlock()

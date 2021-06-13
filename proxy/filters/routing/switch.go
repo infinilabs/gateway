@@ -24,7 +24,7 @@ type SwitchRule struct {
 
 }
 
-func (filter SwitchFlowFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (filter SwitchFlowFilter) Process(ctx *fasthttp.RequestCtx) {
 	v,ok:=filter.GetMapArray("path_rules")
 	if !ok{
 		return

@@ -42,4 +42,7 @@ type RouterConfig struct {
 type FlowConfig struct {
 	Name    string         `config:"name"`
 	Filters []FilterConfig `config:"filter"`
+	FiltersV2 PluginConfig `config:"filter_v2"`
 }
+
+type PluginConfig []*config.Config

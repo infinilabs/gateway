@@ -5,10 +5,10 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/proxy/output/translog"
-	xcap "infini.sh/gateway/trash/captn"
 	"os"
-	capnp "zombiezen.com/go/capnproto2"
+	"time"
 )
 
 var (
@@ -51,27 +51,40 @@ func readRequests() {
 	scanner := bufio.NewScanner(file)
 	scanner.Split(SplitFunc)
 
+	fmt.Println("read files:",file)
+
 	for scanner.Scan() {
+
+		fmt.Println("scanning")
+
 		if err := scanner.Err(); err != nil {
 			fmt.Println(err)
 			panic(err)
 		}
 		data := scanner.Bytes()
-		msg, err := capnp.Unmarshal(data)
+		req:=fasthttp.AcquireRequest()
+		err:=req.Decode(data)
 		if err != nil {
 			panic(err)
 		}
-		requestGroup, err := xcap.ReadRootRequestGroup(msg)
-		if err != nil {
-			panic(err)
-		}
+		//msg, err := capnp.Unmarshal(data)
+		//if err != nil {
+		//	panic(err)
+		//}
+		//requestGroup, err := xcap.ReadRootRequestGroup(msg)
+		//if err != nil {
+		//	panic(err)
+		//}
 		fmt.Println("request:")
-		fmt.Println(requestGroup.Requests())
+		fmt.Println(req.String())
+		//fmt.Println(requestGroup.Requests())
 	}
 
+	fmt.Println("finished.")
 }
 
 func main() {
 	flag.Parse()
 	readRequests()
+	time.Sleep(5*time.Second)
 }

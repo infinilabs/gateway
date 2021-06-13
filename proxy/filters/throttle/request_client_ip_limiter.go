@@ -4,7 +4,6 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/common"
 )
 
 type RequestClientIPLimitFilter struct {
@@ -15,7 +14,7 @@ func (filter RequestClientIPLimitFilter) Name() string {
 	return "request_client_ip_limiter"
 }
 
-func (filter RequestClientIPLimitFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (filter RequestClientIPLimitFilter) Process(ctx *fasthttp.RequestCtx) {
 
 	ips, ok := filter.GetStringArray("ip")
 
@@ -32,7 +31,7 @@ func (filter RequestClientIPLimitFilter) Process(filterCfg *common.FilterConfig,
 				if global.Env().IsDebug {
 					log.Debug(clientIP, "met check rules")
 				}
-				filter.internalProcess("clientIP",clientIP,filterCfg,ctx)
+				filter.internalProcess("clientIP",clientIP,ctx)
 				return
 			}
 		}
@@ -40,5 +39,5 @@ func (filter RequestClientIPLimitFilter) Process(filterCfg *common.FilterConfig,
 		return
 	}
 
-	filter.internalProcess("clientIP",clientIP,filterCfg,ctx)
+	filter.internalProcess("clientIP",clientIP,ctx)
 }

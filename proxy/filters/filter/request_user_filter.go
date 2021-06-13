@@ -4,7 +4,6 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/common"
 )
 
 type RequestUserFilter struct {
@@ -15,7 +14,7 @@ func (filter RequestUserFilter) Name() string {
 	return "request_user_filter"
 }
 
-func (filter RequestUserFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (filter RequestUserFilter) Process(ctx *fasthttp.RequestCtx) {
 	exists,user,_:=ctx.ParseBasicAuth()
 	if !exists{
 		if global.Env().IsDebug{

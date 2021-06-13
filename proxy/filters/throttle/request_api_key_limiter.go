@@ -1,11 +1,9 @@
 package throttle
 
-
 import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/common"
 )
 
 type RequestAPIKeyLimitFilter struct {
@@ -16,7 +14,7 @@ func (filter RequestAPIKeyLimitFilter) Name() string {
 	return "request_api_key_limiter"
 }
 
-func (filter RequestAPIKeyLimitFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (filter RequestAPIKeyLimitFilter) Process(ctx *fasthttp.RequestCtx) {
 
 	exists,apiID,_:=ctx.ParseAPIKey()
 	if !exists{
@@ -39,12 +37,12 @@ func (filter RequestAPIKeyLimitFilter) Process(filterCfg *common.FilterConfig,ct
 				if global.Env().IsDebug {
 					log.Debug(apiIDStr, "met check rules")
 				}
-				filter.internalProcess("api", apiIDStr,filterCfg,ctx)
+				filter.internalProcess("api", apiIDStr,ctx)
 				return
 			}
 		}
 		return
 	}
 
-	filter.internalProcess("api", apiIDStr,filterCfg,ctx)
+	filter.internalProcess("api", apiIDStr,ctx)
 }

@@ -2,6 +2,7 @@ package common
 
 import (
 	log "github.com/cihub/seelog"
+	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/util"
@@ -25,12 +26,10 @@ GET				/audit/*operations			name=secured_audit_access flow=[ basic_auth >> flow{
 
 type FilterFlow struct {
 	ID string
-	FilterConfigs []*FilterConfig
 	Filters []RequestFilter
 }
 
-func (flow *FilterFlow) JoinFilter(filterCfg *FilterConfig,filter RequestFilter) *FilterFlow {
-	flow.FilterConfigs=append(flow.FilterConfigs,filterCfg)
+func (flow *FilterFlow) JoinFilter(filter RequestFilter) *FilterFlow {
 	flow.Filters=append(flow.Filters,filter)
 	return flow
 }
@@ -58,19 +57,19 @@ func (flow *FilterFlow) ToString() string {
 }
 
 func (flow *FilterFlow) Process(ctx *fasthttp.RequestCtx) {
-	for i, v := range flow.Filters {
+	for _, v := range flow.Filters {
 		if !ctx.ShouldContinue(){
 			if global.Env().IsDebug{
 				log.Debugf("filter [%v] not continued",v.Name())
 			}
+			ctx.AddFlowProcess("skipped")
 			break
 		}
 		if global.Env().IsDebug{
-			log.Debugf("processing filter [%v]",v.Name())
+			log.Debugf("processing filter [%v] [%v]",v.Name(),v)
 		}
 		ctx.AddFlowProcess(v.Name())
-		cfg:=flow.FilterConfigs[i]
-		v.Process(cfg,ctx)
+		v.Process(ctx)
 	}
 }
 
@@ -87,10 +86,19 @@ func MustGetFlow(flowID string) FilterFlow {
 		log.Tracef("flow [%v] [%v]",flowID,cfg)
 	}
 
-	for _,z:=range cfg.Filters{
-		f:= GetFilterInstanceWithConfig(&z)
-		v.JoinFilter(&z,f)
+	if len(cfg.FiltersV2)>0{
+		flow1, err := New(cfg.FiltersV2)
+		if err != nil {
+			panic(err)
+		}
+		v.JoinFilter(flow1)
+	}else{
+		for _,z:=range cfg.Filters{
+			f:= GetFilterInstanceWithConfig(&z)
+			v.JoinFilter(f)
+		}
 	}
+
 	flows[flowID]=v
 	return v
 }
@@ -110,8 +118,9 @@ func GetFlowProcess(flowID string) func(ctx *fasthttp.RequestCtx) {
 //	return flow
 //}
 
+//get filter plugins
 func GetFilter(name string) RequestFilter {
-	v, ok := filterTypes[name]
+	v, ok := filterPluginTypes[name]
 	if !ok{
 		panic(errors.Errorf("filter [%s] not found",name))
 	}
@@ -153,18 +162,62 @@ func GetFilterInstanceWithConfig(cfg *FilterConfig) RequestFilter {
 		return x
 }
 
-var filterTypes map[string]RequestFilter = make(map[string]RequestFilter)
+func GetFilterInstanceWithConfigV2(filterName string,cfg *config.Config) RequestFilter {
+		if global.Env().IsDebug {
+			log.Debugf("get filter [%v]", filterName)
+		}
+
+		if !cfg.HasField("_meta:config_id"){
+			panic(errors.Errorf("invalid filter config [%v] [%v] is not set",filterName,cfg))
+		}
+		id,err:=cfg.String("_meta:config_id",-1)
+		if err!=nil{
+			panic(err)
+		}
+
+		v1,ok:=filterInstances[id]
+		if ok{
+			if global.Env().IsDebug{
+				log.Debugf("hit filter instance [%v] [%v], return",filterName,id)
+			}
+			return v1
+		}
+
+
+		////check contional
+		//if cfg.HasField("when"){
+		//
+		//}
+
+		parameters:=map[string]interface{}{}
+		cfg.Unpack(&parameters)
+
+		filter:=GetFilter(filterName)
+		t := reflect.ValueOf(filter).Type()
+		v := reflect.New(t).Elem()
+
+		f := v.FieldByName("Data")
+		if f.IsValid() && f.CanSet() && f.Kind() == reflect.Map {
+			f.Set(reflect.ValueOf(parameters))
+		}
+		x:= v.Interface().(RequestFilter)
+
+		filterInstances[id]=x
+		return x
+}
+
+var filterPluginTypes map[string]RequestFilter = make(map[string]RequestFilter)
+
 var filterInstances map[string]RequestFilter = make(map[string]RequestFilter)
 var flows map[string]FilterFlow = make(map[string]FilterFlow)
 
-var filterConfigs map[string]FilterConfig = make(map[string]FilterConfig)
 var routingRules map[string]RuleConfig = make(map[string]RuleConfig)
 var flowConfigs map[string]FlowConfig = make(map[string]FlowConfig)
 var routerConfigs map[string]RouterConfig = make(map[string]RouterConfig)
 
-func RegisterFilter(filter RequestFilter) {
+func RegisterFilterPlugin(filter RequestFilter) {
 	log.Trace("register filter: ",filter.Name())
-	filterTypes[filter.Name()] = filter
+	filterPluginTypes[filter.Name()] = filter
 }
 
 func RegisterFlow(flow FilterFlow) {

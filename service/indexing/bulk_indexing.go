@@ -217,7 +217,7 @@ func (joint BulkIndexingJoint) NewBulkWorker( bulkSizeInByte int, wg *sync.WaitG
 	if mainBuf.Len() > 0 {
 
 		start:=time.Now()
-		success:=joint.Bulk(&cfg, endpoint, &mainBuf)
+		success:=joint.Bulk(cfg, endpoint, &mainBuf)
 		log.Debug(cfg.Name,", bulk result:",success,", size:",util.ByteSize(uint64(mainBuf.Len())),", elpased:",time.Since(start))
 
 		if !success{

@@ -2,7 +2,6 @@ package cache
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	log "github.com/cihub/seelog"
 	"github.com/dgraph-io/ristretto"
@@ -211,7 +210,7 @@ func (filter RequestCacheGet) Name() string {
 	return "get_cache"
 }
 
-func (filter RequestCacheGet) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 	if bytes.Equal(common.FaviconPath,ctx.Request.URI().Path()){
 		if global.Env().IsDebug{
 			log.Tracef("skip to delegate favicon.io")
@@ -287,7 +286,11 @@ func (filter RequestCacheGet) Process(filterCfg *common.FilterConfig,ctx *fastht
 		if found {
 
 			stats.Increment("cache", "hit")
-			Decode(item, &ctx.Response)
+			err:=ctx.Response.Decode(item)
+			if err!=nil{
+				log.Error(err)
+				panic(err)
+			}
 			ctx.Response.Cached = true
 			ctx.Response.Header.Add("CACHED", "true")
 			ctx.Response.Header.Add("CACHE-HASH", hash)
@@ -364,7 +367,7 @@ func (filter RequestCacheSet) Name() string {
 	return "set_cache"
 }
 
-func (filter RequestCacheSet) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
 	method :=  string(ctx.Request.Header.Method())
 	url := string(ctx.RequestURI())
 
@@ -403,7 +406,12 @@ func (filter RequestCacheSet) Process(filterCfg *common.FilterConfig,ctx *fastht
 
 		var id string
 
-		cacheBytes := filter.Encode(ctx)
+		cacheBytes := ctx.Response.Encode()
+
+		if len(cacheBytes)==0{
+			log.Warn("invalid cache bytes")
+			return
+		}
 
 		if strings.Contains(url, "/_async_search") {
 
@@ -468,79 +476,4 @@ func (filter RequestCacheSet) Process(filterCfg *common.FilterConfig,ctx *fastht
 	}
 }
 
-
-
-//TODO optimize memmove issue, buffer read
-func Decode(data []byte, res *fasthttp.Response)[]byte {
-	readerHeaderLengthBytes := make([]byte, 4)
-	reader := bytes.NewBuffer(data)
-	_, err := reader.Read(readerHeaderLengthBytes)
-	if err != nil {
-		panic(err)
-	}
-
-	readerHeaderLength := binary.LittleEndian.Uint32(readerHeaderLengthBytes)
-	readerHeader := make([]byte, readerHeaderLength)
-	_, err = reader.Read(readerHeader)
-	if err != nil {
-		panic(err)
-	}
-
-	line := bytes.Split(readerHeader, newLine)
-	for _, l := range line {
-		kv := bytes.Split(l, colon)
-		if len(kv) == 2 {
-			res.Header.SetBytesKV(kv[0], kv[1])
-		}
-	}
-
-	readerBodyLengthBytes := make([]byte, 4)
-	_, err = reader.Read(readerBodyLengthBytes)
-	if err != nil {
-		panic(err)
-	}
-
-	readerBodyLength := binary.LittleEndian.Uint32(readerBodyLengthBytes)
-	readerBody := make([]byte, readerBodyLength)
-	_, err = reader.Read(readerBody)
-	if err != nil {
-		panic(err)
-	}
-
-	res.SetBody(readerBody)
-	res.SetStatusCode(fasthttp.StatusOK) //TODO come from cache
-	return readerBody
-}
-
-func (p RequestCache) Encode(ctx *fasthttp.RequestCtx)[]byte {
-
-	buffer := bytes.Buffer{}
-	ctx.Response.Header.VisitAll(func(key, value []byte) {
-		buffer.Write(key)
-		buffer.Write(colon)
-		buffer.Write(value)
-		buffer.Write(newLine)
-	})
-
-	header := buffer.Bytes()
-	body := ctx.Response.Body()
-
-	data := bytes.Buffer{}
-
-	headerLength := make([]byte, 4)
-	binary.LittleEndian.PutUint32(headerLength, uint32(len(header)))
-
-	bodyLength := make([]byte, 4)
-	binary.LittleEndian.PutUint32(bodyLength, uint32(len(body)))
-
-	//header length
-	data.Write(headerLength)
-	data.Write(header)
-
-	//body
-	data.Write(bodyLength)
-	data.Write(body)
-
-	return data.Bytes()
-}
 

@@ -5,7 +5,6 @@ import (
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/common"
 )
 
 type ResponseHeaderFilter struct {
@@ -16,7 +15,7 @@ func (filter ResponseHeaderFilter) Name() string {
 	return "response_header_filter"
 }
 
-func (filter ResponseHeaderFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (filter ResponseHeaderFilter) Process(ctx *fasthttp.RequestCtx) {
 
 	if global.Env().IsDebug {
 		log.Debug("headers:", string(util.EscapeNewLine(ctx.Response.Header.Header())))

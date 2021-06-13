@@ -4,7 +4,6 @@ import (
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/common"
 )
 
 type DatePrecisionTuning struct {
@@ -16,7 +15,7 @@ func (this DatePrecisionTuning) Name() string {
 }
 
 var builtinKeywords=[]string{"_search","_async_search"}
-func (this DatePrecisionTuning) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (this DatePrecisionTuning) Process(ctx *fasthttp.RequestCtx) {
 
 	if ctx.Request.GetBodyLength()<=0{
 		return

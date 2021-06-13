@@ -1,10 +1,9 @@
 package filter
 
 import (
+	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/lib/fasthttp"
-	log "github.com/cihub/seelog"
-	"infini.sh/gateway/common"
 )
 
 type RequestClientIPFilter struct {
@@ -15,7 +14,7 @@ func (filter RequestClientIPFilter) Name() string {
 	return "request_client_ip_filter"
 }
 
-func (filter RequestClientIPFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (filter RequestClientIPFilter) Process(ctx *fasthttp.RequestCtx) {
 
 	clientIP:=ctx.RemoteIP().String()
 

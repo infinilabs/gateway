@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"infini.sh/gateway/common"
+	"infini.sh/gateway/proxy/filters/auth"
 	"infini.sh/gateway/proxy/filters/cache"
 	"infini.sh/gateway/proxy/filters/debug"
 	elastic2 "infini.sh/gateway/proxy/filters/elastic"
@@ -10,56 +11,68 @@ import (
 	"infini.sh/gateway/proxy/filters/sample"
 	"infini.sh/gateway/proxy/filters/throttle"
 	"infini.sh/gateway/proxy/filters/transform"
+	"infini.sh/gateway/proxy/output/disk_queue"
 	"infini.sh/gateway/proxy/output/elastic"
 	"infini.sh/gateway/proxy/output/kafka"
 	"infini.sh/gateway/proxy/output/logging"
+	"infini.sh/gateway/proxy/output/translog"
 )
 
 func Init() {
-	common.RegisterFilter(logging.RequestLogging{})
-	common.RegisterFilter(debug.EchoMessage{})
-	common.RegisterFilter(debug.DumpHeader{})
-	common.RegisterFilter(debug.DumpUrl{})
+	common.RegisterFilterPlugin(logging.RequestLogging{})
+	common.RegisterFilterPlugin(debug.EchoMessage{})
+	common.RegisterFilterPlugin(debug.DumpHeader{})
+	common.RegisterFilterPlugin(debug.DumpUrl{})
 
-	common.RegisterFilter(debug.DumpRequestBody{})
-	common.RegisterFilter(debug.DumpResponseBody{})
+	common.RegisterFilterPlugin(debug.DumpRequestBody{})
+	common.RegisterFilterPlugin(debug.DumpResponseBody{})
 
 
-	common.RegisterFilter(elastic.Elasticsearch{})
-	common.RegisterFilter(elastic2.DatePrecisionTuning{})
-	common.RegisterFilter(elastic2.BulkReshuffle{})
-	common.RegisterFilter(elastic2.BulkToQueue{})
+	common.RegisterFilterPlugin(elastic.Elasticsearch{})
+	common.RegisterFilterPlugin(elastic2.DatePrecisionTuning{})
+	common.RegisterFilterPlugin(elastic2.BulkReshuffle{})
+	common.RegisterFilterPlugin(elastic2.BulkToQueue{})
 
-	common.RegisterFilter(cache.RequestCacheGet{})
-	common.RegisterFilter(cache.RequestCacheSet{})
+	common.RegisterFilterPlugin(cache.RequestCacheGet{})
+	common.RegisterFilterPlugin(cache.RequestCacheSet{})
 
-	common.RegisterFilter(throttle.RequestUserLimitFilter{})
-	common.RegisterFilter(throttle.RequestHostLimitFilter{})
-	common.RegisterFilter(throttle.RequestAPIKeyLimitFilter{})
-	common.RegisterFilter(throttle.RequestClientIPLimitFilter{})
-	common.RegisterFilter(throttle.RequestPathLimitFilter{})
-	common.RegisterFilter(throttle.SleepFilter{})
+	common.RegisterFilterPlugin(throttle.RequestUserLimitFilter{})
+	common.RegisterFilterPlugin(throttle.RequestHostLimitFilter{})
+	common.RegisterFilterPlugin(throttle.RequestAPIKeyLimitFilter{})
+	common.RegisterFilterPlugin(throttle.RequestClientIPLimitFilter{})
+	common.RegisterFilterPlugin(throttle.RequestPathLimitFilter{})
+	common.RegisterFilterPlugin(throttle.SleepFilter{})
 
-	common.RegisterFilter(filter.RequestHeaderFilter{})
-	common.RegisterFilter(filter.RequestMethodFilter{})
-	common.RegisterFilter(sample.SampleFilter{})
-	common.RegisterFilter(filter.RequestUrlPathFilter{})
-	common.RegisterFilter(kafka.Kafka{})
+	common.RegisterFilterPlugin(filter.RequestHeaderFilter{})
+	common.RegisterFilterPlugin(filter.RequestMethodFilter{})
+	common.RegisterFilterPlugin(sample.SampleFilter{})
+	common.RegisterFilterPlugin(filter.RequestUrlPathFilter{})
+	common.RegisterFilterPlugin(kafka.Kafka{})
 
-	common.RegisterFilter(routing.RatioRoutingFlowFilter{})
-	common.RegisterFilter(routing.CloneFlowFilter{})
-	common.RegisterFilter(routing.SwitchFlowFilter{})
+	common.RegisterFilterPlugin(routing.RatioRoutingFlowFilter{})
+	common.RegisterFilterPlugin(routing.CloneFlowFilter{})
+	common.RegisterFilterPlugin(routing.SwitchFlowFilter{})
+	common.RegisterFilterPlugin(routing.FlowFilter{})
 
-	common.RegisterFilter(filter.ResponseStatusCodeFilter{})
-	common.RegisterFilter(filter.ResponseHeaderFilter{})
-	common.RegisterFilter(filter.RequestClientIPFilter{})
-	common.RegisterFilter(filter.RequestUserFilter{})
-	common.RegisterFilter(filter.RequestAPIKeyFilter{})
-	common.RegisterFilter(filter.RequestServerHostFilter{})
+	common.RegisterFilterPlugin(filter.ResponseStatusCodeFilter{})
+	common.RegisterFilterPlugin(filter.ResponseHeaderFilter{})
+	common.RegisterFilterPlugin(filter.RequestClientIPFilter{})
+	common.RegisterFilterPlugin(filter.RequestUserFilter{})
+	common.RegisterFilterPlugin(filter.RequestAPIKeyFilter{})
+	common.RegisterFilterPlugin(filter.RequestServerHostFilter{})
 
-	common.RegisterFilter(transform.RequestBodyTruncate{})
-	common.RegisterFilter(transform.ResponseBodyTruncate{})
-	common.RegisterFilter(transform.ResponseHeaderFormatFilter{})
-	common.RegisterFilter(transform.RequestBodyRegexReplace{})
-	common.RegisterFilter(transform.ResponseBodyRegexReplace{})
+	common.RegisterFilterPlugin(transform.RequestBodyTruncate{})
+	common.RegisterFilterPlugin(transform.ResponseBodyTruncate{})
+	common.RegisterFilterPlugin(transform.ResponseHeaderFormatFilter{})
+	common.RegisterFilterPlugin(transform.RequestBodyRegexReplace{})
+	common.RegisterFilterPlugin(transform.ResponseBodyRegexReplace{})
+
+	common.RegisterFilterPlugin(auth.SetBasicAuth{})
+	common.RegisterFilterPlugin(auth.SetResponse{})
+
+	common.RegisterFilterPlugin(disk_queue.DiskEnqueueFilter{})
+	common.RegisterFilterPlugin(translog.TranslogOutput{})
+
+	common.RegisterFilterPlugin(throttle.DropFilter{})
+	common.RegisterFilterPlugin(throttle.ElasticsearchHealthCheckFilter{})
 }

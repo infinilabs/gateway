@@ -6,7 +6,6 @@ import (
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/common"
 )
 
 type RequestBodyTruncate struct {
@@ -17,7 +16,7 @@ func (filter RequestBodyTruncate) Name() string {
 	return "request_body_truncate"
 }
 
-func (filter RequestBodyTruncate) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (filter RequestBodyTruncate) Process(ctx *fasthttp.RequestCtx) {
 	size:=filter.GetIntOrDefault("max_size",1024)
 	addHeader:=filter.GetBool("add_header",true)
 

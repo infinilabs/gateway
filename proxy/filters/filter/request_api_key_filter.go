@@ -4,7 +4,6 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/common"
 )
 
 type RequestAPIKeyFilter struct {
@@ -15,7 +14,7 @@ func (filter RequestAPIKeyFilter) Name() string {
 	return "request_api_key_filter"
 }
 
-func (filter RequestAPIKeyFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (filter RequestAPIKeyFilter) Process(ctx *fasthttp.RequestCtx) {
 	exists,apiID,_:=ctx.ParseAPIKey()
 	if !exists{
 		if global.Env().IsDebug{

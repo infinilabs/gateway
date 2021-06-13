@@ -1,10 +1,10 @@
 package filter
+
 import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/common"
 )
 
 type RequestHeaderFilter struct {
@@ -15,7 +15,7 @@ func (filter RequestHeaderFilter) Name() string {
 	return "request_header_filter"
 }
 
-func (filter RequestHeaderFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (filter RequestHeaderFilter) Process(ctx *fasthttp.RequestCtx) {
 
 	if global.Env().IsDebug {
 		log.Debug("headers:", string(util.EscapeNewLine(ctx.Request.Header.Header())))

@@ -4,12 +4,11 @@
 package throttle
 
 import (
+	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/rate"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/common"
-	log "github.com/cihub/seelog"
 	"time"
 )
 
@@ -17,7 +16,7 @@ type RequestLimiterBase struct {
 	param.Parameters
 }
 
-func (filter RequestLimiterBase) internalProcess(tokenType,token string,filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx){
+func (filter RequestLimiterBase) internalProcess(tokenType,token string,ctx *fasthttp.RequestCtx){
 
 	maxQps, ok := filter.GetInt64("max_requests", -1)
 	burstQps, _ := filter.GetInt64("burst_requests", -1)

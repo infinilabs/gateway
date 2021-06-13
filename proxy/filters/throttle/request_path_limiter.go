@@ -6,7 +6,6 @@ import (
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/rate"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/common"
 	"regexp"
 )
 
@@ -65,7 +64,7 @@ func (this *MatchRules) Valid()bool {
 	return true
 }
 
-func (filter RequestPathLimitFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (filter RequestPathLimitFilter) Process(ctx *fasthttp.RequestCtx) {
 	rules,ok:=filter.Get("rules_obj").([]MatchRules)
 	if !ok{
 		results:=[]MatchRules{}

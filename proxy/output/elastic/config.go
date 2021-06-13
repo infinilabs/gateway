@@ -4,11 +4,13 @@ import "time"
 
 type ProxyConfig struct {
 	//Enabled             bool   `config:"enabled"`
-	Elasticsearch       string `config:"elasticsearch"`
-	Balancer            string `config:"balancer"`
+	Elasticsearch string `config:"elasticsearch"`
+	Balancer      string `config:"balancer"`
 	//Timeout             string `config:"timeout"`
-	MaxConnection       int    `config:"max_connection"`
-	MaxResponseBodySize int    `config:"max_response_size"`
+	MaxConnection       int `config:"max_connection"`
+	MaxResponseBodySize int `config:"max_response_size"`
+	maxRetryTimes       int `config:"max_retry_times"`
+	retryDelayInMs       int `config:"retry_delay_in_ms"`
 
 	MaxConnWaitTimeout  time.Duration `config:"max_conn_wait_timeout"`
 	MaxIdleConnDuration time.Duration `config:"max_idle_conn_duration"`
@@ -16,15 +18,15 @@ type ProxyConfig struct {
 	ReadTimeout         time.Duration `config:"read_timeout"`
 	WriteTimeout        time.Duration `config:"write_timeout"`
 
-	ReadBufferSize        int  `config:"read_buffer_size"`
-	WriteBufferSize       int  `config:"write_buffer_size"`
-	TLSInsecureSkipVerify bool `config:"tls_insecure_skip_verify"`
-	Weights  map[string]int `config:"weights"`
+	ReadBufferSize        int            `config:"read_buffer_size"`
+	WriteBufferSize       int            `config:"write_buffer_size"`
+	TLSInsecureSkipVerify bool           `config:"tls_insecure_skip_verify"`
+	Weights               map[string]int `config:"weights"`
 
-	Refresh struct{
-		Enabled             bool   `config:"enabled"`
-		Interval            string `config:"interval"`
-	}`config:"refresh"`
+	Refresh struct {
+		Enabled  bool   `config:"enabled"`
+		Interval string `config:"interval"`
+	} `config:"refresh"`
 
 	Filter struct {
 		Hosts struct {

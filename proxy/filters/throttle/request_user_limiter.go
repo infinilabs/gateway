@@ -1,11 +1,9 @@
 package throttle
 
-
 import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/common"
 )
 
 type RequestUserLimitFilter struct {
@@ -16,7 +14,7 @@ func (filter RequestUserLimitFilter) Name() string {
 	return "request_user_limiter"
 }
 
-func (filter RequestUserLimitFilter) Process(filterCfg *common.FilterConfig,ctx *fasthttp.RequestCtx) {
+func (filter RequestUserLimitFilter) Process(ctx *fasthttp.RequestCtx) {
 
 	exists,user,_:=ctx.ParseBasicAuth()
 	if !exists{
@@ -39,7 +37,7 @@ func (filter RequestUserLimitFilter) Process(filterCfg *common.FilterConfig,ctx 
 				if global.Env().IsDebug {
 					log.Debug(userStr, "met check rules")
 				}
-				filter.internalProcess("user",userStr,filterCfg,ctx)
+				filter.internalProcess("user",userStr,ctx)
 				return
 			}
 		}
@@ -47,5 +45,5 @@ func (filter RequestUserLimitFilter) Process(filterCfg *common.FilterConfig,ctx 
 		return
 	}
 
-	filter.internalProcess("user",userStr,filterCfg,ctx)
+	filter.internalProcess("user",userStr,ctx)
 }
