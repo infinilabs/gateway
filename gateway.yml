@@ -46,6 +46,8 @@ flow:
               sleep_in_million_seconds: 1000
           - elasticsearch_health_check:
               elasticsearch: "prod"
+      - ratio:
+          ratio: 0.1
       - flow:
           flows:
             - request_logging
