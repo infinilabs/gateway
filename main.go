@@ -40,6 +40,7 @@ import (
 	"infini.sh/gateway/service/gateway"
 	index_diff "infini.sh/gateway/service/index_diff"
 	"infini.sh/gateway/service/indexing"
+	"infini.sh/gateway/service/offline_processing"
 	"infini.sh/gateway/service/queue_consumer"
 )
 
@@ -78,6 +79,7 @@ func main() {
 		module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
 		module.RegisterUserPlugin(forcemerge.ForceMergeModule{})
 		module.RegisterUserPlugin(index_diff.IndexDiffModule{})
+		module.RegisterUserPlugin(offline_processing.FlowRunner{})
 
 		api2.Init()
 

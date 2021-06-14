@@ -14,6 +14,36 @@ entry:
     tls:
       enabled: true
 flow:
+  - name: prod-flow-post-processing
+    filter_v2:
+      - set_basic_auth:
+          username: elastic
+          password: changeme
+      - if:
+          cluster_available: ["prod"]
+        then:
+          - elasticsearch:
+              elasticsearch: "prod"
+              max_connection: 1000
+          - if:
+              in:
+                _ctx.response.status: [ "200" , "201" ]
+            then:
+              - set_basic_auth:
+                  username: test
+                  password: testtest
+              - disk_enqueue:
+                  queue_name: "dev"
+            else:
+              - disk_enqueue:
+                  queue_name: "prod-500"
+        else:
+          - disk_enqueue:
+              queue_name: "prod-500"
+          - sleep:
+              sleep_in_million_seconds: 1000
+          - elasticsearch_health_check:
+              elasticsearch: "prod"
   - name: prod-flow
     filter_v2:
       - set_basic_auth:
@@ -21,7 +51,7 @@ flow:
           password: changeme
       - if:
           and:
-            - queue_has_lag: [ "prod" ]
+            - queue_has_lag: [ "prod", "prod-500" ]
             - cluster_available: ["prod"]
         then: #集群可用但是集群有堆积的情况，先入队列，追加队伍，确保操作顺序的一致性
           - disk_enqueue:
@@ -59,7 +89,6 @@ flow:
                   queue_name: "dev"
             else: #可能存在脏写，将请求放入写入失败队列，后续可以选择两边集群都重做一次，最终确保一致性，写 translog，提供 UI 可以检查三方：主、备集群和本地日志
               - translog:
-                  name: ""
               - disk_enqueue:
                   queue_name: "prod-500"
 
@@ -281,10 +310,9 @@ elasticsearch:
 - name: dev
   enabled: true
   endpoint: https://192.168.3.98:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
-#  endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
-#  traffic_control: #global traffic control
-#    max_bps_per_node: 102400 #max total bytes send to es per node
-#    max_qps_per_node: 100 #max total requests send to es per node
+  traffic_control: #global traffic control
+    max_bps_per_node: 102400 #max total bytes send to es per node
+    max_qps_per_node: 1000 #max total requests send to es per node
   basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
     username: test
     password: testtest
@@ -331,23 +359,21 @@ modules:
       pipeline_id: bulk_reshuffle
     - name: disk_queue_consumer-dev
       enabled: true
-      max_go_routine: 1
+      max_go_routine: 10
       threshold_in_ms: 0
       timeout_in_ms: 5000
       pipeline_id: disk_queue_consumer-dev
     - name: disk_queue_consumer-prod
       enabled: true
-      max_go_routine: 1
+      max_go_routine: 10
       threshold_in_ms: 0
       timeout_in_ms: 5000
       pipeline_id: disk_queue_consumer-prod
-#    - name: disk_queue_consumer-prod-500
-#      enabled: true
-#      max_go_routine: 1
-#      threshold_in_ms: 0
-#      timeout_in_ms: 5000
-#      pipeline_id: disk_queue_consumer-prod-500
 
+flow_runner:
+  enabled: true
+  input_queue: "prod-500"
+  flow: prod-flow-post-processing
 
 pipelines:
 - name: disk_queue_consumer-dev
@@ -358,15 +384,6 @@ pipelines:
       input_queue: "dev"
       elasticsearch: "dev"
       waiting_after: [ "dev-500"]
-      timeout: "1s"
-      worker_size: 1
-- name: disk_queue_consumer-prod-500 #故障过程中产生的脏数据，可能写成功但是 es 没有返回，也有可能没有发送给 es，如果重做，需要同时发送给两个 Elasticsearch 集群
-  start:
-    joint: disk_queue_consumer
-    enabled: true
-    parameters:
-      input_queue: "prod-500"
-      elasticsearch: "prod"
       timeout: "1s"
       worker_size: 1
 - name: disk_queue_consumer-prod
