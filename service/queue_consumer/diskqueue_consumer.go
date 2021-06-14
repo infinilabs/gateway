@@ -10,6 +10,7 @@ import (
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
+	"infini.sh/framework/core/rate"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"net/http"
@@ -106,7 +107,7 @@ READ_DOCS:
 				for _,v:=range waitingAfter{
 					depth:=queue.Depth(v)
 					if depth>0{
-						log.Errorf("%v has pending %v messages, cleanup it first",v,depth)
+						log.Debug("%v has pending %v messages, cleanup it first",v,depth)
 						time.Sleep(5*time.Second)
 						goto READ_DOCS
 					}
@@ -116,17 +117,16 @@ READ_DOCS:
 
 		//handle message on error queue
 		if queue.Depth(onErrorQueue)>0{
-			fmt.Println(onErrorQueue," has pending message, clear it first")
+			log.Debug(onErrorQueue," has pending message, clear it first")
 			goto HANDLE_PENDING
 		}
 
 		select {
 
 		case pop := <-queue.ReadChan(joint.inputQueueName):
-			ok,status,err:=processMessage(esConfig.GetHost(),pop)
+			ok,status,err:=processMessage(esConfig,pop)
 			if !ok{
 				log.Error(ok,status,err)
-
 				if status>=400 && status< 500{
 					err:=queue.Push(onDeadLetterQueue,pop)
 					if err!=nil{
@@ -138,7 +138,7 @@ READ_DOCS:
 						panic(err)
 					}
 				}
-				time.Sleep(1*time.Second)
+				time.Sleep(5*time.Second)
 			}
 		case <-idleTimeout.C:
 			if global.Env().IsDebug{
@@ -154,18 +154,20 @@ HANDLE_PENDING:
 	idleTimeout1 := time.NewTimer(idleDuration)
 	defer idleTimeout1.Stop()
 
-	log.Debug("handle pending messages")
+	log.Trace("handle pending messages ",onErrorQueue)
 
 	for {
 		idleTimeout1.Reset(idleDuration)
 		select {
 
 		case pop := <-queue.ReadChan(onErrorQueue):
-			ok,status,err:=processMessage(esConfig.GetHost(),pop)
+
+			ok,status,err:=processMessage(esConfig,pop)
 			if !ok{
 				log.Error(ok,status,err)
 
-				if status>=400 && status< 500{
+				if status>401 && status< 500{
+					log.Error("push to dead letter queue,",onDeadLetterQueue)
 					err:=queue.Push(onDeadLetterQueue,pop)
 					if err!=nil{
 						panic(err)
@@ -188,15 +190,38 @@ HANDLE_PENDING:
 	}
 }
 
-func processMessage(host string,pop []byte)(bool,int,error)  {
+func processMessage(esConfig *elastic.ElasticsearchConfig,pop []byte)(bool,int,error)  {
 	req:=fasthttp.AcquireRequest()
 	err:=req.Decode(pop)
 	if err!=nil{
 		return false,0,err
 	}
-	req.Header.SetHost(host)
+
+	endpoint:=esConfig.GetHost()
+
+	req.Header.SetHost(endpoint)
 	resp:=fasthttp.AcquireResponse()
 	err=fastHttpClient.Do(req, resp)
+	if esConfig.TrafficControl!=nil{
+	RetryRateLimit:
+
+		if esConfig.TrafficControl.MaxQpsPerNode>0{
+			if !rate.GetRateLimiterPerSecond(esConfig.Name,endpoint+"max_qps", int(esConfig.TrafficControl.MaxQpsPerNode)).Allow(){
+				time.Sleep(10*time.Millisecond)
+				goto RetryRateLimit
+			}
+		}
+
+		if esConfig.TrafficControl.MaxBytesPerNode>0{
+			if !rate.GetRateLimiterPerSecond(esConfig.Name,endpoint+"max_bps", int(esConfig.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(),req.GetRequestLength()){
+				time.Sleep(10*time.Millisecond)
+				goto RetryRateLimit
+			}
+		}
+
+	}
+
+
 	if err != nil {
 		return false,resp.StatusCode(), err
 	}
@@ -216,7 +241,7 @@ func processMessage(host string,pop []byte)(bool,int,error)  {
 
 		return true,resp.StatusCode(),nil
 	}else{
-		return false,resp.StatusCode(), errors.New(fmt.Sprintf("invalid status code, %v %v",resp.StatusCode(),err))
+		return false,resp.StatusCode(), errors.New(fmt.Sprintf("invalid status code, %v %v %v",resp.StatusCode(),err,string(resp.GetRawBody())))
 	}
 
 }
