@@ -8,7 +8,7 @@ import (
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
-	log "src/github.com/cihub/seelog"
+	log "github.com/cihub/seelog"
 	"strings"
 )
 

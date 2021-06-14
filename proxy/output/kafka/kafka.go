@@ -4,7 +4,7 @@ import (
 	"context"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/lib/fasthttp"
-	"src/github.com/segmentio/kafka-go"
+	"github.com/segmentio/kafka-go"
 	"sync"
 	"time"
 )

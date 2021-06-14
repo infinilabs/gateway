@@ -159,6 +159,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 
 	for _, endpoint := range endpoints {
 		client := &fasthttp.HostClient{
+			Name: "reverse_proxy",
 			Addr:                          endpoint,
 			DisableHeaderNamesNormalizing: true,
 			DisablePathNormalizing:        true,
@@ -309,6 +310,9 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string,cfg *elastic.Elastic
 		if cfg.TrafficControl.MaxQpsPerNode>0{
 			//fmt.Println("MaxQpsPerNode:",cfg.TrafficControl.MaxQpsPerNode)
 			if !rate.GetRateLimiterPerSecond(cfg.Name,endpoint+"max_qps", int(cfg.TrafficControl.MaxQpsPerNode)).Allow(){
+				if global.Env().IsDebug {
+					log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), myctx.RemoteAddr().String())
+				}
 				time.Sleep(10*time.Millisecond)
 				goto RetryRateLimit
 			}
@@ -317,6 +321,9 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string,cfg *elastic.Elastic
 		if cfg.TrafficControl.MaxBytesPerNode>0{
 			//fmt.Println("MaxBytesPerNode:",cfg.TrafficControl.MaxQpsPerNode)
 			if !rate.GetRateLimiterPerSecond(cfg.Name,endpoint+"max_bps", int(cfg.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(),req.GetRequestLength()){
+				if global.Env().IsDebug {
+					log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), myctx.RemoteAddr().String())
+				}
 				time.Sleep(10*time.Millisecond)
 				goto RetryRateLimit
 			}
@@ -348,9 +355,14 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string,cfg *elastic.Elastic
 					log.Debugf("reached max retries, failed to proxy request: %v, %v", err, string(req.RequestURI()))
 				}
 		}
+
 		//TODO if backend failure and after reached max retry, should save translog and mark the elasticsearch cluster to downtime, deny any new requests
 		// the translog file should consider to contain dirty writes, could be used to do cross cluster check or manually operations recovery.
 		res.SetBody([]byte(err.Error()))
+	}else{
+		if global.Env().IsDebug {
+			log.Tracef("request [%v] [%v] [%v]", req.URI().String(),res.StatusCode(), util.SubString(string(res.GetRawBody()),0,256))
+		}
 	}
 
 	res.Header.Set("CLUSTER", p.proxyConfig.Elasticsearch)

@@ -20,7 +20,7 @@ import (
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/util"
 	"net"
-	log "src/github.com/cihub/seelog"
+	log "github.com/cihub/seelog"
 	"time"
 )
 

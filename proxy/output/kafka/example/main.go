@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"src/github.com/segmentio/kafka-go"
+	"github.com/segmentio/kafka-go"
 	"strconv"
 	"time"
 )

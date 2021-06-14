@@ -32,6 +32,7 @@ func Init() {
 	common.RegisterFilterPlugin(elastic2.DatePrecisionTuning{})
 	common.RegisterFilterPlugin(elastic2.BulkReshuffle{})
 	common.RegisterFilterPlugin(elastic2.BulkToQueue{})
+	common.RegisterFilterPlugin(elastic2.BulkResponseValidate{})
 
 	common.RegisterFilterPlugin(cache.RequestCacheGet{})
 	common.RegisterFilterPlugin(cache.RequestCacheSet{})

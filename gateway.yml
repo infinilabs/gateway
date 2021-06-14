@@ -25,9 +25,11 @@ flow:
           - elasticsearch:
               elasticsearch: "prod"
               max_connection: 1000
+          - bulk_response_validate:
+              invalid_status: 500
           - if:
               in:
-                _ctx.response.status: [ "200" , "201" ]
+                _ctx.response.status: [ 200 , 201 ]
             then:
               - set_basic_auth:
                   username: test
@@ -44,6 +46,9 @@ flow:
               sleep_in_million_seconds: 1000
           - elasticsearch_health_check:
               elasticsearch: "prod"
+      - flow:
+          flows:
+            - request_logging
   - name: prod-flow
     filter_v2:
       - set_basic_auth:
@@ -68,7 +73,7 @@ flow:
           - if: #集群如果已经变成不可用状态，则直接丢弃请求，让客户端选择处理，或者也可落地队列确保不丢数据
               not:
                 cluster_available: ["prod"]
-            then:
+            then: #如果集群不可用，则直接拒绝客户端请求
               - set_response:
                  status: 503
                  message: "503 Service Unavailable"
@@ -78,9 +83,11 @@ flow:
           - elasticsearch:
               elasticsearch: "prod"
               max_connection: 1000
+          - bulk_response_validate:
+              invalid_status: 507
           - if:
               in:
-                _ctx.response.status: [ "200" , "201" ]
+                _ctx.response.status: [ 200 , 201 ]
             then: #仅正常处理的集群才转发给后端集群，集群不可用的情况不转发给后端也不入队列
               - set_basic_auth:
                   username: test
@@ -282,7 +289,7 @@ router:
 #    default_flow: dev-flow
     default_flow: prod-flow
 #    default_flow: cache_first
-#    tracing_flow: request_logging
+    tracing_flow: request_logging
 #    rules:
 #      - method:
 #          - "POST"

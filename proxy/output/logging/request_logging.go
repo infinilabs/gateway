@@ -199,6 +199,10 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
+	if global.Env().IsDebug{
+		log.Debug("response body:",string(respBody))
+	}
+
 	request.Response.Body=respBody
 
 	request.Response.BodyLength = ctx.Response.GetBodyLength()

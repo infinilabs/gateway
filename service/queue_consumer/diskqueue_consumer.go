@@ -29,6 +29,7 @@ func (joint DiskQueueConsumer) Name() string {
 }
 
 var fastHttpClient = &fasthttp.Client{
+	Name: "disk_queue_consumer",
 	DisableHeaderNamesNormalizing: false,
 	TLSConfig: &tls.Config{InsecureSkipVerify: true},
 }
@@ -107,7 +108,7 @@ READ_DOCS:
 				for _,v:=range waitingAfter{
 					depth:=queue.Depth(v)
 					if depth>0{
-						log.Debug("%v has pending %v messages, cleanup it first",v,depth)
+						log.Debugf("%v has pending %v messages, cleanup it first",v,depth)
 						time.Sleep(5*time.Second)
 						goto READ_DOCS
 					}
@@ -126,7 +127,9 @@ READ_DOCS:
 		case pop := <-queue.ReadChan(joint.inputQueueName):
 			ok,status,err:=processMessage(esConfig,pop)
 			if !ok{
-				log.Error(ok,status,err)
+				if global.Env().IsDebug{
+					log.Debug(ok,status,err)
+				}
 				if status>=400 && status< 500{
 					err:=queue.Push(onDeadLetterQueue,pop)
 					if err!=nil{
@@ -164,8 +167,9 @@ HANDLE_PENDING:
 
 			ok,status,err:=processMessage(esConfig,pop)
 			if !ok{
-				log.Error(ok,status,err)
-
+				if global.Env().IsDebug{
+					log.Debug(ok,status,err)
+				}
 				if status>401 && status< 500{
 					log.Error("push to dead letter queue,",onDeadLetterQueue)
 					err:=queue.Push(onDeadLetterQueue,pop)
@@ -223,25 +227,28 @@ func processMessage(esConfig *elastic.ElasticsearchConfig,pop []byte)(bool,int,e
 
 
 	if err != nil {
+		log.Error(err)
 		return false,resp.StatusCode(), err
 	}
 
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated || resp.StatusCode() == http.StatusNotFound {
-		if resp.StatusCode() == http.StatusOK{
-
+		if resp.StatusCode() == http.StatusOK && util.ContainStr(string(req.RequestURI()),"_bulk") {
 			//handle bulk response partial failure
 			data:=map[string]interface{}{}
 			util.FromJSONBytes(resp.GetRawBody(),&data)
-			err,ok:=data["error"]
-			if ok{
-				log.Error(err)
-				return false,resp.StatusCode(), errors.New(fmt.Sprintf("%v",err))
+			err,ok2:=data["errors"]
+			if ok2{
+				if err==true{
+					if global.Env().IsDebug{
+						log.Error("disk_queue checking bulk response, invalid, ",ok2,",",err,",",util.SubString(string(resp.GetRawBody()),0,256))
+					}
+					return false,resp.StatusCode(), errors.New(fmt.Sprintf("%v",err))
+				}
 			}
 		}
-
 		return true,resp.StatusCode(),nil
 	}else{
-		return false,resp.StatusCode(), errors.New(fmt.Sprintf("invalid status code, %v %v %v",resp.StatusCode(),err,string(resp.GetRawBody())))
+		return false,resp.StatusCode(), errors.New(fmt.Sprintf("invalid status code, %v %v %v",resp.StatusCode(),err,util.SubString(string(resp.GetRawBody()),0,1024)))
 	}
 
 }

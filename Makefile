@@ -87,7 +87,7 @@ build-cmd: config
 
 # used to build the binary for gdb debugging
 build-race: clean config update-vfs
-	$(GOBUILD) -gcflags "-m -N -l" -race -o $(OUTPUT_DIR)/$(APP_NAME)
+	$(GOBUILDNCGO) -gcflags "-m -N -l" -race -o $(OUTPUT_DIR)/$(APP_NAME)
 	@$(MAKE) restore-generated-file
 
 tar: build
