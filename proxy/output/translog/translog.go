@@ -29,6 +29,9 @@ func Open() {
 	}
 	w = bufio.NewWriterSize(f, defaultBufSize)
 	lock = &sync.Mutex{}
+
+	global.RegisterShutdownCallback(Close)
+
 }
 
 func Close() {

@@ -60,7 +60,6 @@ func main() {
 	app.Init(nil)
 
 	defer app.Shutdown()
-	defer translog.Close()
 
 	app.Start(func() {
 
