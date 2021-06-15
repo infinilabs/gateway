@@ -32,15 +32,16 @@ func Open() {
 }
 
 func Close() {
-	err = w.Flush()
-	if err != nil {
-		panic(err)
+	if w!=nil{
+		err = w.Flush()
+		if err != nil {
+			panic(err)
+		}
+		err = f.Close()
+		if err != nil {
+			panic(err)
+		}
 	}
-	err = f.Close()
-	if err != nil {
-		panic(err)
-	}
-
 }
 
 func Flush() {
