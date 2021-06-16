@@ -29,7 +29,7 @@ flow:
               invalid_status: 500
           - if:
               in:
-                _ctx.response.status: [ 200 , 201 ]
+                _ctx.response.status: [ 404,200 , 201 ]
             then:
               - set_basic_auth: #覆盖身份信息
                   username: test
@@ -46,7 +46,7 @@ flow:
               sleep_in_million_seconds: 1000
           - elasticsearch_health_check:
               elasticsearch: "prod"
-      - ratio:
+      - sample:
           ratio: 0.1
       - flow:
           flows:
@@ -82,6 +82,7 @@ flow:
               - elasticsearch_health_check: #由请求触发的限速模式下的主动检查后端监控情况
                   elasticsearch: "prod"
               - drop:
+          - translog:
           - elasticsearch: #集群可用，直接处理请求
               elasticsearch: "prod"
               max_connection: 1000
@@ -89,7 +90,7 @@ flow:
               invalid_status: 507
           - if: #验证主集群的操作是否成功写入
               in:
-                _ctx.response.status: [ 200 , 201 ]
+                _ctx.response.status: [ 404, 200 , 201 ]
             then: #仅正常处理的集群才转发给后端集群
               - set_basic_auth: #覆盖身份信息
                   username: test
@@ -97,7 +98,6 @@ flow:
               - disk_enqueue:
                   queue_name: "dev"
             else: #集群可用的情况下但是失败了，可能存在脏写，将请求放入写入失败队列，后续可以选择两边集群都重做一次，最终确保一致性，写 translog，后续提供 UI 可以进行三方检查：主、备集群和本地日志
-              - translog:
               - disk_enqueue:
                   queue_name: "prod-500"
 
