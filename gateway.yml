@@ -83,6 +83,12 @@ flow:
                   elasticsearch: "prod"
               - drop:
           - translog:
+          - set_request_header: #覆盖 Header 信息
+              headers:
+                - Trial -> true
+                - Department -> Engineering
+          - set_hostname: #覆盖域名主机信息
+              hostname: api.infini.sh
           - elasticsearch: #集群可用，直接处理请求
               elasticsearch: "prod"
               max_connection: 1000

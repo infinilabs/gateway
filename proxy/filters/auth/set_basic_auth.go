@@ -26,24 +26,3 @@ func (filter SetBasicAuth) Process(ctx *fasthttp.RequestCtx) {
 	//set new user
 	ctx.Request.SetBasicAuth(username,password)
 }
-
-type SetResponse struct {
-	param.Parameters
-}
-
-func (filter SetResponse) Name() string {
-	return "set_response"
-}
-
-func (filter SetResponse) Process(ctx *fasthttp.RequestCtx) {
-
-	status,hasStatus := filter.GetInt64("status",200)
-	if hasStatus{
-		ctx.Response.SetStatusCode(int(status))
-	}
-
-	message,hasMessage := filter.GetString("message")
-	if hasMessage{
-		ctx.Response.SetBody([]byte(message))
-	}
-}

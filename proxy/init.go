@@ -68,8 +68,12 @@ func Init() {
 	common.RegisterFilterPlugin(transform.RequestBodyRegexReplace{})
 	common.RegisterFilterPlugin(transform.ResponseBodyRegexReplace{})
 
+	common.RegisterFilterPlugin(transform.SetHostname{})
+	common.RegisterFilterPlugin(transform.SetRequestHeader{})
+	common.RegisterFilterPlugin(transform.SetResponseHeader{})
+	common.RegisterFilterPlugin(transform.SetResponse{})
+
 	common.RegisterFilterPlugin(auth.SetBasicAuth{})
-	common.RegisterFilterPlugin(auth.SetResponse{})
 
 	common.RegisterFilterPlugin(disk_queue.DiskEnqueueFilter{})
 	common.RegisterFilterPlugin(translog.TranslogOutput{})
