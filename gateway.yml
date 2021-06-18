@@ -384,6 +384,21 @@ modules:
       threshold_in_ms: 0
       timeout_in_ms: 5000
       pipeline_id: disk_queue_consumer-prod
+    - name: my_scroll1
+      enabled: true
+      pipeline_id: es_scroll_a
+      schedule: "once"
+      max_go_routine: 1
+      threshold_in_ms: 0
+      timeout_in_ms: 5000
+    - name: my_scroll2
+      enabled: true
+      pipeline_id: es_scroll_b
+      schedule: "once"
+      max_go_routine: 1
+      threshold_in_ms: 0
+      timeout_in_ms: 5000
+
 
 flow_runner:
   enabled: true
@@ -456,6 +471,40 @@ pipelines:
 #      index:
 #        - test2
 #        - test6
+
+
+- name: es_scroll_a
+  input:
+    joint: es_scroll
+    enabled: true
+    parameters:
+      indices: "medcl-a"
+      scroll_time: "10m"
+      batch_size: 10000
+      slice_size: 1
+      elasticsearch: "dev"
+      output_queue: "source_docs"
+- name: es_scroll_b
+  input:
+    joint: es_scroll
+    enabled: true
+    parameters:
+      indices: "medcl-b"
+      scroll_time: "10m"
+      batch_size: 10000
+      slice_size: 1
+      elasticsearch: "dev"
+      output_queue: "target_docs"
+
+index_diff:
+  enabled: true
+  diff_queue: "diff_result"
+  buffer_size: 10
+  source:
+    input_queue: 'source_docs'
+  target:
+    input_queue: 'target_docs'
+
 
 floating_ip:
   enabled: false

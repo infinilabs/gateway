@@ -38,10 +38,11 @@ import (
 	"infini.sh/gateway/service/floating_ip"
 	"infini.sh/gateway/service/forcemerge"
 	"infini.sh/gateway/service/gateway"
-	index_diff "infini.sh/gateway/service/index_diff"
+	"infini.sh/gateway/service/index_diff"
 	"infini.sh/gateway/service/indexing"
 	"infini.sh/gateway/service/offline_processing"
 	"infini.sh/gateway/service/queue_consumer"
+	"infini.sh/gateway/service/scroll"
 )
 
 func main() {
@@ -87,6 +88,7 @@ func main() {
 		pipe.RegisterPipeJoint(indexing.BulkIndexingJoint{})
 		pipe.RegisterPipeJoint(indexing2.BulkReshuffleJoint{})
 		pipe.RegisterPipeJoint(queue_consumer.DiskQueueConsumer{})
+		pipe.RegisterPipeJoint(scroll.ScrollJoint{})
 
 		translog.Open()
 
