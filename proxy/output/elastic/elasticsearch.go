@@ -65,7 +65,7 @@ func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
 		proxyConfig.WriteBufferSize = filter.GetIntOrDefault("write_buffer_size", 4096*4)
 
 		proxyConfig.MaxConnWaitTimeout = filter.GetDurationOrDefault("max_conn_wait_timeout", "0s")
-		proxyConfig.MaxIdleConnDuration = filter.GetDurationOrDefault("max_idle_conn_duration", "10s")
+		proxyConfig.MaxIdleConnDuration = filter.GetDurationOrDefault("max_idle_conn_duration", "0s")
 		proxyConfig.MaxConnDuration = filter.GetDurationOrDefault("max_conn_duration", "0s")
 		proxyConfig.ReadTimeout = filter.GetDurationOrDefault("read_timeout", "0s")
 		proxyConfig.WriteTimeout = filter.GetDurationOrDefault("write_timeout", "0s")
