@@ -17,8 +17,6 @@ func (filter SetRequestHeader) Name() string {
 func (filter SetRequestHeader) Process(ctx *fasthttp.RequestCtx) {
 	headers,ok := filter.GetStringMap("headers")
 
-	fmt.Println(headers,ok)
-
 	if !ok{
 		return
 	}
