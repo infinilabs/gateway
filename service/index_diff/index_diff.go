@@ -23,18 +23,25 @@ import (
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/util"
+	path2 "path"
 	"runtime"
-	log "src/github.com/cihub/seelog"
-	"src/github.com/segmentio/fasthash/fnv1a"
+	log "github.com/cihub/seelog"
+	"github.com/segmentio/fasthash/fnv1a"
 	"strings"
 	"sync"
+	"time"
 )
 
 type CompareItem struct {
-	Doc      interface{}
-	DiffType string
-	Key      string
-	Hash     string
+	Doc      interface{} `json:"doc,omitempty"`
+	Key      string `json:"key,omitempty"`
+	Hash     string `json:"hash,omitempty"`
+}
+
+type DiffResult struct {
+	DiffType string `json:"type,omitempty"`
+	Source interface{} `json:"source,omitempty"`
+	Target interface{} `json:"target,omitempty"`
 }
 
 func (a *CompareItem) CompareKey(b *CompareItem) int {
@@ -93,8 +100,8 @@ MOVEALL:
 	msgA = <-t.msgAChan
 	msgB = <-t.msgBChan
 
-	if global.Env().IsDebug{
-		log.Trace(msgA," vs ",msgB)
+	if global.Env().IsDebug {
+		log.Trace(msgA, " vs ", msgB)
 	}
 
 	onlyInA := []*CompareItem{}
@@ -105,16 +112,18 @@ COMPARE:
 	result := msgA.CompareKey(&msgB)
 	if result > 0 {
 		onlyInB = append(onlyInB, &msgB)
-		msgB.DiffType = "OnlyInTarget"
-		queue.Push(diffQueue, util.MustToJSONBytes(msgB))
+		result:=DiffResult{Target: msgB}
+		result.DiffType = "OnlyInTarget"
+		queue.Push(diffQueue, util.MustToJSONBytes(result))
 		if global.Env().IsDebug {
 			fmt.Println(" :", msgB)
 		}
 		msgB = <-t.msgBChan
 		goto COMPARE
 	} else if result < 0 { // 1 < 2
-		msgA.DiffType = "OnlyInSource"
-		queue.Push(diffQueue, util.MustToJSONBytes(msgA))
+		result:=DiffResult{Source: msgA}
+		result.DiffType = "OnlyInSource"
+		queue.Push(diffQueue, util.MustToJSONBytes(result))
 		onlyInA = append(onlyInA, &msgA)
 		if global.Env().IsDebug {
 			fmt.Println(msgA, ": ")
@@ -126,12 +135,13 @@ COMPARE:
 			if global.Env().IsDebug {
 				fmt.Println(msgA, "!=", msgB)
 			}
-			msgB.DiffType = "DiffContent"
-			queue.Push(diffQueue, util.MustToJSONBytes(msgA))
+			result:=DiffResult{Target: msgB,Source: msgA}
+			result.DiffType = "DiffBoth"
+			queue.Push(diffQueue, util.MustToJSONBytes(result))
 			diffInBoth = append(diffInBoth, &msgA)
 		} else {
 			if global.Env().IsDebug {
-				log.Trace(msgA,"==",msgB)
+				log.Trace(msgA, "==", msgB)
 			}
 		}
 		goto MOVEALL
@@ -148,10 +158,11 @@ func (this IndexDiffModule) Name() string {
 }
 
 type Config struct {
-	Enabled    bool   `config:"enabled"`
-	BufferSize int    `config:"buffer_size"`
-	DiffQueue  string `config:"diff_queue"`
-	Source     struct {
+	Enabled           bool   `config:"enabled"`
+	TextReportEnabled bool   `config:"text_report"`
+	BufferSize        int    `config:"buffer_size"`
+	DiffQueue         string `config:"diff_queue"`
+	Source            struct {
 		Elasticsearch string `config:"elasticsearch"`
 		InputQueue    string `config:"input_queue"`
 	} `config:"source"`
@@ -242,6 +253,22 @@ func (module IndexDiffModule) Start() error {
 				testChan.addMsgB(item)
 			}
 		}()
+
+		if diffConfig.TextReportEnabled {
+			go func() {
+				path:=path2.Join(global.Env().GetWorkingDir(),"index_diff",fmt.Sprintf("%v_vs_%v",diffConfig.Source.InputQueue,diffConfig.Target.InputQueue),util.FormatTimeForFileName(time.Now()))
+				util.FileAppendNewLine(path,"DIFF RESULT")
+				util.FileAppendNewLine(path,fmt.Sprint("SOURCE / TARGET"))
+				for v := range queue.ReadChan(diffConfig.DiffQueue) {
+					doc := CompareItem{}
+					err := util.FromJSONBytes(v, &doc)
+					if err != nil {
+						log.Error(err)
+						break
+					}
+				}
+			}()
+		}
 
 		wg.Add(1)
 		go testChan.processMsg(diffConfig.DiffQueue)
