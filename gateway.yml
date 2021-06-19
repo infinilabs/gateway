@@ -480,7 +480,7 @@ pipelines:
 #        - test2
 #        - test6
 
-
+#使用两个 scroll 任务并行读取两个索引的文档
 - name: es_scroll_a
   input:
     joint: es_scroll
@@ -503,6 +503,7 @@ pipelines:
       slice_size: 1
       elasticsearch: "dev"
       output_queue: "target_docs"
+# 消费 diff 结果并保存到 Elasticsearch 用于查看两个索引的 diff 结果
 - name: diff_result_ingest
   start:
     joint: json_indexing
@@ -515,7 +516,7 @@ pipelines:
       timeout: "1s"
       worker_size: 1
       bulk_size_in_mb: 1 #in MB
-
+# 进行 diff 的服务
 index_diff:
   enabled: true
   diff_queue: "diff_result"
