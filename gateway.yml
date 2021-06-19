@@ -8,7 +8,7 @@ entry:
   - name: my_es_entry
     enabled: true
     router: my_router
-#    max_concurrency: 10000
+    max_concurrency: 200000
     network:
       binding: 0.0.0.0:8001
 #    tls:
@@ -326,9 +326,9 @@ elasticsearch:
   enabled: true
   endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
 #  endpoint: https://192.168.3.98:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
-  traffic_control: #global traffic control
-    max_bps_per_node: 102400 #max total bytes send to es per node
-    max_qps_per_node: 1000 #max total requests send to es per node
+#  traffic_control: #global traffic control
+#    max_bps_per_node: 102400 #max total bytes send to es per node
+#    max_qps_per_node: 1000 #max total requests send to es per node
   basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
     username: test
     password: testtest
