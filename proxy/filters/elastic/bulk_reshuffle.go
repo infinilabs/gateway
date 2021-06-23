@@ -11,6 +11,7 @@ import (
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/radix"
+	"infini.sh/framework/core/rate"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
@@ -162,7 +163,10 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 		metadata:=elastic.GetMetadata(clusterName)
 		if metadata==nil{
-			log.Warnf("elasticsearch [%v] metadata is nil, skip reshuffle",clusterName)
+			if rate.GetRateLimiter("cluster_metadata",clusterName,1,1,5*time.Second).Allow(){
+				log.Warnf("elasticsearch [%v] metadata is nil, skip reshuffle",clusterName)
+			}
+			time.Sleep(10*time.Second)
 			return
 		}
 
