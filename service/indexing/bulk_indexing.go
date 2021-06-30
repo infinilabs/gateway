@@ -444,7 +444,7 @@ DO:
 		retryTimes++
 		goto DO
 	}else {
-		if joint.GetBool("log_bulk_message",true){
+		if joint.GetBool("log_bulk_message",false){
 			path1:=path.Join(global.Env().GetWorkingDir(),"bulk_error_failure.log")
 			truncateSize := joint.GetIntOrDefault("error_message_truncate_size", -1)
 			util.FileAppendNewLineWithByte(path1, []byte("\nURL:"))
@@ -475,7 +475,7 @@ DO:
 			//	}
 			//}
 		}
-		if joint.GetBool("warm_retry_message",true){
+		if joint.GetBool("warm_retry_message",false){
 			log.Errorf("invalid bulk response, %v - %v",resp.StatusCode(),util.SubString(string(resbody),0,512))
 		}
 		return false

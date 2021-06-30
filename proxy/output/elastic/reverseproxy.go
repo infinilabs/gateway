@@ -157,6 +157,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		}
 	}
 
+	//
 	for _, endpoint := range endpoints {
 		client := &fasthttp.HostClient{
 			Name: "reverse_proxy",
@@ -331,9 +332,9 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string,cfg *elastic.Elastic
 	}
 
 	if err := pc.Do(req, res); err != nil {
-		if global.Env().IsDebug{
+		//if global.Env().IsDebug{
 			log.Warnf("failed to proxy request: %v, %v, retried #%v", err, string(req.RequestURI()),retry)
-		}
+		//}
 
 		if util.ContainsAnyInArray(err.Error(),failureMessage){
 			//record translog, update failure ticket

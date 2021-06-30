@@ -197,6 +197,13 @@ HANDLE_PENDING:
 func processMessage(esConfig *elastic.ElasticsearchConfig,pop []byte)(bool,int,error)  {
 	req:=fasthttp.AcquireRequest()
 	err:=req.Decode(pop)
+
+	if global.Env().IsDebug{
+		log.Trace(err)
+		log.Trace(req.Header.String())
+		log.Trace(string(req.GetRawBody()))
+	}
+
 	if err!=nil{
 		return false,0,err
 	}
@@ -226,6 +233,12 @@ func processMessage(esConfig *elastic.ElasticsearchConfig,pop []byte)(bool,int,e
 	}
 
 
+	if global.Env().IsDebug{
+		log.Trace(err)
+		log.Trace(resp.StatusCode())
+		log.Trace(string(resp.GetRawBody()))
+	}
+
 	if err != nil {
 		log.Error(err)
 		return false,resp.StatusCode(), err
@@ -248,6 +261,9 @@ func processMessage(esConfig *elastic.ElasticsearchConfig,pop []byte)(bool,int,e
 		}
 		return true,resp.StatusCode(),nil
 	}else{
+		if global.Env().IsDebug{
+			log.Warn(err,resp.StatusCode(),string(resp.GetRawBody()))
+		}
 		return false,resp.StatusCode(), errors.New(fmt.Sprintf("invalid status code, %v %v %v",resp.StatusCode(),err,util.SubString(string(resp.GetRawBody()),0,1024)))
 	}
 
