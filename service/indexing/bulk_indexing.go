@@ -176,6 +176,7 @@ func (joint BulkIndexingJoint) NewBulkWorker( bulkSizeInByte int, wg *sync.WaitG
 
 	mainBuf := bytes.Buffer{}
 	esInstanceVal := joint.MustGetString("elasticsearch")
+	validateRequest := joint.GetBool("valid_request",false)
 	deadLetterQueueName := joint.GetStringOrDefault("dead_letter_queue","failed_bulk_messages")
 	timeOut := joint.GetIntOrDefault("idle_timeout_in_second", 5)
 	idleDuration := time.Duration(timeOut) * time.Second
@@ -185,6 +186,10 @@ func (joint BulkIndexingJoint) NewBulkWorker( bulkSizeInByte int, wg *sync.WaitG
 	for {
 		//each message is complete bulk message, must be end with \n
 		pop, ok, err := queue.PopTimeout(queueName, idleDuration)
+		if validateRequest{
+			common.ValidateBulkRequest("write_pop",string(pop))
+		}
+
 		if err != nil {
 			panic(err)
 		}
@@ -247,7 +252,6 @@ func (joint BulkIndexingJoint) Bulk(cfg *elastic.ElasticsearchConfig, endpoint s
 	if data == nil || data.Len() == 0 {
 		return true
 	}
-	data.WriteRune('\n')
 
 	if cfg.IsTLS() {
 		endpoint = "https://" + endpoint
@@ -362,6 +366,19 @@ DO:
 			util.FileAppendNewLineWithByte(path1,util.EscapeNewLine(reqBody) )
 			util.FileAppendNewLineWithByte(path1, []byte("Response:"))
 			util.FileAppendNewLineWithByte(path1, resBody1)
+
+			//requestBody:=data.String()
+			//stringLines:=strings.Split(requestBody,"\n")
+			//for _,v:=range stringLines{
+			//	obj:=map[string]interface{}{}
+			//	err:=util.FromJSONBytes([]byte(v),&obj)
+			//	if err!=nil{
+			//		log.Error("invalid json,",util.SubString(v,0,512),err)
+			//		break
+			//	}
+			//}
+
+
 		}
 		return false
 	}
@@ -447,9 +464,19 @@ DO:
 			util.FileAppendNewLineWithByte(path1, []byte("Response:"))
 			util.FileAppendNewLineWithByte(path1, resBody1)
 
+			//requestBody:=data.String()
+			//stringLines:=strings.Split(requestBody,"\n")
+			//for _,v:=range stringLines{
+			//	obj:=map[string]interface{}{}
+			//	err:=util.FromJSONBytes([]byte(v),&obj)
+			//	if err!=nil{
+			//		log.Error("invalid json,",util.SubString(v,0,512),err)
+			//		break
+			//	}
+			//}
 		}
 		if joint.GetBool("warm_retry_message",true){
-			log.Errorf("invalid bulk response, %v - %v",resp.StatusCode(),string(resbody))
+			log.Errorf("invalid bulk response, %v - %v",resp.StatusCode(),util.SubString(string(resbody),0,512))
 		}
 		return false
 	}
