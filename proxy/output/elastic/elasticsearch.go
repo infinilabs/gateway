@@ -52,11 +52,12 @@ func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
 
 	if !ok || instance == nil {
 
+		//这个配置应该放全局控制
 		var proxyConfig = ProxyConfig{}
 		proxyConfig.Elasticsearch = esRef
 		proxyConfig.Balancer = filter.GetStringOrDefault("balancer", "weight")
 		proxyConfig.MaxResponseBodySize = filter.GetIntOrDefault("max_response_size", 100*1024*1024)
-		proxyConfig.MaxConnection = filter.GetIntOrDefault("max_connection", 10000)
+		proxyConfig.MaxConnection = filter.GetIntOrDefault("max_connection_per_node", 10000)
 		proxyConfig.maxRetryTimes = filter.GetIntOrDefault("max_retry_times", 10)
 		proxyConfig.retryDelayInMs = filter.GetIntOrDefault("retry_delay_in_ms", 1000)
 		proxyConfig.TLSInsecureSkipVerify = filter.GetBool("tls_insecure_skip_verify", true)
@@ -83,9 +84,8 @@ func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
 	}
 
 	if !cfg.IsAvailable(){
-		//log.Error(fmt.Sprintf("cluster [%v] is not available",esRef))
-
 		if rate.GetRateLimiter("cluster_check_health",cfg.Name,1,1,time.Second*1).Allow(){
+			log.Error(fmt.Sprintf("cluster [%v] is not available",esRef))
 			result:=elastic.GetClient(cfg.Name).ClusterHealth()
 			if result.StatusCode==200{
 				cfg.ReportSuccess()
