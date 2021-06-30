@@ -1,0 +1,124 @@
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 200000
+    network:
+      binding: 0.0.0.0:8000
+flow:
+  - name: cache_first
+    filter: #comment out any filter sections, like you don't need cache or rate-limiter
+      - name: get_cache
+        parameters:
+          pass_patterns:
+            - _cat
+      - name: elasticsearch
+        parameters:
+          elasticsearch: dev  #elasticsearch configure reference name
+          max_connection_per_host: 1000 #max tcp connection to upstream, default for all nodes
+          max_response_size: -1 #default for all nodes
+          balancer: weight
+          refresh: # refresh upstream nodes list, need to enable this feature to use elasticsearch nodes auto discovery
+            enabled: true
+            interval: 10s
+          filter:
+            roles:
+              exclude:
+                - master
+      - name: set_cache
+        parameters:
+          cache_ttl: 10s
+  - name: online_indexing_merge
+    filter:
+      - name: bulk_reshuffle
+        parameters:
+          elasticsearch: dev
+          level: node
+          mode: async
+          fix_null_id: true
+          index_stats_analysis: true
+          action_stats_analysis: true
+          safety_parse: false
+      - name: elasticsearch #catchup all left requests
+        parameters:
+          elasticsearch: dev
+          max_connection_per_host: 1000
+          refresh:
+            enabled: true
+            interval: 10s
+router:
+  - name: my_router
+    default_flow: cache_first
+    rules:
+      - method:
+          - "POST"
+        pattern:
+          - /_bulk
+        flow:
+          - online_indexing_merge
+elasticsearch:
+- name: dev
+  enabled: true
+  endpoint: http://localhost:9200
+  traffic_control:
+    max_bps_per_node: -1
+    max_qps_per_node: 300000
+  basic_auth:
+    username: test
+    password: testtest
+  discovery:
+    enabled: true
+    refresh:
+      enabled: true
+      interval: 10s
+
+modules:
+- name: elastic
+  enabled: true
+  elasticsearch: dev
+  store:
+    enabled: true
+  monitoring:
+    enabled: false
+  orm:
+    enabled: true
+    init_template: true
+    template_name: ".gateway-default"
+    index_prefix: "gateway_"
+
+- name: pipeline
+  enabled: true
+  runners:
+    - name: nodes_index
+      enabled: true
+      max_go_routine: 1
+      threshold_in_ms: 0
+      timeout_in_ms: 1000
+      pipeline_id: bulk_request_ingest
+
+
+pipelines:
+- name: bulk_request_ingest
+  start:
+    joint: bulk_indexing
+    enabled: true
+    parameters:
+      elasticsearch: "dev"
+      compress: true
+      worker_size: 5 #node level by default, set number of works per each node
+      bulk_size_in_mb: 1
+      idle_timeout_in_second: 1
+      retry_delay_in_second: 5
+      dead_letter_queue: "failed_bulk_messages"
+
+queue:
+  min_msg_size: 1
+  max_msg_size: 1000000000
+  max_bytes_per_file: 1073741824
+  sync_every_records: 1000 # sync by records count
+  sync_timeout_in_ms: 1000 # sync by time in million seconds
+  write_chan_buffer: 100 #memory buffer size
+  read_chan_buffer: 100 #memory buffer size
