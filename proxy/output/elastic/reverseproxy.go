@@ -3,6 +3,9 @@ package elastic
 import (
 	"crypto/tls"
 	"fmt"
+	"math/rand"
+	"time"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/global"
@@ -12,98 +15,96 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/proxy/balancer"
-	"math/rand"
-	"time"
 )
 
 type ReverseProxy struct {
-	oldAddr     string
-	bla         balancer.IBalancer
-	clients     []*fasthttp.HostClient
-	proxyConfig *ProxyConfig
-	endpoints   []string
+	oldAddr                  string
+	bla                      balancer.IBalancer
+	proxyConfig              *ProxyConfig
+	endpoints                []string
 	lastNodesTopologyVersion int
 }
 
+var clients = map[string]*fasthttp.HostClient{}
+
 func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 
-	log.Tracef("valid endpoint %v",node.Http.PublishAddress)
-	var hasExclude =false
-	var hasInclude =false
-	endpoint:=node.Http.PublishAddress
+	log.Tracef("valid endpoint %v", node.Http.PublishAddress)
+	var hasExclude = false
+	var hasInclude = false
+	endpoint := node.Http.PublishAddress
 	for _, v := range cfg.Filter.Hosts.Exclude {
-		hasExclude=true
-		if endpoint==v{
-			log.Debugf("host [%v] in exclude list, mark as invalid",node.Http.PublishAddress)
+		hasExclude = true
+		if endpoint == v {
+			log.Debugf("host [%v] in exclude list, mark as invalid", node.Http.PublishAddress)
 			return false
 		}
 	}
 
 	for _, v := range cfg.Filter.Hosts.Include {
-		hasInclude=true
-		if endpoint==v{
-			log.Debugf("host [%v] in include list, mark as valid",node.Http.PublishAddress)
+		hasInclude = true
+		if endpoint == v {
+			log.Debugf("host [%v] in include list, mark as valid", node.Http.PublishAddress)
 			return true
 		}
 	}
 
 	//no exclude and only have include, means white list mode
-	if !hasExclude && hasInclude{
+	if !hasExclude && hasInclude {
 		return false
 	}
 
-
-	hasExclude=false
-	hasInclude =false
+	hasExclude = false
+	hasInclude = false
 	for _, v := range cfg.Filter.Roles.Exclude {
-		hasExclude=true
-		if util.ContainsAnyInArray(v,node.Roles){
-			log.Debugf("node [%v] role [%v] match exclude rule [%v], mark as invalid",node.Http.PublishAddress,node.Roles,v)
+		hasExclude = true
+		if util.ContainsAnyInArray(v, node.Roles) {
+			log.Debugf("node [%v] role [%v] match exclude rule [%v], mark as invalid", node.Http.PublishAddress, node.Roles, v)
 			return false
 		}
 	}
 
 	for _, v := range cfg.Filter.Roles.Include {
-		hasInclude=true
-		if util.ContainsAnyInArray(v,node.Roles){
-			log.Debugf("node [%v] role [%v] match include rule [%v], mark as valid",node.Http.PublishAddress,node.Roles,v)
+		hasInclude = true
+		if util.ContainsAnyInArray(v, node.Roles) {
+			log.Debugf("node [%v] role [%v] match include rule [%v], mark as valid", node.Http.PublishAddress, node.Roles, v)
 			return true
 		}
 	}
 
-	if !hasExclude && hasInclude{
+	if !hasExclude && hasInclude {
 		return false
 	}
 
-	hasExclude=false
-	hasInclude =false
-	for _,o := range cfg.Filter.Tags.Exclude {
-		hasExclude=true
-		for k,v:=range o{
-			v1,ok:=node.Attributes[k]
-			if ok{
-				if v1==v{
-					log.Debugf("node [%v] tags [%v:%v] in exclude list, mark as invalid",node.Http.PublishAddress,k,v)
+	hasExclude = false
+	hasInclude = false
+	for _, o := range cfg.Filter.Tags.Exclude {
+		hasExclude = true
+		for k, v := range o {
+			v1, ok := node.Attributes[k]
+			if ok {
+				if v1 == v {
+					log.Debugf("node [%v] tags [%v:%v] in exclude list, mark as invalid", node.Http.PublishAddress, k, v)
 					return false
 				}
 			}
 		}
 	}
 
-	for _,o := range cfg.Filter.Tags.Include {
-		hasInclude=true
-		for k, v:=range o{
-			v1,ok:=node.Attributes[k]
-			if ok{
-				if v1==v{
-					log.Debugf("node [%v] tags [%v:%v] in include list, mark as valid",node.Http.PublishAddress,k,v)
+	for _, o := range cfg.Filter.Tags.Include {
+		hasInclude = true
+		for k, v := range o {
+			v1, ok := node.Attributes[k]
+			if ok {
+				if v1 == v {
+					log.Debugf("node [%v] tags [%v:%v] in include list, mark as valid", node.Http.PublishAddress, k, v)
 					return true
 				}
 			}
 		}
 	}
 
-	if !hasExclude && hasInclude{
+	if !hasExclude && hasInclude {
 		return false
 	}
 
@@ -112,7 +113,7 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 
 func (p *ReverseProxy) refreshNodes(force bool) {
 
-	if global.Env().IsDebug{
+	if global.Env().IsDebug {
 		log.Trace("elasticsearch client nodes refreshing")
 	}
 	cfg := p.proxyConfig
@@ -124,23 +125,21 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 	}
 
 	ws := []int{}
-	clients := []*fasthttp.HostClient{}
 	esConfig := elastic.GetConfig(cfg.Elasticsearch)
 	endpoints := []string{}
-
-	checkMetadata:=false
+	checkMetadata := false
 	if metadata != nil && len(metadata.Nodes) > 0 {
-		oldV:=p.lastNodesTopologyVersion
-		p.lastNodesTopologyVersion=metadata.NodesTopologyVersion
+		oldV := p.lastNodesTopologyVersion
+		p.lastNodesTopologyVersion = metadata.NodesTopologyVersion
 
-		if oldV==p.lastNodesTopologyVersion {
-			if global.Env().IsDebug{
+		if oldV == p.lastNodesTopologyVersion {
+			if global.Env().IsDebug {
 				log.Trace("metadata.NodesTopologyVersion is equal")
 			}
 			return
 		}
 
-		checkMetadata=true
+		checkMetadata = true
 		for _, y := range metadata.Nodes {
 			if !isEndpointValid(y, cfg) {
 				continue
@@ -150,39 +149,41 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		}
 		log.Tracef("discovery %v nodes: [%v]", len(endpoints), util.JoinArray(endpoints, ", "))
 	}
-	if len(endpoints)==0{
+	if len(endpoints) == 0 {
 		endpoints = append(endpoints, esConfig.GetHost())
-		if checkMetadata{
-			log.Warnf("no valid endpoint for elasticsearch, fallback to seed: [%v]",endpoints)
+		if checkMetadata {
+			log.Warnf("no valid endpoint for elasticsearch, fallback to seed: [%v]", endpoints)
 		}
 	}
 
-	//
 	for _, endpoint := range endpoints {
-		client := &fasthttp.HostClient{
-			Name: "reverse_proxy",
-			Addr:                          endpoint,
-			DisableHeaderNamesNormalizing: true,
-			DisablePathNormalizing:        true,
-			MaxConns:                      cfg.MaxConnection,
-			MaxResponseBodySize:           cfg.MaxResponseBodySize,
+		_, ok := clients[endpoint]
+		if !ok {
+			clients[endpoint] = &fasthttp.HostClient{
+				Name:                          "reverse_proxy",
+				Addr:                          endpoint,
+				DisableHeaderNamesNormalizing: true,
+				DisablePathNormalizing:        true,
+				MaxConns:                      cfg.MaxConnection,
+				MaxResponseBodySize:           cfg.MaxResponseBodySize,
 
-			MaxConnWaitTimeout:  cfg.MaxConnWaitTimeout,
-			MaxConnDuration:     cfg.MaxConnDuration,
-			MaxIdleConnDuration: cfg.MaxIdleConnDuration,
-			ReadTimeout:         cfg.ReadTimeout,
-			WriteTimeout:        cfg.WriteTimeout,
-			ReadBufferSize:      cfg.ReadBufferSize,
-			WriteBufferSize:     cfg.WriteBufferSize,
-			//RetryIf: func(request *fasthttp.Request) bool {
-			//
-			//},
-			IsTLS: esConfig.IsTLS(),
-			TLSConfig: &tls.Config{
-				InsecureSkipVerify: cfg.TLSInsecureSkipVerify,
-			},
+				MaxConnWaitTimeout:  cfg.MaxConnWaitTimeout,
+				MaxConnDuration:     cfg.MaxConnDuration,
+				MaxIdleConnDuration: cfg.MaxIdleConnDuration,
+				ReadTimeout:         cfg.ReadTimeout,
+				WriteTimeout:        cfg.WriteTimeout,
+				ReadBufferSize:      cfg.ReadBufferSize,
+				WriteBufferSize:     cfg.WriteBufferSize,
+				//RetryIf: func(request *fasthttp.Request) bool {
+				//
+				//},
+				IsTLS: esConfig.IsTLS(),
+				TLSConfig: &tls.Config{
+					InsecureSkipVerify: cfg.TLSInsecureSkipVerify,
+				},
+			}
 		}
-		clients = append(p.clients, client)
+
 		//get predefined weights
 		w, o := cfg.Weights[endpoint]
 		if !o || w <= 0 {
@@ -198,29 +199,28 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 	}
 
 	//replace with new clients
-	p.clients = clients
+	//TODO add locker
 	p.bla = balancer.NewBalancer(ws)
 	log.Infof("elasticsearch [%v] endpoints: [%v] => [%v]", esConfig.Name, util.JoinArray(p.endpoints, ", "), util.JoinArray(endpoints, ", "))
 	p.endpoints = endpoints
-	log.Trace(esConfig.Name," elasticsearch client nodes refreshed")
+	log.Trace(esConfig.Name, " elasticsearch client nodes refreshed")
 }
 
 func NewReverseProxy(cfg *ProxyConfig) *ReverseProxy {
 
 	p := ReverseProxy{
 		oldAddr:     "",
-		clients:     []*fasthttp.HostClient{},
 		proxyConfig: cfg,
 	}
 
 	p.refreshNodes(true)
 
-	if cfg.Refresh.Enabled{
-		log.Debugf("refresh enabled for elasticsearch: [%v]",cfg.Elasticsearch)
-		task:=task2.ScheduleTask{
-			Description:fmt.Sprintf("refresh nodes for elasticsearch [%v]",cfg.Elasticsearch),
-			Type:"interval",
-			Interval: cfg.Refresh.Interval,
+	if cfg.Refresh.Enabled {
+		log.Debugf("refresh enabled for elasticsearch: [%v]", cfg.Elasticsearch)
+		task := task2.ScheduleTask{
+			Description: fmt.Sprintf("refresh nodes for elasticsearch [%v]", cfg.Elasticsearch),
+			Type:        "interval",
+			Interval:    cfg.Refresh.Interval,
 			Task: func() {
 				p.refreshNodes(false)
 			},
@@ -228,50 +228,53 @@ func NewReverseProxy(cfg *ProxyConfig) *ReverseProxy {
 		task2.RegisterScheduleTask(task)
 	}
 
-
 	return &p
 }
 
-func (p *ReverseProxy) getClient() (clientAvailable bool,client *fasthttp.HostClient,endpoint string) {
-	if p.clients == nil {
+func (p *ReverseProxy) getClient() (clientAvailable bool, client *fasthttp.HostClient, endpoint string) {
+	if clients == nil {
 		panic("ReverseProxy has been closed")
 	}
 
-	if len(p.clients)==0{
+	if len(clients) == 0 {
 		log.Error("no upstream found")
-		return false,nil,""
+		return false, nil, ""
 	}
 
 	if p.bla != nil {
 		// bla has been opened
 		idx := p.bla.Distribute()
-		if idx >= len(p.clients) {
-			log.Warn("invalid offset, ",idx," vs ",len(p.clients),p.clients,p.endpoints,", random pick now")
+		if idx >= len(p.endpoints) {
+			log.Warn("invalid offset, ", idx, " vs ", len(clients), p.endpoints, ", random pick now")
 			idx = 0
 			goto RANDOM
 		}
 
-		if len(p.clients)!=len(p.endpoints){
-			log.Warn("clients != endpoints, ",len(p.clients)," vs ",len(p.endpoints),", random pick now")
-			goto RANDOM
+		// if len(p.bla.) != len(p.endpoints) {
+		// 	log.Warn("clients != endpoints, ", len(clients), " vs ", len(p.endpoints), ", random pick now")
+		// 	goto RANDOM
+		// }
+
+		e := p.endpoints[idx]
+		c, ok := clients[e] //TODO, check client by endpoint
+		if !ok {
+			log.Error("client not found for: ", e)
 		}
 
-		c := p.clients[idx]
-		e:=p.endpoints[idx]
-		return true,c,e
+		return true, c, e
 	}
 
-	RANDOM:
+RANDOM:
 	//or go random way
-	max := len(p.clients)
+	max := len(clients)
 	seed := rand.Intn(max)
-	if seed >= len(p.clients) {
+	if seed >= len(clients) {
 		log.Warn("invalid upstream offset, reset to 0")
 		seed = 0
 	}
-	c := p.clients[seed]
-	e :=p.endpoints[seed]
-	return true,c,e
+	e := p.endpoints[seed]
+	c := clients[e]
+	return true, c, e
 }
 
 func cleanHopHeaders(req *fasthttp.Request) {
@@ -280,23 +283,23 @@ func cleanHopHeaders(req *fasthttp.Request) {
 	}
 }
 
-var failureMessage=[]string{"connection refused","connection reset","no such host","timed out","Connection: close"}
+var failureMessage = []string{"connection refused", "connection reset", "no such host", "timed out", "Connection: close"}
 
-func (p *ReverseProxy) DelegateRequest(elasticsearch string,cfg *elastic.ElasticsearchConfig,myctx *fasthttp.RequestCtx) {
+func (p *ReverseProxy) DelegateRequest(elasticsearch string, cfg *elastic.ElasticsearchConfig, myctx *fasthttp.RequestCtx) {
 
 	stats.Increment("cache", "strike")
 
-	retry:=0
-	START:
+	retry := 0
+START:
 
 	//使用算法来获取合适的 client
-	ok,pc,endpoint := p.getClient()
-	if !ok{
+	ok, pc, endpoint := p.getClient()
+	if !ok {
 		//TODO no client available, throw error directly
 	}
 
-	req:=&myctx.Request
-	res:=&myctx.Response
+	req := &myctx.Request
+	res := &myctx.Response
 
 	cleanHopHeaders(req)
 
@@ -304,28 +307,27 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string,cfg *elastic.Elastic
 		log.Tracef("send request [%v] to upstream [%v]", req.URI().String(), pc.Addr)
 	}
 
-
-	if cfg.TrafficControl!=nil{
+	if cfg.TrafficControl != nil {
 	RetryRateLimit:
 
-		if cfg.TrafficControl.MaxQpsPerNode>0{
+		if cfg.TrafficControl.MaxQpsPerNode > 0 {
 			//fmt.Println("MaxQpsPerNode:",cfg.TrafficControl.MaxQpsPerNode)
-			if !rate.GetRateLimiterPerSecond(cfg.Name,endpoint+"max_qps", int(cfg.TrafficControl.MaxQpsPerNode)).Allow(){
+			if !rate.GetRateLimiterPerSecond(cfg.Name, endpoint+"max_qps", int(cfg.TrafficControl.MaxQpsPerNode)).Allow() {
 				if global.Env().IsDebug {
 					log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), myctx.RemoteAddr().String())
 				}
-				time.Sleep(10*time.Millisecond)
+				time.Sleep(10 * time.Millisecond)
 				goto RetryRateLimit
 			}
 		}
 
-		if cfg.TrafficControl.MaxBytesPerNode>0{
+		if cfg.TrafficControl.MaxBytesPerNode > 0 {
 			//fmt.Println("MaxBytesPerNode:",cfg.TrafficControl.MaxQpsPerNode)
-			if !rate.GetRateLimiterPerSecond(cfg.Name,endpoint+"max_bps", int(cfg.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(),req.GetRequestLength()){
+			if !rate.GetRateLimiterPerSecond(cfg.Name, endpoint+"max_bps", int(cfg.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(), req.GetRequestLength()) {
 				if global.Env().IsDebug {
 					log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), myctx.RemoteAddr().String())
 				}
-				time.Sleep(10*time.Millisecond)
+				time.Sleep(10 * time.Millisecond)
 				goto RetryRateLimit
 			}
 		}
@@ -333,10 +335,10 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string,cfg *elastic.Elastic
 
 	if err := pc.Do(req, res); err != nil {
 		//if global.Env().IsDebug{
-			log.Warnf("failed to proxy request: %v, %v, retried #%v", err, string(req.RequestURI()),retry)
+		log.Warnf("failed to proxy request: %v, %v, retried #%v", err, string(req.RequestURI()), retry)
 		//}
 
-		if util.ContainsAnyInArray(err.Error(),failureMessage){
+		if util.ContainsAnyInArray(err.Error(), failureMessage) {
 			//record translog, update failure ticket
 			if global.Env().IsDebug {
 				log.Errorf("elasticsearch [%v] is on fire now", p.proxyConfig.Elasticsearch)
@@ -345,34 +347,34 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string,cfg *elastic.Elastic
 
 			//server failure flow
 
-		}else if  res.StatusCode()==429{
-				retry++
-				if p.proxyConfig.maxRetryTimes>0 && retry<p.proxyConfig.maxRetryTimes {
-					if p.proxyConfig.retryDelayInMs>0{
-						time.Sleep(time.Duration(p.proxyConfig.retryDelayInMs)*time.Millisecond)
-					}
-					goto START
-				}else{
-					log.Debugf("reached max retries, failed to proxy request: %v, %v", err, string(req.RequestURI()))
+		} else if res.StatusCode() == 429 {
+			retry++
+			if p.proxyConfig.maxRetryTimes > 0 && retry < p.proxyConfig.maxRetryTimes {
+				if p.proxyConfig.retryDelayInMs > 0 {
+					time.Sleep(time.Duration(p.proxyConfig.retryDelayInMs) * time.Millisecond)
 				}
+				goto START
+			} else {
+				log.Debugf("reached max retries, failed to proxy request: %v, %v", err, string(req.RequestURI()))
+			}
 		}
 
 		//TODO if backend failure and after reached max retry, should save translog and mark the elasticsearch cluster to downtime, deny any new requests
 		// the translog file should consider to contain dirty writes, could be used to do cross cluster check or manually operations recovery.
 		res.SetBody([]byte(err.Error()))
-	}else{
+	} else {
 		if global.Env().IsDebug {
-			log.Tracef("request [%v] [%v] [%v]", req.URI().String(),res.StatusCode(), util.SubString(string(res.GetRawBody()),0,256))
+			log.Tracef("request [%v] [%v] [%v]", req.URI().String(), res.StatusCode(), util.SubString(string(res.GetRawBody()), 0, 256))
 		}
 	}
 
 	res.Header.Set("CLUSTER", p.proxyConfig.Elasticsearch)
 
-	if myctx.Has("elastic_cluster_name"){
-		es1:=myctx.MustGetStringArray("elastic_cluster_name")
-		myctx.Set("elastic_cluster_name",append(es1,elasticsearch))
-	}else{
-		myctx.Set("elastic_cluster_name",[]string{elasticsearch})
+	if myctx.Has("elastic_cluster_name") {
+		es1 := myctx.MustGetStringArray("elastic_cluster_name")
+		myctx.Set("elastic_cluster_name", append(es1, elasticsearch))
+	} else {
+		myctx.Set("elastic_cluster_name", []string{elasticsearch})
 	}
 
 	res.Header.Set("UPSTREAM", pc.Addr)
@@ -381,27 +383,27 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string,cfg *elastic.Elastic
 
 }
 
-// SetClient ...
-func (p *ReverseProxy) SetClient(addr string) *ReverseProxy {
-	for idx := range p.clients {
-		p.clients[idx].Addr = addr
-	}
-	return p
-}
+// // SetClient ...
+// func (p *ReverseProxy) SetClient(addr string) *ReverseProxy {
+// 	for idx := range p.clients {
+// 		p.clients[idx].Addr = addr
+// 	}
+// 	return p
+// }
 
-// Reset ...
-func (p *ReverseProxy) Reset() {
-	for idx := range p.clients {
-		p.clients[idx].Addr = ""
-	}
-}
+// // Reset ...
+// func (p *ReverseProxy) Reset() {
+// 	for idx := range p.clients {
+// 		p.clients[idx].Addr = ""
+// 	}
+// }
 
-// Close ... clear and release
-func (p *ReverseProxy) Close() {
-	p.clients = nil
-	p.bla = nil
-	p = nil
-}
+// // Close ... clear and release
+// func (p *ReverseProxy) Close() {
+// 	p.clients = nil
+// 	p.bla = nil
+// 	p = nil
+// }
 
 // Hop-by-hop headers. These are removed when sent to the backend.
 // As of RFC 7230, hop-by-hop headers are required to appear in the

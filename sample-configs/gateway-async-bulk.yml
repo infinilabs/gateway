@@ -7,7 +7,7 @@ entry:
     router: my_router
     max_concurrency: 200000
     network:
-      binding: 0.0.0.0:8000
+      binding: 0.0.0.0:8001
 flow:
   - name: cache_first
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
@@ -22,7 +22,7 @@ flow:
           max_response_size: -1 #default for all nodes
           balancer: weight
           refresh: # refresh upstream nodes list, need to enable this feature to use elasticsearch nodes auto discovery
-            enabled: true
+            enabled: false
             interval: 10s
           filter:
             roles:
@@ -37,11 +37,12 @@ flow:
         parameters:
           elasticsearch: dev
           level: node
-          mode: async
+          mode: sync
           fix_null_id: true
           index_stats_analysis: true
           action_stats_analysis: true
-          safety_parse: false
+          validate_request: true
+          safety_parse: true
       - name: elasticsearch #catchup all left requests
         parameters:
           elasticsearch: dev
@@ -112,6 +113,8 @@ pipelines:
       bulk_size_in_mb: 1
       idle_timeout_in_second: 1
       retry_delay_in_second: 5
+      log_bulk_message: true
+      warm_retry_message: true
       dead_letter_queue: "failed_bulk_messages"
 
 queue:

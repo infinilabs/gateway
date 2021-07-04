@@ -5,7 +5,15 @@ import (
 	"bytes"
 	"crypto/tls"
 	"fmt"
+	"net/http"
+	"path"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	log "github.com/cihub/seelog"
+	"github.com/valyala/bytebufferpool"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
@@ -16,12 +24,6 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
-	"net/http"
-	"path"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 )
 
 var JSON_CONTENT_TYPE = "application/json"
@@ -34,19 +36,14 @@ func (this BulkReshuffle) Name() string {
 	return "bulk_reshuffle"
 }
 
-var bufferPool *sync.Pool
+var bufferPool bytebufferpool.Pool
 
-func initPool() {
-	if bufferPool != nil {
-		return
-	}
-	bufferPool = &sync.Pool{
-		New: func() interface{} {
-			buff := &bytes.Buffer{}
-			return buff
-		},
-	}
-}
+// var bufferPool = &sync.Pool{
+// 	New: func() interface{} {
+// 		buff := &bytes.Buffer{}
+// 		return buff
+// 	},
+// }
 
 var actionIndex = []byte("index")
 var actionDelete = []byte("delete")
@@ -171,11 +168,9 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 		esConfig := elastic.GetConfig(clusterName)
 
-		initPool()
-
 		safetyParse := this.GetBool("safety_parse", true)
 		validMetadata := this.GetBool("valid_metadata", false)
-		validateRequest := this.GetBool("valid_request", false)
+		validateRequest := this.GetBool("validate_request", false)
 		reshuffleType := this.GetStringOrDefault("level", "node")
 		submitMode := this.GetStringOrDefault("mode", "sync")         //sync and async
 		fixNullID := this.GetBool("fix_null_id", true)                //sync and async
@@ -186,7 +181,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		renameMapping, resolveIndexRename := this.GetStringMap("index_rename")
 
 		body := ctx.Request.GetRawBody()
-		if validateRequest{
+		if validateRequest {
 			common.ValidateBulkRequest("raw_body", string(body))
 		}
 
@@ -195,22 +190,18 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		nextIsMeta := true
 
 		//index-shardID -> buffer
-		docBuf := map[string]*bytes.Buffer{}
+		docBuf := map[string]*bytebufferpool.ByteBuffer{}
 		buffEndpoints := map[string]string{}
 		skipNext := false
-		var buff *bytes.Buffer
+		var buff *bytebufferpool.ByteBuffer
 		var indexStatsData map[string]int
 		var actionStatsData map[string]int
 		var indexStatsLock sync.Mutex
 
-		actionMeta := bufferPool.Get().(*bytes.Buffer)
-		actionBody := bufferPool.Get().(*bytes.Buffer)
-
+		actionMeta := bufferPool.Get()
+		// actionBody := bufferPool.Get()
 		defer bufferPool.Put(actionMeta)
-		defer bufferPool.Put(actionBody)
-
-		defer actionMeta.Reset()
-		defer actionBody.Reset()
+		// defer bufferPool.Put(actionBody)
 
 		var needActionBody = true
 		var bufferKey string
@@ -224,7 +215,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				continue
 			}
 
-			if validateRequest{
+			if validateRequest {
 				common.ValidateBulkRequest("scanned_byte", string(scannedByte))
 			}
 
@@ -443,28 +434,25 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				////update actionItem
 				buff, ok = docBuf[bufferKey]
 				if !ok {
-					buff = bufferPool.Get().(*bytes.Buffer)
-					docBuf[bufferKey] = buff
 					nodeInfo := metadata.GetNodeInfo(shardInfo.NodeID)
 					if nodeInfo == nil {
 						log.Warn("nodeInfo not found,", shardID, ",", shardInfo.NodeID)
 						return
 					}
+
+					buff = bufferPool.Get()
+					docBuf[bufferKey] = buff
+
 					buffEndpoints[bufferKey] = nodeInfo.Http.PublishAddress
 					if global.Env().IsDebug {
 						log.Debug(shardInfo.Index, ",", shardInfo.ShardID, ",", nodeInfo.Http.PublishAddress)
 					}
-					//
-					//}
-					//buff.Write(scannedByte)
-					//
-					//if global.Env().IsDebug{
-					//	log.Trace("metadata:",string(scannedByte))
 				}
 
 				//保存临时变量
 				actionMeta.Write(scannedByte)
-				actionBody.Reset()
+				// actionBody.Reset()
+
 				if bytes.Equal(action, actionDelete) {
 					nextIsMeta = true
 					needActionBody = false
@@ -473,43 +461,49 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 			} else {
 				nextIsMeta = true
 
-				if needActionBody {
-					actionBody.Write(scannedByte)
-				}
+				// if needActionBody {
+				// 	actionBody.Write(scannedByte)
+				// }
 
 				if actionMeta.Len() > 0 {
 					buff, ok = docBuf[bufferKey]
 					if !ok {
-						buff = bufferPool.Get().(*bytes.Buffer)
+						buff = bufferPool.Get()
 						docBuf[bufferKey] = buff
 					}
 					if global.Env().IsDebug {
 						log.Trace("metadata:", string(scannedByte))
 					}
-					if validateRequest{
+					if validateRequest {
 						common.ValidateBulkRequest("before_write_meta", string(buff.String()))
-						common.ValidateBulkRequest("validate_meta", actionMeta.String())
+						common.ValidateBulkRequest("validate_meta", string(actionMeta.String()))
 					}
 
 					buff.Write(actionMeta.Bytes())
 					actionMeta.Reset()
-					if validateRequest{
+					// fmt.Println("buffer:",buff.String())
+
+					if validateRequest {
 						common.ValidateBulkRequest("after_write_meta", string(buff.String()))
 					}
 
 					buff.WriteString("\n")
-					if needActionBody {
-						if validateRequest{
+					if needActionBody && scannedByte != nil && len(scannedByte) > 0 {
+						if validateRequest {
 							common.ValidateBulkRequest("before_write_body", string(buff.String()))
 						}
-						buff.Write(actionBody.Bytes())
-						actionBody.Reset()
-						if validateRequest{
-							common.ValidateBulkRequest("validate_body", string(actionBody.String()))
+						buff.Write(scannedByte)
+						// actionBody.Reset()
+
+						if validateRequest {
 							common.ValidateBulkRequest("after_write_body", string(buff.String()))
 						}
+
 						buff.WriteString("\n")
 					}
+
+					//clearup actionMeta
+					actionMeta.Reset()
 				}
 
 			}
@@ -517,7 +511,17 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 		log.Debugf("total [%v] operations in bulk requests", docCount)
 
+		// fmt.Println("d",actionMeta.String())
+		// fmt.Println("d",actionBody.String())
+		// fmt.Println("d",docBuf)
+		// fmt.Println("d",buff.String())
+
+
+
+
 		for x, y := range docBuf {
+			// fmt.Println(x)
+			// fmt.Println(y.String())
 			if submitMode == "sync" {
 				endpoint, ok := buffEndpoints[x]
 				if !ok {
@@ -526,9 +530,16 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					return
 				}
 
-				ok = this.Bulk(esConfig, endpoint, y)
+				data := y.Bytes()
+				if validateRequest {
+					common.ValidateBulkRequest("sync-bulk", string(data))
+				}
+
+				// fmt.Println(string(data))
+
+				status, ok := this.Bulk(esConfig, endpoint, data)
 				if !ok {
-					log.Error("bulk failed on endpoint,", x)
+					log.Error("bulk failed on endpoint,", x, ", code:", status)
 					//TODO
 					return
 				}
@@ -536,14 +547,18 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				ctx.SetDestination(fmt.Sprintf("%v:%v", "sync", x))
 			} else {
 				data := y.Bytes()
-				if validateRequest{
+				if validateRequest {
 					common.ValidateBulkRequest("initial-enqueue", string(data))
 				}
-				err := queue.Push(x, data)
-				if err != nil {
-					panic(err)
+				if len(data) > 0 {
+					err := queue.Push(x, data)
+					if err != nil {
+						panic(err)
+					}
+					ctx.SetDestination(fmt.Sprintf("%v:%v", "async", x))
+				} else {
+					log.Warn("zero message,", x, ",", y.Len(), ",", string(body))
 				}
-				ctx.SetDestination(fmt.Sprintf("%v:%v", "async", x))
 			}
 			y.Reset()
 			bufferPool.Put(y) //TODO
@@ -636,11 +651,11 @@ var fastHttpClient = &fasthttp.Client{
 	TLSConfig: &tls.Config{InsecureSkipVerify: true},
 }
 
-func (joint BulkReshuffle) Bulk(cfg *elastic.ElasticsearchConfig, endpoint string, data *bytes.Buffer) bool {
-	if data == nil || data.Len() == 0 {
-		return true
+func (joint BulkReshuffle) Bulk(cfg *elastic.ElasticsearchConfig, endpoint string, data []byte) (int, bool) {
+	if data == nil || len(data) == 0 {
+		log.Error("data size is empty,", endpoint)
+		return 0, true
 	}
-	data.WriteRune('\n')
 
 	if cfg.IsTLS() {
 		endpoint = "https://" + endpoint
@@ -673,16 +688,16 @@ func (joint BulkReshuffle) Bulk(cfg *elastic.ElasticsearchConfig, endpoint strin
 		req.URI().SetPassword(cfg.BasicAuth.Password)
 	}
 
-	if data.Len() > 0 {
+	if len(data) > 0 {
 		if compress {
-			_, err := fasthttp.WriteGzipLevel(req.BodyWriter(), data.Bytes(), fasthttp.CompressBestSpeed)
+			_, err := fasthttp.WriteGzipLevel(req.BodyWriter(), data, fasthttp.CompressBestSpeed)
 			if err != nil {
 				panic(err)
 			}
 		} else {
 			//req.SetBody(body)
 			req.SetBodyStreamWriter(func(w *bufio.Writer) {
-				w.Write(data.Bytes())
+				w.Write(data)
 				w.Flush()
 			})
 
@@ -693,19 +708,18 @@ func (joint BulkReshuffle) Bulk(cfg *elastic.ElasticsearchConfig, endpoint strin
 DO:
 
 	err := fastHttpClient.Do(req, resp)
+	if resp == nil {
+		if global.Env().IsDebug {
+			log.Error(err)
+		}
+		return 0, false
+	}
 
 	if err != nil {
 		if global.Env().IsDebug {
 			log.Error(err)
 		}
-		return false
-	}
-
-	if resp == nil {
-		if global.Env().IsDebug {
-			log.Error(err)
-		}
-		return false
+		return resp.StatusCode(), false
 	}
 
 	// Do we need to decompress the response?
@@ -716,13 +730,18 @@ DO:
 
 	if resp.StatusCode() == 400 {
 
-		if joint.GetBool("log_bulk_message", true) {
+		if joint.GetBool("log_400_message", true) {
+
+			if rate.GetRateLimiter("log_400_message", endpoint, 1, 1, 5*time.Second).Allow() {
+				log.Warnf("elasticsearch [%v] code 400", endpoint)
+			}
+
 			path1 := path.Join(global.Env().GetWorkingDir(), "bulk_400_failure.log")
 			truncateSize := joint.GetIntOrDefault("error_message_truncate_size", -1)
 			util.FileAppendNewLineWithByte(path1, []byte("URL:"))
 			util.FileAppendNewLineWithByte(path1, []byte(url))
 			util.FileAppendNewLineWithByte(path1, []byte("Request:"))
-			reqBody := data.Bytes()
+			reqBody := data
 			resBody1 := resbody
 			if truncateSize > 0 {
 				if len(reqBody) > truncateSize {
@@ -736,7 +755,7 @@ DO:
 			util.FileAppendNewLineWithByte(path1, []byte("Response:"))
 			util.FileAppendNewLineWithByte(path1, resBody1)
 		}
-		return false
+		return resp.StatusCode(), false
 	}
 
 	//TODO check respbody's error
@@ -754,7 +773,7 @@ DO:
 					util.FileAppendNewLineWithByte(path1, []byte("URL:"))
 					util.FileAppendNewLineWithByte(path1, []byte(url))
 					util.FileAppendNewLineWithByte(path1, []byte("Request:"))
-					reqBody := data.Bytes()
+					reqBody := data
 					resBody1 := resbody
 					if truncateSize > 0 {
 						if len(reqBody) > truncateSize {
@@ -779,7 +798,7 @@ DO:
 			}
 		}
 
-		return true
+		return resp.StatusCode(), true
 	} else if resp.StatusCode() == 429 {
 		log.Warnf("elasticsearch rejected, retried %v times, will try again", retryTimes)
 		delayTime := joint.GetIntOrDefault("retry_delay_in_second", 5)
@@ -788,7 +807,7 @@ DO:
 			if joint.GetBool("warm_retry_message", false) {
 				log.Errorf("elasticsearch rejected, retried %v times, quit retry", retryTimes)
 			}
-			return false
+			return resp.StatusCode(), false
 		}
 		retryTimes++
 		goto DO
@@ -799,7 +818,7 @@ DO:
 			util.FileAppendNewLineWithByte(path1, []byte("URL:"))
 			util.FileAppendNewLineWithByte(path1, []byte(url))
 			util.FileAppendNewLineWithByte(path1, []byte("Request:"))
-			reqBody := data.Bytes()
+			reqBody := data
 			resBody1 := resbody
 			if truncateSize > 0 {
 				if len(reqBody) > truncateSize {
@@ -817,7 +836,7 @@ DO:
 		if joint.GetBool("warm_retry_message", false) {
 			log.Errorf("invalid bulk response, %v - %v", resp.StatusCode(), string(resbody))
 		}
-		return false
+		return resp.StatusCode(), false
 	}
-	return true
+	return resp.StatusCode(), true
 }

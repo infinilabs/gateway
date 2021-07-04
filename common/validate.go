@@ -4,20 +4,27 @@
 package common
 
 import (
-	"github.com/cihub/seelog"
-	"infini.sh/framework/core/util"
 	"strings"
+
+	log "github.com/cihub/seelog"
+	"infini.sh/framework/core/util"
 )
 
 func ValidateBulkRequest(where, body string) {
 	stringLines := strings.Split(body, "\n")
+	// log.Error("validate:",body,",",len(stringLines))
+
+	if len(stringLines)==0{
+		log.Error("invalid json lines, empty")
+		return
+	}
+
+	obj := map[string]interface{}{}
 	for _, v := range stringLines {
-		obj := map[string]interface{}{}
 		err := util.FromJSONBytes([]byte(v), &obj)
 		if err != nil {
-			seelog.Error("invalid json,", where, ",", util.SubString(v, 0, 512), err)
+			log.Error("invalid json,", where, ",", util.SubString(v, 0, 512), err)
 			break
 		}
 	}
 }
-

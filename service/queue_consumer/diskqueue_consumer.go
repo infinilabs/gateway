@@ -240,7 +240,6 @@ func processMessage(esConfig *elastic.ElasticsearchConfig,pop []byte)(bool,int,e
 	}
 
 	if err != nil {
-		log.Error(err)
 		return false,resp.StatusCode(), err
 	}
 
