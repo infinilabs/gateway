@@ -251,13 +251,8 @@ func (p *ReverseProxy) getClient() (clientAvailable bool,client *fasthttp.HostCl
 			goto RANDOM
 		}
 
-		if len(p.clients)!=len(p.endpoints){
-			log.Warn("clients != endpoints, ",len(p.clients)," vs ",len(p.endpoints),", random pick now")
-			goto RANDOM
-		}
-
 		c := p.clients[idx]
-		e:=p.endpoints[idx]
+		e:=  p.endpoints[idx]
 		return true,c,e
 	}
 
