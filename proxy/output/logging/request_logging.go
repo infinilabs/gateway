@@ -192,15 +192,15 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 	//log.Error(ctx.Response.Header.String())
 
 	respBody:=string(ctx.Response.GetRawBody())
+	if global.Env().IsDebug{
+		log.Debug("response body:",string(respBody))
+	}
+
 	maxResponseBodySize,ok:=this.GetInt("max_response_body_size",1024)
 	if ok{
 		if len(respBody)>maxResponseBodySize{
 			respBody=respBody[0:maxResponseBodySize]
 		}
-	}
-
-	if global.Env().IsDebug{
-		log.Debug("response body:",string(respBody))
 	}
 
 	request.Response.Body=respBody
