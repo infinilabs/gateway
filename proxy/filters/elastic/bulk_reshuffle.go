@@ -385,7 +385,10 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 						}
 					}
 
-					log.Warn("index setting not found,", index, ",", string(scannedByte))
+					if rate.GetRateLimiter("index_setting_not_found", index, 1, 5, time.Minute*1).Allow() {
+						log.Warn("index setting not found,", index, ",", string(scannedByte))
+					}
+
 					return
 				}
 
@@ -417,7 +420,9 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 				shardInfo := metadata.GetPrimaryShardInfo(index, shardID)
 				if shardInfo == nil {
-					log.Warn("shardInfo was not found,", index, ",", shardID)
+					if rate.GetRateLimiter(fmt.Sprintf("shard_info_not_found_%v", index), util.IntToString(shardID), 1, 5, time.Minute*1).Allow() {
+						log.Warn("shardInfo was not found,", index, ",", shardID)
+					}
 					return
 				}
 
@@ -436,7 +441,9 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				if !ok {
 					nodeInfo := metadata.GetNodeInfo(shardInfo.NodeID)
 					if nodeInfo == nil {
-						log.Warn("nodeInfo not found,", shardID, ",", shardInfo.NodeID)
+						if rate.GetRateLimiter("node_info_not_found_%v", shardInfo.NodeID, 1, 5, time.Minute*1).Allow() {
+							log.Warn("nodeInfo not found,", shardID, ",", shardInfo.NodeID)
+						}
 						return
 					}
 
@@ -481,7 +488,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 					buff.Write(actionMeta.Bytes())
 					actionMeta.Reset()
-					// fmt.Println("buffer:",buff.String())
 
 					if validateRequest {
 						common.ValidateBulkRequest("after_write_meta", string(buff.String()))
@@ -493,7 +499,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 							common.ValidateBulkRequest("before_write_body", string(buff.String()))
 						}
 						buff.Write(scannedByte)
-						// actionBody.Reset()
 
 						if validateRequest {
 							common.ValidateBulkRequest("after_write_body", string(buff.String()))
@@ -520,8 +525,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 
 		for x, y := range docBuf {
-			// fmt.Println(x)
-			// fmt.Println(y.String())
 			if submitMode == "sync" {
 				endpoint, ok := buffEndpoints[x]
 				if !ok {
@@ -534,8 +537,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				if validateRequest {
 					common.ValidateBulkRequest("sync-bulk", string(data))
 				}
-
-				// fmt.Println(string(data))
 
 				status, ok := this.Bulk(esConfig, endpoint, data)
 				if !ok {
