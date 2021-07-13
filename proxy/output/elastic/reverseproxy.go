@@ -358,23 +358,41 @@ START:
 
 
 	req := &myctx.Request
-	res := fasthttp.AcquireResponse()
-	defer fasthttp.ReleaseResponse(res)
+	res := &myctx.Response
 
 	cleanHopHeaders(req)
 
 	var pc fasthttp.ClientAPI
+	var ok bool
+	var endpoint string
 	//使用算法来获取合适的 client
-	ok, pc, endpoint := p.getHostClient()
+	switch cfg.ClientMode{
+	case "client":
+		ok, pc, endpoint = p.getClient()
+		break
+	case "host":
+		ok, pc, endpoint = p.getHostClient()
+		break
+	//case "pipeline":
+		//ok, pc, endpoint = p.getHostClient()
+		//break
+	default:
+		ok, pc, endpoint = p.getClient()
+	}
+
 	if !ok {
 		//TODO no client available, throw error directly
+		log.Error("no client available")
 	}
 
 	// modify schema，align with elasticsearch's schema
 	orignalSchema:=string(req.URI().Scheme())
+	useClient:=false
 	if cfg.Schema()!=orignalSchema{
 		req.URI().SetScheme(cfg.Schema())
 		ok, pc, endpoint = p.getClient()
+		res = fasthttp.AcquireResponse()
+		useClient=true
 	}
 
 	if global.Env().IsDebug {
@@ -444,11 +462,17 @@ START:
 		}
 	}
 
-	myctx.Response.SetBody(res.Body())
-	myctx.Response.SetStatusCode(res.StatusCode())
-	compress,compressType:= res.IsCompressed()
-	if compress{
-		myctx.Response.Header.Set(fasthttp.HeaderContentEncoding,string(compressType))
+	if useClient{
+		myctx.Response.SetStatusCode(res.StatusCode())
+		myctx.Response.Header.SetContentTypeBytes(res.Header.ContentType())
+		myctx.Response.SetBody(res.Body())
+
+		compress,compressType:= res.IsCompressed()
+		if compress{
+			myctx.Response.Header.Set(fasthttp.HeaderContentEncoding,string(compressType))
+		}
+
+		fasthttp.ReleaseResponse(res)
 	}
 
 	myctx.Response.Header.Set("CLUSTER", p.proxyConfig.Elasticsearch)
