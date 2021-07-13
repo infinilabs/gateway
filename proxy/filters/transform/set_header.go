@@ -91,7 +91,7 @@ func (filter SetResponse) Process(ctx *fasthttp.RequestCtx) {
 		ctx.SetContentType(contentType)
 	}
 
-	message,hasMessage := filter.GetString("message")
+	message,hasMessage := filter.GetString("body")
 	if hasMessage{
 		ctx.Response.SetBody([]byte(message))
 	}
