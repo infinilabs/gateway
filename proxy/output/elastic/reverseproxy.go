@@ -374,11 +374,8 @@ START:
 	orignalSchema:=string(req.URI().Scheme())
 	if cfg.Schema()!=orignalSchema{
 		req.URI().SetScheme(cfg.Schema())
-	}else{
 		ok, pc, endpoint = p.getClient()
 	}
-
-
 
 	if global.Env().IsDebug {
 		log.Tracef("send request [%v] to upstream [%v]", req.URI().String(), endpoint)
@@ -388,7 +385,6 @@ START:
 	RetryRateLimit:
 
 		if cfg.TrafficControl.MaxQpsPerNode > 0 {
-			//fmt.Println("MaxQpsPerNode:",cfg.TrafficControl.MaxQpsPerNode)
 			if !rate.GetRateLimiterPerSecond(cfg.Name, endpoint+"max_qps", int(cfg.TrafficControl.MaxQpsPerNode)).Allow() {
 				if global.Env().IsDebug {
 					log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), myctx.RemoteAddr().String())
@@ -399,7 +395,6 @@ START:
 		}
 
 		if cfg.TrafficControl.MaxBytesPerNode > 0 {
-			//fmt.Println("MaxBytesPerNode:",cfg.TrafficControl.MaxQpsPerNode)
 			if !rate.GetRateLimiterPerSecond(cfg.Name, endpoint+"max_bps", int(cfg.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(), req.GetRequestLength()) {
 				if global.Env().IsDebug {
 					log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), myctx.RemoteAddr().String())
@@ -419,9 +414,7 @@ START:
 	req.URI().SetScheme(orignalSchema)
 
 	if  err != nil {
-		//if global.Env().IsDebug{
 		log.Warnf("failed to proxy request: %v, %v, retried #%v", err, string(req.RequestURI()), retry)
-		//}
 
 		if util.ContainsAnyInArray(err.Error(), failureMessage) {
 			//record translog, update failure ticket
@@ -429,9 +422,7 @@ START:
 				log.Errorf("elasticsearch [%v] is on fire now", p.proxyConfig.Elasticsearch)
 			}
 			cfg.ReportFailure()
-
 			//server failure flow
-
 		} else if res.StatusCode() == 429 {
 			retry++
 			if p.proxyConfig.maxRetryTimes > 0 && retry < p.proxyConfig.maxRetryTimes {
@@ -460,7 +451,6 @@ START:
 		myctx.Response.Header.Set(fasthttp.HeaderContentEncoding,string(compressType))
 	}
 
-
 	myctx.Response.Header.Set("CLUSTER", p.proxyConfig.Elasticsearch)
 
 	if myctx.Has("elastic_cluster_name") {
@@ -475,28 +465,6 @@ START:
 	myctx.SetDestination(endpoint)
 
 }
-
-// // SetClient ...
-// func (p *ReverseProxy) SetClient(addr string) *ReverseProxy {
-// 	for idx := range p.hostClients {
-// 		p.hostClients[idx].Addr = addr
-// 	}
-// 	return p
-// }
-
-// // Reset ...
-// func (p *ReverseProxy) Reset() {
-// 	for idx := range p.hostClients {
-// 		p.hostClients[idx].Addr = ""
-// 	}
-// }
-
-// // Close ... clear and release
-// func (p *ReverseProxy) Close() {
-// 	p.hostClients = nil
-// 	p.bla = nil
-// 	p = nil
-// }
 
 // Hop-by-hop headers. These are removed when sent to the backend.
 // As of RFC 7230, hop-by-hop headers are required to appear in the
