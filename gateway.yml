@@ -26,6 +26,14 @@ flow:
           str: "hello world\n"
   - name: cache_first
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
+      - name: translog
+        parameters:
+          category: dev
+          filename: translog.log
+          compress: true
+#          max_file_age: 2
+          max_file_count: 50
+          max_file_size_in_mb: 1024
       - name: get_cache
         parameters:
           pass_patterns:
