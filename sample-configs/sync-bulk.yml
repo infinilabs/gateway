@@ -52,6 +52,7 @@ flow:
           index_stats_analysis: true
           action_stats_analysis: true
           safety_parse: true
+          log_bulk_message: false
       - name: elasticsearch #catchup all left requests
         parameters:
           elasticsearch: dev

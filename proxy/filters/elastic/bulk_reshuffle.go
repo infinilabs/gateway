@@ -726,7 +726,7 @@ DO:
 			//"errors":true
 			hit := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
 			if hit {
-				if joint.GetBool("log_bulk_message", false) {
+				if joint.GetBool("log_bulk_message", true) {
 					path1 := path.Join(global.Env().GetWorkingDir(), "bulk_req_failure.log")
 					truncateSize := joint.GetIntOrDefault("error_message_truncate_size", -1)
 					util.FileAppendNewLineWithByte(path1, []byte("URL:"))
