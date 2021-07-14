@@ -33,7 +33,6 @@ import (
 	stats "infini.sh/framework/plugins/stats_statsd"
 	api2 "infini.sh/gateway/api"
 	"infini.sh/gateway/config"
-	"infini.sh/gateway/proxy/output/translog"
 	indexing2 "infini.sh/gateway/service/bulk_reshuffle"
 	"infini.sh/gateway/service/floating_ip"
 	"infini.sh/gateway/service/forcemerge"
@@ -43,6 +42,7 @@ import (
 	"infini.sh/gateway/service/offline_processing"
 	"infini.sh/gateway/service/queue_consumer"
 	"infini.sh/gateway/service/scroll"
+	"infini.sh/gateway/service/translog"
 )
 
 func main() {
@@ -80,6 +80,7 @@ func main() {
 		module.RegisterUserPlugin(forcemerge.ForceMergeModule{})
 		module.RegisterUserPlugin(index_diff.IndexDiffModule{})
 		module.RegisterUserPlugin(offline_processing.FlowRunner{})
+		module.RegisterUserPlugin(translog.TranslogModule{})
 
 		api2.Init()
 
@@ -89,8 +90,6 @@ func main() {
 		pipe.RegisterPipeJoint(indexing2.BulkReshuffleJoint{})
 		pipe.RegisterPipeJoint(queue_consumer.DiskQueueConsumer{})
 		pipe.RegisterPipeJoint(scroll.ScrollJoint{})
-
-		translog.Open()
 
 		//start each module, with enabled provider
 		module.Start()
