@@ -4,6 +4,7 @@
 package entry
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -298,5 +299,17 @@ func (this *Entrypoint) Stop() error {
 	if !this.config.Enabled {
 		return nil
 	}
-	return this.server.Shutdown()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*800))
+	defer cancel()
+	go func(ctx context.Context) {
+		this.server.Shutdown()
+	}(ctx)
+
+	select {
+	case <-ctx.Done():
+		log.Debug("entry shutdown successful")
+	case <-time.After(time.Duration(time.Second * 5)):
+		log.Debug("entry shutdown 5s timeout")
+	}
+	return nil
 }
