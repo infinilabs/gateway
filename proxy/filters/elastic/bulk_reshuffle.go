@@ -38,13 +38,6 @@ func (this BulkReshuffle) Name() string {
 
 var bufferPool bytebufferpool.Pool
 
-// var bufferPool = &sync.Pool{
-// 	New: func() interface{} {
-// 		buff := &bytes.Buffer{}
-// 		return buff
-// 	},
-// }
-
 var actionIndex = []byte("index")
 var actionDelete = []byte("delete")
 var actionCreate = []byte("create")
@@ -199,9 +192,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		var indexStatsLock sync.Mutex
 
 		actionMeta := bufferPool.Get()
-		// actionBody := bufferPool.Get()
 		defer bufferPool.Put(actionMeta)
-		// defer bufferPool.Put(actionBody)
 
 		var needActionBody = true
 		var bufferKey string
@@ -402,11 +393,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 						log.Tracef("%s/%s => %v", index, id, shardID)
 					}
 
-					//shardsInfo:=metadata.GetPrimaryShardInfo(index,shardID)
-					//nodeInfo:=metadata.GetNodeInfo(shardsInfo.NodeID)
-					//fmt.Println(index,id,shardID,shardsInfo,nodeInfo)
-					//TODO cache index-shard -> endpoint, 10s
-
 					//save endpoint for bufferkey
 					if checkShards && len(enabledShards) > 0 && needActionBody {
 						if !util.ContainsAnyInArray(strconv.Itoa(shardID), enabledShards) {
@@ -458,7 +444,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 				//保存临时变量
 				actionMeta.Write(scannedByte)
-				// actionBody.Reset()
 
 				if bytes.Equal(action, actionDelete) {
 					nextIsMeta = true
@@ -467,10 +452,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				docCount++
 			} else {
 				nextIsMeta = true
-
-				// if needActionBody {
-				// 	actionBody.Write(scannedByte)
-				// }
 
 				if actionMeta.Len() > 0 {
 					buff, ok = docBuf[bufferKey]
@@ -516,14 +497,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 		log.Debugf("total [%v] operations in bulk requests", docCount)
 
-		// fmt.Println("d",actionMeta.String())
-		// fmt.Println("d",actionBody.String())
-		// fmt.Println("d",docBuf)
-		// fmt.Println("d",buff.String())
-
-
-
-
 		for x, y := range docBuf {
 			if submitMode == "sync" {
 				endpoint, ok := buffEndpoints[x]
@@ -562,7 +535,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				}
 			}
 			y.Reset()
-			bufferPool.Put(y) //TODO
+			bufferPool.Put(y)
 		}
 
 		if indexAnalysis {
@@ -603,21 +576,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		//fmt.Println("not a valid indexing request,",len(pathItems),pathItems)
 		return
 	}
-
-	//validate index,type,id
-	//index:=pathItems[1]
-	//docType:=pathItems[2]
-	//docID:=pathItems[3]
-
-	//fmt.Println("index:",index,",type:",docType,",id:",docID)
-
-	//get index settings
-	//numOfTotalShards:=
-
-	//if shardID!=4{
-	//	ctx.Finished()
-	//	return
-	//}
 
 	return
 	//排除条件，非 _ 开头的索引。
@@ -768,7 +726,7 @@ DO:
 			//"errors":true
 			hit := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
 			if hit {
-				if joint.GetBool("log_bulk_message", true) {
+				if joint.GetBool("log_bulk_message", false) {
 					path1 := path.Join(global.Env().GetWorkingDir(), "bulk_req_failure.log")
 					truncateSize := joint.GetIntOrDefault("error_message_truncate_size", -1)
 					util.FileAppendNewLineWithByte(path1, []byte("URL:"))
