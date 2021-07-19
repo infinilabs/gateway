@@ -93,3 +93,26 @@ func (filter DumpResponseBody) Name() string {
 func (filter DumpResponseBody) Process(ctx *fasthttp.RequestCtx) {
 	fmt.Println("response_body: ", string(ctx.Response.GetRawBody()))
 }
+
+type DumpContext struct {
+	param.Parameters
+}
+
+func (filter DumpContext) Name() string {
+	return "dump_context"
+}
+
+func (filter DumpContext) Process(ctx *fasthttp.RequestCtx) {
+	keys,ok:=filter.GetStringArray("context")
+	if ok{
+		fmt.Println("---- dumping context ---- ")
+		for _,k:=range keys{
+			v,err:=ctx.GetValue(k)
+			if err!=nil{
+				fmt.Println(k,", err:",err)
+			}else{
+				fmt.Println(k," : ", v)
+			}
+		}
+	}
+}
