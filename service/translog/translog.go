@@ -20,6 +20,10 @@ func (module TranslogModule) Setup(cfg *Config) {
 
 func (module TranslogModule) Start() error {
 
+	//TODO
+	// 生命周期管理
+	// 定期上传到远程 s3 仓库
+
 	return nil
 }
 
