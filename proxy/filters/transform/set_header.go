@@ -47,11 +47,11 @@ func (filter SetResponseHeader) Process(ctx *fasthttp.RequestCtx) {
 
 	for k,v:=range headers{
 		//remove old one
-		value:=ctx.Request.Header.Peek(k)
+		value:=ctx.Response.Header.Peek(k)
 		if len(value)>0{
-			ctx.Request.Header.Del(k)
+			ctx.Response.Header.Del(k)
 		}
-		ctx.Request.Header.Set(k,v)
+		ctx.Response.Header.Set(k,v)
 	}
 }
 
