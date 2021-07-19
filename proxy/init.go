@@ -23,9 +23,9 @@ func Init() {
 	common.RegisterFilterPlugin(debug.EchoMessage{})
 	common.RegisterFilterPlugin(debug.DumpHeader{})
 	common.RegisterFilterPlugin(debug.DumpUrl{})
-
 	common.RegisterFilterPlugin(debug.DumpRequestBody{})
 	common.RegisterFilterPlugin(debug.DumpResponseBody{})
+	common.RegisterFilterPlugin(debug.DumpContext{})
 
 
 	common.RegisterFilterPlugin(elastic.Elasticsearch{})
