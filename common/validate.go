@@ -12,13 +12,10 @@ import (
 
 func ValidateBulkRequest(where, body string) {
 	stringLines := strings.Split(body, "\n")
-	// log.Error("validate:",body,",",len(stringLines))
-
 	if len(stringLines)==0{
 		log.Error("invalid json lines, empty")
 		return
 	}
-
 	obj := map[string]interface{}{}
 	for _, v := range stringLines {
 		err := util.FromJSONBytes([]byte(v), &obj)

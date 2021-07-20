@@ -20,10 +20,45 @@ entry:
 #      enabled: true
 flow:
   - name: echo
-    filter:
-      - name: echo
-        parameters:
-          str: "hello world\n"
+    filter_v2:
+      - set_response:
+          when:
+            equals:
+              _ctx.request.path: /favicon.ico
+          status: 404
+          content_type: "text/plain; charset=utf-8"
+          body: "oops, favicon.ico"
+      - set_response:
+          when:
+            equals:
+              _ctx.request.path: /
+          status: 404
+          content_type: "text/plain; charset=utf-8"
+          body: "root path"
+#      - set_response_header:
+#          headers:
+#            - Env -> Dev
+#      - dump_context:
+#          context:
+#            - _ctx.id
+#            - _ctx.tls
+#            - _ctx.remote_addr
+#            - _ctx.local_addr
+#            - _ctx.request.host
+#            - _ctx.request.method
+#            - _ctx.request.uri
+#            - _ctx.request.path
+#            - _ctx.request.body
+#            - _ctx.request.body_length
+#            - _ctx.request.query_args.from
+#            - _ctx.request.query_args.size
+#            - _ctx.request.header.Accept
+#            - _ctx.request.user
+#            - _ctx.response.status
+#            - _ctx.response.body
+#            - _ctx.response.content_type
+#            - _ctx.response.body_length
+#            - _ctx.response.header.Env
   - name: cache_first
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
       - name: translog
@@ -68,8 +103,9 @@ flow:
           bulk_stats_details: true
 router:
   - name: my_router
+#    default_flow: echo
     default_flow: cache_first
-#    tracing_flow: request_logging
+    tracing_flow: request_logging
 #    rules:
 #      - method:
 #          - "POST"
@@ -83,7 +119,6 @@ elasticsearch:
 - name: dev
   enabled: true
   endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
-#  endpoint: https://192.168.3.98:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
 #  traffic_control: #global traffic control
 #    max_bps_per_node: 102400 #max total bytes send to es per node
 #    max_qps_per_node: 1000 #max total requests send to es per node
@@ -96,40 +131,24 @@ elasticsearch:
 #      enabled: true
 #      interval: 60s
 
-modules:
-- name: elastic
-  enabled: true
-  elasticsearch: dev
-  store:
-    enabled: true
-  monitoring:
-    enabled: false
-  orm:
-    enabled: true
-    init_template: true
-    template_name: ".gateway-default"
-    index_prefix: "gateway_"
-
-- name: pipeline
-  enabled: true
-  runners:
-    - name: primary
-      enabled: true
-      max_go_routine: 1
-      threshold_in_ms: 0
-      timeout_in_ms: 5000
-      pipeline_id: request_logging_index
-    - name: nodes_index
-      enabled: true
-      max_go_routine: 2
-      threshold_in_ms: 0
-      timeout_in_ms: 1000
-      pipeline_id: bulk_request_ingest
-
-
+#elastic:
+#  elasticsearch: dev
+#  store:
+#    enabled: true
+#  monitoring:
+#    enabled: false
+#  orm:
+#    enabled: true
+#    init_template: true
+#    template_name: ".gateway-default"
+#    index_prefix: "gateway_"
 
 pipelines:
 - name: request_logging_index
+  enabled: true
+  max_go_routine: 1
+  threshold_in_ms: 0
+  timeout_in_ms: 5000
   start:
     joint: json_indexing
     enabled: true
@@ -141,6 +160,10 @@ pipelines:
       worker_size: 1
       bulk_size_in_mb: 1 #in MB
 - name: bulk_request_ingest
+  enabled: true
+  max_go_routine: 10
+  threshold_in_ms: 0
+  timeout_in_ms: 5000
   start:
     joint: bulk_indexing
     enabled: true

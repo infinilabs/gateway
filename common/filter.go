@@ -82,26 +82,6 @@ func New(cfg PluginConfig) (*RequestFilters, error) {
 			continue
 		}
 		procs.AddProcessor(filter)
-
-
-		//gen, exists := registry.reg[actionName]
-		//if !exists {
-		//	var validActions []string
-		//	for k := range registry.reg {
-		//		validActions = append(validActions, k)
-		//
-		//	}
-		//	return nil, errors.Errorf("the processor action %s does not exist. Valid actions: %v", actionName, strings.Join(validActions, ", "))
-		//}
-		//
-		////actionCfg.PrintDebugf("Configure processor action '%v' with:", actionName)
-		//constructor := gen.Plugin()
-		//plugin, err := constructor(actionCfg)
-		//if err != nil {
-		//	return nil, err
-		//}
-		//
-		//procs.AddProcessor(plugin)
 	}
 
 	if len(procs.List) > 0 {
@@ -157,8 +137,6 @@ func (procs *RequestFilters) Close() error {
 // an error. If the event has been dropped (canceled) by a processor in the
 // list then a nil event is returned.
 func (procs *RequestFilters) Process(ctx *fasthttp.RequestCtx) {
-	//var err error
-
 	for _, p := range procs.List {
 
 		if !ctx.ShouldContinue(){
@@ -179,7 +157,6 @@ func (procs *RequestFilters) Process(ctx *fasthttp.RequestCtx) {
 		//	return nil, nil
 		//}
 	}
-	//return event, nil
 }
 
 func (procs *RequestFilters) Name() string {
