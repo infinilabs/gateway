@@ -79,7 +79,6 @@ func NewConditionRule(
 
 // Run executes this WhenProcessor.
 func (r WhenProcessor) Process(ctx *fasthttp.RequestCtx) {
-	log.Error("when processing")
 	if !ctx.ShouldContinue(){
 		if global.Env().IsDebug{
 			log.Debugf("filter [%v] not continued",r.Name())

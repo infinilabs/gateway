@@ -39,10 +39,10 @@ func NewList() *RequestFilters {
 	return &RequestFilters{}
 }
 
-func New(config PluginConfig) (*RequestFilters, error) {
+func New(cfg PluginConfig) (*RequestFilters, error) {
 	procs := NewList()
 
-	for _, procConfig := range config {
+	for _, procConfig := range cfg {
 		// Handle if/then/else processor which has multiple top-level keys.
 		if procConfig.HasField("if") {
 			p, err := NewIfElseThenProcessor(procConfig)
@@ -74,7 +74,15 @@ func New(config PluginConfig) (*RequestFilters, error) {
 
 		f:= GetFilterInstanceWithConfigV2(actionName,actionCfg)
 
-		procs.AddProcessor(f)
+		filter, err := NewConditional(func(_ *config.Config) (RequestFilter, error) {
+			return f, nil
+		})(actionCfg)
+		if err != nil {
+			log.Error(err)
+			continue
+		}
+		procs.AddProcessor(filter)
+
 
 		//gen, exists := registry.reg[actionName]
 		//if !exists {
