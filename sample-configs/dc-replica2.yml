@@ -7,7 +7,7 @@ entry:
     router: my_router
     max_concurrency: 10000
     network:
-      binding: 0.0.0.0:8001
+      binding: 0.0.0.0:8010
     tls:
       enabled: false
 flow:
@@ -15,7 +15,7 @@ flow:
     filter_v2:
       - set_basic_auth: #覆盖身份信息
           username: elastic
-          password: changeme
+          password: password
       - if:
           cluster_available: ["prod"]
         then:
@@ -28,11 +28,16 @@ flow:
               in:
                 _ctx.response.status: [ 403,404,200,201 ]
             then:
-              - set_basic_auth: #覆盖身份信息
-                  username: test
-                  password: testtest
+              - set_basic_auth: #覆盖dr1身份信息
+                  username: elastic
+                  password: password
               - disk_enqueue:
-                  queue_name: "dev"
+                  queue_name: "dr1"
+              - set_basic_auth: #覆盖dr2身份信息
+                  username: elastic
+                  password: password
+              - disk_enqueue:
+                  queue_name: "dr2"
             else:
               - disk_enqueue:
                   queue_name: "prod-500"
@@ -43,8 +48,8 @@ flow:
               sleep_in_million_seconds: 1000
           - elasticsearch_health_check:
               elasticsearch: "prod"
-      - sample:
-          ratio: 0.1
+      #- sample:
+      #    ratio: 0.1
       - flow:
           flows:
             - request_logging
@@ -52,7 +57,7 @@ flow:
     filter_v2:
       - set_basic_auth: #覆盖身份信息
           username: elastic
-          password: changeme
+          password: password
       - if:
           and:
             - queue_has_lag: [ "prod", "prod-500" ]
@@ -60,11 +65,16 @@ flow:
         then: #集群可用但是集群有堆积的情况，先入队列，追加到队尾，确保操作顺序的一致性
           - disk_enqueue:
               queue_name: "prod"
-          - set_basic_auth: #覆盖身份信息
-              username: test
-              password: testtest
+          - set_basic_auth: #覆盖dr1身份信息
+              username: elastic
+              password: password
           - disk_enqueue:
-              queue_name: "dev"
+              queue_name: "dr1"
+          - set_basic_auth: #覆盖dr2身份信息
+              username: elastic
+              password: password
+          - disk_enqueue:
+              queue_name: "dr2"
           - set_response:
               status: 202
               body: "202 Accepted"
@@ -95,11 +105,16 @@ flow:
               in:
                 _ctx.response.status: [ 403,404,200,201 ]
             then: #仅正常处理的集群才转发给后端集群
-              - set_basic_auth: #覆盖身份信息
-                  username: test
-                  password: testtest
+              - set_basic_auth: #覆盖dr1身份信息
+                  username: elastic
+                  password: password
               - disk_enqueue:
-                  queue_name: "dev"
+                  queue_name: "dr1"            
+              - set_basic_auth: #覆盖dr2身份信息
+                  username: elastic
+                  password: password
+              - disk_enqueue:
+                  queue_name: "dr2"
             else: #集群可用的情况下但是失败了，可能存在脏写，将请求放入写入失败队列，后续可以选择两边集群都重做一次，最终确保一致性，写 translog，后续提供 UI 可以进行三方检查：主、备集群和本地日志
               - disk_enqueue:
                   queue_name: "prod-500"
@@ -111,7 +126,7 @@ flow:
             - _cat
       - name: elasticsearch
         parameters:
-          elasticsearch: dev  #elasticsearch configure reference name
+          elasticsearch: prod  #elasticsearch configure reference name
           max_connection_per_host: 1000 #max tcp connection to upstream, default for all nodes
           max_response_size: -1 #default for all nodes
           balancer: weight
@@ -127,9 +142,14 @@ flow:
                 - master
       - name: set_cache
         parameters:
-          cache_ttl: 30s
+          cache_ttl: 10s
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
+      - name: request_path_filter
+        parameters:
+          must_not:
+            prefix:
+              - /favicon.ico    
       - name: request_logging
         parameters:
           queue_name: request_logging
@@ -140,41 +160,49 @@ flow:
 router:
   - name: my_router
     default_flow: prod-flow
-#    tracing_flow: request_logging
+    tracing_flow: request_logging
+    
+    
 elasticsearch:
-  - name: dev
+- name: prod #主
+  enabled: true
+  version: 6.8.7
+  endpoint: http://172.26.9.32:9201
+  discovery: 
     enabled: true
-    endpoint: http://localhost:9200
-    basic_auth:
-      username: test
-      password: testtest
-      #  traffic_control: #global traffic control
-      #    max_bps_per_node: 10240000 #max total bytes send to es per node
-  #    max_qps_per_node: 100 #max total requests send to es per node
-    discovery: # auto discovery elasticsearch cluster nodes
-      enabled: false
-      refresh:
-        enabled: true
-        interval: 60s
-  - name: prod
+    refresh:
+      enabled: true
+  basic_auth: 
+    username: elastic
+    password: password
+- name: dr1 #备1
+  enabled: true
+  version: 7.9.2
+  endpoint: http://172.26.9.47:9202
+  discovery: 
     enabled: true
-    endpoint: http://localhost:9202
-#    traffic_control: #global traffic control
-#      max_bps_per_node: 10240000 #max total bytes send to es per node
-#      max_qps_per_node: 100000 #max total requests send to es per node
-    basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
-      username: elastic
-      password: changeme
-    discovery: # auto discovery elasticsearch cluster nodes
-      enabled: false
-      refresh:
-        enabled: true
-        interval: 60s
+    refresh:
+      enabled: true
+  basic_auth: 
+    username: elastic
+    password: password
+- name: dr2 #备2
+  enabled: true
+  version: 6.8.7
+  endpoint: http://172.26.9.44:9212
+  discovery: 
+    enabled: true
+    refresh:
+      enabled: true
+  basic_auth: 
+    username: elastic
+    password: password
+
 
 modules:
   - name: elastic
     enabled: true
-    elasticsearch: dev
+    elasticsearch: dr1
     store:
       enabled: true
     monitoring:
@@ -194,19 +222,24 @@ modules:
         threshold_in_ms: 0
         timeout_in_ms: 5000
         pipeline_id: request_logging_index
-      - name: disk_queue_consumer-dev
-        enabled: true
-        max_go_routine: 1
-        threshold_in_ms: 0
-        timeout_in_ms: 5000
-        pipeline_id: disk_queue_consumer-dev
       - name: disk_queue_consumer-prod
         enabled: true
         max_go_routine: 1
         threshold_in_ms: 0
         timeout_in_ms: 5000
         pipeline_id: disk_queue_consumer-prod
-
+      - name: disk_queue_consumer-dr1
+        enabled: true
+        max_go_routine: 1
+        threshold_in_ms: 0
+        timeout_in_ms: 5000
+        pipeline_id: disk_queue_consumer-dr1
+      - name: disk_queue_consumer-dr2
+        enabled: true
+        max_go_routine: 1
+        threshold_in_ms: 0
+        timeout_in_ms: 5000
+        pipeline_id: disk_queue_consumer-dr2
 
 flow_runner:
   enabled: true
@@ -214,14 +247,24 @@ flow_runner:
   flow: prod-flow-post-processing
 
 pipelines:
-  - name: disk_queue_consumer-dev
+  - name: disk_queue_consumer-dr1
     start:
       joint: disk_queue_consumer
       enabled: true
       parameters:
-        input_queue: "dev"
-        elasticsearch: "dev"
-        waiting_after: [ "dev-500"]
+        input_queue: "dr1"
+        elasticsearch: "dr1"
+        waiting_after: [ "dr1-500"]
+        timeout: "1s"
+        worker_size: 20
+  - name: disk_queue_consumer-dr2
+    start:
+      joint: disk_queue_consumer
+      enabled: true
+      parameters:
+        input_queue: "dr2"
+        elasticsearch: "dr2"
+        waiting_after: [ "dr2-500"]
         timeout: "1s"
         worker_size: 20
   - name: disk_queue_consumer-prod
@@ -240,11 +283,11 @@ pipelines:
       enabled: true
       parameters:
         index_name: "gateway_requests"
-        elasticsearch: "dev"
+        elasticsearch: "dr1"
         input_queue: "request_logging"
         timeout: "1s"
         worker_size: 1
-        bulk_size_in_mb: 1 #in MB
+        bulk_size_in_mb: 10 #in MB
 
 queue:
   min_msg_size: 1

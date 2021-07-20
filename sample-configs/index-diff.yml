@@ -10,7 +10,7 @@ elasticsearch:
       password: testtest
   - name: dev
     enabled: true
-    endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
+    endpoint: http://localhost:9200
     basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
       username: test
       password: testtest
