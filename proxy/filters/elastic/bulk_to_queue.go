@@ -65,7 +65,7 @@ func (this BulkResponseValidate) Process(ctx *fasthttp.RequestCtx) {
 		if ok2{
 			if err2==true{
 				if global.Env().IsDebug{
-					log.Error("checking bulk response, invalid, ",ok2,",",err2,",",util.SubString(string(ctx.Response.GetRawBody()),0,256))
+					log.Error("invalid bulk response, ",ok2,",",err2,",",util.SubString(string(ctx.Response.GetRawBody()),0,256))
 				}
 				ctx.Response.SetStatusCode(this.GetIntOrDefault("invalid_status",500))
 			}
