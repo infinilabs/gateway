@@ -67,6 +67,7 @@ func main() {
 		//load core modules first
 		module.RegisterSystemModule(elastic.ElasticModule{})
 		module.RegisterSystemModule(boltdb.StorageModule{})
+		module.RegisterUserPlugin(translog.TranslogModule{})
 		module.RegisterSystemModule(filter.FilterModule{})
 		module.RegisterSystemModule(queue.DiskQueue{})
 		module.RegisterSystemModule(api.APIModule{})
@@ -80,7 +81,6 @@ func main() {
 		module.RegisterUserPlugin(forcemerge.ForceMergeModule{})
 		module.RegisterUserPlugin(index_diff.IndexDiffModule{})
 		module.RegisterUserPlugin(offline_processing.FlowRunner{})
-		module.RegisterUserPlugin(translog.TranslogModule{})
 
 		api2.Init()
 

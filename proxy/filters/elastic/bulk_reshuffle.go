@@ -498,6 +498,10 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		log.Debugf("total [%v] operations in bulk requests", docCount)
 
 		for x, y := range docBuf {
+			y.WriteString("\n")
+			data := y.Bytes()
+			y.Reset()
+			bufferPool.Put(y)
 			if submitMode == "sync" {
 				endpoint, ok := buffEndpoints[x]
 				if !ok {
@@ -506,7 +510,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					return
 				}
 
-				data := y.Bytes()
 				if validateRequest {
 					common.ValidateBulkRequest("sync-bulk", string(data))
 				}
@@ -520,7 +523,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 				ctx.SetDestination(fmt.Sprintf("%v:%v", "sync", x))
 			} else {
-				data := y.Bytes()
 				if validateRequest {
 					common.ValidateBulkRequest("initial-enqueue", string(data))
 				}
@@ -531,11 +533,10 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					}
 					ctx.SetDestination(fmt.Sprintf("%v:%v", "async", x))
 				} else {
-					log.Warn("zero message,", x, ",", y.Len(), ",", string(body))
+					log.Warn("zero message,", x, ",", len(data), ",", string(body))
 				}
 			}
-			y.Reset()
-			bufferPool.Put(y)
+
 		}
 
 		if indexAnalysis {

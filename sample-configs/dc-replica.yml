@@ -7,7 +7,7 @@ entry:
     router: my_router
     max_concurrency: 10000
     network:
-      binding: 0.0.0.0:8001
+      binding: 0.0.0.0:8000
     tls:
       enabled: false
 flow:
@@ -50,6 +50,7 @@ flow:
             - request_logging
   - name: prod-flow
     filter_v2:
+      - translog:
       - set_basic_auth: #覆盖身份信息
           username: elastic
           password: changeme
@@ -79,7 +80,6 @@ flow:
               - elasticsearch_health_check: #由请求触发的限速模式下的主动检查后端监控情况
                   elasticsearch: "prod"
               - drop:
-#          - translog:
 #          - set_request_header: #覆盖 Header 信息
 #              headers:
 #                - Trial -> true
@@ -158,7 +158,7 @@ elasticsearch:
         interval: 60s
   - name: prod
     enabled: true
-    endpoint: http://localhost:9202
+    endpoint: http://localhost:9201
 #    traffic_control: #global traffic control
 #      max_bps_per_node: 10240000 #max total bytes send to es per node
 #      max_qps_per_node: 100000 #max total requests send to es per node
@@ -171,43 +171,6 @@ elasticsearch:
         enabled: true
         interval: 60s
 
-modules:
-  - name: elastic
-    enabled: true
-    elasticsearch: dev
-    store:
-      enabled: true
-    monitoring:
-      enabled: false
-    orm:
-      enabled: true
-      init_template: true
-      template_name: ".gateway-default"
-      index_prefix: "gateway_"
-
-  - name: pipeline
-    enabled: true
-    runners:
-      - name: primary
-        enabled: true
-        max_go_routine: 1
-        threshold_in_ms: 0
-        timeout_in_ms: 5000
-        pipeline_id: request_logging_index
-      - name: disk_queue_consumer-dev
-        enabled: true
-        max_go_routine: 1
-        threshold_in_ms: 0
-        timeout_in_ms: 5000
-        pipeline_id: disk_queue_consumer-dev
-      - name: disk_queue_consumer-prod
-        enabled: true
-        max_go_routine: 1
-        threshold_in_ms: 0
-        timeout_in_ms: 5000
-        pipeline_id: disk_queue_consumer-prod
-
-
 flow_runner:
   enabled: true
   input_queue: "prod-500"
@@ -215,6 +178,7 @@ flow_runner:
 
 pipelines:
   - name: disk_queue_consumer-dev
+    enabled: true
     start:
       joint: disk_queue_consumer
       enabled: true
@@ -225,6 +189,7 @@ pipelines:
         timeout: "1s"
         worker_size: 20
   - name: disk_queue_consumer-prod
+    enabled: true
     start:
       joint: disk_queue_consumer
       enabled: true
@@ -235,6 +200,7 @@ pipelines:
         timeout: "1s"
         worker_size: 20
   - name: request_logging_index
+    enabled: true
     start:
       joint: json_indexing
       enabled: true

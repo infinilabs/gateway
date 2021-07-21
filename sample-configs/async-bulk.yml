@@ -75,33 +75,9 @@ elasticsearch:
       enabled: true
       interval: 10s
 
-modules:
-- name: elastic
-  enabled: true
-  elasticsearch: dev
-  store:
-    enabled: true
-  monitoring:
-    enabled: false
-  orm:
-    enabled: true
-    init_template: true
-    template_name: ".gateway-default"
-    index_prefix: "gateway_"
-
-- name: pipeline
-  enabled: true
-  runners:
-    - name: nodes_index
-      enabled: true
-      max_go_routine: 1
-      threshold_in_ms: 0
-      timeout_in_ms: 1000
-      pipeline_id: bulk_request_ingest
-
-
 pipelines:
 - name: bulk_request_ingest
+  enabled: true
   start:
     joint: bulk_indexing
     enabled: true

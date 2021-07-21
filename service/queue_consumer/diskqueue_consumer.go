@@ -197,6 +197,10 @@ HANDLE_PENDING:
 func processMessage(esConfig *elastic.ElasticsearchConfig,pop []byte)(bool,int,error)  {
 	req:=fasthttp.AcquireRequest()
 	err:=req.Decode(pop)
+	if err!=nil{
+		log.Error("failed to decode request, ",esConfig.Name)
+		return false,408,err
+	}
 
 	if global.Env().IsDebug{
 		log.Trace(err)
@@ -204,15 +208,15 @@ func processMessage(esConfig *elastic.ElasticsearchConfig,pop []byte)(bool,int,e
 		log.Trace(string(req.GetRawBody()))
 	}
 
-	if err!=nil{
-		return false,0,err
-	}
-
 	endpoint:=esConfig.GetHost()
 
 	req.Header.SetHost(endpoint)
 	resp:=fasthttp.AcquireResponse()
 	err=fastHttpClient.Do(req, resp)
+	if err != nil {
+		return false,resp.StatusCode(), err
+	}
+
 	if esConfig.TrafficControl!=nil{
 	RetryRateLimit:
 
@@ -232,15 +236,10 @@ func processMessage(esConfig *elastic.ElasticsearchConfig,pop []byte)(bool,int,e
 
 	}
 
-
 	if global.Env().IsDebug{
 		log.Trace(err)
 		log.Trace(resp.StatusCode())
 		log.Trace(string(resp.GetRawBody()))
-	}
-
-	if err != nil {
-		return false,resp.StatusCode(), err
 	}
 
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated || resp.StatusCode() == http.StatusNotFound {
@@ -261,7 +260,7 @@ func processMessage(esConfig *elastic.ElasticsearchConfig,pop []byte)(bool,int,e
 		return true,resp.StatusCode(),nil
 	}else{
 		if global.Env().IsDebug{
-			log.Warn(err,resp.StatusCode(),string(resp.GetRawBody()))
+			log.Warn(err,resp.StatusCode(),util.SubString(string(req.GetRawBody()),0,512),string(resp.GetRawBody()))
 		}
 		return false,resp.StatusCode(), errors.New(fmt.Sprintf("invalid status code, %v %v %v",resp.StatusCode(),err,util.SubString(string(resp.GetRawBody()),0,1024)))
 	}

@@ -73,7 +73,7 @@ router:
 elasticsearch:
 - name: dev
   enabled: true
-  endpoint: https://192.168.3.98:9200
+  endpoint: http://localhost:9200
   traffic_control:
     max_bps_per_node: -1
     max_qps_per_node: 300000
@@ -85,22 +85,6 @@ elasticsearch:
     refresh:
       enabled: true
       interval: 10s
-
-modules:
-- name: elastic
-  enabled: true
-  elasticsearch: dev
-  store:
-    enabled: true
-  monitoring:
-    enabled: false
-  orm:
-    enabled: true
-    init_template: true
-    template_name: ".gateway-default"
-    index_prefix: "gateway_"
-
-
 queue:
   min_msg_size: 1
   max_msg_size: 1000000000

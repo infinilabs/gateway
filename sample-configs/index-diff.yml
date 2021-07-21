@@ -14,50 +14,10 @@ elasticsearch:
     basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
       username: test
       password: testtest
-
-modules:
-  - name: elastic
-    enabled: true
-    elasticsearch: dev
-    store:
-      enabled: true
-    monitoring:
-      enabled: false
-    orm:
-      enabled: true
-      init_template: true
-      template_name: ".gateway-default"
-      index_prefix: "gateway_"
-
-  - name: pipeline
-    enabled: true
-    runners:
-      - name: my_scroll1
-        enabled: false
-        pipeline_id: es_scroll_a
-        schedule: "once"
-        max_go_routine: 1
-        threshold_in_ms: 0
-        timeout_in_ms: 5000
-      - name: my_scroll2
-        enabled: false
-        pipeline_id: es_scroll_b
-        schedule: "once"
-        max_go_routine: 1
-        threshold_in_ms: 0
-        timeout_in_ms: 5000
-      - name: diff_result_ingest
-        enabled: false
-        pipeline_id: diff_result_ingest
-        schedule: "once"
-        max_go_routine: 1
-        threshold_in_ms: 0
-        timeout_in_ms: 5000
-
-
 pipelines:
   #使用两个 scroll 任务并行读取两个索引的文档
   - name: es_scroll_a
+    enabled: true
     input:
       joint: es_scroll
       enabled: false
@@ -69,6 +29,7 @@ pipelines:
         elasticsearch: "dev"
         output_queue: "source_docs"
   - name: es_scroll_b
+    enabled: true
     input:
       joint: es_scroll
       enabled: false
@@ -81,6 +42,7 @@ pipelines:
         output_queue: "target_docs"
   # 消费 diff 结果并保存到 Elasticsearch 用于查看两个索引的 diff 结果
   - name: diff_result_ingest
+    enabled: true
     start:
       joint: json_indexing
       enabled: false
@@ -92,7 +54,6 @@ pipelines:
         timeout: "1s"
         worker_size: 1
         bulk_size_in_mb: 1 #in MB
-
 # 进行 diff 的服务
 index_diff:
   enabled: false

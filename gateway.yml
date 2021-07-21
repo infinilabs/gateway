@@ -146,9 +146,6 @@ elasticsearch:
 pipelines:
 - name: request_logging_index
   enabled: true
-  max_go_routine: 1
-  threshold_in_ms: 0
-  timeout_in_ms: 5000
   start:
     joint: json_indexing
     enabled: true
@@ -162,8 +159,6 @@ pipelines:
 - name: bulk_request_ingest
   enabled: true
   max_go_routine: 10
-  threshold_in_ms: 0
-  timeout_in_ms: 5000
   start:
     joint: bulk_indexing
     enabled: true
