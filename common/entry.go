@@ -9,6 +9,7 @@ import (
 
 type EntryConfig struct {
 	Enabled          bool                 `config:"enabled"`
+	DirtyShutdown   bool          `config:"dirty_shutdown"`
 	Name             string               `config:"name"`
 	ReadTimeout      int                  `config:"read_timeout"`
 	WriteTimeout     int                  `config:"write_timeout"`
