@@ -353,7 +353,7 @@ DO:
 
 		if joint.GetBool("log_bulk_message", true) {
 			path1 := path.Join(global.Env().GetWorkingDir(), "bulk_400_failure.log")
-			truncateSize := joint.GetIntOrDefault("error_message_truncate_size", -1)
+			truncateSize := joint.GetIntOrDefault("error_message_truncate_size", 4096)
 			util.FileAppendNewLineWithByte(path1, []byte("\nURL:"))
 			util.FileAppendNewLineWithByte(path1, []byte(url))
 			util.FileAppendNewLineWithByte(path1, []byte("Request:"))
@@ -396,7 +396,7 @@ DO:
 		if hit {
 			if joint.GetBool("log_bulk_message", true) {
 				path1 := path.Join(global.Env().GetWorkingDir(), "bulk_req_failure.log")
-				truncateSize := joint.GetIntOrDefault("error_message_truncate_size", -1)
+				truncateSize := joint.GetIntOrDefault("error_message_truncate_size", 4096)
 				util.FileAppendNewLineWithByte(path1, []byte("\nURL:"))
 				util.FileAppendNewLineWithByte(path1, []byte(url))
 				util.FileAppendNewLineWithByte(path1, []byte("Request:"))
@@ -421,7 +421,7 @@ DO:
 			if retryTimes >= joint.GetIntOrDefault("failed_retry_times", 3) {
 				if joint.GetBool("warm_retry_message", true) {
 					log.Errorf("elasticsearch failed, retried %v times, quit retry", retryTimes)
-					log.Errorf(string(resbody))
+					//log.Errorf(string(resbody))
 				}
 				return false
 			}
@@ -440,7 +440,7 @@ DO:
 		if retryTimes >= joint.GetIntOrDefault("reject_retry_times", 60) {
 			if joint.GetBool("warm_retry_message", true) {
 				log.Errorf("elasticsearch rejected, retried %v times, quit retry", retryTimes)
-				log.Errorf(string(resbody))
+				//log.Errorf(string(resbody))
 			}
 			return false
 		}
@@ -449,7 +449,7 @@ DO:
 	} else {
 		if joint.GetBool("log_bulk_message", false) {
 			path1 := path.Join(global.Env().GetWorkingDir(), "bulk_error_failure.log")
-			truncateSize := joint.GetIntOrDefault("error_message_truncate_size", -1)
+			truncateSize := joint.GetIntOrDefault("error_message_truncate_size", 4096)
 			util.FileAppendNewLineWithByte(path1, []byte("\nURL:"))
 			util.FileAppendNewLineWithByte(path1, []byte(url))
 			util.FileAppendNewLineWithByte(path1, []byte("Request:"))

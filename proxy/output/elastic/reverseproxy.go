@@ -153,7 +153,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 	if len(endpoints) == 0 {
 		endpoints = append(endpoints, esConfig.GetHost())
 		if checkMetadata {
-			log.Warnf("no valid endpoint for elasticsearch, fallback to seed: [%v]", endpoints)
+			log.Warnf("no valid endpoint, fallback to seed: [%v]", endpoints)
 		}
 	}
 

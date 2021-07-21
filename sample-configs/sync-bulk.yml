@@ -67,7 +67,8 @@ router:
       - method:
           - "POST"
         pattern:
-          - /_bulk
+#          - '/index125/_bulk'
+          - '/_bulk'
         flow:
           - online_indexing_merge
 elasticsearch:

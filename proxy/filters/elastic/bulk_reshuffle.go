@@ -18,7 +18,6 @@ import (
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/queue"
-	"infini.sh/framework/core/radix"
 	"infini.sh/framework/core/rate"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
@@ -55,76 +54,87 @@ var idStart = []byte("\"_id\"")
 var idEnd = []byte("\"")
 
 func parseActionMeta(data []byte) ([]byte, []byte, []byte) {
-
 	action := util.ExtractFieldFromBytes(&data, actionStart, actionEnd, nil)
 	index := util.ExtractFieldFromBytesWitSkipBytes(&data, indexStart, []byte("\""), indexEnd, filteredFromValue)
 	id := util.ExtractFieldFromBytesWitSkipBytes(&data, idStart, []byte("\""), idEnd, filteredFromValue)
-
 	return action, index, id
 }
 
-//"_index":"test" => "_index":"test", "_id":"id"
-func insertUUID(scannedByte []byte) (newBytes []byte, id string) {
-	id = util.GetUUID()
-	newData := util.InsertBytesAfterField(&scannedByte, []byte("\"_index\""), []byte("\""), []byte("\""), []byte(",\"_id\":\""+id+"\""))
-	return newData, id
-}
-
 //TODO performance
-func updateJsonWithUUID(scannedByte []byte) (newBytes []byte, id string) {
-	var meta elastic.BulkActionMetadata
-	meta = elastic.BulkActionMetadata{}
-	util.MustFromJSONBytes(scannedByte, &meta)
-	id = util.GetUUID()
-	if meta.Index != nil {
-		meta.Index.ID = id
-	} else if meta.Create != nil {
-		meta.Create.ID = id
-	}
-	return util.MustToJSONBytes(meta), id
-}
-
-//TODO performance
-func updateJsonWithNewIndex(scannedByte []byte, index string) (newBytes []byte) {
-	var meta elastic.BulkActionMetadata
-	meta = elastic.BulkActionMetadata{}
+func updateJsonWithNewIndex(scannedByte []byte, index,typeName,id string) (newBytes []byte) {
+	var meta = elastic.BulkActionMetadata{}
 	util.MustFromJSONBytes(scannedByte, &meta)
 	if meta.Index != nil {
-		meta.Index.Index = index
+		if index!=""{
+			meta.Index.Index = index
+		}
+		if typeName!=""{
+			meta.Index.Type = typeName
+		}
+		if id!=""{
+			meta.Index.ID = id
+		}
 	} else if meta.Create != nil {
-		meta.Create.Index = index
+		if index!=""{
+			meta.Create.Index = index
+		}
+		if typeName!=""{
+			meta.Create.Type = typeName
+		}
+		if id!=""{
+			meta.Create.ID = id
+		}
 	} else if meta.Update != nil {
-		meta.Update.Index = index
+		if index!=""{
+			meta.Update.Index = index
+		}
+		if typeName!=""{
+			meta.Update.Type = typeName
+		}
+		if id!=""{
+			meta.Update.ID = id
+		}
 	} else if meta.Delete != nil {
-		meta.Delete.Index = index
+		if index!=""{
+			meta.Delete.Index = index
+		}
+		if typeName!=""{
+			meta.Delete.Type = typeName
+		}
+		if id!=""{
+			meta.Delete.ID = id
+		}
 	}
 	return util.MustToJSONBytes(meta)
 }
 
-func parseJson(scannedByte []byte) (action []byte, index, id string) {
+func parseJson(scannedByte []byte) (action []byte, index,typeName, id string) {
 	//use Json
 	var meta = elastic.BulkActionMetadata{}
 	util.MustFromJSONBytes(scannedByte, &meta)
-
 	if meta.Index != nil {
 		index = meta.Index.Index
+		typeName = meta.Index.Type
 		id = meta.Index.ID
 		action = actionIndex
 	} else if meta.Create != nil {
 		index = meta.Create.Index
+		typeName = meta.Create.Type
 		id = meta.Create.ID
 		action = actionCreate
 	} else if meta.Update != nil {
 		index = meta.Update.Index
+		typeName = meta.Update.Type
 		id = meta.Update.ID
 		action = actionUpdate
 	} else if meta.Delete != nil {
 		index = meta.Delete.Index
+		typeName = meta.Delete.Type
 		action = actionDelete
 		id = meta.Delete.ID
 	}
 
-	return action, index, id
+	return action, index,typeName, id
 }
 
 var versions = map[string]int{}
@@ -132,12 +142,10 @@ var versionLock = sync.Mutex{}
 
 func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
-	path := string(ctx.URI().Path())
+	pathStr := string(ctx.URI().Path())
 
-	//TODO 处理 {INDEX}/_bulk 的情况
-	//filebeat 等都是 bulk 结尾的请求了。
-	//需要拆解 bulk 请求，重新封装
-	if util.PrefixStr(path, "/_bulk") {
+	//拆解 bulk 请求，重新封装
+	if util.SuffixStr(pathStr, "/_bulk") {
 
 		ctx.Set(common.CACHEABLE, false)
 
@@ -171,12 +179,9 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		actionAnalysis := this.GetBool("action_stats_analysis", true) //sync and async
 		enabledShards, checkShards := this.GetStringArray("shards")
 
-		renameMapping, resolveIndexRename := this.GetStringMap("index_rename")
+		//renameMapping, resolveIndexRename := this.GetStringMap("index_rename")
 
 		body := ctx.Request.GetRawBody()
-		if validateRequest {
-			common.ValidateBulkRequest("raw_body", string(body))
-		}
 
 		scanner := bufio.NewScanner(bytes.NewReader(body))
 		scanner.Split(util.GetSplitFunc([]byte("\n")))
@@ -192,6 +197,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		var indexStatsLock sync.Mutex
 
 		actionMeta := bufferPool.Get()
+		actionMeta.Reset()
 		defer bufferPool.Put(actionMeta)
 
 		var needActionBody = true
@@ -206,10 +212,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				continue
 			}
 
-			if validateRequest {
-				common.ValidateBulkRequest("scanned_byte", string(scannedByte))
-			}
-
 			if skipNext {
 				skipNext = false
 				nextIsMeta = true
@@ -219,13 +221,27 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 			if nextIsMeta {
 				nextIsMeta = false
-
 				var index string
+				var typeName string
+				pathArray:=strings.Split(pathStr,"/")
+
+				var urlLevelIndex string
+				var urlLevelType string
+				switch len(pathArray) {
+				case 4:
+					urlLevelIndex=pathArray[1]
+					urlLevelType=pathArray[2]
+					break
+				case 3:
+					urlLevelIndex=pathArray[1]
+					break
+				}
+
 				var id string
 				var action []byte
 
 				if safetyParse {
-					action, index, id = parseJson(scannedByte)
+					action, index,typeName, id = parseJson(scannedByte)
 				} else {
 					var indexb, idb []byte
 
@@ -238,29 +254,57 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 					if len(action) == 0 || index == "" {
 						log.Warn("invalid bulk action:", string(action), ",index:", string(indexb), ",id:", string(idb), ", try json parse:", string(scannedByte))
-						action, index, id = parseJson(scannedByte)
+						action, index,typeName, id = parseJson(scannedByte)
 					}
 				}
 
+
 				//index_rename
-				if resolveIndexRename {
-					for k, v := range renameMapping {
-						if strings.Contains(k, "*") {
-							patterns := radix.Compile(k) //TODO performance
-							ok := patterns.Match(index)
-							if ok {
-								if global.Env().IsDebug {
-									log.Debug("wildcard matched: ", path)
-								}
-								index = v
-								scannedByte = updateJsonWithNewIndex(scannedByte, index)
-								break
-							}
-						} else if k == index {
-							index = v
-							scannedByte = updateJsonWithNewIndex(scannedByte, index)
-							break
-						}
+				//if resolveIndexRename {
+				//	for k, v := range renameMapping {
+				//		if strings.Contains(k, "*") {
+				//			patterns := radix.Compile(k) //TODO performance
+				//			ok := patterns.Match(index)
+				//			if ok {
+				//				if global.Env().IsDebug {
+				//					log.Debug("wildcard matched: ", pathStr)
+				//				}
+				//				index = v
+				//				scannedByte = updateJsonWithNewIndex(scannedByte, index)
+				//				break
+				//			}
+				//		} else if k == index {
+				//			index = v
+				//			scannedByte = updateJsonWithNewIndex(scannedByte, index)
+				//			break
+				//		}
+				//	}
+				//}
+
+
+				var indexNew,typeNew,idNew string
+				if index=="" && urlLevelIndex!=""{
+					index=urlLevelIndex
+					indexNew=urlLevelIndex
+				}
+
+				if typeName=="" && urlLevelType!=""{
+					typeName=urlLevelType
+					typeNew=urlLevelType
+				}
+
+				if (bytes.Equal(action, []byte("index")) || bytes.Equal(action, []byte("create"))) && len(id) == 0 && fixNullID {
+					id = util.GetUUID()
+					idNew=id
+					if global.Env().IsDebug {
+						log.Trace("generated ID,", id, ",", string(scannedByte))
+					}
+				}
+
+				if indexNew!=""||typeNew!=""||idNew!=""{
+					scannedByte=updateJsonWithNewIndex(scannedByte,indexNew,typeNew,idNew)
+					if global.Env().IsDebug {
+						log.Trace("updated meta,", id, ",", string(scannedByte))
 					}
 				}
 
@@ -307,17 +351,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 						actionStatsData[actionStr] = v + 1
 					}
 					indexStatsLock.Unlock()
-				}
-
-				if (bytes.Equal(action, []byte("index")) || bytes.Equal(action, []byte("create"))) && len(id) == 0 && fixNullID {
-					if safetyParse {
-						scannedByte, id = updateJsonWithUUID(scannedByte)
-					} else {
-						scannedByte, id = insertUUID(scannedByte)
-					}
-					if global.Env().IsDebug {
-						log.Trace("generated ID,", id, ",", string(scannedByte))
-					}
 				}
 
 				if validMetadata {
@@ -419,7 +452,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				}
 
 				if global.Env().IsDebug {
-					log.Tracef("%s/%s => %v , %v", index, id, shardID, bufferKey)
+					log.Tracef("%s/%s/%s => %v , %v", index,typeName, id, shardID, bufferKey)
 				}
 
 				////update actionItem
@@ -434,6 +467,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					}
 
 					buff = bufferPool.Get()
+					buff.Reset()
 					docBuf[bufferKey] = buff
 
 					buffEndpoints[bufferKey] = nodeInfo.Http.PublishAddress
@@ -457,38 +491,26 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					buff, ok = docBuf[bufferKey]
 					if !ok {
 						buff = bufferPool.Get()
+						buff.Reset()
 						docBuf[bufferKey] = buff
 					}
 					if global.Env().IsDebug {
 						log.Trace("metadata:", string(scannedByte))
 					}
-					if validateRequest {
-						common.ValidateBulkRequest("before_write_meta", string(buff.String()))
-						common.ValidateBulkRequest("validate_meta", string(actionMeta.String()))
+
+					if buff.Len()>0{
+						buff.WriteString("\n")
 					}
 
 					buff.Write(actionMeta.Bytes())
 					actionMeta.Reset()
 
-					if validateRequest {
-						common.ValidateBulkRequest("after_write_meta", string(buff.String()))
-					}
-
-					buff.WriteString("\n")
 					if needActionBody && scannedByte != nil && len(scannedByte) > 0 {
-						if validateRequest {
-							common.ValidateBulkRequest("before_write_body", string(buff.String()))
-						}
-						buff.Write(scannedByte)
-
-						if validateRequest {
-							common.ValidateBulkRequest("after_write_body", string(buff.String()))
-						}
-
 						buff.WriteString("\n")
+						buff.Write(scannedByte)
 					}
 
-					//clearup actionMeta
+					//cleanup actionMeta
 					actionMeta.Reset()
 				}
 
@@ -500,8 +522,11 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		for x, y := range docBuf {
 			y.WriteString("\n")
 			data := y.Bytes()
-			y.Reset()
-			bufferPool.Put(y)
+
+			if validateRequest {
+				common.ValidateBulkRequest("sync-bulk", string(data))
+			}
+
 			if submitMode == "sync" {
 				endpoint, ok := buffEndpoints[x]
 				if !ok {
@@ -510,9 +535,9 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					return
 				}
 
-				if validateRequest {
-					common.ValidateBulkRequest("sync-bulk", string(data))
-				}
+
+
+				endpoint= path.Join(endpoint,pathStr)
 
 				status, ok := this.Bulk(esConfig, endpoint, data)
 				if !ok {
@@ -523,9 +548,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 				ctx.SetDestination(fmt.Sprintf("%v:%v", "sync", x))
 			} else {
-				if validateRequest {
-					common.ValidateBulkRequest("initial-enqueue", string(data))
-				}
 				if len(data) > 0 {
 					err := queue.Push(x, data)
 					if err != nil {
@@ -537,6 +559,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
+			bufferPool.Put(y)
 		}
 
 		if indexAnalysis {
@@ -554,7 +577,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		}
 
 		//fake results
-
 		ctx.SetContentType(JSON_CONTENT_TYPE)
 		ctx.WriteString("{\"took\":0,\"errors\":false,\"items\":[")
 		for i := 0; i < docCount; i++ {
@@ -566,47 +588,22 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		ctx.WriteString("]}")
 		ctx.Response.SetStatusCode(200)
 		ctx.Finished()
-		return
 	}
 
-	return
-
-	//处理单次请求。
-	pathItems := strings.Split(path, "/")
-	if len(pathItems) != 4 {
-		//fmt.Println("not a valid indexing request,",len(pathItems),pathItems)
-		return
-	}
-
-	return
 	//排除条件，非 _ 开头的索引。
 	//可以指定排除和允许的索引，设置匹配的索引名称，通配符。
 
 	//PUT/POST index/_doc/UUID
 	//只有匹配到是单独的索引请求才会进行合并处理。
 	//放内存里面，按节点或者分片为单位进行缓存，或者固定的通道数，固定通道数<按节点<按分片。
+
 	//count、size 和 timeout 任意满足即进行 bulk 提交。
-
 	//通过 ID 获取到分片所在节点位置，没有 ID 就获取到包含主分片的节点，均衡选择，或者主动生成 ID。
-
 	//变成 bulk 格式
-
-	//defer writerPool.Put(w)
-	//
-	//err := request.MarshalFastJSON(w)
-	//if err != nil {
-	//	panic(err)
-	//}
-	//
-	//err = queue.Push(this.GetStringOrDefault("queue_name","request_logging"),w.Bytes() )
-	//if err != nil {
-	//	panic(err)
-	//}
 
 }
 
 //TODO 提取出来，作为公共方法，和 indexing/bulking_indexing 的方法合并
-
 var fastHttpClient = &fasthttp.Client{
 	TLSConfig: &tls.Config{InsecureSkipVerify: true},
 }
@@ -697,7 +694,7 @@ DO:
 			}
 
 			path1 := path.Join(global.Env().GetWorkingDir(), "bulk_400_failure.log")
-			truncateSize := joint.GetIntOrDefault("error_message_truncate_size", -1)
+			truncateSize := joint.GetIntOrDefault("error_message_truncate_size", 4096)
 			util.FileAppendNewLineWithByte(path1, []byte("URL:"))
 			util.FileAppendNewLineWithByte(path1, []byte(url))
 			util.FileAppendNewLineWithByte(path1, []byte("Request:"))
@@ -729,7 +726,7 @@ DO:
 			if hit {
 				if joint.GetBool("log_bulk_message", true) {
 					path1 := path.Join(global.Env().GetWorkingDir(), "bulk_req_failure.log")
-					truncateSize := joint.GetIntOrDefault("error_message_truncate_size", -1)
+					truncateSize := joint.GetIntOrDefault("error_message_truncate_size", 4096)
 					util.FileAppendNewLineWithByte(path1, []byte("URL:"))
 					util.FileAppendNewLineWithByte(path1, []byte(url))
 					util.FileAppendNewLineWithByte(path1, []byte("Request:"))
@@ -774,7 +771,7 @@ DO:
 	} else {
 		if joint.GetBool("log_bulk_message", true) {
 			path1 := path.Join(global.Env().GetWorkingDir(), "bulk_error_failure.log")
-			truncateSize := joint.GetIntOrDefault("error_message_truncate_size", -1)
+			truncateSize := joint.GetIntOrDefault("error_message_truncate_size", 4096)
 			util.FileAppendNewLineWithByte(path1, []byte("URL:"))
 			util.FileAppendNewLineWithByte(path1, []byte(url))
 			util.FileAppendNewLineWithByte(path1, []byte("Request:"))

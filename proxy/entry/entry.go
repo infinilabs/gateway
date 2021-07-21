@@ -300,8 +300,8 @@ func (this *Entrypoint) Stop() error {
 		return nil
 	}
 
-	if this.config.DirtyShutdown{
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*800))
+	if !this.config.SafetyShutdown {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*500))
 		defer cancel()
 		go func(ctx context.Context) {
 			this.server.Shutdown()
@@ -310,7 +310,7 @@ func (this *Entrypoint) Stop() error {
 		select {
 		case <-ctx.Done():
 			log.Debug("entry shutdown successful")
-		case <-time.After(time.Duration(time.Second * 5)):
+		case <-time.After(time.Duration(time.Second * 30)):
 			log.Debug("entry shutdown 5s timeout")
 		}
 	}else{

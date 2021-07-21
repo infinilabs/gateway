@@ -39,6 +39,7 @@ flow:
           level: node
           mode: async
           fix_null_id: true
+          validate_request: false
           index_stats_analysis: true
           action_stats_analysis: true
           safety_parse: true
@@ -56,7 +57,9 @@ router:
       - method:
           - "POST"
         pattern:
-          - /_bulk
+#          - '/index125/_bulk'
+#          - '/index124/doc13/_bulk'
+          - '/_bulk'
         flow:
           - online_indexing_merge
 elasticsearch:
@@ -85,7 +88,8 @@ pipelines:
       elasticsearch: "dev"
       compress: true
       worker_size: 5 #node level by default, set number of works per each node
-      bulk_size_in_mb: 1
+      bulk_size_in_mb: 10
+#      error_message_truncate_size: 4096
       idle_timeout_in_second: 1
       retry_delay_in_second: 5
       dead_letter_queue: "failed_bulk_messages"
@@ -96,5 +100,5 @@ queue:
   max_bytes_per_file: 1073741824
   sync_every_records: 1000 # sync by records count
   sync_timeout_in_ms: 1000 # sync by time in million seconds
-  write_chan_buffer: 100 #memory buffer size
-  read_chan_buffer: 100 #memory buffer size
+  write_chan_buffer: 0 #memory buffer size
+  read_chan_buffer: 0 #memory buffer size
