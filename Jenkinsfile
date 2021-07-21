@@ -25,15 +25,22 @@ pipeline {
                     archiveArtifacts artifacts: 'gateway-$VERSION-$BUILD_NUMBER-*.tar.gz', fingerprint: true, followSymlinks: true, onlyIfSuccessful: true
                 }
             }
-
-            steps {
-                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE'){
-                    sh label: 'docker-build', script: 'cd /home/jenkins/go/src/infini.sh/ && docker build -t infini-gateway  -f gateway/docker/Dockerfile .'
-                    sh label: 'docker-tagging', script: 'docker tag infini-gateway medcl/infini-gateway:latest && docker tag infini-gateway medcl/infini-gateway:$VERSION-$BUILD_NUMBER'
-                    sh label: 'docker-push', script: 'docker push medcl/infini-gateway:latest && docker push medcl/infini-gateway:$VERSION-$BUILD_NUMBER'
-                }
-            }
         }
+
+        stage('Build Docker Images') {
+
+                    agent {
+                        label 'linux'
+                    }
+
+                    steps {
+                        catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE'){
+                            sh label: 'docker-build', script: 'cd /home/jenkins/go/src/infini.sh/ && docker build -t infini-gateway  -f gateway/docker/Dockerfile .'
+                            sh label: 'docker-tagging', script: 'docker tag infini-gateway medcl/infini-gateway:latest && docker tag infini-gateway medcl/infini-gateway:$VERSION-$BUILD_NUMBER'
+                            sh label: 'docker-push', script: 'docker push medcl/infini-gateway:latest && docker push medcl/infini-gateway:$VERSION-$BUILD_NUMBER'
+                        }
+                    }
+                }
 
     }
 }
