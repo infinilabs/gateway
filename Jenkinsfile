@@ -23,6 +23,11 @@ pipeline {
                     sh label: 'package-arm7', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-arm7.tar.gz gateway-armv7 gateway.yml ../sample-configs'
                     sh label: 'package-arm64', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-arm64.tar.gz gateway-arm64 gateway.yml ../sample-configs'
                     archiveArtifacts artifacts: 'gateway-$VERSION-$BUILD_NUMBER-*.tar.gz', fingerprint: true, followSymlinks: true, onlyIfSuccessful: true
+                }
+            }
+
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE'){
                     sh label: 'docker-build', script: 'cd /home/jenkins/go/src/infini.sh/ && docker build -t infini-gateway  -f gateway/docker/Dockerfile .'
                     sh label: 'docker-tagging', script: 'docker tag infini-gateway medcl/infini-gateway:latest && docker tag infini-gateway medcl/infini-gateway:$VERSION-$BUILD_NUMBER'
                     sh label: 'docker-push', script: 'docker push medcl/infini-gateway:latest && docker push medcl/infini-gateway:$VERSION-$BUILD_NUMBER'
