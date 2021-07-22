@@ -84,7 +84,7 @@ func (module GatewayModule) Setup(cfg *Config) {
 
 	flowConfigs := []common.FlowConfig{}
 	ok, err = env.ParseConfig("flow", &flowConfigs)
-	if err != nil {
+	if ok&&err != nil {
 		panic(err)
 	}
 	if ok {
