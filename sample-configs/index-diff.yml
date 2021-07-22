@@ -4,7 +4,7 @@ path.logs: log
 elasticsearch:
   - name: prod
     enabled: true
-    endpoint: https://192.168.3.98:9200
+    endpoint: http://localhost:9200
     basic_auth:
       username: test
       password: testtest
@@ -21,7 +21,7 @@ pipelines:
     enabled: true
     input:
       joint: es_scroll
-      enabled: false
+      enabled: true
       parameters:
         indices: "medcl-a"
         scroll_time: "10m"
@@ -33,7 +33,7 @@ pipelines:
     enabled: true
     input:
       joint: es_scroll
-      enabled: false
+      enabled: true
       parameters:
         indices: "medcl-b"
         scroll_time: "10m"
@@ -46,7 +46,7 @@ pipelines:
     enabled: true
     start:
       joint: json_indexing
-      enabled: false
+      enabled: true
       parameters:
         index_name: "diff_result"
         index_type: "doc"
@@ -58,7 +58,7 @@ pipelines:
 
 # 进行 diff 的服务
 index_diff:
-  enabled: false
+  enabled: true
   diff_queue: "diff_result"
   buffer_size: 10
   source:

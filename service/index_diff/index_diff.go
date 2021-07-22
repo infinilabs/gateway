@@ -160,6 +160,7 @@ func (this IndexDiffModule) Name() string {
 type Config struct {
 	Enabled           bool   `config:"enabled"`
 	TextReportEnabled bool   `config:"text_report"`
+	KeepSourceInResult bool   `config:"keep_source"`
 	BufferSize        int    `config:"buffer_size"`
 	DiffQueue         string `config:"diff_queue"`
 	Source            struct {
@@ -225,7 +226,9 @@ func (module IndexDiffModule) Start() error {
 				h1 := fnv1a.HashBytes64(util.MustToJSONBytes(doc["_source"]))
 				hash := util.MustToJSONBytes(h1)
 				delete(doc, "_score")
-				delete(doc, "_source")
+				if !diffConfig.KeepSourceInResult{
+					delete(doc, "_source")
+				}
 				delete(doc, "sort")
 				item := CompareItem{
 					Doc:  doc,
@@ -243,7 +246,9 @@ func (module IndexDiffModule) Start() error {
 				h1 := fnv1a.HashBytes64(util.MustToJSONBytes(doc["_source"]))
 				hash := util.MustToJSONBytes(h1)
 				delete(doc, "_score")
-				delete(doc, "_source")
+				if !diffConfig.KeepSourceInResult{
+					delete(doc, "_source")
+				}
 				delete(doc, "sort")
 				item := CompareItem{
 					Doc:  doc,
