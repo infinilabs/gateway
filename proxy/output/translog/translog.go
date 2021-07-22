@@ -36,7 +36,7 @@ func (filter TranslogOutput) Process(ctx *fasthttp.RequestCtx) {
 
 	config:=rotate.RotateConfig{
 		Compress:         filter.GetBool("compress",true),
-		MaxFileAge:       filter.GetIntOrDefault("max_file_age",30),
+		MaxFileAge:       filter.GetIntOrDefault("max_file_age",0),
 		MaxFileCount: filter.GetIntOrDefault("max_file_count",100),
 		MaxFileSize:      filter.GetIntOrDefault("max_file_size_in_mb",1024),
 	}
