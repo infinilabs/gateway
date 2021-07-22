@@ -1,13 +1,12 @@
 path.data: data
 path.logs: log
+#log.level: trace
+#log.debug: true
 
 #api:
 #  enabled: true
 #  network:
 #    binding: 127.0.0.1:2900
-
-#log.level: trace
-#log.debug: true
 
 entry:
   - name: my_es_entry
@@ -18,6 +17,7 @@ entry:
       binding: 0.0.0.0:8000
 #    tls:
 #      enabled: true
+
 flow:
   - name: echo
     filter_v2:
@@ -60,7 +60,7 @@ flow:
 #            - _ctx.response.body_length
 #            - _ctx.response.header.Env
   - name: cache_first
-    filter: #comment out any filter sections, like you don't need cache or rate-limiter
+    filter:
       - name: translog
         parameters:
           category: dev
@@ -73,6 +73,19 @@ flow:
         parameters:
           pass_patterns:
             - _cat
+      - name: bulk_reshuffle
+        when:
+          contains:
+            _ctx.request.path: /_bulk
+        parameters:
+          elasticsearch: dev
+          level: node
+          mode: async
+          fix_null_id: true
+          index_stats_analysis: true
+          action_stats_analysis: true
+          safety_parse: true
+          log_bulk_message: false
       - name: elasticsearch
         parameters:
           elasticsearch: dev  #elasticsearch configure reference name
@@ -106,30 +119,23 @@ router:
 #    default_flow: echo
     default_flow: cache_first
     tracing_flow: request_logging
-#    rules:
-#      - method:
-#          - "POST"
-#        pattern:
-#          - /_bulk
-#        flow:
-#          - online_indexing_merge
 
 
 elasticsearch:
 - name: dev
   enabled: true
   endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
-#  traffic_control: #global traffic control
-#    max_bps_per_node: 102400 #max total bytes send to es per node
-#    max_qps_per_node: 1000 #max total requests send to es per node
+  traffic_control: #global traffic control
+    max_bps_per_node: 209715200 #max total bytes send to es per node, 200MB/s
+    max_qps_per_node: 20000 #max total requests send to es per node, 20k/s
   basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
     username: test
     password: testtest
-#  discovery: # auto discovery elasticsearch cluster nodes
-#    enabled: true
-#    refresh:
-#      enabled: true
-#      interval: 60s
+  discovery: # auto discovery elasticsearch cluster nodes
+    enabled: true
+    refresh:
+      enabled: true
+      interval: 60s
 
 #elastic:
 #  elasticsearch: dev
