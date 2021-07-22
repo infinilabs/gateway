@@ -14,6 +14,7 @@ elasticsearch:
     basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
       username: test
       password: testtest
+
 pipelines:
   #使用两个 scroll 任务并行读取两个索引的文档
   - name: es_scroll_a
@@ -54,6 +55,7 @@ pipelines:
         timeout: "1s"
         worker_size: 1
         bulk_size_in_mb: 1 #in MB
+
 # 进行 diff 的服务
 index_diff:
   enabled: false
