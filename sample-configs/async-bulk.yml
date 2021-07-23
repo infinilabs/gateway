@@ -1,5 +1,12 @@
 path.data: data
 path.logs: log
+#log.level: trace
+#log.debug: true
+
+#api:
+#  enabled: true
+#  network:
+#    binding: 127.0.0.1:2900
 
 entry:
   - name: my_es_entry
@@ -8,14 +15,77 @@ entry:
     max_concurrency: 200000
     network:
       binding: 0.0.0.0:8000
+#    tls:
+#      enabled: true
 
 flow:
+  - name: echo
+    filter_v2:
+      - set_response:
+          when:
+            equals:
+              _ctx.request.path: /favicon.ico
+          status: 404
+          content_type: "text/plain; charset=utf-8"
+          body: "oops, favicon.ico"
+      - set_response:
+          when:
+            equals:
+              _ctx.request.path: /
+          status: 404
+          content_type: "text/plain; charset=utf-8"
+          body: "root path"
+  #      - set_response_header:
+  #          headers:
+  #            - Env -> Dev
+  #      - dump_context:
+  #          context:
+  #            - _ctx.id
+  #            - _ctx.tls
+  #            - _ctx.remote_addr
+  #            - _ctx.local_addr
+  #            - _ctx.request.host
+  #            - _ctx.request.method
+  #            - _ctx.request.uri
+  #            - _ctx.request.path
+  #            - _ctx.request.body
+  #            - _ctx.request.body_length
+  #            - _ctx.request.query_args.from
+  #            - _ctx.request.query_args.size
+  #            - _ctx.request.header.Accept
+  #            - _ctx.request.user
+  #            - _ctx.response.status
+  #            - _ctx.response.body
+  #            - _ctx.response.content_type
+  #            - _ctx.response.body_length
+  #            - _ctx.response.header.Env
   - name: cache_first
-    filter: #comment out any filter sections, like you don't need cache or rate-limiter
-      - name: get_cache
+    filter:
+      #      - name: translog
+      #        parameters:
+      #          category: dev
+      #          filename: translog.log
+      #          compress: true
+      ##          max_file_age: 2
+      #          max_file_count: 50
+      #          max_file_size_in_mb: 1024
+      #      - name: get_cache
+      #        parameters:
+      #          pass_patterns:
+      #            - _cat
+      - name: bulk_reshuffle
+        when:
+          contains:
+            _ctx.request.path: /_bulk
         parameters:
-          pass_patterns:
-            - _cat
+          elasticsearch: dev
+          level: node
+          mode: async
+          fix_null_id: true
+          index_stats_analysis: true
+          action_stats_analysis: true
+          safety_parse: true
+          log_bulk_message: false
       - name: elasticsearch
         parameters:
           elasticsearch: dev  #elasticsearch configure reference name
@@ -24,74 +94,100 @@ flow:
           balancer: weight
           refresh: # refresh upstream nodes list, need to enable this feature to use elasticsearch nodes auto discovery
             enabled: true
-            interval: 10s
+            interval: 60s
           filter:
+            tags:
+              exclude:
+                - temp: cold
             roles:
               exclude:
                 - master
-      - name: set_cache
-        parameters:
-          cache_ttl: 10s
-  - name: online_indexing_merge
+  #      - name: set_cache
+  #        parameters:
+  #          cache_ttl: 30s
+  - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
-      - name: bulk_reshuffle
+      - name: request_logging
         parameters:
-          elasticsearch: dev
-          level: node
-          mode: async
-          fix_null_id: true
-          validate_request: false
-          index_stats_analysis: true
-          action_stats_analysis: true
-          safety_parse: true
-      - name: elasticsearch #catchup all left requests
-        parameters:
-          elasticsearch: dev
-          max_connection_per_host: 1000
-          refresh:
-            enabled: true
-            interval: 10s
+          queue_name: request_logging
+          max_request_body_size: 1024
+          max_response_body_size: 1024
+          #          min_elapsed_time_in_ms: 500 # only record slow requests
+          bulk_stats_details: true
 router:
   - name: my_router
+    #    default_flow: echo
     default_flow: cache_first
-    rules:
-      - method:
-          - "POST"
-        pattern:
-          - '/index125/_bulk'
-          - '/index124/doc13/_bulk'
-          - '/_bulk'
-        flow:
-          - online_indexing_merge
+#    tracing_flow: request_logging
+
 
 elasticsearch:
-- name: dev
-  enabled: true
-  endpoint: http://localhost:9200
-  traffic_control:
-    max_bps_per_node: -1
-    max_qps_per_node: 300000
-  basic_auth:
-    username: test
-    password: testtest
-  discovery:
+  - name: dev
     enabled: true
-    refresh:
+    endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
+    traffic_control: #global traffic control
+      max_bps_per_node: 209715200 #max total bytes send to es per node, 200MB/s
+      max_qps_per_node: 20000 #max total requests send to es per node, 20k/s
+    basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
+      username: test
+      password: testtest
+    discovery: # auto discovery elasticsearch cluster nodes
       enabled: true
-      interval: 10s
+      refresh:
+        enabled: true
+        interval: 60s
+
+#elastic:
+#  elasticsearch: dev
+#  store:
+#    enabled: true
+#  monitoring:
+#    enabled: false
+#  orm:
+#    enabled: true
+#    init_template: true
+#    template_name: ".gateway-default"
+#    index_prefix: "gateway_"
 
 pipelines:
-- name: bulk_request_ingest
-  enabled: true
-  start:
-    joint: bulk_indexing
+  - name: request_logging_index
     enabled: true
-    parameters:
-      elasticsearch: "dev"
-      compress: true
-      worker_size: 5 #node level by default, set number of works per each node
-      bulk_size_in_kb: 4
-      error_message_truncate_size: 40960
-      idle_timeout_in_second: 1
-      retry_delay_in_second: 5
-      dead_letter_queue: "failed_bulk_messages"
+    start:
+      joint: json_indexing
+      enabled: true
+      parameters:
+        index_name: "gateway_requests"
+        elasticsearch: "dev"
+        input_queue: "request_logging"
+        timeout: "1s"
+        worker_size: 2
+        bulk_size_in_mb: 10 #in MB
+  - name: bulk_request_ingest
+    enabled: true
+    start:
+      joint: bulk_indexing
+      enabled: true
+      parameters:
+        elasticsearch: "dev"
+        compress: true
+        worker_size: 1
+        bulk_size_in_mb: 10  #in MB
+        idle_timeout_in_second: 1
+        retry_delay_in_second: 5
+        warm_retry_message: true
+        log_bulk_message: false
+        error_message_truncate_size: 1024
+        dead_letter_queue: "failed_bulk_messages"
+
+
+floating_ip:
+  enabled: false
+#  ip: 192.168.3.234      #yep, it's optional, infini-gateway could detect one but maybe not the right one
+##  netmask: 255.255.255.0 #optional
+##  interface: en1         #optional
+
+#statsd:
+#  enabled: false
+#  host: 192.168.3.98
+#  port: 8125
+#  namespace: gateway.
