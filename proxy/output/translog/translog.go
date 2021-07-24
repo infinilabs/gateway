@@ -29,7 +29,7 @@ func (filter TranslogOutput) Process(ctx *fasthttp.RequestCtx) {
 	}
 
 	logPath := path.Join(
-		filter.GetStringOrDefault("path",global.Env().GetWorkingDir()), "translog",
+		filter.GetStringOrDefault("path",global.Env().GetDataDir()), "translog",
 		filter.GetStringOrDefault("category","default"))
 	os.MkdirAll(logPath, 0755)
 	logPath=path.Join(logPath,filter.GetStringOrDefault("filename","translog.log"))

@@ -261,7 +261,7 @@ func (module IndexDiffModule) Start() error {
 
 		if diffConfig.TextReportEnabled {
 			go func() {
-				path:=path2.Join(global.Env().GetWorkingDir(),"index_diff",fmt.Sprintf("%v_vs_%v",diffConfig.Source.InputQueue,diffConfig.Target.InputQueue),util.FormatTimeForFileName(time.Now()))
+				path:=path2.Join(global.Env().GetDataDir(),"index_diff",fmt.Sprintf("%v_vs_%v",diffConfig.Source.InputQueue,diffConfig.Target.InputQueue),util.FormatTimeForFileName(time.Now()))
 				util.FileAppendNewLine(path,"DIFF RESULT")
 				util.FileAppendNewLine(path,fmt.Sprint("SOURCE / TARGET"))
 				for v := range queue.ReadChan(diffConfig.DiffQueue) {
