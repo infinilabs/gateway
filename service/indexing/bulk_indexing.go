@@ -227,7 +227,7 @@ CLEAN_BUFFER:
 
 		start := time.Now()
 		success := joint.Bulk(cfg, endpoint, &mainBuf, &httpClient)
-		log.Debug(cfg.Name, ", bulk result:", success, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elpased:", time.Since(start))
+		log.Debug(cfg.Name, ", success:", success, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elpased:", time.Since(start))
 
 		if !success {
 			queue.Push(deadLetterQueueName, mainBuf.Bytes())

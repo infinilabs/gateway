@@ -517,7 +517,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 			}
 		}
 
-		log.Debugf("total [%v] operations in bulk requests", docCount)
+		log.Tracef("total [%v] operations in bulk requests", docCount)
 
 		for x, y := range docBuf {
 			y.WriteString("\n")
