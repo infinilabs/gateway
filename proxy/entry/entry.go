@@ -310,7 +310,7 @@ func (this *Entrypoint) Stop() error {
 		select {
 		case <-ctx.Done():
 			log.Debug("entry shutdown successful")
-		case <-time.After(time.Duration(time.Second * 30)):
+		case <-time.After(time.Duration(time.Second * 120)):
 			log.Debug("entry shutdown 5s timeout")
 		}
 	}else{
