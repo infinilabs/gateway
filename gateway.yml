@@ -12,7 +12,7 @@ entry:
   - name: my_es_entry
     enabled: true
     router: my_router
-    max_concurrency: 200000
+    max_concurrency: 1000
     network:
       binding: 0.0.0.0:8000
 #    tls:
@@ -35,30 +35,6 @@ flow:
           status: 404
           content_type: "text/plain; charset=utf-8"
           body: "root path"
-#      - set_response_header:
-#          headers:
-#            - Env -> Dev
-#      - dump_context:
-#          context:
-#            - _ctx.id
-#            - _ctx.tls
-#            - _ctx.remote_addr
-#            - _ctx.local_addr
-#            - _ctx.request.host
-#            - _ctx.request.method
-#            - _ctx.request.uri
-#            - _ctx.request.path
-#            - _ctx.request.body
-#            - _ctx.request.body_length
-#            - _ctx.request.query_args.from
-#            - _ctx.request.query_args.size
-#            - _ctx.request.header.Accept
-#            - _ctx.request.user
-#            - _ctx.response.status
-#            - _ctx.response.body
-#            - _ctx.response.content_type
-#            - _ctx.response.body_length
-#            - _ctx.response.header.Env
   - name: cache_first
     filter:
       - name: translog
@@ -85,7 +61,6 @@ flow:
           index_stats_analysis: true
           action_stats_analysis: true
           safety_parse: true
-          log_bulk_message: false
       - name: elasticsearch
         parameters:
           elasticsearch: dev  #elasticsearch configure reference name
@@ -172,12 +147,8 @@ pipelines:
       compress: true
       worker_size: 1
       bulk_size_in_mb: 10  #in MB
-      idle_timeout_in_second: 1
       retry_delay_in_second: 5
-      warm_retry_message: true
-      log_bulk_message: false
-      error_message_truncate_size: 1024
-      dead_letter_queue: "failed_bulk_messages"
+      process_dead_letter_queue: false
 
 
 floating_ip:

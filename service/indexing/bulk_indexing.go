@@ -1,12 +1,11 @@
 package indexing
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/tls"
 	"fmt"
-	"net/http"
-	"path"
+	"infini.sh/framework/core/rotate"
+	elastic2 "infini.sh/gateway/proxy/filters/elastic"
 	"runtime"
 	"sync"
 	"time"
@@ -18,7 +17,6 @@ import (
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
-	"infini.sh/framework/core/rate"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
@@ -137,9 +135,11 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 	}
 
 	//start deadline ingest
-	deadLetterQueueName := joint.GetStringOrDefault("dead_letter_queue", "failed_bulk_messages")
-	v := meta.GetActiveNodeInfo()
-	go joint.NewBulkWorker(bulkSizeInByte, &wg, deadLetterQueueName, v.Http.PublishAddress)
+	if joint.GetBool("process_dead_letter_queue", false) {
+		deadLetterQueueName := joint.GetStringOrDefault("dead_letter_queue", fmt.Sprintf("%v-failed_bulk_messages", esInstanceVal))
+		v := meta.GetActiveNodeInfo()
+		go joint.NewBulkWorker(bulkSizeInByte, &wg, deadLetterQueueName, v.Http.PublishAddress)
+	}
 
 	wg.Wait()
 
@@ -170,17 +170,38 @@ func (joint BulkIndexingJoint) NewBulkWorker(bulkSizeInByte int, wg *sync.WaitGr
 	mainBuf := bytes.Buffer{}
 	esInstanceVal := joint.MustGetString("elasticsearch")
 	validateRequest := joint.GetBool("valid_request", false)
-	deadLetterQueueName := joint.GetStringOrDefault("dead_letter_queue", "failed_bulk_messages")
+	deadLetterQueueName := joint.GetStringOrDefault("dead_letter_queue", fmt.Sprintf("%v-failed_bulk_messages", esInstanceVal))
 	timeOut := joint.GetIntOrDefault("idle_timeout_in_second", 5)
 	connections := joint.GetIntOrDefault("max_connection_per_host", 1)
 
 	idleDuration := time.Duration(timeOut) * time.Second
 	cfg := elastic.GetConfig(esInstanceVal)
 
+	bulkProcessor := elastic2.BulkProcessor{
+		RotateConfig: rotate.RotateConfig{
+			Compress:     joint.GetBool("compress_after_rotate", true),
+			MaxFileAge:   joint.GetIntOrDefault("max_file_age", 0),
+			MaxFileCount: joint.GetIntOrDefault("max_file_count", 100),
+			MaxFileSize:  joint.GetIntOrDefault("max_file_size_in_mb", 1024),
+		},
+		Compress:                  joint.GetBool("compress", true),
+		Log400Message:             joint.GetBool("log_400_message", true),
+		LogInvalidMessage:         joint.GetBool("log_invalid_message", true),
+		LogInvalid200Message:      joint.GetBool("log_invalid_200_message", true),
+		LogInvalid200RetryMessage: joint.GetBool("log_200_retry_message", true),
+		Log429RetryMessage:        joint.GetBool("log_429_retry_message", true),
+		RetryDelayInSeconds:       joint.GetIntOrDefault("retry_delay_in_second", 1),
+		RejectDelayInSeconds:      joint.GetIntOrDefault("reject_retry_delay_in_second", 1),
+		MaxRejectRetryTimes:       joint.GetIntOrDefault("max_reject_retry_times", 3),
+		MaxRetryTimes:             joint.GetIntOrDefault("max_retry_times", 3),
+		MaxRequestBodySize:        joint.GetIntOrDefault("max_logged_request_body_size", 1024),
+		MaxResponseBodySize:       joint.GetIntOrDefault("max_logged_response_body_size", 1024),
+	}
+
 	httpClient := fasthttp.Client{
 		MaxConnsPerHost:     connections,
-		MaxConnDuration:     time.Second * 600,
-		MaxIdleConnDuration: time.Second * 600,
+		MaxConnDuration:     0,
+		MaxIdleConnDuration: 0,
 		ReadTimeout:         time.Second * 60,
 		WriteTimeout:        time.Second * 60,
 		TLSConfig:           &tls.Config{InsecureSkipVerify: true},
@@ -200,7 +221,7 @@ READ_DOCS:
 
 		if ok {
 			if global.Env().IsDebug {
-				log.Tracef("%v no message input", idleDuration)
+				log.Tracef("%v no message input: %v", idleDuration, queueName)
 			}
 			goto CLEAN_BUFFER
 		}
@@ -213,7 +234,7 @@ READ_DOCS:
 
 		if mainBuf.Len() > (bulkSizeInByte) {
 			if global.Env().IsDebug {
-				log.Trace("hit buffer size, ", mainBuf.Len())
+				log.Trace("hit buffer size,", mainBuf.Len(), ", ", queueName, ", submit")
 			}
 			goto CLEAN_BUFFER
 		} else {
@@ -226,13 +247,19 @@ CLEAN_BUFFER:
 	if mainBuf.Len() > 0 {
 
 		start := time.Now()
-		success := joint.Bulk(cfg, endpoint, &mainBuf, &httpClient)
-		log.Debug(cfg.Name, ", success:", success, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elpased:", time.Since(start))
+		data := mainBuf.Bytes()
+		log.Trace(cfg.Name, ", starting submit bulk request")
+
+		status, success := bulkProcessor.Bulk(cfg, endpoint, data, &httpClient)
+		log.Debug(cfg.Name, ", success:", success, ", status:", status, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elapsed:", time.Since(start))
 
 		if !success {
-			queue.Push(deadLetterQueueName, mainBuf.Bytes())
+			err := queue.Push(deadLetterQueueName, data)
+			if err != nil {
+				panic(err)
+			}
 			if global.Env().IsDebug {
-				log.Warn("re-enqueue bulk messages")
+				log.Warn("re-enqueue bulk messages to dead_letter queue")
 			}
 			stats.IncrementBy("bulk", "bytes_processed_failed", int64(mainBuf.Len()))
 		} else {
@@ -250,239 +277,4 @@ CLEAN_BUFFER:
 
 	goto READ_DOCS
 
-}
-
-func (joint BulkIndexingJoint) Bulk(cfg *elastic.ElasticsearchConfig, endpoint string, data *bytes.Buffer, httpClient *fasthttp.Client) bool {
-	if data == nil || data.Len() == 0 {
-		return true
-	}
-
-	if cfg.IsTLS() {
-		endpoint = "https://" + endpoint
-	} else {
-		endpoint = "http://" + endpoint
-	}
-	url := fmt.Sprintf("%s/_bulk", endpoint)
-	compress := joint.GetBool("compress", true)
-
-	req := fasthttp.AcquireRequest()
-	req.Reset()
-	req.ResetBody()
-	resp := fasthttp.AcquireResponse()
-	resp.Reset()
-	defer fasthttp.ReleaseRequest(req)   // <- do not forget to release
-	defer fasthttp.ReleaseResponse(resp) // <- do not forget to release
-
-	req.SetRequestURI(url)
-	req.Header.SetMethod(http.MethodPost)
-	req.Header.SetUserAgent("bulk_indexing")
-
-	if compress {
-		req.Header.Set("Accept-Encoding", "gzip")
-		req.Header.Set("content-encoding", "gzip")
-	}
-
-	req.Header.SetContentType("application/x-ndjson")
-
-	if cfg.BasicAuth != nil {
-		req.URI().SetUsername(cfg.BasicAuth.Username)
-		req.URI().SetPassword(cfg.BasicAuth.Password)
-	}
-
-	//set body
-	if data.Len() > 0 {
-		if compress {
-			_, err := fasthttp.WriteGzipLevel(req.BodyWriter(), data.Bytes(), fasthttp.CompressBestSpeed)
-			if err != nil {
-				return false
-			}
-		} else {
-			req.SetBodyStreamWriter(func(w *bufio.Writer) {
-				w.Write(data.Bytes())
-				w.Flush()
-			})
-		}
-	}
-
-	retryTimes := 1
-
-DO:
-
-	if cfg.TrafficControl != nil {
-	RetryRateLimit:
-
-		if cfg.TrafficControl.MaxQpsPerNode > 0 {
-			if !rate.GetRateLimiterPerSecond(cfg.Name, endpoint+"max_qps", int(cfg.TrafficControl.MaxQpsPerNode)).Allow() {
-				time.Sleep(10 * time.Millisecond)
-				goto RetryRateLimit
-			}
-		}
-
-		if cfg.TrafficControl.MaxBytesPerNode > 0 {
-			if !rate.GetRateLimiterPerSecond(cfg.Name, endpoint+"max_bps", int(cfg.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(), req.GetRequestLength()) {
-				time.Sleep(10 * time.Millisecond)
-				goto RetryRateLimit
-			}
-		}
-
-	}
-
-	err := httpClient.Do(req, resp)
-
-	if err != nil {
-		if global.Env().IsDebug {
-			log.Error(req.Host(), err)
-		}
-		return false
-	}
-
-	if resp == nil {
-		if global.Env().IsDebug {
-			log.Error(err)
-		}
-		return false
-	}
-
-	// Do we need to decompress the response?
-	var resbody = resp.GetRawBody()
-	if global.Env().IsDebug {
-		log.Trace(resp.StatusCode(), string(resbody))
-	}
-
-	if resp.StatusCode() == 400 {
-
-		if joint.GetBool("log_bulk_message", true) {
-			path1 := path.Join(global.Env().GetWorkingDir(), "bulk_400_failure.log")
-			truncateSize := joint.GetIntOrDefault("error_message_truncate_size", 4096)
-			util.FileAppendNewLineWithByte(path1, []byte("\nURL:"))
-			util.FileAppendNewLineWithByte(path1, []byte(url))
-			util.FileAppendNewLineWithByte(path1, []byte("Request:"))
-			reqBody := data.Bytes()
-			resBody1 := resbody
-			if truncateSize > 0 {
-				if len(reqBody) > truncateSize {
-					reqBody = reqBody[:truncateSize]
-				}
-				if len(resBody1) > truncateSize {
-					resBody1 = resBody1[:truncateSize]
-				}
-			}
-			util.FileAppendNewLineWithByte(path1, util.EscapeNewLine(reqBody))
-			util.FileAppendNewLineWithByte(path1, []byte("Response:"))
-			util.FileAppendNewLineWithByte(path1, resBody1)
-
-			//requestBody:=data.String()
-			//stringLines:=strings.Split(requestBody,"\n")
-			//for _,v:=range stringLines{
-			//	obj:=map[string]interface{}{}
-			//	err:=util.FromJSONBytes([]byte(v),&obj)
-			//	if err!=nil{
-			//		log.Error("invalid json,",util.SubString(v,0,512),err)
-			//		break
-			//	}
-			//}
-
-		}
-		return false
-	}
-
-	//TODO check resp body's error
-	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated {
-
-		//200{"took":2,"errors":true,"items":[
-		//handle error items
-		//"errors":true
-		hit := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
-		if hit {
-			if joint.GetBool("log_bulk_message", true) {
-				path1 := path.Join(global.Env().GetWorkingDir(), "bulk_req_failure.log")
-				truncateSize := joint.GetIntOrDefault("error_message_truncate_size", 4096)
-				util.FileAppendNewLineWithByte(path1, []byte("\nURL:"))
-				util.FileAppendNewLineWithByte(path1, []byte(url))
-				util.FileAppendNewLineWithByte(path1, []byte("Request:"))
-				reqBody := data.Bytes()
-				resBody1 := resbody
-				if truncateSize > 0 {
-					if len(reqBody) > truncateSize {
-						reqBody = reqBody[:truncateSize]
-					}
-					if len(resBody1) > truncateSize {
-						resBody1 = resBody1[:truncateSize]
-					}
-				}
-				util.FileAppendNewLineWithByte(path1, util.EscapeNewLine(reqBody))
-				util.FileAppendNewLineWithByte(path1, []byte("Response:"))
-				util.FileAppendNewLineWithByte(path1, resBody1)
-			}
-			if joint.GetBool("warm_retry_message", true) {
-				log.Warnf("elasticsearch bulk error, retried %v times, will try again", retryTimes)
-			}
-
-			if retryTimes >= joint.GetIntOrDefault("failed_retry_times", 3) {
-				if joint.GetBool("warm_retry_message", true) {
-					log.Errorf("elasticsearch failed, retried %v times, quit retry", retryTimes)
-					//log.Errorf(string(resbody))
-				}
-				return false
-			}
-
-			retryTimes++
-			delayTime := joint.GetIntOrDefault("failed_retry_delay_in_second", 5)
-			time.Sleep(time.Duration(delayTime) * time.Second)
-			goto DO
-		}
-
-		return true
-	} else if resp.StatusCode() == 429 {
-		log.Warnf("elasticsearch rejected, retried %v times, will try again", retryTimes)
-		delayTime := joint.GetIntOrDefault("reject_retry_delay_in_second", 5)
-		time.Sleep(time.Duration(delayTime) * time.Second)
-		if retryTimes >= joint.GetIntOrDefault("reject_retry_times", 60) {
-			if joint.GetBool("warm_retry_message", true) {
-				log.Errorf("elasticsearch rejected, retried %v times, quit retry", retryTimes)
-				//log.Errorf(string(resbody))
-			}
-			return false
-		}
-		retryTimes++
-		goto DO
-	} else {
-		if joint.GetBool("log_bulk_message", false) {
-			path1 := path.Join(global.Env().GetWorkingDir(), "bulk_error_failure.log")
-			truncateSize := joint.GetIntOrDefault("error_message_truncate_size", 4096)
-			util.FileAppendNewLineWithByte(path1, []byte("\nURL:"))
-			util.FileAppendNewLineWithByte(path1, []byte(url))
-			util.FileAppendNewLineWithByte(path1, []byte("Request:"))
-			reqBody := data.Bytes()
-			resBody1 := resbody
-			if truncateSize > 0 {
-				if len(reqBody) > truncateSize {
-					reqBody = reqBody[:truncateSize-1]
-				}
-				if len(resBody1) > truncateSize {
-					resBody1 = resBody1[:truncateSize-1]
-				}
-			}
-			util.FileAppendNewLineWithByte(path1, util.EscapeNewLine(reqBody))
-			util.FileAppendNewLineWithByte(path1, []byte("Response:"))
-			util.FileAppendNewLineWithByte(path1, resBody1)
-
-			//requestBody:=data.String()
-			//stringLines:=strings.Split(requestBody,"\n")
-			//for _,v:=range stringLines{
-			//	obj:=map[string]interface{}{}
-			//	err:=util.FromJSONBytes([]byte(v),&obj)
-			//	if err!=nil{
-			//		log.Error("invalid json,",util.SubString(v,0,512),err)
-			//		break
-			//	}
-			//}
-		}
-		if joint.GetBool("warm_retry_message", false) {
-			log.Errorf("invalid bulk response, %v - %v", resp.StatusCode(), util.SubString(string(resbody), 0, 512))
-		}
-		return false
-	}
-
-	return true
 }

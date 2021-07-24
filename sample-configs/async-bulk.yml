@@ -28,7 +28,6 @@ flow:
           index_stats_analysis: true
           action_stats_analysis: true
           safety_parse: true
-          log_bulk_message: false
       - name: elasticsearch
         parameters:
           elasticsearch: dev  #elasticsearch configure reference name
@@ -95,9 +94,11 @@ pipelines:
         compress: true
         worker_size: 1
         bulk_size_in_mb: 10  #in MB
-        idle_timeout_in_second: 1
-        retry_delay_in_second: 5
-        warm_retry_message: true
-        log_bulk_message: false
-        error_message_truncate_size: 1024
-        dead_letter_queue: "failed_bulk_messages"
+        idle_timeout_in_second: 5
+        retry_delay_in_second: 1
+        reject_retry_delay_in_second: 1
+        max_retry_times: 3
+        max_reject_retry_times: 3
+        max_logged_request_body_size: 1024
+        max_logged_response_body_size: 1024
+        process_dead_letter_queue: false

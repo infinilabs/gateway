@@ -432,12 +432,13 @@ START:
 	req.URI().SetScheme(orignalSchema)
 
 	if  err != nil {
-		log.Warnf("failed to proxy request: %v, %v, retried #%v", err, string(req.RequestURI()), retry)
-
 		if util.ContainsAnyInArray(err.Error(), failureMessage) {
 			//record translog, update failure ticket
 			if global.Env().IsDebug {
-				log.Errorf("elasticsearch [%v] is on fire now", p.proxyConfig.Elasticsearch)
+				if !rate.GetRateLimiterPerSecond(cfg.Name, endpoint+"on_error", 1).Allow() {
+					log.Errorf("elasticsearch [%v] is on fire now, %v", p.proxyConfig.Elasticsearch,err)
+					time.Sleep(1 * time.Second)
+				}
 			}
 			cfg.ReportFailure()
 			//server failure flow
@@ -451,6 +452,8 @@ START:
 			} else {
 				log.Debugf("reached max retries, failed to proxy request: %v, %v", err, string(req.RequestURI()))
 			}
+		}else{
+			log.Warnf("failed to proxy request: %v, %v, retried #%v", err, string(req.RequestURI()), retry)
 		}
 
 		//TODO if backend failure and after reached max retry, should save translog and mark the elasticsearch cluster to downtime, deny any new requests
