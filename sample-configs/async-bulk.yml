@@ -101,4 +101,4 @@ pipelines:
         max_reject_retry_times: 3
         max_logged_request_body_size: 1024
         max_logged_response_body_size: 1024
-        process_dead_letter_queue: false
+        process_dead_letter_queue: true

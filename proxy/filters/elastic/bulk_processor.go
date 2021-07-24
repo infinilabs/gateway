@@ -628,7 +628,7 @@ DO:
 	}
 
 	if err != nil {
-		log.Error("status:", resp.StatusCode(), ",", endpoint, ",",err,",", util.SubString(string(util.EscapeNewLine(resbody)), 0, 256))
+		log.Error("status:", resp.StatusCode(), ",", endpoint, ",",err," ", util.SubString(string(util.EscapeNewLine(resbody)), 0, 256))
 		return resp.StatusCode(), false
 	}
 
