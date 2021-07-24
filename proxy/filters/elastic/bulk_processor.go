@@ -17,14 +17,17 @@ import (
 	"net/http"
 	"path"
 	log "github.com/cihub/seelog"
-	"github.com/valyala/bytebufferpool"
+	"infini.sh/framework/lib/bytebufferpool"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
-var bufferPool bytebufferpool.Pool
+var bufferPool =bytebufferpool.NewPool(65536,655360)
+var smallSizedPool =bytebufferpool.NewPool(512,655360)
+
+var  NEWLINEBYTES =[]byte("\n")
 
 func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
@@ -70,7 +73,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		body := ctx.Request.GetRawBody()
 
 		scanner := bufio.NewScanner(bytes.NewReader(body))
-		scanner.Split(util.GetSplitFunc([]byte("\n")))
+		scanner.Split(util.GetSplitFunc(NEWLINEBYTES))
 		nextIsMeta := true
 
 		//index-shardID -> buffer
@@ -82,9 +85,9 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		var actionStatsData map[string]int
 		var indexStatsLock sync.Mutex
 
-		actionMeta := bufferPool.Get()
+		actionMeta := smallSizedPool.Get()
 		actionMeta.Reset()
-		defer bufferPool.Put(actionMeta)
+		defer smallSizedPool.Put(actionMeta)
 
 		var needActionBody = true
 		var bufferKey string
@@ -93,6 +96,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		for scanner.Scan() {
 			shardID := 0
 			scannedByte := scanner.Bytes()
+			scannedStr:=string(scannedByte)
 			if scannedByte == nil || len(scannedByte) <= 0 {
 				log.Debug("invalid scanned byte, continue")
 				continue
@@ -278,7 +282,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 						indexSettings, ok = metadata.Indices[newIndex]
 						if ok {
 							if global.Env().IsDebug {
-								log.Trace("index was found in index settings,", index, "=>", newIndex, ",", string(scannedByte), ",", indexSettings)
+								log.Trace("index was found in index settings,", index, "=>", newIndex, ",", scannedStr, ",", indexSettings)
 							}
 							index = newIndex
 							goto CONTINUE_RESHUFFLE
@@ -388,14 +392,14 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					}
 
 					if buff.Len() > 0 {
-						buff.WriteString("\n")
+						buff.Write(NEWLINEBYTES)
 					}
 
 					buff.Write(actionMeta.Bytes())
 					actionMeta.Reset()
 
 					if needActionBody && scannedByte != nil && len(scannedByte) > 0 {
-						buff.WriteString("\n")
+						buff.Write(NEWLINEBYTES)
 						buff.Write(scannedByte)
 					}
 
@@ -409,7 +413,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		log.Tracef("total [%v] operations in bulk requests", docCount)
 
 		for x, y := range docBuf {
-			y.WriteString("\n")
+			y.Write(NEWLINEBYTES)
 			data := y.Bytes()
 
 			if validateRequest {
@@ -446,6 +450,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
+			//fmt.Println("length of buff:",y.Len())
 			bufferPool.Put(y)
 		}
 
@@ -465,14 +470,14 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 		//fake results
 		ctx.SetContentType(JSON_CONTENT_TYPE)
-		ctx.WriteString("{\"took\":0,\"errors\":false,\"items\":[")
+		ctx.Write(startPart)
 		for i := 0; i < docCount; i++ {
 			if i != 0 {
-				ctx.WriteString(",")
+				ctx.Write([]byte(","))
 			}
-			ctx.WriteString("{\"index\":{\"_index\":\"fake-index\",\"_type\":\"doc\",\"_id\":\"1\",\"_version\":1,\"result\":\"created\",\"_shards\":{\"total\":1,\"successful\":1,\"failed\":0},\"_seq_no\":1,\"_primary_term\":1,\"status\":200}}")
+			ctx.Write(itemPart)
 		}
-		ctx.WriteString("]}")
+		ctx.Write(endPart)
 		ctx.Response.SetStatusCode(200)
 		ctx.Finished()
 	}
@@ -489,6 +494,9 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 	//变成 bulk 格式
 
 }
+var startPart=[]byte("{\"took\":0,\"errors\":false,\"items\":[")
+var itemPart=[]byte("{\"index\":{\"_index\":\"fake-index\",\"_type\":\"doc\",\"_id\":\"1\",\"_version\":1,\"result\":\"created\",\"_shards\":{\"total\":1,\"successful\":1,\"failed\":0},\"_seq_no\":1,\"_primary_term\":1,\"status\":200}}")
+var endPart=[]byte("]}")
 
 //TODO 提取出来，作为公共方法，和 indexing/bulking_indexing 的方法合并
 var fastHttpClient = &fasthttp.Client{

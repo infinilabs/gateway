@@ -1,10 +1,10 @@
 package indexing
 
 import (
-	"bytes"
 	"crypto/tls"
 	"fmt"
 	"infini.sh/framework/core/rotate"
+	"infini.sh/framework/lib/bytebufferpool"
 	elastic2 "infini.sh/gateway/proxy/filters/elastic"
 	"runtime"
 	"sync"
@@ -48,6 +48,8 @@ func (joint BulkIndexingJoint) Name() string {
 	return "bulk_indexing"
 }
 
+var bufferPool *bytebufferpool.Pool
+var initLocker sync.RWMutex
 func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 	defer func() {
 		if !global.Env().IsDebug {
@@ -75,6 +77,16 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 	if bulkSizeInKB > 0 {
 		bulkSizeInByte = 1024 * bulkSizeInKB
 	}
+
+	if bufferPool==nil{
+		initLocker.Lock()
+		if bufferPool==nil{
+			estimatedBulkSizeInByte:=bulkSizeInByte+(bulkSizeInByte/3)
+			bufferPool=bytebufferpool.NewPool(uint64(estimatedBulkSizeInByte),uint64(bulkSizeInByte*2))
+		}
+		initLocker.Unlock()
+	}
+
 
 	meta := elastic.GetMetadata(elasticsearch)
 	wg := sync.WaitGroup{}
@@ -146,6 +158,7 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 	return nil
 }
 
+
 func (joint BulkIndexingJoint) NewBulkWorker(bulkSizeInByte int, wg *sync.WaitGroup, queueName string, endpoint string) {
 	defer func() {
 		if !global.Env().IsDebug {
@@ -167,7 +180,9 @@ func (joint BulkIndexingJoint) NewBulkWorker(bulkSizeInByte int, wg *sync.WaitGr
 
 	log.Debug("start worker:", queueName, ", endpoint:", endpoint)
 
-	mainBuf := bytes.Buffer{}
+	mainBuf := bufferPool.Get()
+	mainBuf.Reset()
+	defer bufferPool.Put(mainBuf)
 	esInstanceVal := joint.MustGetString("elasticsearch")
 	validateRequest := joint.GetBool("valid_request", false)
 	deadLetterQueueName := joint.GetStringOrDefault("dead_letter_queue", fmt.Sprintf("%v-failed_bulk_messages", esInstanceVal))

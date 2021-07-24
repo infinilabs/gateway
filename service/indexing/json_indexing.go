@@ -17,7 +17,6 @@ limitations under the License.
 package indexing
 
 import (
-	"bytes"
 	"fmt"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/elastic"
@@ -101,8 +100,12 @@ func (joint JsonIndexingJoint) NewBulkWorker(count *int, bulkSizeInMB int, wg *s
 
 	log.Trace("start bulk worker")
 
-	mainBuf := bytes.Buffer{}
-	docBuf := bytes.Buffer{}
+	mainBuf := bufferPool.Get()
+	mainBuf.Reset()
+	defer bufferPool.Put(mainBuf)
+	docBuf := bufferPool.Get()
+	docBuf.Reset()
+	defer bufferPool.Put(docBuf)
 
 	destIndex := joint.GetStringOrDefault("index_name", "")
 	destType := joint.GetStringOrDefault("index_type", "")
@@ -169,7 +172,9 @@ READ_DOCS:
 		if mainBuf.Len() > 0 {
 
 			//TODO merge into bulk services
-			client.Bulk(&mainBuf)
+			mainBuf.WriteByte('\n')
+			client.Bulk(mainBuf.Bytes())
+			mainBuf.Reset()
 			//TODO handle retry and fallback/over, dead letter queue
 			//set services to failure, need manual restart
 			//process dead letter queue first next round
