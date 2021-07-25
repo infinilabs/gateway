@@ -25,6 +25,7 @@ import (
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/stats"
+	"infini.sh/framework/lib/bytebufferpool"
 	"runtime"
 	"sync"
 	"time"
@@ -33,6 +34,8 @@ import (
 type JsonIndexingJoint struct {
 	param.Parameters
 	inputQueueName string
+	bufferPool *bytebufferpool.Pool
+	initLocker sync.RWMutex
 }
 
 //处理纯 json 格式的消息索引
@@ -62,15 +65,29 @@ func (joint JsonIndexingJoint) Process(c *pipeline.Context) error {
 	}()
 
 	workers, _ := joint.GetInt("worker_size", 1)
-	bulkSizeInMB, _ := joint.GetInt("bulk_size_in_mb", 10)
 	joint.inputQueueName = joint.GetStringOrDefault("input_queue", "es_queue")
-	bulkSizeInMB = 1048576 * bulkSizeInMB
+
+	bulkSizeInKB, _ := joint.GetInt("bulk_size_in_kb", 0)
+	bulkSizeInMB, _ := joint.GetInt("bulk_size_in_mb", 10)
+	bulkSizeInByte := 1048576 * bulkSizeInMB
+	if bulkSizeInKB > 0 {
+		bulkSizeInByte = 1024 * bulkSizeInKB
+	}
+
+	if joint.bufferPool==nil{
+		joint.initLocker.Lock()
+		if joint.bufferPool==nil{
+			estimatedBulkSizeInByte:=bulkSizeInByte+(bulkSizeInByte/3)
+			joint.bufferPool=bytebufferpool.NewPool(uint64(estimatedBulkSizeInByte),uint64(bulkSizeInByte*2))
+		}
+		joint.initLocker.Unlock()
+	}
 
 	wg := sync.WaitGroup{}
 	totalSize := 0
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
-		go joint.NewBulkWorker(&totalSize, bulkSizeInMB, &wg)
+		go joint.NewBulkWorker(&totalSize, bulkSizeInByte, &wg)
 	}
 
 	wg.Wait()
@@ -78,7 +95,7 @@ func (joint JsonIndexingJoint) Process(c *pipeline.Context) error {
 	return nil
 }
 
-func (joint JsonIndexingJoint) NewBulkWorker(count *int, bulkSizeInMB int, wg *sync.WaitGroup) {
+func (joint JsonIndexingJoint) NewBulkWorker(count *int, bulkSizeInByte int, wg *sync.WaitGroup) {
 
 	defer func() {
 		if !global.Env().IsDebug {
@@ -100,12 +117,12 @@ func (joint JsonIndexingJoint) NewBulkWorker(count *int, bulkSizeInMB int, wg *s
 
 	log.Trace("start bulk worker")
 
-	mainBuf := bufferPool.Get()
+	mainBuf := joint.bufferPool.Get()
 	mainBuf.Reset()
-	defer bufferPool.Put(mainBuf)
-	docBuf := bufferPool.Get()
+	defer joint.bufferPool.Put(mainBuf)
+	docBuf := joint.bufferPool.Get()
 	docBuf.Reset()
-	defer bufferPool.Put(docBuf)
+	defer joint.bufferPool.Put(docBuf)
 
 	destIndex := joint.GetStringOrDefault("index_name", "")
 	destType := joint.GetStringOrDefault("index_type", "")
@@ -147,7 +164,7 @@ READ_DOCS:
 			docBuf.Reset()
 			(*count)++
 
-			if mainBuf.Len() > (bulkSizeInMB) {
+			if mainBuf.Len() > (bulkSizeInByte) {
 				if global.Env().IsDebug {
 					log.Trace("hit buffer size, ", mainBuf.Len())
 				}

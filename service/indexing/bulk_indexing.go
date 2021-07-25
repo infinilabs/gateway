@@ -42,14 +42,16 @@ import (
 //处理 bulk 格式的数据索引。
 type BulkIndexingJoint struct {
 	param.Parameters
+	bufferPool *bytebufferpool.Pool
+	initLocker sync.RWMutex
 }
 
 func (joint BulkIndexingJoint) Name() string {
 	return "bulk_indexing"
 }
 
-var bufferPool *bytebufferpool.Pool
-var initLocker sync.RWMutex
+
+
 func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 	defer func() {
 		if !global.Env().IsDebug {
@@ -69,22 +71,23 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 	}()
 
 	workers, _ := joint.GetInt("worker_size", 1)
-	bulkSizeInKB, _ := joint.GetInt("bulk_size_in_kb", 0)
-	bulkSizeInMB, _ := joint.GetInt("bulk_size_in_mb", 10)
 	elasticsearch := joint.GetStringOrDefault("elasticsearch", "default")
 	enabledShards, checkShards := joint.GetStringArray("shards")
+
+	bulkSizeInKB, _ := joint.GetInt("bulk_size_in_kb", 0)
+	bulkSizeInMB, _ := joint.GetInt("bulk_size_in_mb", 10)
 	bulkSizeInByte := 1048576 * bulkSizeInMB
 	if bulkSizeInKB > 0 {
 		bulkSizeInByte = 1024 * bulkSizeInKB
 	}
 
-	if bufferPool==nil{
-		initLocker.Lock()
-		if bufferPool==nil{
+	if joint.bufferPool==nil{
+		joint.initLocker.Lock()
+		if joint.bufferPool==nil{
 			estimatedBulkSizeInByte:=bulkSizeInByte+(bulkSizeInByte/3)
-			bufferPool=bytebufferpool.NewPool(uint64(estimatedBulkSizeInByte),uint64(bulkSizeInByte*2))
+			joint.bufferPool=bytebufferpool.NewPool(uint64(estimatedBulkSizeInByte),uint64(bulkSizeInByte*2))
 		}
-		initLocker.Unlock()
+		joint.initLocker.Unlock()
 	}
 
 
@@ -180,9 +183,9 @@ func (joint BulkIndexingJoint) NewBulkWorker(bulkSizeInByte int, wg *sync.WaitGr
 
 	log.Debug("start worker:", queueName, ", endpoint:", endpoint)
 
-	mainBuf := bufferPool.Get()
+	mainBuf := joint.bufferPool.Get()
 	mainBuf.Reset()
-	defer bufferPool.Put(mainBuf)
+	defer joint.bufferPool.Put(mainBuf)
 	esInstanceVal := joint.MustGetString("elasticsearch")
 	validateRequest := joint.GetBool("valid_request", false)
 	deadLetterQueueName := joint.GetStringOrDefault("dead_letter_queue", fmt.Sprintf("%v-failed_bulk_messages", esInstanceVal))
