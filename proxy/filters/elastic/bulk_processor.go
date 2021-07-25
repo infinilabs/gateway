@@ -354,7 +354,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					nodeInfo := metadata.GetNodeInfo(shardInfo.NodeID)
 					if nodeInfo == nil {
 						if rate.GetRateLimiter("node_info_not_found_%v", shardInfo.NodeID, 1, 5, time.Minute*1).Allow() {
-							log.Warn("nodeInfo not found,", shardID, ",", shardInfo.NodeID)
+							log.Warnf("nodeInfo not found, %v %v", bufferKey,shardInfo.NodeID)
 						}
 						return
 					}
