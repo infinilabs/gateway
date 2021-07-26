@@ -109,7 +109,10 @@ build-win: config
 build-linux: config
 	GOOS=linux  GOARCH=amd64  $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-linux-amd64
 	GOOS=linux  GOARCH=386    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-linux-386
+	GOOS=linux  GOARCH=mips    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-linux-mips
 	GOOS=linux  GOARCH=mipsle    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-linux-mipsle
+	GOOS=linux  GOARCH=mips64    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-linux-mips64
+	GOOS=linux  GOARCH=mips64le    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-linux-mips64le
 	@$(MAKE) restore-generated-file
 
 build-arm: config
@@ -196,7 +199,6 @@ package:
 	@echo "Packaging"
 	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/darwin-amd64.tar.gz darwin-amd64  $(APP_CONFIG)
 	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/linux-amd64.tar.gz linux-amd64  $(APP_CONFIG)
-	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/linux-mipsle.tar.gz linux-mipsle  $(APP_CONFIG)
 	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/windows-amd64.tar.gz windows-amd64  $(APP_CONFIG)
 
 package-all-platform: package-darwin-platform package-linux-platform package-windows-platform
@@ -216,7 +218,10 @@ package-darwin-platform:
 package-linux-platform:
 	@echo "Packaging Linux"
 	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/linux-amd64.tar.gz     $(APP_NAME)-linux-amd64 $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/linux-mips.tar.gz     $(APP_NAME)-linux-mips $(APP_CONFIG)
 	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/linux-mipsle.tar.gz     $(APP_NAME)-linux-mipsle $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/linux-mips64.tar.gz     $(APP_NAME)-linux-mips64 $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/linux-mips64le.tar.gz     $(APP_NAME)-linux-mips64le $(APP_CONFIG)
 	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/linux-386.tar.gz     $(APP_NAME)-linux-386 $(APP_CONFIG)
 
 package-linux-arm-platform:
