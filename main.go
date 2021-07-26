@@ -23,8 +23,6 @@ import (
 	pipe "infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/modules/api"
-	"infini.sh/framework/modules/boltdb"
-	"infini.sh/framework/modules/cluster"
 	"infini.sh/framework/modules/elastic"
 	"infini.sh/framework/modules/filter"
 	"infini.sh/framework/modules/pipeline"
@@ -66,14 +64,12 @@ func main() {
 
 		//load core modules first
 		module.RegisterSystemModule(elastic.ElasticModule{})
-		module.RegisterSystemModule(boltdb.StorageModule{})
 		module.RegisterUserPlugin(translog.TranslogModule{})
 		module.RegisterSystemModule(filter.FilterModule{})
 		module.RegisterSystemModule(queue.DiskQueue{})
 		module.RegisterSystemModule(api.APIModule{})
 		module.RegisterSystemModule(pipeline.PipeModule{})
 		module.RegisterSystemModule(task.TaskModule{})
-		module.RegisterSystemModule(cluster.ClusterModule{})
 
 		module.RegisterUserPlugin(stats.StatsDModule{})
 		module.RegisterUserPlugin(gateway.GatewayModule{})
