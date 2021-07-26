@@ -16,7 +16,7 @@ pipeline {
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE'){
                     sh 'cd /home/jenkins/go/src/infini.sh/gateway && git stash && git pull origin master && make clean config build-linux build-arm'
-                    sh label: 'package-linux-arm64', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-arm64.tar.gz gateway-linux-arm64 gateway.yml ../sample-configs'
+                    sh label: 'package-linux-amd64', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-amd64.tar.gz gateway-linux-amd64 gateway.yml ../sample-configs'
                     sh label: 'package-linux-386', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-386.tar.gz gateway-linux-386 gateway.yml ../sample-configs'
                     sh label: 'package-linux-mipsle', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-mipsle.tar.gz gateway-linux-mipsle gateway.yml ../sample-configs'
                     sh label: 'package-linux-arm5', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-arm5.tar.gz gateway-linux-armv5 gateway.yml ../sample-configs'
