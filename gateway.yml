@@ -79,7 +79,7 @@ flow:
                 - master
       - name: set_cache
         parameters:
-          cache_ttl: 30s
+          cache_ttl: 10s
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
       - name: request_logging
