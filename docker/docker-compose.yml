@@ -2,7 +2,7 @@ version: "3.5"
 
 services:
   infini-gateway:
-    image: medcl/infini-gateway:latest
+    image: infinilabs/gateway:latest
 #    build:
 #      context: .
 #      dockerfile: ./Dockerfile

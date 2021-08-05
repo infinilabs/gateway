@@ -40,8 +40,8 @@ pipeline {
                     steps {
                         catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE'){
                             sh label: 'docker-build', script: 'cd /home/jenkins/go/src/infini.sh/ && docker build -t infini-gateway  -f gateway/docker/Dockerfile .'
-                            sh label: 'docker-tagging', script: 'docker tag infini-gateway medcl/infini-gateway:latest && docker tag infini-gateway medcl/infini-gateway:$VERSION-$BUILD_NUMBER'
-                            sh label: 'docker-push', script: 'docker push medcl/infini-gateway:latest && docker push medcl/infini-gateway:$VERSION-$BUILD_NUMBER'
+                            sh label: 'docker-tagging', script: 'docker tag infini-gateway infinilabs/gateway:latest && docker tag infini-gateway infinilabs/gateway:$VERSION-$BUILD_NUMBER'
+                            sh label: 'docker-push', script: 'docker push infinilabs/gateway:latest && docker push infinilabs/gateway:$VERSION-$BUILD_NUMBER'
                         }
                     }
                 }
