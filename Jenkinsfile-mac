@@ -1,0 +1,26 @@
+pipeline {
+
+    agent none
+
+    environment { 
+        CI = 'true'
+    }
+    stages {
+        
+        stage('Build Mac Packages') {
+
+            agent {
+                label 'mac'
+            }
+
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE'){
+                    sh 'cd /var/jenkins/go/src/infini.sh/gateway && git stash && git pull origin master && make clean config build-darwin'
+                    sh label: 'package-mac-amd64', script: 'cd /var/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-mac-amd64.tar.gz gateway-mac-amd64 gateway.yml ../sample-configs'
+                    archiveArtifacts artifacts: 'gateway-$VERSION-$BUILD_NUMBER-*.tar.gz', fingerprint: true, followSymlinks: true, onlyIfSuccessful: false
+                }
+            }
+        }
+
+    }
+}

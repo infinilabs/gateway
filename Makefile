@@ -96,7 +96,7 @@ tar: build
 cross-build: clean config update-vfs
 	$(GO) test
 	GOOS=windows GOARCH=amd64 $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-windows-amd64.exe
-	GOOS=darwin  GOARCH=amd64 $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-darwin-amd64
+	GOOS=darwin  GOARCH=amd64 $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-mac-amd64
 	GOOS=linux  GOARCH=amd64 $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-linux-amd64
 	@$(MAKE) restore-generated-file
 
@@ -123,8 +123,9 @@ build-arm: config
 	@$(MAKE) restore-generated-file
 
 build-darwin: config
-	GOOS=darwin  GOARCH=amd64     $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-darwin-amd64
-	GOOS=darwin  GOARCH=386       $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-darwin-386
+	GOOS=darwin  GOARCH=amd64     $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-mac-amd64
+# 	GOOS=darwin  GOARCH=386       $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-mac-386
+# 	GOOS=darwin  GOARCH=arm64    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-mac-arm64
 	@$(MAKE) restore-generated-file
 
 build-bsd: config
@@ -197,7 +198,7 @@ dist-all-platform: all-platform package-all-platform
 
 package:
 	@echo "Packaging"
-	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/darwin-amd64.tar.gz darwin-amd64  $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/mac-amd64.tar.gz mac-amd64  $(APP_CONFIG)
 	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/linux-amd64.tar.gz linux-amd64  $(APP_CONFIG)
 	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/windows-amd64.tar.gz windows-amd64  $(APP_CONFIG)
 
@@ -212,8 +213,9 @@ package-all-platform: package-darwin-platform package-linux-platform package-win
 
 package-darwin-platform:
 	@echo "Packaging Darwin"
-	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/darwin-amd64.tar.gz      $(APP_NAME)-darwin-amd64 $(APP_CONFIG)
-	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/darwin-386.tar.gz      $(APP_NAME)-darwin-386 $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/mac-amd64.tar.gz      $(APP_NAME)-mac-amd64 $(APP_CONFIG)
+# 	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/mac-386.tar.gz      $(APP_NAME)-mac-386 $(APP_CONFIG)
+# 	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/mac-arm64.tar.gz      $(APP_NAME)-mac-arm64 $(APP_CONFIG)
 
 package-linux-platform:
 	@echo "Packaging Linux"
