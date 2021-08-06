@@ -66,7 +66,7 @@ endif
 
 .PHONY: all build update test clean
 
-default: build
+default: build-race
 
 env:
 	@echo OLDGOPATH：$(OLDGOPATH)
