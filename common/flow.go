@@ -9,6 +9,7 @@ import (
 	"infini.sh/framework/lib/fasthttp"
 	"reflect"
 	"strings"
+	"sync"
 )
 
 /*
@@ -103,8 +104,10 @@ func MustGetFlow(flowID string) FilterFlow {
 	return v
 }
 
-
+var flowLock sync.RWMutex
 func GetFlowProcess(flowID string) func(ctx *fasthttp.RequestCtx) {
+	flowLock.Lock()
+	defer flowLock.Unlock()
 	flow := MustGetFlow(flowID)
 	return flow.Process
 }

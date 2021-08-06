@@ -76,7 +76,6 @@ func main() {
 		module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
 		module.RegisterUserPlugin(forcemerge.ForceMergeModule{})
 		module.RegisterUserPlugin(index_diff.IndexDiffModule{})
-		module.RegisterUserPlugin(offline_processing.FlowRunner{})
 
 		api2.Init()
 
@@ -86,6 +85,7 @@ func main() {
 		pipe.RegisterPipeJoint(indexing2.BulkReshuffleJoint{})
 		pipe.RegisterPipeJoint(queue_consumer.DiskQueueConsumer{})
 		pipe.RegisterPipeJoint(scroll.ScrollJoint{})
+		pipe.RegisterPipeJoint(offline_processing.FlowRunner{})
 
 		//start each module, with enabled provider
 		module.Start()

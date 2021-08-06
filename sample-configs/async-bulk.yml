@@ -91,7 +91,7 @@ pipelines:
       enabled: true
       parameters:
         elasticsearch: "dev"
-        compress: true
+        compress: false
         worker_size: 1
         bulk_size_in_mb: 5  #in MB
         idle_timeout_in_second: 5

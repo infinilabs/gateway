@@ -3,8 +3,9 @@ package offline_processing
 import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
-	"infini.sh/framework/core/env"
 	"infini.sh/framework/core/global"
+	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
@@ -15,7 +16,6 @@ import (
 )
 
 type RunnerConfig struct {
-	Enabled    bool   `config:"enabled"`
 	FlowName   string `config:"flow"`
 	InputQueue string `config:"input_queue"`
 }
@@ -42,24 +42,52 @@ func releaseCtx(ctx *fasthttp.RequestCtx) {
 }
 
 type FlowRunner struct {
-	Config *RunnerConfig
+	param.Parameters
 }
 
 var signalChannel chan bool
 
-func (this FlowRunner) Start() error {
+func (this FlowRunner) Stop() error {
+	signalChannel <- true
+	return nil
+}
+
+func (this FlowRunner) Setup(cfg *config.Config) {
+}
+
+func (this FlowRunner) Name() string {
+	return "flow_runner"
+}
+
+
+func (this FlowRunner) Process(c *pipeline.Context) error {
+	defer func() {
+		if !global.Env().IsDebug {
+			if r := recover(); r != nil {
+				var v string
+				switch r.(type) {
+				case error:
+					v = r.(error).Error()
+				case runtime.Error:
+					v = r.(runtime.Error).Error()
+				case string:
+					v = r.(string)
+				}
+				log.Error("error in FlowRunner,", v)
+			}
+		}
+	}()
 
 	signalChannel = make(chan bool, 1)
 
-	runnerConfig := RunnerConfig{}
-	ok, err := env.ParseConfig("flow_runner", &runnerConfig)
-	if ok && err != nil {
-		panic(err)
-	}
 
-	if runnerConfig.Enabled == false {
+	if !this.GetBool("enabled",true){
 		return nil
 	}
+
+	runnerConfig := RunnerConfig{}
+	runnerConfig.InputQueue=this.MustGetString("input_queue")
+	runnerConfig.FlowName=this.MustGetString("flow")
 
 	timeOut := 5
 	idleDuration := time.Duration(timeOut) * time.Second
@@ -70,31 +98,13 @@ func (this FlowRunner) Start() error {
 
 	processor := common.GetFlowProcess(runnerConfig.FlowName)
 
-	go func() {
-		defer func() {
-			if !global.Env().IsDebug {
-				if r := recover(); r != nil {
-					var v string
-					switch r.(type) {
-					case error:
-						v = r.(error).Error()
-					case runtime.Error:
-						v = r.(runtime.Error).Error()
-					case string:
-						v = r.(string)
-					}
-					log.Error("error in FlowRunner,", v)
-				}
-			}
-		}()
-
 	READ_DOCS:
 		stop := false
 		for {
 			select {
 			case <-signalChannel:
 				stop = true
-				return
+				return nil
 			default:
 				idleTimeout1.Reset(idleDuration)
 				if !stop {
@@ -122,19 +132,6 @@ func (this FlowRunner) Start() error {
 			}
 
 		}
-	}()
 
 	return nil
-}
-
-func (this FlowRunner) Stop() error {
-	signalChannel <- true
-	return nil
-}
-
-func (this FlowRunner) Setup(cfg *config.Config) {
-}
-
-func (this FlowRunner) Name() string {
-	return "flow_runner"
 }

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"fmt"
+	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/queue"
@@ -12,12 +13,11 @@ import (
 	"infini.sh/framework/core/rotate"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
+	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
 	"net/http"
 	"path"
-	log "github.com/cihub/seelog"
-	"infini.sh/framework/lib/bytebufferpool"
 	"strconv"
 	"strings"
 	"sync"
@@ -653,7 +653,7 @@ DO:
 			logHandler := rotate.GetFileHandler(logPath, joint.RotateConfig)
 
 			logHandler.WriteBytesArray(
-				[]byte("\nURL:\n"),
+				[]byte("\nURL:"),
 				[]byte(url),
 				[]byte("\nRequest:\n"),
 				[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.MaxRequestBodySize)),
@@ -678,7 +678,7 @@ DO:
 					logHandler := rotate.GetFileHandler(logPath, joint.RotateConfig)
 
 					logHandler.WriteBytesArray(
-						[]byte("\nURL:\n"),
+						[]byte("\nURL:"),
 						[]byte(url),
 						[]byte("\nRequest:\n"),
 						[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.MaxRequestBodySize)),
@@ -732,7 +732,7 @@ DO:
 			logHandler := rotate.GetFileHandler(logPath, joint.RotateConfig)
 
 			logHandler.WriteBytesArray(
-				[]byte("\nURL:\n"),
+				[]byte("\nURL:"),
 				[]byte(url),
 				[]byte("\nRequest:\n"),
 				[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.MaxRequestBodySize)),

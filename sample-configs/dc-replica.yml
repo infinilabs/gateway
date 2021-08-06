@@ -10,17 +10,18 @@ entry:
       binding: 0.0.0.0:8000
     tls:
       enabled: false
+
 flow:
-  - name: prod-flow-post-processing
+  - name: primary-flow-post-processing
     filter_v2:
       - set_basic_auth: #覆盖身份信息
           username: elastic
           password: changeme
       - if:
-          cluster_available: ["prod"]
+          cluster_available: ["primary"]
         then:
           - elasticsearch:
-              elasticsearch: "prod"
+              elasticsearch: "primary"
               max_connection_per_host: 1000
           - bulk_response_validate:
               invalid_status: 500
@@ -32,23 +33,26 @@ flow:
                   username: test
                   password: testtest
               - disk_enqueue:
-                  queue_name: "dev"
+                  queue_name: "backup"
             else:
               - disk_enqueue:
-                  queue_name: "prod-500"
+                  queue_name: "primary-500"
         else:
           - disk_enqueue:
-              queue_name: "prod-500"
+              queue_name: "primary-500"
           - sleep:
               sleep_in_million_seconds: 1000
           - elasticsearch_health_check:
-              elasticsearch: "prod"
-      - sample:
-          ratio: 0.1
+              elasticsearch: "primary"
+#      - sample:
+#          ratio: 0.1
+      - set_request_header:
+          headers:
+          - PostProcessing -> true
       - flow:
           flows:
             - request_logging
-  - name: prod-flow
+  - name: primary-flow
     filter_v2:
       - translog:
       - set_basic_auth: #覆盖身份信息
@@ -56,29 +60,29 @@ flow:
           password: changeme
       - if:
           and:
-            - queue_has_lag: [ "prod", "prod-500" ]
-            - cluster_available: ["prod"]
+            - queue_has_lag: [ "primary", "primary-500" ]
+            - cluster_available: ["primary"]
         then: #集群可用但是集群有堆积的情况，先入队列，追加到队尾，确保操作顺序的一致性
           - disk_enqueue:
-              queue_name: "prod"
+              queue_name: "primary"
           - set_basic_auth: #覆盖身份信息
               username: test
               password: testtest
           - disk_enqueue:
-              queue_name: "dev"
+              queue_name: "backup"
           - set_response:
               status: 202
               body: "202 Accepted"
         else: # 集群不可用或者集群可用且没有堆积的情况，都直接转发给集群先处理
           - if: #集群如果已经变成不可用状态，则直接丢弃请求，让客户端选择处理，或者也可落地队列确保不丢数据
               not:
-                cluster_available: ["prod"]
+                cluster_available: ["primary"]
             then: #如果集群不可用，则直接拒绝客户端请求
               - set_response:
                   status: 503
                   body: "503 Service Unavailable"
               - elasticsearch_health_check: #由请求触发的限速模式下的主动检查后端监控情况
-                  elasticsearch: "prod"
+                  elasticsearch: "primary"
               - drop:
 #          - set_request_header: #覆盖 Header 信息
 #              headers:
@@ -87,7 +91,7 @@ flow:
 #          - set_hostname: #覆盖域名主机信息
 #              hostname: api.infini.sh
           - elasticsearch: #集群可用，直接处理请求
-              elasticsearch: "prod"
+              elasticsearch: "primary"
               max_connection_per_host: 1000
           - bulk_response_validate: #如果是 bulk 请求，还需要进一步验证是否存在部分请求失败的错误异常
               invalid_status: 507
@@ -99,10 +103,10 @@ flow:
                   username: test
                   password: testtest
               - disk_enqueue:
-                  queue_name: "dev"
+                  queue_name: "backup"
             else: #集群可用的情况下但是失败了，可能存在脏写，将请求放入写入失败队列，后续可以选择两边集群都重做一次，最终确保一致性，写 translog，后续提供 UI 可以进行三方检查：主、备集群和本地日志
               - disk_enqueue:
-                  queue_name: "prod-500"
+                  queue_name: "primary-500"
   - name: cache_first
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
       - name: get_cache
@@ -111,7 +115,7 @@ flow:
             - _cat
       - name: elasticsearch
         parameters:
-          elasticsearch: dev  #elasticsearch configure reference name
+          elasticsearch: backup  #elasticsearch configure reference name
           max_connection_per_host: 1000 #max tcp connection to upstream, default for all nodes
           max_response_size: -1 #default for all nodes
           balancer: weight
@@ -137,31 +141,16 @@ flow:
           max_response_body_size: 1024
           #          min_elapsed_time_in_ms: 500 # only record slow requests
           bulk_stats_details: true
+
 router:
   - name: my_router
-    default_flow: prod-flow
+    default_flow: primary-flow
 #    tracing_flow: request_logging
+
 elasticsearch:
-  - name: dev
+  - name: primary
     enabled: true
     endpoint: http://localhost:9200
-    basic_auth:
-      username: test
-      password: testtest
-      #  traffic_control: #global traffic control
-      #    max_bps_per_node: 10240000 #max total bytes send to es per node
-  #    max_qps_per_node: 100 #max total requests send to es per node
-    discovery: # auto discovery elasticsearch cluster nodes
-      enabled: false
-      refresh:
-        enabled: true
-        interval: 60s
-  - name: prod
-    enabled: true
-    endpoint: http://localhost:9201
-#    traffic_control: #global traffic control
-#      max_bps_per_node: 10240000 #max total bytes send to es per node
-#      max_qps_per_node: 100000 #max total requests send to es per node
     basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
       username: elastic
       password: changeme
@@ -170,33 +159,55 @@ elasticsearch:
       refresh:
         enabled: true
         interval: 60s
-
-flow_runner:
-  enabled: true
-  input_queue: "prod-500"
-  flow: prod-flow-post-processing
+  - name: backup
+    enabled: true
+    endpoint: http://localhost:9201
+    basic_auth:
+      username: test
+      password: testtest
+    discovery: # auto discovery elasticsearch cluster nodes
+      enabled: false
+      refresh:
+        enabled: true
+        interval: 60s
 
 pipelines:
-  - name: disk_queue_consumer-dev
+  - name: disk_queue_primary-failure-consumer
+    enabled: true
+    start:
+      joint: flow_runner
+      enabled: true
+      parameters:
+        input_queue: "primary-500"
+        flow: primary-flow-post-processing
+  - name: disk_queue_primary-deadletter-consumer
+    enabled: true
+    start:
+      joint: flow_runner
+      enabled: true
+      parameters:
+        input_queue: "primary_dead_letter"
+        flow: primary-flow-post-processing
+  - name: disk_queue_backup-consumer
     enabled: true
     start:
       joint: disk_queue_consumer
       enabled: true
       parameters:
-        input_queue: "dev"
-        elasticsearch: "dev"
-        waiting_after: [ "dev-500"]
+        input_queue: "backup"
+        elasticsearch: "backup"
+        waiting_after: [ "backup-500"]
         timeout: "1s"
         worker_size: 20
-  - name: disk_queue_consumer-prod
+  - name: disk_queue_primary-consumer
     enabled: true
     start:
       joint: disk_queue_consumer
       enabled: true
       parameters:
-        input_queue: "prod"
-        elasticsearch: "prod"
-        waiting_after: [ "prod-500" ]
+        input_queue: "primary"
+        elasticsearch: "primary"
+        waiting_after: [ "primary-500" ]
         timeout: "1s"
         worker_size: 20
   - name: request_logging_index
@@ -206,7 +217,7 @@ pipelines:
       enabled: true
       parameters:
         index_name: "gateway_requests"
-        elasticsearch: "dev"
+        elasticsearch: "backup"
         input_queue: "request_logging"
         timeout: "1s"
         worker_size: 1

@@ -6,6 +6,7 @@ import (
 	"infini.sh/framework/core/rotate"
 	"infini.sh/framework/lib/bytebufferpool"
 	elastic2 "infini.sh/gateway/proxy/filters/elastic"
+	"path"
 	"runtime"
 	"sync"
 	"time"
@@ -202,7 +203,7 @@ func (joint BulkIndexingJoint) NewBulkWorker(bulkSizeInByte int, wg *sync.WaitGr
 			MaxFileCount: joint.GetIntOrDefault("max_file_count", 100),
 			MaxFileSize:  joint.GetIntOrDefault("max_file_size_in_mb", 1024),
 		},
-		Compress:                  joint.GetBool("compress", true),
+		Compress:                  joint.GetBool("compress", false),
 		Log400Message:             joint.GetBool("log_400_message", true),
 		LogInvalidMessage:         joint.GetBool("log_invalid_message", true),
 		LogInvalid200Message:      joint.GetBool("log_invalid_200_message", true),
@@ -280,6 +281,21 @@ CLEAN_BUFFER:
 				log.Warn("re-enqueue bulk messages to dead_letter queue")
 			}
 			stats.IncrementBy("bulk", "bytes_processed_failed", int64(mainBuf.Len()))
+
+			if joint.GetBool("log_dead_letter_requests",false){
+				logPath := path.Join(global.Env().GetLogDir(), cfg.Name, "dead_letter", "requests.log")
+				logHandler := rotate.GetFileHandler(logPath, bulkProcessor.RotateConfig)
+
+				logHandler.WriteBytesArray(
+					[]byte("\nURL:"),
+					[]byte(endpoint),
+					[]byte("\nRequest:\n"),
+					[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, bulkProcessor.MaxRequestBodySize)),
+					[]byte("\nResponse:\n"),
+					[]byte(fmt.Sprintf("status: %v",status)),
+				)
+			}
+
 		} else {
 			stats.IncrementBy("bulk", "bytes_processed_success", int64(mainBuf.Len()))
 		}
