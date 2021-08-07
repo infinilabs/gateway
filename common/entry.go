@@ -8,15 +8,16 @@ import (
 )
 
 type EntryConfig struct {
-	Enabled          bool                 `config:"enabled"`
-	SafetyShutdown   bool                 `config:"safety_shutdown"`
-	Name             string               `config:"name"`
-	ReadTimeout      int                  `config:"read_timeout"`
-	WriteTimeout     int                  `config:"write_timeout"`
-	MaxConcurrency   int                  `config:"max_concurrency"`
-	TLSConfig        config.TLSConfig     `config:"tls"`
-	NetworkConfig    config.NetworkConfig `config:"network"`
-	RouterConfigName string               `config:"router"`
+	Enabled           bool                 `config:"enabled"`
+	SafetyShutdown    bool                 `config:"safety_shutdown"`
+	ReduceMemoryUsage bool                 `config:"reduce_memory_usage"`
+	Name              string               `config:"name"`
+	ReadTimeout       int                  `config:"read_timeout"`
+	WriteTimeout      int                  `config:"write_timeout"`
+	MaxConcurrency    int                  `config:"max_concurrency"`
+	TLSConfig         config.TLSConfig     `config:"tls"`
+	NetworkConfig     config.NetworkConfig `config:"network"`
+	RouterConfigName  string               `config:"router"`
 }
 
 type RuleConfig struct {
@@ -41,9 +42,9 @@ type RouterConfig struct {
 }
 
 type FlowConfig struct {
-	Name    string         `config:"name"`
-	Filters []FilterConfig `config:"filter"`
-	FiltersV2 PluginConfig `config:"filter_v2"`
+	Name      string         `config:"name"`
+	Filters   []FilterConfig `config:"filter"`
+	FiltersV2 PluginConfig   `config:"filter_v2"`
 }
 
 type PluginConfig []*config.Config

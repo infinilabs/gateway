@@ -171,7 +171,7 @@ func (this *Entrypoint) Start() error {
 		LogAllErrors:                  false,
 		MaxRequestBodySize:            200 * 1024 * 1024,
 		GetOnly:                       false,
-		ReduceMemoryUsage:             false,
+		ReduceMemoryUsage:             this.config.ReduceMemoryUsage,
 		//TCPKeepalivePeriod:  		   time.Duration(this.config.ReadTimeout) * time.Second,
 		//IdleTimeout:  				   time.Duration(this.config.ReadTimeout) * time.Second,
 		ReadTimeout:                   time.Duration(this.config.ReadTimeout) * time.Second,
