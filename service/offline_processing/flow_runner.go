@@ -45,7 +45,7 @@ type FlowRunner struct {
 	param.Parameters
 }
 
-var signalChannel chan bool
+var signalChannel chan bool = make(chan bool, 1)
 
 func (this FlowRunner) Stop() error {
 	signalChannel <- true
@@ -77,9 +77,6 @@ func (this FlowRunner) Process(c *pipeline.Context) error {
 			}
 		}
 	}()
-
-	signalChannel = make(chan bool, 1)
-
 
 	if !this.GetBool("enabled",true){
 		return nil
