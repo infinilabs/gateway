@@ -48,7 +48,7 @@ func (joint ScrollJoint) Open() error {
 	scrollTimeVal := joint.GetStringOrDefault("scroll_time", "5m")
 	queryVal := joint.GetStringOrDefault("query", "")
 	indexNameVal := joint.GetStringOrDefault("indices", "filebeat-*")
-	sortField := joint.GetStringOrDefault("sort_field", "_id")
+	sortField := joint.GetStringOrDefault("sort_field", "")
 	sortType := joint.GetStringOrDefault("sort_type", "asc")
 	esNameVal := joint.GetStringOrDefault("elasticsearch", "default")
 	joint.outputQueueName = joint.GetStringOrDefault("output_queue", "default")
@@ -69,29 +69,27 @@ func (joint ScrollJoint) Open() error {
 		tempSlice := slice
 		scrollResponse, err := client.NewScroll(indexNameVal, scrollTimeVal, joint.batchSize, queryVal, tempSlice, sliceSizeVal, fieldsVal, sortField, sortType)
 		if err != nil {
-			log.Debug(err)
+			log.Error(err)
 			continue
 		}
 
 		scrollResponse1, ok := scrollResponse.(elastic.ScrollResponseAPI)
 		if !ok {
-			log.Debug(scrollResponse, err)
+			log.Warn("invalid scroll response, ",scrollResponse, err)
 			break
 		}
+
+		log.Debug("total docs for scrolling: ",scrollResponse1.GetHitsTotal())
 
 		docs := scrollResponse1.GetDocs()
 		docSize := len(docs)
 		//joint.totalSize += docSize
-		if docSize == 0 {
-			log.Trace(scrollResponse)
-			break
+		if docSize > 0 {
+			processingDocs(docs, joint.outputQueueName)
+			//joint.totalSize += len(scrollResponse1.GetDocs())
 		}
 
-		processingDocs(docs, joint.outputQueueName)
-
 		log.Debugf("slice %v docs: %v", tempSlice, scrollResponse1.GetHitsTotal())
-
-		//joint.totalSize += len(scrollResponse1.GetDocs())
 
 		if scrollResponse1.GetHitsTotal() == 0 {
 			log.Tracef("slice %v is empty", tempSlice)
