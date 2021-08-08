@@ -80,6 +80,10 @@ func (p RequestCache) initCache() {
 	l.Lock()
 	defer l.Unlock()
 
+	if inited {
+		return
+	}
+
 	var err error
 	cache, err = ristretto.NewCache(&ristretto.Config{
 		NumCounters: 1e7,                                                // Num keys to track frequency of (10M).
