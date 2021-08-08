@@ -27,7 +27,6 @@ flow:
           fix_null_id: true
           index_stats_analysis: true
           action_stats_analysis: true
-          safety_parse: true
       - name: elasticsearch
         parameters:
           elasticsearch: dev  #elasticsearch configure reference name

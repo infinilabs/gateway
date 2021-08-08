@@ -6,6 +6,7 @@ entry:
     enabled: true
     router: my_router
     max_concurrency: 10000
+#    reduce_memory_usage: true
     network:
       binding: 0.0.0.0:8000
     tls:

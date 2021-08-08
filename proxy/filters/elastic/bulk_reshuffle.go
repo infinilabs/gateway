@@ -1,7 +1,10 @@
 package elastic
 
 import (
+	"github.com/buger/jsonparser"
+	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/elastic"
+	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/util"
 	"sync"
@@ -17,81 +20,93 @@ func (this BulkReshuffle) Name() string {
 	return "bulk_reshuffle"
 }
 
-var actionIndex = []byte("index")
-var actionDelete = []byte("delete")
-var actionCreate = []byte("create")
-var actionUpdate = []byte("update")
+var actionIndex ="index"
+var actionDelete = "delete"
+var actionCreate = "create"
+var actionUpdate = "update"
 
 var actionStart = []byte("\"")
 var actionEnd = []byte("\"")
 
-var indexStart = []byte("\"_index\"")
-var indexEnd = []byte("\"")
+var actions = []string{"index","delete","create","update"}
 
-var filteredFromValue = []byte(": \"")
+func parseActionMeta(data []byte) (action, index, typeName, id string) {
 
-var idStart = []byte("\"_id\"")
-var idEnd = []byte("\"")
-
-func parseActionMeta(data []byte) ([]byte, []byte, []byte) {
-	action := util.ExtractFieldFromBytes(&data, actionStart, actionEnd, nil)
-	index := util.ExtractFieldFromBytesWitSkipBytes(&data, indexStart, []byte("\""), indexEnd, filteredFromValue)
-	id := util.ExtractFieldFromBytesWitSkipBytes(&data, idStart, []byte("\""), idEnd, filteredFromValue)
-	return action, index, id
-}
-
-//TODO performance
-func updateJsonWithNewIndex(scannedByte []byte, index, typeName, id string) (newBytes []byte) {
-	var meta = elastic.BulkActionMetadata{}
-	util.MustFromJSONBytes(scannedByte, &meta)
-	if meta.Index != nil {
-		if index != "" {
-			meta.Index.Index = index
-		}
-		if typeName != "" {
-			meta.Index.Type = typeName
-		}
-		if id != "" {
-			meta.Index.ID = id
-		}
-	} else if meta.Create != nil {
-		if index != "" {
-			meta.Create.Index = index
-		}
-		if typeName != "" {
-			meta.Create.Type = typeName
-		}
-		if id != "" {
-			meta.Create.ID = id
-		}
-	} else if meta.Update != nil {
-		if index != "" {
-			meta.Update.Index = index
-		}
-		if typeName != "" {
-			meta.Update.Type = typeName
-		}
-		if id != "" {
-			meta.Update.ID = id
-		}
-	} else if meta.Delete != nil {
-		if index != "" {
-			meta.Delete.Index = index
-		}
-		if typeName != "" {
-			meta.Delete.Type = typeName
-		}
-		if id != "" {
-			meta.Delete.ID = id
+	match:=false
+	for _,v:=range actions{
+		jsonparser.ObjectEach(data, func(key []byte, value []byte, dataType jsonparser.ValueType, offset int) error {
+			switch util.UnsafeBytesToString(key) {
+			case "_index":
+				index=string(value)
+				break
+			case "_type":
+				typeName=string(value)
+				break
+			case "_id":
+				id=string(value)
+				break
+			}
+			match=true
+			return nil
+		}, v)
+		action=v
+		if match{
+			return action, index,typeName, id
 		}
 	}
-	return util.MustToJSONBytes(meta)
+
+	log.Warn("fallback to unsafe parse:",string(data))
+
+	action = string(util.ExtractFieldFromBytes(&data, actionStart, actionEnd, nil))
+	index,_=jsonparser.GetString(data,action,"_index")
+	typeName,_=jsonparser.GetString(data,action,"_type")
+	id,_=jsonparser.GetString(data,action,"_id")
+
+	if index!=""{
+		return action, index,typeName, id
+	}
+
+	log.Warn("fallback to safety parse:",string(data))
+	return safetyParseActionMeta(data)
 }
 
-func parseJson(scannedByte []byte) (action []byte, index, typeName, id string) {
-	//use Json
+func updateJsonWithNewIndex(action string,scannedByte []byte, index, typeName, id string) (newBytes []byte,err error) {
+
+	if global.Env().IsDebug{
+		log.Trace("update:",action,",",index,",",typeName,",",id)
+	}
+
+	newBytes= make([]byte,len(scannedByte))
+	copy(newBytes,scannedByte)
+
+	if index != "" {
+		newBytes,err=jsonparser.Set(newBytes, []byte("\""+index+"\""),action,"_index")
+		if err!=nil{
+			return newBytes,err
+		}
+	}
+	if typeName != "" {
+		newBytes,err=jsonparser.Set(newBytes, []byte("\""+typeName+"\""),action,"_type")
+		if err!=nil{
+			return newBytes,err
+		}
+	}
+	if id != "" {
+		newBytes,err=jsonparser.Set(newBytes, []byte("\""+id+"\""),action,"_id")
+		if err!=nil{
+			return newBytes,err
+		}
+	}
+
+	return newBytes,err
+}
+
+//performance is poor
+func safetyParseActionMeta(scannedByte []byte) (action , index, typeName, id string) {
+
+	////{ "index" : { "_index" : "test", "_id" : "1" } }
 	var meta = elastic.BulkActionMetadata{}
-	util.MustFromJSONBytes(scannedByte, &meta)
+	meta.UnmarshalJSON(scannedByte)
 	if meta.Index != nil {
 		index = meta.Index.Index
 		typeName = meta.Index.Type

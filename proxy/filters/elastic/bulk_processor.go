@@ -62,8 +62,9 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 		esConfig := elastic.GetConfig(clusterName)
 
-		safetyParse := this.GetBool("safety_parse", true)
-		validMetadata := this.GetBool("valid_metadata", false)
+		validEachLine := this.GetBool("validate_each_line", false)
+		validMetadata := this.GetBool("validate_metadata", false)
+		validPayload := this.GetBool("validate_payload", false)
 		validateRequest := this.GetBool("validate_request", false)
 		reshuffleType := this.GetStringOrDefault("level", "node")
 		submitMode := this.GetStringOrDefault("mode", "sync")         //sync and async
@@ -100,11 +101,21 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		for scanner.Scan() {
 			shardID := 0
 			scannedByte := scanner.Bytes()
-			scannedStr:=string(scannedByte)
+			scannedStr:=util.UnsafeBytesToString(scannedByte)
 			if scannedByte == nil || len(scannedByte) <= 0 {
 				log.Debug("invalid scanned byte, continue")
 				continue
 			}
+
+			if validEachLine{
+				obj := map[string]interface{}{}
+				err := util.FromJSONBytes(scannedByte, &obj)
+				if err != nil {
+					log.Error("error on validate scannedByte:",string(scannedByte))
+					panic(err)
+				}
+			}
+
 
 			if skipNext {
 				skipNext = false
@@ -132,25 +143,9 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				}
 
 				var id string
-				var action []byte
+				var actionStr string
 
-				if safetyParse {
-					action, index, typeName, id = parseJson(scannedByte)
-				} else {
-					var indexb, idb []byte
-
-					//TODO action: update ,index:  ,id: 1,_indextest
-					//{ "update" : {"_id" : "1", "_index" : "test"} }
-					//字段顺序换了。
-					action, indexb, idb = parseActionMeta(scannedByte)
-					index = string(indexb)
-					id = string(idb)
-
-					if len(action) == 0 || index == "" {
-						log.Warn("invalid bulk action:", string(action), ",index:", string(indexb), ",id:", string(idb), ", try json parse:", string(scannedByte))
-						action, index, typeName, id = parseJson(scannedByte)
-					}
-				}
+				actionStr, index, typeName, id = parseActionMeta(scannedByte)
 
 				//index_rename
 				//if resolveIndexRename {
@@ -185,7 +180,8 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					typeNew = urlLevelType
 				}
 
-				if (bytes.Equal(action, []byte("index")) || bytes.Equal(action, []byte("create"))) && len(id) == 0 && fixNullID {
+				if (actionStr==actionIndex || actionStr==actionDelete) && len(id) == 0 && fixNullID {
+					fmt.Println("generating ID:",actionStr)
 					id = util.GetUUID()
 					idNew = id
 					if global.Env().IsDebug {
@@ -194,14 +190,16 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				}
 
 				if indexNew != "" || typeNew != "" || idNew != "" {
-					scannedByte = updateJsonWithNewIndex(scannedByte, indexNew, typeNew, idNew)
+					var err error
+					scannedByte,err = updateJsonWithNewIndex(actionStr,scannedByte, indexNew, typeNew, idNew)
+					if err!=nil{
+						panic(err)
+					}
 					if global.Env().IsDebug {
 						log.Trace("updated meta,", id, ",", string(scannedByte))
 					}
 				}
 
-				//统计索引次数
-				stats.Increment("elasticsearch."+clusterName+".indexing", index)
 				if indexAnalysis {
 					//init
 					if indexStatsData == nil {
@@ -235,7 +233,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 					//stats
 					indexStatsLock.Lock()
-					actionStr := string(action)
 					v, ok := actionStatsData[actionStr]
 					if !ok {
 						actionStatsData[actionStr] = 1
@@ -254,8 +251,8 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					}
 				}
 
-				if len(action) == 0 || index == "" || id == "" {
-					log.Warn("invalid bulk action:", string(action), ",index:", string(index), ",id:", string(id), ",", string(scannedByte))
+				if actionStr =="" || index == "" || id == "" {
+					log.Warn("invalid bulk action:", actionStr, ",index:", string(index), ",id:", string(id), ",", string(scannedByte))
 					return
 				}
 
@@ -376,7 +373,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				//保存临时变量
 				actionMeta.Write(scannedByte)
 
-				if bytes.Equal(action, actionDelete) {
+				if actionStr== actionDelete {
 					nextIsMeta = true
 					needActionBody = false
 				}
@@ -400,11 +397,18 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					}
 
 					buff.Write(actionMeta.Bytes())
-					actionMeta.Reset()
-
 					if needActionBody && scannedByte != nil && len(scannedByte) > 0 {
 						buff.Write(NEWLINEBYTES)
 						buff.Write(scannedByte)
+
+						if validPayload{
+							obj := map[string]interface{}{}
+							err := util.FromJSONBytes(scannedByte, &obj)
+							if err != nil {
+								log.Error("error on validate action payload:",string(scannedByte))
+								panic(err)
+							}
+						}
 					}
 
 					//cleanup actionMeta
@@ -416,15 +420,37 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 		log.Tracef("total [%v] operations in bulk requests", docCount)
 
-		for x, y := range docBuf {
-			y.Write(NEWLINEBYTES)
-			data := y.Bytes()
 
-			if validateRequest {
-				common.ValidateBulkRequest("sync-bulk", string(data))
+		if submitMode=="sync"{
+			bulkProcessor := BulkProcessor{
+				RotateConfig: rotate.RotateConfig{
+					Compress:     this.GetBool("compress_after_rotate", true),
+					MaxFileAge:   this.GetIntOrDefault("max_file_age", 0),
+					MaxFileCount: this.GetIntOrDefault("max_file_count", 100),
+					MaxFileSize:  this.GetIntOrDefault("max_file_size_in_mb", 1024),
+				},
+				Compress:                  this.GetBool("compress", false),
+				Log400Message:             this.GetBool("log_400_message", true),
+				LogInvalidMessage:         this.GetBool("log_invalid_message", true),
+				LogInvalid200Message:      this.GetBool("log_invalid_200_message", true),
+				LogInvalid200RetryMessage: this.GetBool("log_200_retry_message", true),
+				Log429RetryMessage:        this.GetBool("log_429_retry_message", true),
+				RetryDelayInSeconds:       this.GetIntOrDefault("retry_delay_in_second", 1),
+				RejectDelayInSeconds:      this.GetIntOrDefault("reject_retry_delay_in_second", 1),
+				MaxRejectRetryTimes:       this.GetIntOrDefault("max_reject_retry_times", 3),
+				MaxRetryTimes:             this.GetIntOrDefault("max_retry_times", 3),
+				MaxRequestBodySize:        this.GetIntOrDefault("max_logged_request_body_size", 1024),
+				MaxResponseBodySize:       this.GetIntOrDefault("max_logged_response_body_size", 1024),
 			}
 
-			if submitMode == "sync" {
+			for x, y := range docBuf {
+				y.Write(NEWLINEBYTES)
+				data := y.Bytes()
+
+				if validateRequest {
+					common.ValidateBulkRequest("sync-bulk", string(data))
+				}
+
 				endpoint, ok := buffEndpoints[x]
 				if !ok {
 					log.Error("shard endpoint was not found,", x)
@@ -437,12 +463,23 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				status, ok := bulkProcessor.Bulk(esConfig, endpoint, data,fastHttpClient)
 				if !ok {
 					log.Error("bulk failed on endpoint,", x, ", code:", status)
-					//TODO
 					return
 				}
 
 				ctx.SetDestination(fmt.Sprintf("%v:%v", "sync", x))
-			} else {
+				bufferPool.Put(y)
+			}
+
+		}else{
+
+			for x, y := range docBuf {
+				y.Write(NEWLINEBYTES)
+				data := y.Bytes()
+
+				if validateRequest {
+					common.ValidateBulkRequest("aync-bulk", string(data))
+				}
+
 				if len(data) > 0 {
 					err := queue.Push(x, data)
 					if err != nil {
@@ -452,17 +489,24 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				} else {
 					log.Warn("zero message,", x, ",", len(data), ",", string(body))
 				}
+				bufferPool.Put(y)
 			}
 
-			//fmt.Println("length of buff:",y.Len())
-			bufferPool.Put(y)
 		}
 
 		if indexAnalysis {
 			ctx.Set("bulk_index_stats", indexStatsData)
+			for k,v:=range indexStatsData{
+				//统计索引次数
+				stats.IncrementBy("elasticsearch."+clusterName+"."+k,"writes", int64(v))
+			}
 		}
 		if actionAnalysis {
 			ctx.Set("bulk_action_stats", actionStatsData)
+			for k,v:=range actionStatsData{
+				//统计操作次数
+				stats.IncrementBy("elasticsearch."+clusterName+"._all",k, int64(v))
+			}
 		}
 
 		if ctx.Has("elastic_cluster_name") {
@@ -511,27 +555,6 @@ var fastHttpClient = &fasthttp.Client{
 	TLSConfig: &tls.Config{InsecureSkipVerify: true},
 }
 
-var bulkProcessor=BulkProcessor{
-	RotateConfig: rotate.RotateConfig{
-		Compress:         true,
-		MaxFileAge:       0,
-		MaxFileCount: 100,
-		MaxFileSize:      1024,
-	},
-	Compress:true,
-	Log400Message: true,
-	LogInvalidMessage: true,
-	LogInvalid200Message: true,
-	LogInvalid200RetryMessage: true,
-	Log429RetryMessage: true,
-	RetryDelayInSeconds: 1,
-	RejectDelayInSeconds: 1,
-	MaxRejectRetryTimes: 3,
-	MaxRetryTimes: 3,
-	MaxRequestBodySize: 256,
-	MaxResponseBodySize: 256,
-}
-
 type BulkProcessor struct {
 	RotateConfig              rotate.RotateConfig
 	Compress                  bool
@@ -560,7 +583,6 @@ func (joint *BulkProcessor) Bulk(cfg *elastic.ElasticsearchConfig, endpoint stri
 		endpoint = "http://" + endpoint
 	}
 	url := fmt.Sprintf("%s/_bulk", endpoint)
-	//compress := joint.GetBool("compress", true)
 
 	req := fasthttp.AcquireRequest()
 	req.Reset()
@@ -593,18 +615,6 @@ func (joint *BulkProcessor) Bulk(cfg *elastic.ElasticsearchConfig, endpoint stri
 			}
 		} else {
 			req.SetBody(data)
-
-			//buggy
-			//req.SetBodyStreamWriter(func(w *bufio.Writer) {
-			//	_,err:=w.Write(data)
-			//	if err!=nil{
-			//		log.Error(err)
-			//	}
-			//	err=w.Flush()
-			//	if err!=nil{
-			//		log.Error(err)
-			//	}
-			//})
 		}
 
 		if req.GetBodyLength()<=0{
@@ -678,7 +688,7 @@ DO:
 				[]byte("\nRequest:\n"),
 				[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.MaxRequestBodySize)),
 				[]byte("\nResponse:\n"),
-				[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.MaxRequestBodySize)),
+				[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.MaxResponseBodySize)),
 			)
 		}
 		return resp.StatusCode(), false
@@ -703,7 +713,7 @@ DO:
 						[]byte("\nRequest:\n"),
 						[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.MaxRequestBodySize)),
 						[]byte("\nResponse:\n"),
-						[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.MaxRequestBodySize)),
+						[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.MaxResponseBodySize)),
 					)
 				}
 				delayTime := joint.RetryDelayInSeconds
@@ -757,7 +767,7 @@ DO:
 				[]byte("\nRequest:\n"),
 				[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.MaxRequestBodySize)),
 				[]byte("\nResponse:\n"),
-				[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.MaxRequestBodySize)),
+				[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.MaxResponseBodySize)),
 			)
 		}
 

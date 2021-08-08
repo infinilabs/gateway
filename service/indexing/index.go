@@ -1,8 +1,8 @@
 package indexing
 
 import (
-	"encoding/json"
 	log "github.com/cihub/seelog"
+	"github.com/segmentio/encoding/json"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
