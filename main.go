@@ -38,7 +38,7 @@ import (
 	"infini.sh/gateway/service/index_diff"
 	"infini.sh/gateway/service/indexing"
 	"infini.sh/gateway/service/offline_processing"
-	"infini.sh/gateway/service/queue_consumer"
+	"infini.sh/gateway/service/diskqueue_consumer"
 	"infini.sh/gateway/service/scroll"
 	"infini.sh/gateway/service/translog"
 )
@@ -83,7 +83,7 @@ func main() {
 		pipe.RegisterPipeJoint(indexing.JsonIndexingJoint{})
 		pipe.RegisterPipeJoint(indexing.BulkIndexingJoint{})
 		pipe.RegisterPipeJoint(indexing2.BulkReshuffleJoint{})
-		pipe.RegisterPipeJoint(queue_consumer.DiskQueueConsumer{})
+		pipe.RegisterPipeJoint(diskqueue_consumer.DiskQueueConsumer{})
 		pipe.RegisterPipeJoint(scroll.ScrollJoint{})
 		pipe.RegisterPipeJoint(offline_processing.FlowRunner{})
 
