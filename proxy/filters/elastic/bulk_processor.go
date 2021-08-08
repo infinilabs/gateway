@@ -20,7 +20,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -75,6 +74,18 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 		//renameMapping, resolveIndexRename := this.GetStringMap("index_rename")
 
+		//url level
+		var urlLevelIndex string
+		var urlLevelType string
+
+		urlLevelIndex,urlLevelType= getUrlLevelBulkMeta(pathStr)
+
+		//action level
+		var actionStr string
+		var index string
+		var typeName string
+		var id string
+
 		body := ctx.Request.GetRawBody()
 
 		scanner := bufio.NewScanner(bytes.NewReader(body))
@@ -88,7 +99,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		var buff *bytebufferpool.ByteBuffer
 		var indexStatsData map[string]int
 		var actionStatsData map[string]int
-		var indexStatsLock sync.Mutex
 
 		actionMeta := smallSizedPool.Get()
 		actionMeta.Reset()
@@ -126,25 +136,8 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 			if nextIsMeta {
 				nextIsMeta = false
-				var index string
-				var typeName string
-				pathArray := strings.Split(pathStr, "/")
 
-				var urlLevelIndex string
-				var urlLevelType string
-				switch len(pathArray) {
-				case 4:
-					urlLevelIndex = pathArray[1]
-					urlLevelType = pathArray[2]
-					break
-				case 3:
-					urlLevelIndex = pathArray[1]
-					break
-				}
-
-				var id string
-				var actionStr string
-
+				//TODO improve poor performance
 				actionStr, index, typeName, id = parseActionMeta(scannedByte)
 
 				//index_rename
@@ -203,43 +196,35 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				if indexAnalysis {
 					//init
 					if indexStatsData == nil {
-						indexStatsLock.Lock()
 						if indexStatsData == nil {
 							indexStatsData = map[string]int{}
 						}
-						indexStatsLock.Unlock()
 					}
 
 					//stats
-					indexStatsLock.Lock()
 					v, ok := indexStatsData[index]
 					if !ok {
 						indexStatsData[index] = 1
 					} else {
 						indexStatsData[index] = v + 1
 					}
-					indexStatsLock.Unlock()
 				}
 
 				if actionAnalysis {
 					//init
 					if actionStatsData == nil {
-						indexStatsLock.Lock()
 						if actionStatsData == nil {
 							actionStatsData = map[string]int{}
 						}
-						indexStatsLock.Unlock()
 					}
 
 					//stats
-					indexStatsLock.Lock()
 					v, ok := actionStatsData[actionStr]
 					if !ok {
 						actionStatsData[actionStr] = 1
 					} else {
 						actionStatsData[actionStr] = v + 1
 					}
-					indexStatsLock.Unlock()
 				}
 
 				if validMetadata {
@@ -518,14 +503,21 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 		//fake results
 		ctx.SetContentType(JSON_CONTENT_TYPE)
-		ctx.Write(startPart)
+
+		buffer:=bytebufferpool.Get()
+
+		buffer.Write(startPart)
 		for i := 0; i < docCount; i++ {
 			if i != 0 {
-				ctx.Write([]byte(","))
+				buffer.Write([]byte(","))
 			}
-			ctx.Write(itemPart)
+			buffer.Write(itemPart)
 		}
-		ctx.Write(endPart)
+		buffer.Write(endPart)
+
+		ctx.Response.AppendBody(buffer.Bytes())
+		bytebufferpool.Put(buffer)
+
 		ctx.Response.SetStatusCode(200)
 		ctx.Finished()
 	}
@@ -542,6 +534,46 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 	//变成 bulk 格式
 
 }
+
+func getUrlLevelBulkMeta(pathStr string) (urlLevelIndex,urlLevelType string) {
+
+	if !util.SuffixStr(pathStr,"_bulk"){
+		return urlLevelIndex, urlLevelType
+	}
+
+
+	if strings.Contains(pathStr,"//"){
+		pathStr=strings.ReplaceAll(pathStr,"//","/")
+	}
+
+	//pathArray := strings.Split(pathStr,"/")
+	//switch len(pathArray) {
+	//case 4:
+	//	urlLevelIndex = pathArray[1]
+	//	urlLevelType = pathArray[2]
+	//	break
+	//case 3:
+	//	urlLevelIndex = pathArray[1]
+	//	break
+	//}
+
+	pathArray := strings.FieldsFunc(pathStr, func(c rune) bool {
+		return c=='/'
+	} )
+
+	switch len(pathArray) {
+	case 3:
+		urlLevelIndex = pathArray[0]
+		urlLevelType = pathArray[1]
+		break
+	case 2:
+		urlLevelIndex = pathArray[0]
+		break
+	}
+
+	return urlLevelIndex, urlLevelType
+}
+
 var startPart=[]byte("{\"took\":0,\"errors\":false,\"items\":[")
 var itemPart=[]byte("{\"index\":{\"_index\":\"fake-index\",\"_type\":\"doc\",\"_id\":\"1\",\"_version\":1,\"result\":\"created\",\"_shards\":{\"total\":1,\"successful\":1,\"failed\":0},\"_seq_no\":1,\"_primary_term\":1,\"status\":200}}")
 var endPart=[]byte("]}")

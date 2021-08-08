@@ -5,6 +5,7 @@ import (
 	"github.com/buger/jsonparser"
 	"github.com/magiconair/properties/assert"
 	"infini.sh/framework/core/util"
+	"strings"
 	"testing"
 )
 
@@ -164,4 +165,45 @@ func TestParseActionMeta3(t *testing.T) {
 	newData,err = updateJsonWithNewIndex("index",data,"","","newId")
 	fmt.Println(err,string(newData))
 	assert.Equal(t,string(newData),"{\"index\":{\"_index\":\"medcl1\",\"_type\":\"doc1\",\"_id\":\"newId\"}}")
+}
+
+func TestGetUrlLevelMeta(t *testing.T) {
+
+	pathStr:="/index/_bulk"
+	pathArray := strings.FieldsFunc(pathStr, func(c rune) bool {
+						return c=='/'
+					} )
+	fmt.Println(pathArray,len(pathArray))
+
+	pathArray=strings.Split(pathStr,"/")
+	fmt.Println(pathArray,len(pathArray))
+
+	tindex,ttype:= getUrlLevelBulkMeta(pathStr)
+	fmt.Println(tindex,ttype)
+	assert.Equal(t,tindex,"index")
+	assert.Equal(t,ttype,"")
+
+	pathStr="/_bulk"
+	tindex,ttype= getUrlLevelBulkMeta(pathStr)
+	fmt.Println(tindex,ttype)
+	assert.Equal(t,tindex,"")
+	assert.Equal(t,ttype,"")
+
+	pathStr="//_bulk"
+	tindex,ttype= getUrlLevelBulkMeta(pathStr)
+	fmt.Println(tindex,ttype)
+	assert.Equal(t,tindex,"")
+	assert.Equal(t,ttype,"")
+
+	pathStr="/index/doc/_bulk"
+	tindex,ttype= getUrlLevelBulkMeta(pathStr)
+	fmt.Println(tindex,ttype)
+	assert.Equal(t,tindex,"index")
+	assert.Equal(t,ttype,"doc")
+
+	pathStr="//index/doc/_bulk"
+	tindex,ttype= getUrlLevelBulkMeta(pathStr)
+	fmt.Println(tindex,ttype)
+	assert.Equal(t,tindex,"index")
+	assert.Equal(t,ttype,"doc")
 }

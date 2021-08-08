@@ -13,6 +13,7 @@ entry:
     enabled: true
     router: my_router
     max_concurrency: 1000
+#    reduce_memory_usage: true
     network:
       binding: 0.0.0.0:8000
 #    tls:
@@ -37,14 +38,14 @@ flow:
           body: "root path"
   - name: cache_first
     filter:
-      - name: translog
-        parameters:
-          category: dev
-          filename: translog.log
-          compress: true
+#      - name: translog
+#        parameters:
+#          category: dev
+#          filename: translog.log
+#          compress: true
 #          max_file_age: 2
-          max_file_count: 50
-          max_file_size_in_mb: 1024
+#          max_file_count: 50
+#          max_file_size_in_mb: 1024
       - name: get_cache
         parameters:
           pass_patterns:
@@ -60,7 +61,11 @@ flow:
           fix_null_id: true
           index_stats_analysis: true
           action_stats_analysis: true
-          safety_parse: true
+          validate_each_line: false
+          validate_metadata: false
+          validate_request: false
+          validate_payload: false
+          max_logged_response_body_size: 4096
       - name: elasticsearch
         parameters:
           elasticsearch: dev  #elasticsearch configure reference name
@@ -93,7 +98,7 @@ router:
   - name: my_router
 #    default_flow: echo
     default_flow: cache_first
-    tracing_flow: request_logging
+#    tracing_flow: request_logging
 
 
 elasticsearch:
@@ -158,8 +163,10 @@ floating_ip:
 ##  netmask: 255.255.255.0 #optional
 ##  interface: en1         #optional
 
-#statsd:
-#  enabled: false
-#  host: 192.168.3.98
-#  port: 8125
-#  namespace: gateway.
+statsd:
+  enabled: true
+  host: 127.0.0.1
+  port: 8125
+  protocol: udp
+  namespace: gateway.
+  buffer_size: 102400

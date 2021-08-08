@@ -37,13 +37,13 @@ func parseActionMeta(data []byte) (action, index, typeName, id string) {
 		jsonparser.ObjectEach(data, func(key []byte, value []byte, dataType jsonparser.ValueType, offset int) error {
 			switch util.UnsafeBytesToString(key) {
 			case "_index":
-				index=util.UnsafeBytesToString(value)
+				index=string(value)
 				break
 			case "_type":
-				typeName=util.UnsafeBytesToString(value)
+				typeName=string(value)
 				break
 			case "_id":
-				id=util.UnsafeBytesToString(value)
+				id=string(value)
 				break
 			}
 			match=true
@@ -51,6 +51,7 @@ func parseActionMeta(data []byte) (action, index, typeName, id string) {
 		}, v)
 		action=v
 		if match{
+			//fmt.Println(action,",",index,",",typeName,",", id)
 			return action, index,typeName, id
 		}
 	}
