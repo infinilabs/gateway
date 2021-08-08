@@ -39,7 +39,11 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		ctx.Set(common.CACHEABLE, false)
 
 		clusterName := this.MustGetString("elasticsearch")
+
+		versionLock.RLock()
 		esMajorVersion, ok := versions[clusterName]
+		versionLock.RUnlock()
+
 		if !ok {
 			versionLock.Lock()
 			esMajorVersion := elastic.GetClient(clusterName).GetMajorVersion()
@@ -560,7 +564,6 @@ func (joint *BulkProcessor) Bulk(cfg *elastic.ElasticsearchConfig, endpoint stri
 
 	req := fasthttp.AcquireRequest()
 	req.Reset()
-	req.ResetBody()
 	resp := fasthttp.AcquireResponse()
 	resp.Reset()
 	defer fasthttp.ReleaseRequest(req)   // <- do not forget to release
@@ -589,17 +592,34 @@ func (joint *BulkProcessor) Bulk(cfg *elastic.ElasticsearchConfig, endpoint stri
 				panic(err)
 			}
 		} else {
-			//req.SetBody(body)
-			req.SetBodyStreamWriter(func(w *bufio.Writer) {
-				w.Write(data)
-				w.Flush()
-			})
+			req.SetBody(data)
 
+			//buggy
+			//req.SetBodyStreamWriter(func(w *bufio.Writer) {
+			//	_,err:=w.Write(data)
+			//	if err!=nil{
+			//		log.Error(err)
+			//	}
+			//	err=w.Flush()
+			//	if err!=nil{
+			//		log.Error(err)
+			//	}
+			//})
 		}
+
+		if req.GetBodyLength()<=0{
+			log.Error("INIT: after set, but body is zero,",len(data),",is compress:",joint.Compress)
+		}
+	}else{
+		log.Error("INIT: data length is zero,",string(data),",is compress:",joint.Compress)
 	}
 	retryTimes := 0
 
 DO:
+
+	if req.GetBodyLength()<=0{
+		log.Error("DO: data length is zero,",string(data),",is compress:",joint.Compress)
+	}
 
 	if cfg.TrafficControl != nil {
 	RetryRateLimit:
@@ -646,7 +666,7 @@ DO:
 
 			bodyString := string(resbody)
 			if rate.GetRateLimiter("log_400_message", endpoint, 1, 1, 5*time.Second).Allow() {
-				log.Warn("status:", resp.StatusCode(), ",", endpoint, ",", util.SubString(bodyString, 0, 256))
+				log.Warn("status:", resp.StatusCode(), ",",req.URI().String(),",data length:",len(data) ,",data:",util.SubString(util.UnsafeBytesToString(util.EscapeNewLine(data)), 0, 256),",req body:",util.SubString(util.UnsafeBytesToString(util.EscapeNewLine(req.GetRawBody())), 0, 256),",", util.SubString(bodyString, 0, 256))
 			}
 
 			logPath := path.Join(global.Env().GetLogDir(), cfg.Name, "400", "requests.log")

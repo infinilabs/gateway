@@ -118,4 +118,4 @@ func parseJson(scannedByte []byte) (action []byte, index, typeName, id string) {
 }
 
 var versions = map[string]int{}
-var versionLock = sync.Mutex{}
+var versionLock = sync.RWMutex{}
