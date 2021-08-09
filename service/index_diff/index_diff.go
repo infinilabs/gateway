@@ -26,17 +26,18 @@ type CompareItem struct {
 
 type DiffResult struct {
 	DiffType string       `json:"type,omitempty"`
+	Key      string       `json:"key,omitempty"`
 	Source   *CompareItem `json:"source,omitempty"`
 	Target   *CompareItem `json:"target,omitempty"`
 }
 
 func (a *CompareItem) CompareKey(b *CompareItem) int {
-	v := strings.Compare(a.Key,b.Key)
+	v := strings.Compare(a.Key, b.Key)
 	return v
 }
 
 func (a *CompareItem) CompareHash(b *CompareItem) int {
-	return strings.Compare(a.Hash,b.Hash)
+	return strings.Compare(a.Hash, b.Hash)
 }
 
 func NewCompareItem(key, hash string) CompareItem {
@@ -44,16 +45,19 @@ func NewCompareItem(key, hash string) CompareItem {
 	return item
 }
 
-func processMsg(diffQueue string) {
+func processMsg(diffResultHandler func(DiffResult)) {
 	var msgA, msgB CompareItem
 
 MOVEALL:
 	msgA = <-testChan.msgChans[diffConfig.GetSortedLeftQueue()]
 	msgB = <-testChan.msgChans[diffConfig.GetSortedRightQueue()]
+	//fmt.Println("Pop A:",msgA.Key)
+	//fmt.Println("Pop B:",msgB.Key)
 
 COMPARE:
 	result := msgA.CompareKey(&msgB)
 
+	//fmt.Println("A:",msgA.Key," vs B:",msgB.Key,"=",result)
 	if global.Env().IsDebug {
 		log.Trace(result, " - ", msgA, " vs ", msgB)
 	}
@@ -62,24 +66,32 @@ COMPARE:
 
 		result := DiffResult{Target: &msgB}
 		result.DiffType = "OnlyInTarget"
-		queue.Push(diffQueue, util.MustToJSONBytes(result))
+		result.Key=msgB.Key
+
+		diffResultHandler(result)
+
 		if global.Env().IsDebug {
 			log.Trace("OnlyInTarget :", msgB)
 		}
 
 		msgB = <-testChan.msgChans[diffConfig.GetSortedRightQueue()]
+		//fmt.Println("Pop B:",msgB.Key)
 
 		goto COMPARE
 	} else if result < 0 { // 1 < 2
 
 		result := DiffResult{Source: &msgA}
 		result.DiffType = "OnlyInSource"
-		queue.Push(diffQueue, util.MustToJSONBytes(result))
+		result.Key=msgA.Key
+
+		diffResultHandler(result)
+
 		if global.Env().IsDebug {
 			log.Trace(msgA, ": OnlyInSource")
 		}
 
 		msgA = <-testChan.msgChans[diffConfig.GetSortedLeftQueue()]
+		//fmt.Println("Pop A:",msgA.Key)
 
 		goto COMPARE
 	} else {
@@ -90,7 +102,10 @@ COMPARE:
 			}
 			result := DiffResult{Target: &msgB, Source: &msgA}
 			result.DiffType = "DiffBoth"
-			queue.Push(diffQueue, util.MustToJSONBytes(result))
+			result.Key=msgB.Key
+
+			diffResultHandler(result)
+
 		} else {
 			if global.Env().IsDebug {
 				log.Trace(msgA, "==", msgB)
@@ -120,26 +135,23 @@ type Config struct {
 	KeepSourceInResult bool   `config:"keep_source"`
 	BufferSize         int    `config:"buffer_size"`
 	DiffQueue          string `config:"diff_queue"`
-	Source             struct {
-		InputQueue string `config:"input_queue"`
-	} `config:"source"`
-
-	Target struct {
-		InputQueue string `config:"input_queue"`
-	} `config:"target"`
+	SourceInputQueue    string         `config:"source_queue"`
+	TargetInputQueue    string         `config:"target_queue"`
 }
 
-func (cfg *Config)GetSortedLeftQueue()string  {
-	return cfg.Source.InputQueue+"_sorted"
+func (cfg *Config) GetSortedLeftQueue() string {
+	return cfg.SourceInputQueue + "_sorted"
 }
 
-func (cfg *Config)GetSortedRightQueue()string  {
-	return cfg.Target.InputQueue+"_sorted"
+func (cfg *Config) GetSortedRightQueue() string {
+	return cfg.TargetInputQueue + "_sorted"
 }
 
 var diffConfig = Config{
 	TextReportEnabled: true,
 	BufferSize:        1,
+	SourceInputQueue:         "source",
+	TargetInputQueue:         "target",
 	DiffQueue:         "diff_result",
 }
 
@@ -157,10 +169,8 @@ func (module IndexDiffModule) Setup(cfg *config.Config) {
 		stopChan: make(chan struct{}),
 	}
 
-	testChan.msgChans= map[string]chan CompareItem{}
-	testChan.msgChans[diffConfig.GetSortedLeftQueue()]=make(chan CompareItem, diffConfig.BufferSize)
-	testChan.msgChans[diffConfig.GetSortedRightQueue()]=make(chan CompareItem, diffConfig.BufferSize)
-
+	testChan.msgChans[diffConfig.GetSortedLeftQueue()] = make(chan CompareItem, diffConfig.BufferSize)
+	testChan.msgChans[diffConfig.GetSortedRightQueue()] = make(chan CompareItem, diffConfig.BufferSize)
 
 }
 
@@ -188,8 +198,7 @@ func (module IndexDiffModule) Start() error {
 			}
 		}()
 
-		queueNames := []string{diffConfig.Source.InputQueue, diffConfig.Target.InputQueue}
-
+		queueNames := []string{diffConfig.SourceInputQueue, diffConfig.TargetInputQueue}
 
 		for _, q := range queueNames {
 			wg.Add(1)
@@ -201,7 +210,7 @@ func (module IndexDiffModule) Start() error {
 				file := path.Join(global.Env().GetDataDir(), "diff", q)
 				sortedFile := path.Join(global.Env().GetDataDir(), "diff", q+"_sorted")
 
-				if !util.FileExists(sortedFile){
+				if !util.FileExists(sortedFile) {
 					err := util.FileLinesWalk(file, func(bytes []byte) {
 						_ = sorter.Append(bytes)
 					})
@@ -232,17 +241,17 @@ func (module IndexDiffModule) Start() error {
 					if err := iter.Err(); err != nil {
 						panic(err)
 					}
-				}else{
-					log.Debugf("sorted file exists, ignore,",sortedFile)
+				} else {
+					log.Debugf("sorted file exists, ignore,", sortedFile)
 				}
 
 				//popup sorted list
 				err := util.FileLinesWalk(sortedFile, func(bytes []byte) {
-					arr :=strings.FieldsFunc(string(bytes), func(r rune) bool {
-						return r==','
+					arr := strings.FieldsFunc(string(bytes), func(r rune) bool {
+						return r == ','
 					})
-					if len(arr)!=2{
-						log.Error("invalid line:",util.UnsafeBytesToString)
+					if len(arr) != 2 {
+						log.Error("invalid line:", util.UnsafeBytesToString)
 						return
 					}
 					id := arr[0]
@@ -261,13 +270,15 @@ func (module IndexDiffModule) Start() error {
 			}(q)
 		}
 
-		go processMsg(diffConfig.DiffQueue)
+		go processMsg(func(result DiffResult) {
+			queue.Push(diffConfig.DiffQueue, util.MustToJSONBytes(result))
+		})
 
 		wg.Wait()
 
 		if diffConfig.TextReportEnabled {
 			go func() {
-				path1 := path.Join(global.Env().GetLogDir(), "diff_result", fmt.Sprintf("%v_vs_%v", diffConfig.Source.InputQueue, diffConfig.Target.InputQueue))
+				path1 := path.Join(global.Env().GetLogDir(), "diff_result", fmt.Sprintf("%v_vs_%v", diffConfig.SourceInputQueue, diffConfig.TargetInputQueue))
 				os.MkdirAll(path1, 0775)
 				file := path.Join(path1, util.FormatTimeForFileName(time.Now())+".log")
 				str := "    ___ _  __  __     __                 _ _   \n"
@@ -294,7 +305,7 @@ func (module IndexDiffModule) Start() error {
 						if len(testChan.msgChans[diffConfig.GetSortedLeftQueue()]) > 0 ||
 							len(testChan.msgChans[diffConfig.GetSortedRightQueue()]) > 0 {
 							time.Sleep(5 * time.Second)
-							log.Debug("waiting for:",len(testChan.msgChans[diffConfig.GetSortedLeftQueue()]),",",len(testChan.msgChans[diffConfig.GetSortedRightQueue()]))
+							log.Debug("waiting for:", len(testChan.msgChans[diffConfig.GetSortedLeftQueue()]), ",", len(testChan.msgChans[diffConfig.GetSortedRightQueue()]))
 							goto WAIT
 						}
 						goto RESULT

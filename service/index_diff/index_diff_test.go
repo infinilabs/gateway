@@ -1,6 +1,8 @@
 package index_diff
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 )
@@ -8,46 +10,64 @@ import (
 func TestCompareItems(t *testing.T) {
 
 	a:=[]CompareItem{
-		NewCompareItem("1", "1"),
+		NewCompareItem("1", "1"),//diff left
 		NewCompareItem("2", "1"),
-		NewCompareItem("3", "1"),
+		NewCompareItem("3", "1"),//diff left
 		NewCompareItem("4", "1"),
 		NewCompareItem("5", "1"),
 		NewCompareItem("9", "1"),
-		NewCompareItem("11", "1"),
-		NewCompareItem("12", "1"),
+		NewCompareItem("11", "1"),//diff left
+		NewCompareItem("12", "1"),//diff both
 	}
 
 	b:=[]CompareItem{
 			NewCompareItem("2","1"),
 			NewCompareItem("4","1"),
 			NewCompareItem("5","1"),
-			NewCompareItem("8","1"),
+			NewCompareItem("8","1"),//diff right
 			NewCompareItem("9","1"),
-			NewCompareItem("10","1"),
+			NewCompareItem("10","1"),//diff right
 			NewCompareItem("12","2"),}
 
-	buffer:=10
-	testChan:= CompareChan{
-		msgAChan: make(chan CompareItem,buffer),
-		msgBChan: make(chan CompareItem,buffer),
+	testChan = CompareChan{
+		msgChans: map[string]chan CompareItem{},
 		stopChan: make(chan struct{}),
 	}
 
-	go testChan.processMsg()
+	testChan.msgChans[diffConfig.GetSortedLeftQueue()]=make(chan CompareItem)
+	testChan.msgChans[diffConfig.GetSortedRightQueue()]=make(chan CompareItem)
 
+	go processMsg(func(result DiffResult) {
+		fmt.Println(result.DiffType,",",result.Key)
+	})
+
+	wg:=sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
 		for _,v:=range a{
-			testChan.addMsgA(v)
+			//fmt.Println("InputA:",v.Key)
+			testChan.msgChans[diffConfig.GetSortedLeftQueue()]<- v
 		}
+		wg.Done()
 	}()
 
+	wg.Add(1)
 	go func() {
 		for _,v:=range b{
-			testChan.addMsgB(v)
+			//fmt.Println("InputB:",v.Key)
+			testChan.msgChans[diffConfig.GetSortedRightQueue()]<- v
 		}
+		wg.Done()
 	}()
 
-	time.Sleep(time.Minute)
+	wg.Wait()
+	time.Sleep(1*time.Second)
+
+	//OnlyInSource , 1
+	//OnlyInSource , 3
+	//OnlyInTarget , 8
+	//OnlyInTarget , 10
+	//OnlyInSource , 11
+	//DiffBoth , 12
 
 }
