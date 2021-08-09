@@ -237,9 +237,11 @@ func (module IndexDiffModule) Start() error {
 				sortedFile := path.Join(global.Env().GetDataDir(), "diff", q+"_sorted")
 
 				if !util.FileExists(sortedFile){
-					lines := util.FileGetLines(file)
-					for _, v := range lines {
-						_ = sorter.Append([]byte(v))
+					err := util.FileLinesWalk(file, func(bytes []byte) {
+						_ = sorter.Append(bytes)
+					})
+					if err != nil {
+						panic(err)
 					}
 
 					defer sorter.Close()
@@ -270,24 +272,25 @@ func (module IndexDiffModule) Start() error {
 				}
 
 				//popup sorted list
-				lines := util.FileGetLines(sortedFile)
-				for _, v := range lines {
-					arr :=strings.FieldsFunc(v, func(r rune) bool {
+				err := util.FileLinesWalk(sortedFile, func(bytes []byte) {
+					arr :=strings.FieldsFunc(string(bytes), func(r rune) bool {
 						return r==','
 					})
 					if len(arr)!=2{
-						log.Error("invalid line:",v)
-						continue
+						log.Error("invalid line:",util.UnsafeBytesToString)
+						return
 					}
 					id := arr[0]
 					hash := arr[1]
 					item := CompareItem{
 						//Doc:  doc,
-						Key:  fmt.Sprintf("%v", id),
-						Hash: fmt.Sprintf("%v", (hash)),
+						Key:  id,
+						Hash: hash,
 					}
 					testChan.msgChans[q+"_sorted"] <- item
-					//queue.Push(q+"_sorted", util.MustToJSONBytes(item))
+				})
+				if err != nil {
+					panic(err)
 				}
 
 			}(q)
@@ -326,6 +329,7 @@ func (module IndexDiffModule) Start() error {
 						if len(testChan.msgChans[diffConfig.GetSortedLeftQueue()]) > 0 ||
 							len(testChan.msgChans[diffConfig.GetSortedRightQueue()]) > 0 {
 							time.Sleep(5 * time.Second)
+							log.Debug("waiting for:",len(testChan.msgChans[diffConfig.GetSortedLeftQueue()]),",",len(testChan.msgChans[diffConfig.GetSortedRightQueue()]))
 							goto WAIT
 						}
 						goto RESULT
