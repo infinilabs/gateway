@@ -16,7 +16,7 @@ elasticsearch:
       password: testtest
 
 pipelines:
-  #使用两个 scroll 任务并行读取两个索引的文档
+#  #使用两个 scroll 任务并行读取两个索引的文档
 #  - name: es_scroll_a
 #    enabled: true
 #    input:
@@ -25,8 +25,7 @@ pipelines:
 #      parameters:
 #        indices: "medcl-test"
 #        scroll_time: "10m"
-##        sort_field: "id.keyword"
-#        batch_size: 10000
+#        batch_size: 5000
 #        slice_size: 1
 #        elasticsearch: "source"
 #        output_queue: "source_docs"
@@ -38,11 +37,11 @@ pipelines:
 #      parameters:
 #        indices: "medcl-test"
 #        scroll_time: "10m"
-##        sort_field: "id"
 #        batch_size: 10000
 #        slice_size: 1
 #        elasticsearch: "target"
 #        output_queue: "target_docs"
+
   # 消费 diff 结果并保存到 Elasticsearch 用于查看两个索引的 diff 结果
 #  - name: diff_result_ingest
 #    enabled: true
@@ -58,35 +57,14 @@ pipelines:
 #        worker_size: 1
 #        bulk_size_in_mb: 1 #in MB
 
-## 进行 diff 的服务
+### 进行 diff 的服务
 index_diff:
   enabled: true
   diff_queue: "diff_result"
   buffer_size: 1
-  text_report: true
-  source:
-    input_queue: 'source_docs'
-  target:
-    input_queue: 'target_docs'
-
-
-elastic:
-  elasticsearch: source
-  store:
-    enabled: true
-  monitoring:
-    enabled: false
-  orm:
-    enabled: true
-    init_template: true
-    template_name: ".gateway-default"
-    index_prefix: "gateway_"
-
-queue:
-  sync_timeout_in_ms: 100000
-  sync_every_records: 100000
-  write_chan_buffer_size: 100000
-  read_chan_buffer_size: 100000
+  text_report: true #如果要存 es，这个开关关闭，开启 pipeline 的 diff_result_ingest 任务
+  source_queue: 'source_docs'
+  target_queue: 'target_docs'
 
 statsd:
   enabled: true

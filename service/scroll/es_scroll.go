@@ -28,15 +28,14 @@ import (
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/bytebufferpool"
+	"math"
 	"path"
 	"sync"
+	"time"
 )
 
 type ScrollJoint struct {
 	param.Parameters
-	//totalSize       int
-	//successSize     int
-	//failureSize     int
 	batchSize       int
 	persist         bool
 	outputQueueName string
@@ -75,7 +74,7 @@ func (joint ScrollJoint) Open() error {
 	joint.outputQueueName = joint.GetStringOrDefault("output_queue", "default")
 	joint.persist = joint.GetBool("persist", true)
 
-	//start := time.Now()
+	start := time.Now()
 
 	joint.esconfig = elastic.GetConfig(esNameVal)
 	client := elastic.GetClient(esNameVal)
@@ -85,7 +84,10 @@ func (joint ScrollJoint) Open() error {
 		sliceSizeVal = 1
 	}
 
+	var statsLock sync.RWMutex
 	var totalSize  int
+
+	log.Trace(esNameVal,indexNameVal,"slice size:",sliceSizeVal)
 
 	for slice := 0; slice < sliceSizeVal; slice++ {
 
@@ -98,7 +100,11 @@ func (joint ScrollJoint) Open() error {
 
 		docs := scrollResponse1.GetDocs()
 		docSize := len(docs)
+
+		statsLock.Lock()
 		totalSize += docSize
+		statsLock.Unlock()
+
 		if docSize > 0 {
 			processingDocs(docs, joint.outputQueueName)
 			//joint.totalSize += len(scrollResponse1.GetDocs())
@@ -122,25 +128,19 @@ func (joint ScrollJoint) Open() error {
 			for {
 				data, err := client.NextScroll(scrollTimeVal, initScrollID)
 
+				if err != nil {
+					log.Error("failed to scroll,",esNameVal,indexNameVal,string(data),err)
+					return
+				}
+
 				if version>=7{
 					scrollResponse= scrollResponseV7Pool.Get().(*elastic.ScrollResponseV7)
 
 					err=scrollResponse.(*elastic.ScrollResponseV7).UnmarshalJSON(data)
 
-					//var json = jsoniter.ConfigCompatibleWithStandardLibrary
-					//err=json.Unmarshal(data,scrollResponse)
-
-					//iter := jsoniter.ConfigFastest.BorrowIterator(data)
-					//iter.ReadVal(scrollResponse)
-					//if iter.Error != nil {
-					//	fmt.Println("error:", iter.Error)
-					//}
-					//jsoniter.ConfigFastest.ReturnIterator(iter)
-
-					//err=json.Unmarshal(data,scrollResponse)
-
 					if err != nil {
-						panic(err)
+						log.Error("failed to scroll,",esNameVal,indexNameVal,string(data),err)
+						return
 					}
 				}else{
 					scrollResponse= scrollResponsePool.Get().(*elastic.ScrollResponse)
@@ -175,7 +175,10 @@ func (joint ScrollJoint) Open() error {
 
 				docs := obj.GetDocs()
 				docSize := len(docs)
+
+				statsLock.Lock()
 				totalSize += docSize
+				statsLock.Unlock()
 
 				stats.Gauge(fmt.Sprintf("scroll_total_received-%v",tempSlice),joint.outputQueueName, int64(totalSize))
 
@@ -193,19 +196,17 @@ func (joint ScrollJoint) Open() error {
 				}
 
 			}
-			log.Debugf("slice %v is done", slice)
+			log.Debugf("%v - %v, slice %v is done", esNameVal,indexNameVal,slice)
 
 		}()
 
 	}
 
-	log.Infof("scroll finished, docs: %v ", totalSize)
-
 	wg.Wait()
 
-	//duration := time.Now().Sub(start).Seconds()
+	duration := time.Now().Sub(start).Seconds()
 
-	//log.Infof("scroll finished, docs: %v, duration: %vs, qps: %v ", totalSize, duration, math.Ceil(float64(joint.totalSize)/math.Ceil((duration))))
+	log.Infof("scroll finished, es:%v, index: %v, docs: %v, duration: %vs, qps: %v ", esNameVal,indexNameVal,totalSize, duration, math.Ceil(float64(totalSize)/math.Ceil((duration))))
 
 	return nil
 }

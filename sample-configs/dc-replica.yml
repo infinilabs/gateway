@@ -181,14 +181,14 @@ pipelines:
       parameters:
         input_queue: "primary-500"
         flow: primary-flow-post-processing
-  - name: disk_queue_primary-deadletter-consumer
-    enabled: true
-    start:
-      joint: flow_runner
-      enabled: true
-      parameters:
-        input_queue: "primary_dead_letter"
-        flow: primary-flow-post-processing
+#  - name: disk_queue_primary-deadletter-consumer #TODO dead_letter failure should always go to dead_letter, no back to 500 queue, which will cause infiniloop
+#    enabled: true
+#    start:
+#      joint: flow_runner
+#      enabled: true
+#      parameters:
+#        input_queue: "primary_dead_letter"
+#        flow: primary-flow-post-processing
   - name: disk_queue_backup-deadletter-consumer
     enabled: true
     start:
