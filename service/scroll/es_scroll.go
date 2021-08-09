@@ -27,6 +27,7 @@ import (
 	"infini.sh/framework/core/rotate"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
+	"infini.sh/framework/lib/bytebufferpool"
 	"path"
 	"sync"
 )
@@ -211,26 +212,24 @@ func (joint ScrollJoint) Open() error {
 
 func processingDocs(docs []elastic.IndexDocument, outputQueueName string) {
 
+	buffer:=bytebufferpool.Get()
+
+	stats.IncrementBy("scrolling_processing."+outputQueueName,"docs", int64(len(docs)))
 
 	for _, v := range docs {
 
-		//bytes:=util.MustToJSONBytes(v)
-		stats.Increment("scrolling_processing."+outputQueueName,"docs")
-
 		h1 := fnv1a.HashBytes32(util.MustToJSONBytes(v.Source))
-		//hash := util.MustToJSONBytes(h1)
 
-		//fmt.Println(v.Index,",",v.ID,",",util.IntToString(int(h1)))
-
-		handler:=rotate.GetFileHandler(path.Join(global.Env().GetDataDir(),"diff",outputQueueName),rotate.DefaultConfig)
-		handler.WriteBytesArray([]byte((v.ID.(string))),[]byte(","),[]byte(util.IntToString(int(h1))),[]byte("\n"))
-		//handler.Close()
-
-		//err := queue.Push(outputQueueName, bytes)
-		//if err != nil {
-		//	log.Error(err)
-		//}
+		_,err:=buffer.WriteBytesArray([]byte((v.ID.(string))),[]byte(","),[]byte(util.Int64ToString(int64(h1))),[]byte("\n"))
+		if err != nil {
+			panic(err)
+		}
 	}
+	handler:=rotate.GetFileHandler(path.Join(global.Env().GetDataDir(),"diff",outputQueueName),rotate.DefaultConfig)
+
+	handler.Write(buffer.Bytes())
+	bytebufferpool.Put(buffer)
+
 }
 
 func (joint ScrollJoint) Close() error {
