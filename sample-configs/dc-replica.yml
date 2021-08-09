@@ -189,6 +189,14 @@ pipelines:
       parameters:
         input_queue: "primary_dead_letter"
         flow: primary-flow-post-processing
+  - name: disk_queue_backup-deadletter-consumer
+    enabled: true
+    start:
+      joint: flow_runner
+      enabled: true
+      parameters:
+        input_queue: "backup_dead_letter"
+        flow: primary-flow-post-processing
   - name: disk_queue_backup-consumer
     enabled: true
     start:
@@ -223,3 +231,10 @@ pipelines:
         timeout: "1s"
         worker_size: 1
         bulk_size_in_mb: 1 #in MB
+statsd:
+  enabled: true
+  host: 127.0.0.1
+  port: 8125
+  protocol: udp
+  namespace: dc-replica.
+  buffer_size: 102400
