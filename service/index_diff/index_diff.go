@@ -47,22 +47,7 @@ func NewCompareItem(key, hash string) CompareItem {
 func processMsg(diffQueue string) {
 	var msgA, msgB CompareItem
 
-	//distance:=0
-
 MOVEALL:
-	//b1, err := queue.Pop(diffConfig.GetSortedLeftQueue())
-	//if err != nil {
-	//	panic(err)
-	//}
-	//util.MustFromJSONBytes(b1, &msgA)
-	//
-	//b2, err := queue.Pop(diffConfig.GetSortedRightQueue())
-	//if err != nil {
-	//	panic(err)
-	//}
-	//util.MustFromJSONBytes(b2, &msgB)
-
-
 	msgA = <-testChan.msgChans[diffConfig.GetSortedLeftQueue()]
 	msgB = <-testChan.msgChans[diffConfig.GetSortedRightQueue()]
 
@@ -72,10 +57,6 @@ COMPARE:
 	if global.Env().IsDebug {
 		log.Trace(result, " - ", msgA, " vs ", msgB)
 	}
-	//distance++
-	//if msgA.Key=="c46krqcgq9s2jd9v9tig"||msgB.Key=="c46krqcgq9s2jd9v9tig"{
-	//	distance=0
-	//}
 
 	if result > 0 {
 
@@ -86,14 +67,7 @@ COMPARE:
 			log.Trace("OnlyInTarget :", msgB)
 		}
 
-		//b2, err := queue.Pop(diffConfig.GetSortedRightQueue())
-		//if err != nil {
-		//	panic(err)
-		//}
-		//util.MustFromJSONBytes(b2, &msgB)
-
 		msgB = <-testChan.msgChans[diffConfig.GetSortedRightQueue()]
-
 
 		goto COMPARE
 	} else if result < 0 { // 1 < 2
@@ -105,19 +79,12 @@ COMPARE:
 			log.Trace(msgA, ": OnlyInSource")
 		}
 
-		//b1, err := queue.Pop(diffConfig.GetSortedLeftQueue())
-		//if err != nil {
-		//	panic(err)
-		//}
-		//util.MustFromJSONBytes(b1, &msgA)
-
 		msgA = <-testChan.msgChans[diffConfig.GetSortedLeftQueue()]
 
 		goto COMPARE
 	} else {
 		//doc exists, compare hash
 		if msgA.CompareHash(&msgB) != 0 {
-			//fmt.Println(msgA, "!=", msgB)
 			if global.Env().IsDebug {
 				log.Trace(msgA, "!=", msgB)
 			}
@@ -138,8 +105,6 @@ type IndexDiffModule struct {
 
 type CompareChan struct {
 	msgChans map[string]chan CompareItem
-	//msgAChan chan CompareItem
-	//msgBChan chan CompareItem
 	stopChan chan struct{}
 }
 
