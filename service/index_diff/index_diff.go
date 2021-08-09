@@ -1,19 +1,3 @@
-/*
-Copyright Medcl (m AT medcl.net)
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-   http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package index_diff
 
 import (
@@ -25,6 +9,7 @@ import (
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/util"
+	"infini.sh/framework/lib/bytebufferpool"
 	"os"
 	"path"
 	"runtime"
@@ -46,12 +31,12 @@ type DiffResult struct {
 }
 
 func (a *CompareItem) CompareKey(b *CompareItem) int {
-	v := strings.Compare(a.Key, b.Key)
+	v := strings.Compare(a.Key,b.Key)
 	return v
 }
 
 func (a *CompareItem) CompareHash(b *CompareItem) int {
-	return strings.Compare(a.Hash, b.Hash)
+	return strings.Compare(a.Hash,b.Hash)
 }
 
 func NewCompareItem(key, hash string) CompareItem {
@@ -65,13 +50,13 @@ func processMsg(diffQueue string) {
 	//distance:=0
 
 MOVEALL:
-	b1, err := queue.Pop(diffConfig.SortedLeftQueue)
+	b1, err := queue.Pop(diffConfig.GetSortedLeftQueue())
 	if err != nil {
 		panic(err)
 	}
 	util.MustFromJSONBytes(b1, &msgA)
 
-	b2, err := queue.Pop(diffConfig.SortedRightQueue)
+	b2, err := queue.Pop(diffConfig.GetSortedRightQueue())
 	if err != nil {
 		panic(err)
 	}
@@ -96,7 +81,7 @@ COMPARE:
 		if global.Env().IsDebug {
 			log.Trace("OnlyInTarget :", msgB)
 		}
-		b2, err := queue.Pop(diffConfig.SortedRightQueue)
+		b2, err := queue.Pop(diffConfig.GetSortedRightQueue())
 		if err != nil {
 			panic(err)
 		}
@@ -110,7 +95,7 @@ COMPARE:
 		if global.Env().IsDebug {
 			log.Trace(msgA, ": OnlyInSource")
 		}
-		b1, err := queue.Pop(diffConfig.SortedLeftQueue)
+		b1, err := queue.Pop(diffConfig.GetSortedLeftQueue())
 		if err != nil {
 			panic(err)
 		}
@@ -148,10 +133,8 @@ type Config struct {
 	KeepSourceInResult bool   `config:"keep_source"`
 	BufferSize         int    `config:"buffer_size"`
 	DiffQueue          string `config:"diff_queue"`
-	SortedLeftQueue    string `config:"sorted_source"`
-	SortedRightQueue   string `config:"sorted_target"`
 	Source             struct {
-		InputQueue    string `config:"input_queue"`
+		InputQueue string `config:"input_queue"`
 	} `config:"source"`
 
 	Target struct {
@@ -159,12 +142,17 @@ type Config struct {
 	} `config:"target"`
 }
 
+func (cfg *Config)GetSortedLeftQueue()string  {
+	return cfg.Source.InputQueue+"_sorted"
+}
+func (cfg *Config)GetSortedRightQueue()string  {
+	return cfg.Target.InputQueue+"_sorted"
+}
+
 var diffConfig = Config{
-	TextReportEnabled:true,
-	BufferSize:       1,
-	DiffQueue:        "diff_result",
-	SortedLeftQueue:  "sorted_source",
-	SortedRightQueue: "sorted_target",
+	TextReportEnabled: true,
+	BufferSize:        1,
+	DiffQueue:         "diff_result",
 }
 
 var wg sync.WaitGroup
@@ -182,14 +170,6 @@ func (module IndexDiffModule) Start() error {
 	if !diffConfig.Enabled {
 		return nil
 	}
-
-	//opt := nutsdb.DefaultOptions
-	//opt.Dir = path.Join(global.Env().GetDataDir(), "index_diff")
-	//var err error
-	//db, err := nutsdb.Open(opt)
-	//if err != nil {
-	//	panic(err)
-	//}
 
 	go func() {
 		defer func() {
@@ -209,17 +189,18 @@ func (module IndexDiffModule) Start() error {
 			}
 		}()
 
-		//build sorted file
-		//go func() {
+		queueNames := []string{diffConfig.Source.InputQueue, diffConfig.Target.InputQueue}
 
-			files:=[]string{"source_docs","target_docs"}
-			for _,v:=range files{
+		for _, q := range queueNames {
+			go func(q string) {
+				buffer := bytebufferpool.Get()
+				//build sorted file
 				sorter := extsort.New(nil)
 				defer sorter.Close()
-				file:=path.Join(global.Env().GetDataDir(),"diff",v)
-				file1:=path.Join(global.Env().GetDataDir(),"diff",v+"_sorted")
-				lines:=util.FileGetLines(file)
-				for _,v:=range lines{
+				file := path.Join(global.Env().GetDataDir(), "diff", q)
+				sortedFile := path.Join(global.Env().GetDataDir(), "diff", q+"_sorted")
+				lines := util.FileGetLines(file)
+				for _, v := range lines {
 					_ = sorter.Append([]byte(v))
 				}
 
@@ -231,52 +212,41 @@ func (module IndexDiffModule) Start() error {
 				defer iter.Close()
 
 				for iter.Next() {
-					//fmt.Println(string(iter.Data()))
-					util.FileAppendNewLine(file1,string(iter.Data()))
+					buffer.Write(iter.Data())
+					buffer.WriteByte('\n')
+
+					if buffer.Len() > 10*1024 {
+						util.FileAppendContentWithByte(sortedFile, buffer.Bytes())
+						buffer.Reset()
+					}
 				}
+
+				util.FileAppendContentWithByte(sortedFile, buffer.Bytes())
+				bytebufferpool.Put(buffer)
 				if err := iter.Err(); err != nil {
 					panic(err)
 				}
-			}
 
-		//}()
-
-		//popup source sorted list
-		//go func() {
-
-			file1:=path.Join(global.Env().GetDataDir(),"diff","source_docs_sorted")
-			lines:=util.FileGetLines(file1)
-			for _,v:=range lines{
-				arr:=strings.Split(v,",")
-				id:=arr[0]
-				hash:=arr[1]
-				item := CompareItem{
-					//Doc:  doc,
-					Key:  fmt.Sprintf("%v", id),
-					Hash: fmt.Sprintf("%v", (hash)),
+				//popup sorted list
+				lines = util.FileGetLines(sortedFile)
+				for _, v := range lines {
+					arr := strings.Split(v, ",")
+					if len(arr)!=2{
+						log.Error("invalid line:",v)
+						continue
+					}
+					id := arr[0]
+					hash := arr[1]
+					item := CompareItem{
+						//Doc:  doc,
+						Key:  fmt.Sprintf("%v", id),
+						Hash: fmt.Sprintf("%v", (hash)),
+					}
+					queue.Push(q+"_sorted", util.MustToJSONBytes(item))
 				}
-				queue.Push(diffConfig.SortedLeftQueue, util.MustToJSONBytes(item))
-			}
 
-		//}()
-
-		//popup target sorted list
-		//go func() {
-
-			file1=path.Join(global.Env().GetDataDir(),"diff","target_docs_sorted")
-			lines=util.FileGetLines(file1)
-			for _,v:=range lines{
-				arr:=strings.Split(v,",")
-				id:=arr[0]
-				hash:=arr[1]
-				item := CompareItem{
-					//Doc:  doc,
-					Key:  fmt.Sprintf("%v", id),
-					Hash: fmt.Sprintf("%v", (hash)),
-				}
-				queue.Push(diffConfig.SortedRightQueue, util.MustToJSONBytes(item))
-			}
-		//}()
+			}(q)
+		}
 
 		if diffConfig.TextReportEnabled {
 			go func() {
@@ -295,26 +265,19 @@ func (module IndexDiffModule) Start() error {
 				bothBuilder := strings.Builder{}
 				strBuilder.WriteString(str)
 
-				var i,left,right,both int
+				var i, left, right, both int
 
 			WAIT:
-				timeOut := 1 * time.Second
+				timeOut := 30 * time.Second
 				for {
-					//if queue.Depth(diffConfig.Source.InputQueue) > 0 ||
-					//	queue.Depth(diffConfig.SortedLeftQueue) > 0 ||
-					//	queue.Depth(diffConfig.SortedRightQueue) > 0 ||
-					//	queue.Depth(diffConfig.Target.InputQueue) > 0 {
-					//	time.Sleep(10 * time.Second)
-					//	goto WAIT
-					//}
 
 					v, timeout, err := queue.PopTimeout(diffConfig.DiffQueue, timeOut)
 					if timeout {
 						if queue.Depth(diffConfig.Source.InputQueue) > 0 ||
-							queue.Depth(diffConfig.SortedLeftQueue) > 0 ||
-							queue.Depth(diffConfig.SortedRightQueue) > 0 ||
+							queue.Depth(diffConfig.GetSortedRightQueue()) > 0 ||
+							queue.Depth(diffConfig.GetSortedLeftQueue()) > 0 ||
 							queue.Depth(diffConfig.Target.InputQueue) > 0 {
-							time.Sleep(10 * time.Second)
+							time.Sleep(30 * time.Second)
 							goto WAIT
 						}
 						goto RESULT
@@ -358,7 +321,7 @@ func (module IndexDiffModule) Start() error {
 				util.FileAppendNewLine(file, strBuilder.String())
 
 				if leftBuilder.Len() > 0 {
-					str:=fmt.Sprintf("%v Documents diff in left side:",left)
+					str := fmt.Sprintf("%v Documents diff in left side:", left)
 					fmt.Println(str)
 					fmt.Println(leftBuilder.String())
 
@@ -367,7 +330,7 @@ func (module IndexDiffModule) Start() error {
 				}
 				if rightBuilder.Len() > 0 {
 
-					str:=fmt.Sprintf("%v Documents diff in right side:",right)
+					str := fmt.Sprintf("%v Documents diff in right side:", right)
 					fmt.Println(str)
 					fmt.Println(rightBuilder.String())
 
@@ -376,7 +339,7 @@ func (module IndexDiffModule) Start() error {
 				}
 				if bothBuilder.Len() > 0 {
 
-					str:=fmt.Sprintf("%v Documents diff in both side:",both)
+					str := fmt.Sprintf("%v Documents diff in both side:", both)
 					fmt.Println(str)
 					fmt.Println(bothBuilder.String())
 
@@ -387,10 +350,7 @@ func (module IndexDiffModule) Start() error {
 			}()
 		}
 
-
-
 		wg.Add(1)
-
 		go processMsg(diffConfig.DiffQueue)
 		wg.Wait()
 
@@ -403,7 +363,6 @@ func (module IndexDiffModule) Stop() error {
 	if !diffConfig.Enabled {
 		return nil
 	}
-	//close(testChan.stopChan)
 	wg.Done()
 	return nil
 }
