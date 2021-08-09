@@ -2,6 +2,7 @@ package index_diff
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"
 	"time"
@@ -37,8 +38,13 @@ func TestCompareItems(t *testing.T) {
 	testChan.msgChans[diffConfig.GetSortedLeftQueue()]=make(chan CompareItem)
 	testChan.msgChans[diffConfig.GetSortedRightQueue()]=make(chan CompareItem)
 
+	a1:=[]string{}
+	m:=map[string]string{}
 	go processMsg(func(result DiffResult) {
+		key:=result.DiffType+","+result.Key
 		fmt.Println(result.DiffType,",",result.Key)
+		a1=append(a1,key)
+		m[key]=result.Key
 	})
 
 	wg:=sync.WaitGroup{}
@@ -62,6 +68,15 @@ func TestCompareItems(t *testing.T) {
 
 	wg.Wait()
 	time.Sleep(1*time.Second)
+
+	assert.Equal(t, 6,len(a1))
+
+	assert.Equal(t,"1",m["OnlyInSource,1"])
+	assert.Equal(t,"3",m["OnlyInSource,3"])
+	assert.Equal(t,"11",m["OnlyInSource,11"])
+	assert.Equal(t,"8",m["OnlyInTarget,8"])
+	assert.Equal(t,"10",m["OnlyInTarget,10"])
+	assert.Equal(t,"12",m["DiffBoth,12"])
 
 	//OnlyInSource , 1
 	//OnlyInSource , 3
