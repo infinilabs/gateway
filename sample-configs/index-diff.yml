@@ -25,24 +25,24 @@ pipelines:
 #      parameters:
 #        indices: "medcl-test"
 #        scroll_time: "10m"
-##        sort_field: "id"
+##        sort_field: "id.keyword"
 #        batch_size: 10000
 #        slice_size: 1
 #        elasticsearch: "source"
 #        output_queue: "source_docs"
-  - name: es_scroll_b
-    enabled: true
-    input:
-      joint: es_scroll
-      enabled: true
-      parameters:
-        indices: "medcl-test"
-        scroll_time: "10m"
-#        sort_field: "id.keyword"
-        batch_size: 10000
-        slice_size: 5
-        elasticsearch: "target"
-        output_queue: "target_docs"
+#  - name: es_scroll_b
+#    enabled: true
+#    input:
+#      joint: es_scroll
+#      enabled: true
+#      parameters:
+#        indices: "medcl-test"
+#        scroll_time: "10m"
+##        sort_field: "id"
+#        batch_size: 10000
+#        slice_size: 1
+#        elasticsearch: "target"
+#        output_queue: "target_docs"
   # 消费 diff 结果并保存到 Elasticsearch 用于查看两个索引的 diff 结果
 #  - name: diff_result_ingest
 #    enabled: true
@@ -58,7 +58,7 @@ pipelines:
 #        worker_size: 1
 #        bulk_size_in_mb: 1 #in MB
 
-# 进行 diff 的服务
+## 进行 diff 的服务
 index_diff:
   enabled: true
   diff_queue: "diff_result"

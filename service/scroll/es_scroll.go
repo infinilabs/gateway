@@ -17,12 +17,17 @@ limitations under the License.
 package scroll
 
 import (
+	"fmt"
 	log "github.com/cihub/seelog"
+	"github.com/segmentio/fasthash/fnv1a"
 	"infini.sh/framework/core/elastic"
+	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/pipeline"
-	"infini.sh/framework/core/queue"
+	"infini.sh/framework/core/rotate"
+	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
+	"path"
 	"sync"
 )
 
@@ -40,6 +45,21 @@ type ScrollJoint struct {
 func (joint ScrollJoint) Name() string {
 	return "es_scroll"
 }
+
+
+var scrollResponsePool = &sync.Pool{
+	New: func() interface{} {
+		c := elastic.ScrollResponse{}
+		return &c
+	},
+}
+var scrollResponseV7Pool = &sync.Pool{
+	New: func() interface{} {
+		c := elastic.ScrollResponseV7{}
+		return &c
+	},
+}
+
 
 func (joint ScrollJoint) Open() error {
 	sliceSizeVal, _ := joint.GetInt("slice_size", 1)
@@ -64,26 +84,20 @@ func (joint ScrollJoint) Open() error {
 		sliceSizeVal = 1
 	}
 
+	var totalSize  int
+
 	for slice := 0; slice < sliceSizeVal; slice++ {
 
 		tempSlice := slice
-		scrollResponse, err := client.NewScroll(indexNameVal, scrollTimeVal, joint.batchSize, queryVal, tempSlice, sliceSizeVal, fieldsVal, sortField, sortType)
+		scrollResponse1, err := client.NewScroll(indexNameVal, scrollTimeVal, joint.batchSize, queryVal, tempSlice, sliceSizeVal, fieldsVal, sortField, sortType)
 		if err != nil {
 			log.Error(err)
 			continue
 		}
 
-		scrollResponse1, ok := scrollResponse.(elastic.ScrollResponseAPI)
-		if !ok {
-			log.Warn("invalid scroll response, ",scrollResponse, err)
-			break
-		}
-
-		log.Debug("total docs for scrolling: ",scrollResponse1.GetHitsTotal())
-
 		docs := scrollResponse1.GetDocs()
 		docSize := len(docs)
-		//joint.totalSize += docSize
+		totalSize += docSize
 		if docSize > 0 {
 			processingDocs(docs, joint.outputQueueName)
 			//joint.totalSize += len(scrollResponse1.GetDocs())
@@ -95,25 +109,75 @@ func (joint ScrollJoint) Open() error {
 			log.Tracef("slice %v is empty", tempSlice)
 			continue
 		}
-
 		wg.Add(1)
 
 		go func() {
+			defer wg.Done()
 			var scrollResponse interface{}
 			initScrollID := scrollResponse1.GetScrollId()
 
+			version:=client.GetMajorVersion()
+
 			for {
-				scrollResponse, err = client.NextScroll(scrollTimeVal, initScrollID)
+				data, err := client.NextScroll(scrollTimeVal, initScrollID)
+
+				if version>=7{
+					scrollResponse= scrollResponseV7Pool.Get().(*elastic.ScrollResponseV7)
+
+					err=scrollResponse.(*elastic.ScrollResponseV7).UnmarshalJSON(data)
+
+					//var json = jsoniter.ConfigCompatibleWithStandardLibrary
+					//err=json.Unmarshal(data,scrollResponse)
+
+					//iter := jsoniter.ConfigFastest.BorrowIterator(data)
+					//iter.ReadVal(scrollResponse)
+					//if iter.Error != nil {
+					//	fmt.Println("error:", iter.Error)
+					//}
+					//jsoniter.ConfigFastest.ReturnIterator(iter)
+
+					//err=json.Unmarshal(data,scrollResponse)
+
+					if err != nil {
+						panic(err)
+					}
+				}else{
+					scrollResponse= scrollResponsePool.Get().(*elastic.ScrollResponse)
+					err=scrollResponse.(*elastic.ScrollResponse).UnmarshalJSON(data)
+
+					//var json = jsoniter.ConfigCompatibleWithStandardLibrary
+					//err=json.Unmarshal(data,scrollResponse)
+
+					//iter := jsoniter.ConfigFastest.BorrowIterator(data)
+					//iter.ReadVal(scrollResponse)
+					//if iter.Error != nil {
+					//	fmt.Println("error:", iter.Error)
+					//}
+					//jsoniter.ConfigFastest.ReturnIterator(iter)
+
+					//err=json.Unmarshal(data,scrollResponse)
+
+					if err != nil {
+						panic(err)
+					}
+				}
+
 				obj, ok := scrollResponse.(elastic.ScrollResponseAPI)
-				initScrollID = obj.GetScrollId()
 				if !ok {
-					log.Debug(scrollResponse, err)
+					if err != nil {
+						panic(err)
+					}
 					break
 				}
 
+				initScrollID = obj.GetScrollId()
+
 				docs := obj.GetDocs()
 				docSize := len(docs)
-				//joint.totalSize += docSize
+				totalSize += docSize
+
+				stats.Gauge(fmt.Sprintf("scroll_total_received-%v",tempSlice),joint.outputQueueName, int64(totalSize))
+
 				if docSize == 0 {
 					log.Trace(scrollResponse)
 					break
@@ -121,30 +185,51 @@ func (joint ScrollJoint) Open() error {
 
 				processingDocs(docs, joint.outputQueueName)
 
+				if version>=7{
+					scrollResponseV7Pool.Put(scrollResponse)
+				}else{
+					scrollResponsePool.Put(scrollResponse)
+				}
+
 			}
-			log.Tracef("slice %v is done", tempSlice)
-			wg.Done()
+			log.Debugf("slice %v is done", slice)
+
 		}()
 
 	}
 
-	//log.Debug("total docs: ", joint.totalSize)
+	log.Infof("scroll finished, docs: %v ", totalSize)
 
 	wg.Wait()
 
 	//duration := time.Now().Sub(start).Seconds()
 
-	//log.Infof("scroll finished, docs: %v, duration: %vs, qps: %v ", joint.totalSize, duration, math.Ceil(float64(joint.totalSize)/math.Ceil((duration))))
+	//log.Infof("scroll finished, docs: %v, duration: %vs, qps: %v ", totalSize, duration, math.Ceil(float64(joint.totalSize)/math.Ceil((duration))))
 
 	return nil
 }
 
-func processingDocs(docs []interface{}, outputQueueName string) {
+func processingDocs(docs []elastic.IndexDocument, outputQueueName string) {
+
+
 	for _, v := range docs {
-		err := queue.Push(outputQueueName, util.MustToJSONBytes(v))
-		if err != nil {
-			log.Error(err)
-		}
+
+		//bytes:=util.MustToJSONBytes(v)
+		stats.Increment("scrolling_processing."+outputQueueName,"docs")
+
+		h1 := fnv1a.HashBytes32(util.MustToJSONBytes(v.Source))
+		//hash := util.MustToJSONBytes(h1)
+
+		//fmt.Println(v.Index,",",v.ID,",",util.IntToString(int(h1)))
+
+		handler:=rotate.GetFileHandler(path.Join(global.Env().GetDataDir(),"diff",outputQueueName),rotate.DefaultConfig)
+		handler.WriteBytesArray([]byte((v.ID.(string))),[]byte(","),[]byte(util.IntToString(int(h1))),[]byte("\n"))
+		//handler.Close()
+
+		//err := queue.Push(outputQueueName, bytes)
+		//if err != nil {
+		//	log.Error(err)
+		//}
 	}
 }
 
