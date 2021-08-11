@@ -31,15 +31,15 @@ import (
 	stats "infini.sh/framework/plugins/stats_statsd"
 	api2 "infini.sh/gateway/api"
 	"infini.sh/gateway/config"
+	"infini.sh/gateway/pipeline/dump_hash"
+	"infini.sh/gateway/pipeline/index_diff"
 	indexing2 "infini.sh/gateway/service/bulk_reshuffle"
+	"infini.sh/gateway/service/diskqueue_consumer"
 	"infini.sh/gateway/service/floating_ip"
 	"infini.sh/gateway/service/forcemerge"
 	"infini.sh/gateway/service/gateway"
-	"infini.sh/gateway/service/index_diff"
 	"infini.sh/gateway/service/indexing"
 	"infini.sh/gateway/service/offline_processing"
-	"infini.sh/gateway/service/diskqueue_consumer"
-	"infini.sh/gateway/service/scroll"
 	"infini.sh/gateway/service/translog"
 )
 
@@ -75,7 +75,6 @@ func main() {
 		module.RegisterUserPlugin(gateway.GatewayModule{})
 		module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
 		module.RegisterUserPlugin(forcemerge.ForceMergeModule{})
-		module.RegisterUserPlugin(index_diff.IndexDiffModule{})
 
 		api2.Init()
 
@@ -84,8 +83,11 @@ func main() {
 		pipe.RegisterPipeJoint(indexing.BulkIndexingJoint{})
 		pipe.RegisterPipeJoint(indexing2.BulkReshuffleJoint{})
 		pipe.RegisterPipeJoint(diskqueue_consumer.DiskQueueConsumer{})
-		pipe.RegisterPipeJoint(scroll.ScrollJoint{})
 		pipe.RegisterPipeJoint(offline_processing.FlowRunner{})
+
+		//TODO auto register plugins
+		pipe.RegisterPlugin("index_diff", index_diff.New)
+		pipe.RegisterPlugin("dump_hash", scroll.NewDumpHashProcessor)
 
 		//start each module, with enabled provider
 		module.Start()

@@ -15,34 +15,34 @@ elasticsearch:
       username: test
       password: testtest
 
-pipelines:
-#  #使用两个 scroll 任务并行读取两个索引的文档
-#  - name: es_scroll_a
-#    enabled: true
-#    input:
-#      joint: es_scroll
-#      enabled: true
-#      parameters:
-#        indices: "medcl-test"
-#        scroll_time: "10m"
-#        batch_size: 5000
-#        slice_size: 1
-#        elasticsearch: "source"
-#        output_queue: "source_docs"
-#  - name: es_scroll_b
-#    enabled: true
-#    input:
-#      joint: es_scroll
-#      enabled: true
-#      parameters:
-#        indices: "medcl-test"
-#        scroll_time: "10m"
-#        batch_size: 10000
-#        slice_size: 1
-#        elasticsearch: "target"
-#        output_queue: "target_docs"
+pipelines_v2:
+  - name: index_diff_service
+    processors:
+    - dag:
+        parallel:
+          - dump_hash: #dump es1's doc
+              indices: "medcl-test"
+              scroll_time: "10m"
+              elasticsearch: "source"
+              output_queue: "source_docs"
+              batch_size: 10000
+              slice_size: 5
+          - dump_hash: #dump es2's doc
+              indices: "medcl-test"
+              scroll_time: "10m"
+              batch_size: 10000
+              slice_size: 5
+              elasticsearch: "target"
+              output_queue: "target_docs"
+        end:
+          - index_diff:
+              diff_queue: "diff_result"
+              buffer_size: 1
+              text_report: true #如果要存 es，这个开关关闭，开启 pipeline 的 diff_result_ingest 任务
+              source_queue: 'source_docs'
+              target_queue: 'target_docs'
 
-  # 消费 diff 结果并保存到 Elasticsearch 用于查看两个索引的 diff 结果
+#pipelines:
 #  - name: diff_result_ingest
 #    enabled: true
 #    start:
@@ -56,19 +56,3 @@ pipelines:
 #        timeout: "1s"
 #        worker_size: 1
 #        bulk_size_in_mb: 1 #in MB
-
-### 进行 diff 的服务
-index_diff:
-  enabled: true
-  diff_queue: "diff_result"
-  buffer_size: 1
-  text_report: true #如果要存 es，这个开关关闭，开启 pipeline 的 diff_result_ingest 任务
-  source_queue: 'source_docs'
-  target_queue: 'target_docs'
-
-statsd:
-  enabled: true
-  host: 127.0.0.1
-  port: 8125
-  protocol: udp
-  namespace: gateway.

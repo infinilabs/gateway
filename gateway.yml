@@ -129,6 +129,28 @@ elasticsearch:
 #    template_name: ".gateway-default"
 #    index_prefix: "gateway_"
 
+#pipelines_v2:
+#  - name: index_diff_service
+#    processors:
+#    - echo: #ready, set, go
+#        message: read,set,go
+#    - dag:
+#        mode: first_win #first_win, wait_all
+#        parallel:
+#          - echo: #player1
+#              message: player1
+#          - echo: #player2
+#              message: player2
+#          - echo: #player3
+#              message: player3
+#        end:
+#          - echo: #checking score
+#              message: checking score
+#          - echo: #announce champion
+#              message: 'announce champion'
+#    - echo: #done
+#        message: racing finished
+
 pipelines:
 - name: request_logging_index
   enabled: true
