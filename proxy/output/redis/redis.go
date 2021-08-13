@@ -30,7 +30,7 @@ func (p RedisOutput) getRedisClient() *redis.Client {
 	}
 
 	client = redis.NewClient(&redis.Options{
-		Addr: fmt.Sprintf("%s:%v", p.MustGetString("host"), p.MustGet("port")),
+		Addr: fmt.Sprintf("%s:%v", p.GetStringOrDefault("host","localhost"), p.GetIntOrDefault("port",6379)),
 		Password: p.GetStringOrDefault("password",""),
 		DB:       p.GetIntOrDefault("db",0),
 	})

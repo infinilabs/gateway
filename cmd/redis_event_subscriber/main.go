@@ -111,7 +111,6 @@ func decodeRequest(data []byte)error {
 	readerBodyLengthBytes := make([]byte, 4)
 	_, err := reader.Read(readerBodyLengthBytes)
 	if err != nil {
-		panic(err)
 		return err
 	}
 	readerBodyLength := binary.LittleEndian.Uint32(readerBodyLengthBytes)
@@ -119,12 +118,15 @@ func decodeRequest(data []byte)error {
 		readerBody := make([]byte, readerBodyLength)
 		_, err = reader.Read(readerBody)
 		if err != nil {
-			panic(err)
 			return err
 		}
 		fmt.Println("body:\n",string(readerBody))
 	}
 
+
+	if reader.Len()==0{
+		return nil
+	}
 
 	////response
 	fmt.Println("response:")
