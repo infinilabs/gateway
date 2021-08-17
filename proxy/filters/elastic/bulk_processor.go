@@ -7,6 +7,7 @@ import (
 	"fmt"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/elastic"
+	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/rate"
@@ -28,9 +29,70 @@ var smallSizedPool =bytebufferpool.NewPool(512,655360)
 
 var  NEWLINEBYTES =[]byte("\n")
 
+func WalkBulkRequests(data []byte,eachLineFunc func(eachLine []byte)(skipNextLine bool),metaFunc func(metaBytes []byte,actionStr,index,typeName,id string)(err error),payloadFunc func(payloadBytes []byte)) (int,error){
+
+	nextIsMeta := true
+	skipNextLineProcessing := false
+
+
+	var docCount = 0
+
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	scanner.Split(util.GetSplitFunc(NEWLINEBYTES))
+
+	for scanner.Scan() {
+		scannedByte := scanner.Bytes()
+		if scannedByte == nil || len(scannedByte) <= 0 {
+			log.Debug("invalid scanned byte, continue")
+			continue
+		}
+
+		if eachLineFunc!=nil{
+			skipNextLineProcessing=eachLineFunc(scannedByte)
+		}
+
+		if skipNextLineProcessing {
+			skipNextLineProcessing = false
+			nextIsMeta = true
+			log.Debug("skip body processing")
+			continue
+		}
+
+		if nextIsMeta {
+
+			nextIsMeta = false
+
+			//TODO improve poor performance
+			var actionStr string
+			var index string
+			var typeName string
+			var id string
+			actionStr, index, typeName, id = parseActionMeta(scannedByte)
+
+			err:=metaFunc(scannedByte,actionStr,index,typeName,id)
+			if err!=nil{
+				return docCount,err
+			}
+
+			docCount++
+
+			if actionStr== actionDelete {
+				nextIsMeta = true
+				payloadFunc(nil)
+			}
+		} else {
+			nextIsMeta = true
+			payloadFunc(scannedByte)
+		}
+	}
+
+	log.Tracef("total [%v] operations in bulk requests", docCount)
+	return docCount,nil
+}
+
 func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
-	pathStr := string(ctx.URI().Path())
+	pathStr := util.UnsafeBytesToString(ctx.URI().Path())
 
 	//拆解 bulk 请求，重新封装
 	if util.SuffixStr(pathStr, "/_bulk") {
@@ -61,351 +123,319 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 		esConfig := elastic.GetConfig(clusterName)
 
-		validEachLine := this.GetBool("validate_each_line", false)
-		validMetadata := this.GetBool("validate_metadata", false)
-		validPayload := this.GetBool("validate_payload", false)
-		validateRequest := this.GetBool("validate_request", false)
-		reshuffleType := this.GetStringOrDefault("level", "node")
-		submitMode := this.GetStringOrDefault("mode", "sync")         //sync and async
-		fixNullID := this.GetBool("fix_null_id", true)                //sync and async
-		indexAnalysis := this.GetBool("index_stats_analysis", true)   //sync and async
-		actionAnalysis := this.GetBool("action_stats_analysis", true) //sync and async
-		enabledShards, checkShards := this.GetStringArray("shards")
-
-		//renameMapping, resolveIndexRename := this.GetStringMap("index_rename")
-
-		//url level
-		var urlLevelIndex string
-		var urlLevelType string
-
-		urlLevelIndex,urlLevelType= getUrlLevelBulkMeta(pathStr)
-
-		//action level
-		var actionStr string
-		var index string
-		var typeName string
-		var id string
-
 		body := ctx.Request.GetRawBody()
 
-		scanner := bufio.NewScanner(bytes.NewReader(body))
-		scanner.Split(util.GetSplitFunc(NEWLINEBYTES))
-		nextIsMeta := true
+		var indexStatsData map[string]int
+		var actionStatsData map[string]int
 
 		//index-shardID -> buffer
 		docBuf := map[string]*bytebufferpool.ByteBuffer{}
 		buffEndpoints := map[string]string{}
-		skipNext := false
-		var buff *bytebufferpool.ByteBuffer
-		var indexStatsData map[string]int
-		var actionStatsData map[string]int
 
+		validEachLine := this.GetBool("validate_each_line", false)
+		validMetadata := this.GetBool("validate_metadata", false)
+		validPayload := this.GetBool("validate_payload", false)
+		reshuffleType := this.GetStringOrDefault("level", "node")
+		fixNullID := this.GetBool("fix_null_id", true)                //sync and async
+
+		enabledShards, checkShards := this.GetStringArray("shards")
+
+		//renameMapping, resolveIndexRename := this.GetStringMap("index_rename")
+
+		var buff *bytebufferpool.ByteBuffer
+
+		var bufferKey string
+		indexAnalysis := this.GetBool("index_stats_analysis", true)   //sync and async
+		actionAnalysis := this.GetBool("action_stats_analysis", true) //sync and async
+		validateRequest := this.GetBool("validate_request", false)
 		actionMeta := smallSizedPool.Get()
 		actionMeta.Reset()
 		defer smallSizedPool.Put(actionMeta)
 
-		var needActionBody = true
-		var bufferKey string
-		var docCount = 0
-
-		for scanner.Scan() {
-			shardID := 0
-			scannedByte := scanner.Bytes()
-			scannedStr:=util.UnsafeBytesToString(scannedByte)
-			if scannedByte == nil || len(scannedByte) <= 0 {
-				log.Debug("invalid scanned byte, continue")
-				continue
-			}
-
+		docCount,err:=WalkBulkRequests(body, func(eachLine []byte) (skipNextLine bool) {
 			if validEachLine{
 				obj := map[string]interface{}{}
-				err := util.FromJSONBytes(scannedByte, &obj)
+				err := util.FromJSONBytes(eachLine, &obj)
 				if err != nil {
-					log.Error("error on validate scannedByte:",string(scannedByte))
+					log.Error("error on validate scannedByte:",string(eachLine))
+					panic(err)
+				}
+			}
+			return false
+		}, func(metaBytes []byte,actionStr,index,typeName,id string)(err error) {
+
+			metaStr :=util.UnsafeBytesToString(metaBytes)
+			shardID := 0
+
+			//url level
+			var urlLevelIndex string
+			var urlLevelType string
+
+			urlLevelIndex,urlLevelType= getUrlLevelBulkMeta(pathStr)
+
+			//index_rename
+			//if resolveIndexRename {
+			//	for k, v := range renameMapping {
+			//		if strings.Contains(k, "*") {
+			//			patterns := radix.Compile(k) //TODO performance
+			//			ok := patterns.Match(index)
+			//			if ok {
+			//				if global.Env().IsDebug {
+			//					log.Debug("wildcard matched: ", pathStr)
+			//				}
+			//				index = v
+			//				scannedByte = updateJsonWithNewIndex(scannedByte, index)
+			//				break
+			//			}
+			//		} else if k == index {
+			//			index = v
+			//			scannedByte = updateJsonWithNewIndex(scannedByte, index)
+			//			break
+			//		}
+			//	}
+			//}
+
+			var indexNew, typeNew, idNew string
+			if index == "" && urlLevelIndex != "" {
+				index = urlLevelIndex
+				indexNew = urlLevelIndex
+			}
+
+			if typeName == "" && urlLevelType != "" {
+				typeName = urlLevelType
+				typeNew = urlLevelType
+			}
+
+			if (actionStr==actionIndex || actionStr==actionDelete) && len(id) == 0 && fixNullID {
+				fmt.Println("generating ID:",actionStr)
+				id = util.GetUUID()
+				idNew = id
+				if global.Env().IsDebug {
+					log.Trace("generated ID,", id, ",", string(metaBytes))
+				}
+			}
+
+			if indexNew != "" || typeNew != "" || idNew != "" {
+				var err error
+				metaBytes,err = updateJsonWithNewIndex(actionStr,metaBytes, indexNew, typeNew, idNew)
+				if err!=nil{
+					panic(err)
+				}
+				if global.Env().IsDebug {
+					log.Trace("updated meta,", id, ",", string(metaBytes))
+				}
+			}
+
+			if indexAnalysis {
+				//init
+				if indexStatsData == nil {
+					if indexStatsData == nil {
+						indexStatsData = map[string]int{}
+					}
+				}
+
+				//stats
+				v, ok := indexStatsData[index]
+				if !ok {
+					indexStatsData[index] = 1
+				} else {
+					indexStatsData[index] = v + 1
+				}
+			}
+
+			if actionAnalysis {
+				//init
+				if actionStatsData == nil {
+					if actionStatsData == nil {
+						actionStatsData = map[string]int{}
+					}
+				}
+
+				//stats
+				v, ok := actionStatsData[actionStr]
+				if !ok {
+					actionStatsData[actionStr] = 1
+				} else {
+					actionStatsData[actionStr] = v + 1
+				}
+			}
+
+			if validMetadata {
+				obj := map[string]interface{}{}
+				err := util.FromJSONBytes(metaBytes, &obj)
+				if err != nil {
+					log.Error("error on validate action metadata")
 					panic(err)
 				}
 			}
 
-
-			if skipNext {
-				skipNext = false
-				nextIsMeta = true
-				log.Debug("skip body processing")
-				continue
+			if actionStr =="" || index == "" || id == "" {
+				log.Warn("invalid bulk action:", actionStr, ",index:", string(index), ",id:", string(id), ",", string(metaBytes))
+				return errors.Error("invalid bulk action:", actionStr, ",index:", string(index), ",id:", string(id), ",", string(metaBytes))
 			}
 
-			if nextIsMeta {
-				nextIsMeta = false
+			indexSettings, ok := metadata.Indices[index]
 
-				//TODO improve poor performance
-				actionStr, index, typeName, id = parseActionMeta(scannedByte)
-
-				//index_rename
-				//if resolveIndexRename {
-				//	for k, v := range renameMapping {
-				//		if strings.Contains(k, "*") {
-				//			patterns := radix.Compile(k) //TODO performance
-				//			ok := patterns.Match(index)
-				//			if ok {
-				//				if global.Env().IsDebug {
-				//					log.Debug("wildcard matched: ", pathStr)
-				//				}
-				//				index = v
-				//				scannedByte = updateJsonWithNewIndex(scannedByte, index)
-				//				break
-				//			}
-				//		} else if k == index {
-				//			index = v
-				//			scannedByte = updateJsonWithNewIndex(scannedByte, index)
-				//			break
-				//		}
-				//	}
-				//}
-
-				var indexNew, typeNew, idNew string
-				if index == "" && urlLevelIndex != "" {
-					index = urlLevelIndex
-					indexNew = urlLevelIndex
+			if !ok {
+				metadata = elastic.GetMetadata(clusterName)
+				if global.Env().IsDebug {
+					log.Trace("index was not found in index settings,", index, ",", string(metaBytes))
 				}
-
-				if typeName == "" && urlLevelType != "" {
-					typeName = urlLevelType
-					typeNew = urlLevelType
-				}
-
-				if (actionStr==actionIndex || actionStr==actionDelete) && len(id) == 0 && fixNullID {
-					fmt.Println("generating ID:",actionStr)
-					id = util.GetUUID()
-					idNew = id
+				alias, ok := metadata.Aliases[index]
+				if ok {
 					if global.Env().IsDebug {
-						log.Trace("generated ID,", id, ",", string(scannedByte))
+						log.Trace("found index in alias settings,", index, ",", string(metaBytes))
 					}
-				}
-
-				if indexNew != "" || typeNew != "" || idNew != "" {
-					var err error
-					scannedByte,err = updateJsonWithNewIndex(actionStr,scannedByte, indexNew, typeNew, idNew)
-					if err!=nil{
-						panic(err)
-					}
-					if global.Env().IsDebug {
-						log.Trace("updated meta,", id, ",", string(scannedByte))
-					}
-				}
-
-				if indexAnalysis {
-					//init
-					if indexStatsData == nil {
-						if indexStatsData == nil {
-							indexStatsData = map[string]int{}
+					newIndex := alias.WriteIndex
+					if alias.WriteIndex == "" {
+						if len(alias.Index) == 1 {
+							newIndex = alias.Index[0]
+							if global.Env().IsDebug {
+								log.Trace("found index in alias settings, no write_index, but only have one index, will use it,", index, ",", string(metaBytes))
+							}
+						} else {
+							log.Warn("writer_index was not found in alias settings,", index, ",", alias)
+							return errors.Error("writer_index was not found in alias settings,", index, ",", alias)
 						}
 					}
-
-					//stats
-					v, ok := indexStatsData[index]
-					if !ok {
-						indexStatsData[index] = 1
-					} else {
-						indexStatsData[index] = v + 1
-					}
-				}
-
-				if actionAnalysis {
-					//init
-					if actionStatsData == nil {
-						if actionStatsData == nil {
-							actionStatsData = map[string]int{}
-						}
-					}
-
-					//stats
-					v, ok := actionStatsData[actionStr]
-					if !ok {
-						actionStatsData[actionStr] = 1
-					} else {
-						actionStatsData[actionStr] = v + 1
-					}
-				}
-
-				if validMetadata {
-					obj := map[string]interface{}{}
-					err := util.FromJSONBytes(scannedByte, &obj)
-					if err != nil {
-						log.Error("error on validate action metadata")
-						panic(err)
-					}
-				}
-
-				if actionStr =="" || index == "" || id == "" {
-					log.Warn("invalid bulk action:", actionStr, ",index:", string(index), ",id:", string(id), ",", string(scannedByte))
-					return
-				}
-
-				indexSettings, ok := metadata.Indices[index]
-
-				if !ok {
-					metadata = elastic.GetMetadata(clusterName)
-					if global.Env().IsDebug {
-						log.Trace("index was not found in index settings,", index, ",", string(scannedByte))
-					}
-					alias, ok := metadata.Aliases[index]
+					indexSettings, ok = metadata.Indices[newIndex]
 					if ok {
 						if global.Env().IsDebug {
-							log.Trace("found index in alias settings,", index, ",", string(scannedByte))
+							log.Trace("index was found in index settings,", index, "=>", newIndex, ",", metaStr, ",", indexSettings)
 						}
-						newIndex := alias.WriteIndex
-						if alias.WriteIndex == "" {
-							if len(alias.Index) == 1 {
-								newIndex = alias.Index[0]
-								if global.Env().IsDebug {
-									log.Trace("found index in alias settings, no write_index, but only have one index, will use it,", index, ",", string(scannedByte))
-								}
-							} else {
-								log.Warn("writer_index was not found in alias settings,", index, ",", alias)
-								return
-							}
-						}
-						indexSettings, ok = metadata.Indices[newIndex]
-						if ok {
-							if global.Env().IsDebug {
-								log.Trace("index was found in index settings,", index, "=>", newIndex, ",", scannedStr, ",", indexSettings)
-							}
-							index = newIndex
-							goto CONTINUE_RESHUFFLE
-						} else {
-							if global.Env().IsDebug {
-								log.Trace("writer_index was not found in index settings,", index, ",", string(scannedByte))
-							}
-						}
+						index = newIndex
+						goto CONTINUE_RESHUFFLE
 					} else {
 						if global.Env().IsDebug {
-							log.Trace("index was not found in alias settings,", index, ",", string(scannedByte))
+							log.Trace("writer_index was not found in index settings,", index, ",", string(metaBytes))
 						}
 					}
-
-					if rate.GetRateLimiter("index_setting_not_found", index, 1, 5, time.Minute*1).Allow() {
-						log.Warn("index setting not found,", index, ",", string(scannedByte))
-					}
-
-					return
-				}
-
-			CONTINUE_RESHUFFLE:
-
-				if indexSettings.Shards<=0 ||indexSettings.Status=="close"{
-					log.Debugf("index %v closed,",indexSettings.Index)
-					return
-				}
-
-				if indexSettings.Shards != 1 {
-					//如果 shards=1，则直接找主分片所在节点，否则计算一下。
-					shardID = elastic.GetShardID(esMajorVersion, []byte(id), indexSettings.Shards)
-
+				} else {
 					if global.Env().IsDebug {
-						log.Tracef("%s/%s => %v", index, id, shardID)
+						log.Trace("index was not found in alias settings,", index, ",", string(metaBytes))
 					}
-
-					//save endpoint for bufferkey
-					if checkShards && len(enabledShards) > 0 && needActionBody {
-						if !util.ContainsAnyInArray(strconv.Itoa(shardID), enabledShards) {
-							log.Debugf("shard %s-%s not enabled, skip processing", index, shardID)
-							skipNext = true
-							continue
-						}
-					}
-
 				}
 
-				shardInfo := metadata.GetPrimaryShardInfo(index, shardID)
-				if shardInfo == nil {
-					if rate.GetRateLimiter(fmt.Sprintf("shard_info_not_found_%v", index), util.IntToString(shardID), 1, 5, time.Minute*1).Allow() {
-						log.Warn("shardInfo was not found,", index, ",", shardID)
-					}
-					return
+				if rate.GetRateLimiter("index_setting_not_found", index, 1, 5, time.Minute*1).Allow() {
+					log.Warn("index setting not found,", index, ",", string(metaBytes))
 				}
 
-				//write meta
-				bufferKey = common.GetNodeLevelShuffleKey(clusterName, shardInfo.NodeID)
-				if reshuffleType == "shard" {
-					bufferKey = common.GetShardLevelShuffleKey(clusterName, index, shardID)
-				}
+				return errors.Error("index setting not found,", index, ",", string(metaBytes))
+			}
+
+		CONTINUE_RESHUFFLE:
+
+			if indexSettings.Shards<=0 ||indexSettings.Status=="close"{
+				log.Debugf("index %v closed,",indexSettings.Index)
+				return errors.Errorf("index %v closed,",indexSettings.Index)
+			}
+
+			if indexSettings.Shards != 1 {
+				//如果 shards=1，则直接找主分片所在节点，否则计算一下。
+				shardID = elastic.GetShardID(esMajorVersion, []byte(id), indexSettings.Shards)
 
 				if global.Env().IsDebug {
-					log.Tracef("%s/%s/%s => %v , %v", index, typeName, id, shardID, bufferKey)
+					log.Tracef("%s/%s => %v", index, id, shardID)
 				}
 
-				////update actionItem
+				//save endpoint for bufferkey
+				if checkShards && len(enabledShards) > 0  {
+					if !util.ContainsAnyInArray(strconv.Itoa(shardID), enabledShards) {
+						log.Debugf("shard %s-%s not enabled, skip processing", index, shardID)
+						//skipNext = true
+						//continue
+						return errors.Errorf("shard %s-%v not enabled, skip processing", index, shardID)
+					}
+				}
+
+			}
+
+			shardInfo := metadata.GetPrimaryShardInfo(index, shardID)
+			if shardInfo == nil {
+				if rate.GetRateLimiter(fmt.Sprintf("shard_info_not_found_%v", index), util.IntToString(shardID), 1, 5, time.Minute*1).Allow() {
+					log.Warn("shardInfo was not found,", index, ",", shardID)
+				}
+				return errors.Error("shardInfo was not found,", index, ",", shardID)
+			}
+
+			//write meta
+			bufferKey = common.GetNodeLevelShuffleKey(clusterName, shardInfo.NodeID)
+			if reshuffleType == "shard" {
+				bufferKey = common.GetShardLevelShuffleKey(clusterName, index, shardID)
+			}
+
+			if global.Env().IsDebug {
+				log.Tracef("%s/%s/%s => %v , %v", index, typeName, id, shardID, bufferKey)
+			}
+
+			////update actionItem
+			buff, ok = docBuf[bufferKey]
+			if !ok {
+				nodeInfo := metadata.GetNodeInfo(shardInfo.NodeID)
+				if nodeInfo == nil {
+					if rate.GetRateLimiter("node_info_not_found_%v", shardInfo.NodeID, 1, 5, time.Minute*1).Allow() {
+						log.Warnf("nodeInfo not found, %v %v", bufferKey,shardInfo.NodeID)
+					}
+					return errors.Errorf("nodeInfo not found, %v %v", bufferKey,shardInfo.NodeID)
+				}
+
+				buff = bufferPool.Get()
+				buff.Reset()
+				docBuf[bufferKey] = buff
+
+				buffEndpoints[bufferKey] = nodeInfo.Http.PublishAddress
+				if global.Env().IsDebug {
+					log.Debug(shardInfo.Index, ",", shardInfo.ShardID, ",", nodeInfo.Http.PublishAddress)
+				}
+			}
+
+			//保存临时变量
+			actionMeta.Write(metaBytes)
+
+			return  nil
+		}, func(payloadBytes []byte) {
+
+			if actionMeta.Len() > 0 {
 				buff, ok = docBuf[bufferKey]
 				if !ok {
-					nodeInfo := metadata.GetNodeInfo(shardInfo.NodeID)
-					if nodeInfo == nil {
-						if rate.GetRateLimiter("node_info_not_found_%v", shardInfo.NodeID, 1, 5, time.Minute*1).Allow() {
-							log.Warnf("nodeInfo not found, %v %v", bufferKey,shardInfo.NodeID)
-						}
-						return
-					}
-
 					buff = bufferPool.Get()
 					buff.Reset()
 					docBuf[bufferKey] = buff
-
-					buffEndpoints[bufferKey] = nodeInfo.Http.PublishAddress
-					if global.Env().IsDebug {
-						log.Debug(shardInfo.Index, ",", shardInfo.ShardID, ",", nodeInfo.Http.PublishAddress)
-					}
+				}
+				if global.Env().IsDebug {
+					log.Trace("metadata:", string(payloadBytes))
 				}
 
-				//保存临时变量
-				actionMeta.Write(scannedByte)
-
-				if actionStr== actionDelete {
-					nextIsMeta = true
-					needActionBody = false
+				if buff.Len() > 0 {
+					buff.Write(NEWLINEBYTES)
 				}
-				docCount++
-			} else {
-				nextIsMeta = true
 
-				if actionMeta.Len() > 0 {
-					buff, ok = docBuf[bufferKey]
-					if !ok {
-						buff = bufferPool.Get()
-						buff.Reset()
-						docBuf[bufferKey] = buff
-					}
-					if global.Env().IsDebug {
-						log.Trace("metadata:", string(scannedByte))
-					}
+				buff.Write(actionMeta.Bytes())
+				if payloadBytes != nil && len(payloadBytes) > 0 {
+					buff.Write(NEWLINEBYTES)
+					buff.Write(payloadBytes)
 
-					if buff.Len() > 0 {
-						buff.Write(NEWLINEBYTES)
-					}
-
-					buff.Write(actionMeta.Bytes())
-					if needActionBody && scannedByte != nil && len(scannedByte) > 0 {
-						buff.Write(NEWLINEBYTES)
-						buff.Write(scannedByte)
-
-						if validPayload{
-							obj := map[string]interface{}{}
-							err := util.FromJSONBytes(scannedByte, &obj)
-							if err != nil {
-								log.Error("error on validate action payload:",string(scannedByte))
-								panic(err)
-							}
+					if validPayload{
+						obj := map[string]interface{}{}
+						err := util.FromJSONBytes(payloadBytes, &obj)
+						if err != nil {
+							log.Error("error on validate action payload:",string(payloadBytes))
+							panic(err)
 						}
 					}
-
-					//cleanup actionMeta
-					actionMeta.Reset()
 				}
 
+				//cleanup actionMeta
+				actionMeta.Reset()
 			}
+		})
+
+		if err!=nil{
+			log.Error(err)
+			return
 		}
 
-		log.Tracef("total [%v] operations in bulk requests", docCount)
-
-
+		submitMode := this.GetStringOrDefault("mode", "sync")         //sync and async
 		if submitMode=="sync"{
 			bulkProcessor := BulkProcessor{
 				RotateConfig: rotate.RotateConfig{
@@ -478,6 +508,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 			}
 
 		}
+
 
 		if indexAnalysis {
 			ctx.Set("bulk_index_stats", indexStatsData)
@@ -731,6 +762,84 @@ DO:
 			//200{"took":2,"errors":true,"items":[
 			hit := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
 			if hit {
+
+				//decode response
+				response:=elastic.BulkResponse{}
+				err:=response.UnmarshalJSON(resbody)
+				if err!=nil{
+					panic(err)
+				}
+
+				invalidOffset:=map[int]elastic.BulkActionMetadata{}
+				for i,v:=range response.Items{
+					item:=v.GetItem()
+					if item.Error!=nil{
+						//fmt.Println(i,",",item.Status,",",item.Error.Type)
+						//TODO log invalid requests
+						//send 400 requests to dedicated queue, the rest go to failure queue
+						invalidOffset[i]=v
+					}
+				}
+				//fmt.Println("invalid requests:",invalidOffset)
+
+				var contains400Error bool
+				if len(invalidOffset)>0 && len(invalidOffset)<len(response.Items){
+					requestBytes:= req.GetRawBody()
+					errorItems:=bytebufferpool.Get()
+					retryableItems:=bytebufferpool.Get()
+
+					var offset=0
+					var match=false
+					var retryable=false
+					var response elastic.BulkActionMetadata
+					//walk bulk message, with invalid id, save to another list
+					WalkBulkRequests(requestBytes, func(eachLine []byte) (skipNextLine bool) {
+						return false
+					}, func(metaBytes []byte, actionStr, index, typeName, id string) (err error) {
+
+						response,match=invalidOffset[offset]
+						if match{
+						//find invalid request
+							//fmt.Println(offset,"invalid request:",string(metaBytes),"invalid response:",response.GetItem().Result,response.GetItem().Index,response.GetItem().Type,response.GetItem().Index,response.GetItem().ID,response.GetItem().Error)
+							if response.GetItem().Status>=400 &&  response.GetItem().Status<500 && response.GetItem().Status!=429{
+								retryable=false
+								contains400Error=true
+								errorItems.Write(metaBytes)
+							}else{
+								retryable=true
+								retryableItems.Write(metaBytes)
+							}
+						}
+						offset++
+						return nil
+					}, func(payloadBytes []byte) {
+						if match{
+							if payloadBytes!=nil&&len(payloadBytes)>0{
+								if retryable{
+									retryableItems.Write(payloadBytes)
+								}else{
+									errorItems.Write(payloadBytes)
+								}
+							}
+						}
+					})
+
+					if errorItems.Len()>0{
+						queue.Push("400-failure",errorItems.Bytes())
+						//send to redis channel
+						errorItems.Reset()
+						bytebufferpool.Put(errorItems)
+					}
+
+					if retryableItems.Len()>0{
+						queue.Push("none-400-failure",retryableItems.Bytes())
+						retryableItems.Reset()
+						bytebufferpool.Put(retryableItems)
+					}
+
+
+				}
+
 				if joint.LogInvalid200Message {
 					if rate.GetRateLimiter("log_invalid_200_message", endpoint, 1, 1, 5*time.Second).Allow() {
 						log.Warn("status:", resp.StatusCode(), ",", endpoint, ",", util.SubString(string(util.EscapeNewLine(resbody)), 0, 256))
@@ -748,6 +857,11 @@ DO:
 						[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.MaxResponseBodySize)),
 					)
 				}
+
+				if contains400Error{
+					return 400,false
+				}
+
 				delayTime := joint.RetryDelayInSeconds
 				if delayTime <= 0 {
 					delayTime = 10

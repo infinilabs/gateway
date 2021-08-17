@@ -273,6 +273,7 @@ CLEAN_BUFFER:
 		log.Debug(cfg.Name, ", success:", success, ", status:", status, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elapsed:", time.Since(start))
 
 		if !success {
+			//err := queue.Push(fmt.Sprintf("%v-%v",deadLetterQueueName,status), data)
 			err := queue.Push(deadLetterQueueName, data)
 			if err != nil {
 				panic(err)
