@@ -96,6 +96,9 @@ flow:
               max_connection_per_host: 1000
           - bulk_response_validate: #如果是 bulk 请求，还需要进一步验证是否存在部分请求失败的错误异常
               invalid_status: 507
+              when:
+                contains:
+                  _ctx.request.path: /_bulk
           - if: #验证主集群的操作是否成功写入
               in:
                 _ctx.response.status: [ 403,404,200,201 ]
