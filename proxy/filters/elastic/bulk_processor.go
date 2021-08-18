@@ -572,21 +572,9 @@ func getUrlLevelBulkMeta(pathStr string) (urlLevelIndex,urlLevelType string) {
 		return urlLevelIndex, urlLevelType
 	}
 
-
 	if strings.Contains(pathStr,"//"){
 		pathStr=strings.ReplaceAll(pathStr,"//","/")
 	}
-
-	//pathArray := strings.Split(pathStr,"/")
-	//switch len(pathArray) {
-	//case 4:
-	//	urlLevelIndex = pathArray[1]
-	//	urlLevelType = pathArray[2]
-	//	break
-	//case 3:
-	//	urlLevelIndex = pathArray[1]
-	//	break
-	//}
 
 	pathArray := strings.FieldsFunc(pathStr, func(c rune) bool {
 		return c=='/'
