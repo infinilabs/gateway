@@ -38,10 +38,11 @@ func main() {
 	for ;;{
 		msg:=<-client.Subscribe(*channel).Channel()
 		data:=[]byte(msg.Payload)
-		err:=decodeRequest(data)
-		if err!=nil{
-			panic(err)
-		}
+		fmt.Println(string(data))
+		//err:=decodeRequest(data)
+		//if err!=nil{
+		//	panic(err)
+		//}
 	}
 
 }
