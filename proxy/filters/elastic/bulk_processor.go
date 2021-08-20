@@ -24,16 +24,15 @@ import (
 	"time"
 )
 
-var bufferPool =bytebufferpool.NewPool(65536,655360)
-var smallSizedPool =bytebufferpool.NewPool(512,655360)
+var bufferPool = bytebufferpool.NewPool(65536, 655360)
+var smallSizedPool = bytebufferpool.NewPool(512, 655360)
 
-var  NEWLINEBYTES =[]byte("\n")
+var NEWLINEBYTES = []byte("\n")
 
-func WalkBulkRequests(data []byte,eachLineFunc func(eachLine []byte)(skipNextLine bool),metaFunc func(metaBytes []byte,actionStr,index,typeName,id string)(err error),payloadFunc func(payloadBytes []byte)) (int,error){
+func WalkBulkRequests(data []byte, eachLineFunc func(eachLine []byte) (skipNextLine bool), metaFunc func(metaBytes []byte, actionStr, index, typeName, id string) (err error), payloadFunc func(payloadBytes []byte)) (int, error) {
 
 	nextIsMeta := true
 	skipNextLineProcessing := false
-
 
 	var docCount = 0
 
@@ -47,8 +46,8 @@ func WalkBulkRequests(data []byte,eachLineFunc func(eachLine []byte)(skipNextLin
 			continue
 		}
 
-		if eachLineFunc!=nil{
-			skipNextLineProcessing=eachLineFunc(scannedByte)
+		if eachLineFunc != nil {
+			skipNextLineProcessing = eachLineFunc(scannedByte)
 		}
 
 		if skipNextLineProcessing {
@@ -69,14 +68,14 @@ func WalkBulkRequests(data []byte,eachLineFunc func(eachLine []byte)(skipNextLin
 			var id string
 			actionStr, index, typeName, id = parseActionMeta(scannedByte)
 
-			err:=metaFunc(scannedByte,actionStr,index,typeName,id)
-			if err!=nil{
-				return docCount,err
+			err := metaFunc(scannedByte, actionStr, index, typeName, id)
+			if err != nil {
+				return docCount, err
 			}
 
 			docCount++
 
-			if actionStr== actionDelete {
+			if actionStr == actionDelete {
 				nextIsMeta = true
 				payloadFunc(nil)
 			}
@@ -87,7 +86,7 @@ func WalkBulkRequests(data []byte,eachLineFunc func(eachLine []byte)(skipNextLin
 	}
 
 	log.Tracef("total [%v] operations in bulk requests", docCount)
-	return docCount,nil
+	return docCount, nil
 }
 
 func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
@@ -136,7 +135,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		validMetadata := this.GetBool("validate_metadata", false)
 		validPayload := this.GetBool("validate_payload", false)
 		reshuffleType := this.GetStringOrDefault("level", "node")
-		fixNullID := this.GetBool("fix_null_id", true)                //sync and async
+		fixNullID := this.GetBool("fix_null_id", true) //sync and async
 
 		enabledShards, checkShards := this.GetStringArray("shards")
 
@@ -152,26 +151,26 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		actionMeta.Reset()
 		defer smallSizedPool.Put(actionMeta)
 
-		docCount,err:=WalkBulkRequests(body, func(eachLine []byte) (skipNextLine bool) {
-			if validEachLine{
+		docCount, err := WalkBulkRequests(body, func(eachLine []byte) (skipNextLine bool) {
+			if validEachLine {
 				obj := map[string]interface{}{}
 				err := util.FromJSONBytes(eachLine, &obj)
 				if err != nil {
-					log.Error("error on validate scannedByte:",string(eachLine))
+					log.Error("error on validate scannedByte:", string(eachLine))
 					panic(err)
 				}
 			}
 			return false
-		}, func(metaBytes []byte,actionStr,index,typeName,id string)(err error) {
+		}, func(metaBytes []byte, actionStr, index, typeName, id string) (err error) {
 
-			metaStr :=util.UnsafeBytesToString(metaBytes)
+			metaStr := util.UnsafeBytesToString(metaBytes)
 			shardID := 0
 
 			//url level
 			var urlLevelIndex string
 			var urlLevelType string
 
-			urlLevelIndex,urlLevelType= getUrlLevelBulkMeta(pathStr)
+			urlLevelIndex, urlLevelType = getUrlLevelBulkMeta(pathStr)
 
 			//index_rename
 			//if resolveIndexRename {
@@ -206,8 +205,8 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				typeNew = urlLevelType
 			}
 
-			if (actionStr==actionIndex || actionStr==actionDelete) && len(id) == 0 && fixNullID {
-				fmt.Println("generating ID:",actionStr)
+			if (actionStr == actionIndex || actionStr == actionDelete) && len(id) == 0 && fixNullID {
+				fmt.Println("generating ID:", actionStr)
 				id = util.GetUUID()
 				idNew = id
 				if global.Env().IsDebug {
@@ -217,8 +216,8 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 			if indexNew != "" || typeNew != "" || idNew != "" {
 				var err error
-				metaBytes,err = updateJsonWithNewIndex(actionStr,metaBytes, indexNew, typeNew, idNew)
-				if err!=nil{
+				metaBytes, err = updateJsonWithNewIndex(actionStr, metaBytes, indexNew, typeNew, idNew)
+				if err != nil {
 					panic(err)
 				}
 				if global.Env().IsDebug {
@@ -269,7 +268,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
-			if actionStr =="" || index == "" || id == "" {
+			if actionStr == "" || index == "" || id == "" {
 				log.Warn("invalid bulk action:", actionStr, ",index:", string(index), ",id:", string(id), ",", string(metaBytes))
 				return errors.Error("invalid bulk action:", actionStr, ",index:", string(index), ",id:", string(id), ",", string(metaBytes))
 			}
@@ -325,9 +324,9 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 		CONTINUE_RESHUFFLE:
 
-			if indexSettings.Shards<=0 ||indexSettings.Status=="close"{
-				log.Debugf("index %v closed,",indexSettings.Index)
-				return errors.Errorf("index %v closed,",indexSettings.Index)
+			if indexSettings.Shards <= 0 || indexSettings.Status == "close" {
+				log.Debugf("index %v closed,", indexSettings.Index)
+				return errors.Errorf("index %v closed,", indexSettings.Index)
 			}
 
 			if indexSettings.Shards != 1 {
@@ -339,7 +338,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				}
 
 				//save endpoint for bufferkey
-				if checkShards && len(enabledShards) > 0  {
+				if checkShards && len(enabledShards) > 0 {
 					if !util.ContainsAnyInArray(strconv.Itoa(shardID), enabledShards) {
 						log.Debugf("shard %s-%s not enabled, skip processing", index, shardID)
 						//skipNext = true
@@ -374,9 +373,9 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				nodeInfo := metadata.GetNodeInfo(shardInfo.NodeID)
 				if nodeInfo == nil {
 					if rate.GetRateLimiter("node_info_not_found_%v", shardInfo.NodeID, 1, 5, time.Minute*1).Allow() {
-						log.Warnf("nodeInfo not found, %v %v", bufferKey,shardInfo.NodeID)
+						log.Warnf("nodeInfo not found, %v %v", bufferKey, shardInfo.NodeID)
 					}
-					return errors.Errorf("nodeInfo not found, %v %v", bufferKey,shardInfo.NodeID)
+					return errors.Errorf("nodeInfo not found, %v %v", bufferKey, shardInfo.NodeID)
 				}
 
 				buff = bufferPool.Get()
@@ -392,7 +391,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 			//保存临时变量
 			actionMeta.Write(metaBytes)
 
-			return  nil
+			return nil
 		}, func(payloadBytes []byte) {
 
 			if actionMeta.Len() > 0 {
@@ -415,11 +414,11 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					buff.Write(NEWLINEBYTES)
 					buff.Write(payloadBytes)
 
-					if validPayload{
+					if validPayload {
 						obj := map[string]interface{}{}
 						err := util.FromJSONBytes(payloadBytes, &obj)
 						if err != nil {
-							log.Error("error on validate action payload:",string(payloadBytes))
+							log.Error("error on validate action payload:", string(payloadBytes))
 							panic(err)
 						}
 					}
@@ -430,13 +429,13 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 			}
 		})
 
-		if err!=nil{
+		if err != nil {
 			log.Error(err)
 			return
 		}
 
-		submitMode := this.GetStringOrDefault("mode", "sync")         //sync and async
-		if submitMode=="sync"{
+		submitMode := this.GetStringOrDefault("mode", "sync") //sync and async
+		if submitMode == "sync" {
 			bulkProcessor := BulkProcessor{
 				RotateConfig: rotate.RotateConfig{
 					Compress:     this.GetBool("compress_after_rotate", true),
@@ -445,7 +444,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					MaxFileSize:  this.GetIntOrDefault("max_file_size_in_mb", 1024),
 				},
 				Compress:                  this.GetBool("compress", false),
-				Log400Message:             this.GetBool("log_400_message", true),
 				LogInvalidMessage:         this.GetBool("log_invalid_message", true),
 				LogInvalid200Message:      this.GetBool("log_invalid_200_message", true),
 				LogInvalid200RetryMessage: this.GetBool("log_200_retry_message", true),
@@ -475,9 +473,15 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 				endpoint = path.Join(endpoint, pathStr)
 
-				status, ok := bulkProcessor.Bulk(esConfig, endpoint, data,fastHttpClient)
-				if !ok {
-					log.Error("bulk failed on endpoint,", x, ", code:", status)
+				code, status := bulkProcessor.Bulk(esConfig, endpoint, data, fastHttpClient)
+				switch status {
+				case SUCCESS:
+					break
+				case PARTIAL:
+					break
+				case FAILURE:
+					//TODO
+					log.Error("bulk failed on endpoint,", x, ", code:", code)
 					return
 				}
 
@@ -485,7 +489,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				bufferPool.Put(y)
 			}
 
-		}else{
+		} else {
 
 			for x, y := range docBuf {
 				y.Write(NEWLINEBYTES)
@@ -509,19 +513,18 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 		}
 
-
 		if indexAnalysis {
 			ctx.Set("bulk_index_stats", indexStatsData)
-			for k,v:=range indexStatsData{
+			for k, v := range indexStatsData {
 				//统计索引次数
-				stats.IncrementBy("elasticsearch."+clusterName+"."+k,"writes", int64(v))
+				stats.IncrementBy("elasticsearch."+clusterName+"."+k, "writes", int64(v))
 			}
 		}
 		if actionAnalysis {
 			ctx.Set("bulk_action_stats", actionStatsData)
-			for k,v:=range actionStatsData{
+			for k, v := range actionStatsData {
 				//统计操作次数
-				stats.IncrementBy("elasticsearch."+clusterName+"._all",k, int64(v))
+				stats.IncrementBy("elasticsearch."+clusterName+"._all", k, int64(v))
 			}
 		}
 
@@ -535,7 +538,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		//fake results
 		ctx.SetContentType(JSON_CONTENT_TYPE)
 
-		buffer:=bytebufferpool.Get()
+		buffer := bytebufferpool.Get()
 
 		buffer.Write(startPart)
 		for i := 0; i < docCount; i++ {
@@ -566,19 +569,19 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 }
 
-func getUrlLevelBulkMeta(pathStr string) (urlLevelIndex,urlLevelType string) {
+func getUrlLevelBulkMeta(pathStr string) (urlLevelIndex, urlLevelType string) {
 
-	if !util.SuffixStr(pathStr,"_bulk"){
+	if !util.SuffixStr(pathStr, "_bulk") {
 		return urlLevelIndex, urlLevelType
 	}
 
-	if strings.Contains(pathStr,"//"){
-		pathStr=strings.ReplaceAll(pathStr,"//","/")
+	if strings.Contains(pathStr, "//") {
+		pathStr = strings.ReplaceAll(pathStr, "//", "/")
 	}
 
 	pathArray := strings.FieldsFunc(pathStr, func(c rune) bool {
-		return c=='/'
-	} )
+		return c == '/'
+	})
 
 	switch len(pathArray) {
 	case 3:
@@ -593,9 +596,9 @@ func getUrlLevelBulkMeta(pathStr string) (urlLevelIndex,urlLevelType string) {
 	return urlLevelIndex, urlLevelType
 }
 
-var startPart=[]byte("{\"took\":0,\"errors\":false,\"items\":[")
-var itemPart=[]byte("{\"index\":{\"_index\":\"fake-index\",\"_type\":\"doc\",\"_id\":\"1\",\"_version\":1,\"result\":\"created\",\"_shards\":{\"total\":1,\"successful\":1,\"failed\":0},\"_seq_no\":1,\"_primary_term\":1,\"status\":200}}")
-var endPart=[]byte("]}")
+var startPart = []byte("{\"took\":0,\"errors\":false,\"items\":[")
+var itemPart = []byte("{\"index\":{\"_index\":\"fake-index\",\"_type\":\"doc\",\"_id\":\"1\",\"_version\":1,\"result\":\"created\",\"_shards\":{\"total\":1,\"successful\":1,\"failed\":0},\"_seq_no\":1,\"_primary_term\":1,\"status\":200}}")
+var endPart = []byte("]}")
 
 //TODO 提取出来，作为公共方法，和 indexing/bulking_indexing 的方法合并
 var fastHttpClient = &fasthttp.Client{
@@ -603,13 +606,12 @@ var fastHttpClient = &fasthttp.Client{
 	MaxIdleConnDuration: 0,
 	ReadTimeout:         time.Second * 60,
 	WriteTimeout:        time.Second * 60,
-	TLSConfig: &tls.Config{InsecureSkipVerify: true},
+	TLSConfig:           &tls.Config{InsecureSkipVerify: true},
 }
 
 type BulkProcessor struct {
 	RotateConfig              rotate.RotateConfig
 	Compress                  bool
-	Log400Message             bool
 	LogInvalidMessage         bool
 	LogInvalid200Message      bool
 	LogInvalid200RetryMessage bool
@@ -622,10 +624,16 @@ type BulkProcessor struct {
 	MaxResponseBodySize       int
 }
 
-func (joint *BulkProcessor) Bulk(cfg *elastic.ElasticsearchConfig, endpoint string, data []byte,httpClient *fasthttp.Client) (int, bool) {
+type API_STATUS string
+
+const SUCCESS API_STATUS = "success"
+const PARTIAL API_STATUS = "partial"
+const FAILURE API_STATUS = "failure"
+
+func (joint *BulkProcessor) Bulk(cfg *elastic.ElasticsearchConfig, endpoint string, data []byte, httpClient *fasthttp.Client) (status_code int, status API_STATUS) {
 	if data == nil || len(data) == 0 {
 		log.Error("data size is empty,", endpoint)
-		return 0, true
+		return 0, FAILURE
 	}
 
 	if cfg.IsTLS() {
@@ -668,18 +676,18 @@ func (joint *BulkProcessor) Bulk(cfg *elastic.ElasticsearchConfig, endpoint stri
 			req.SetBody(data)
 		}
 
-		if req.GetBodyLength()<=0{
-			log.Error("INIT: after set, but body is zero,",len(data),",is compress:",joint.Compress)
+		if req.GetBodyLength() <= 0 {
+			log.Error("INIT: after set, but body is zero,", len(data), ",is compress:", joint.Compress)
 		}
-	}else{
-		log.Error("INIT: data length is zero,",string(data),",is compress:",joint.Compress)
+	} else {
+		log.Error("INIT: data length is zero,", string(data), ",is compress:", joint.Compress)
 	}
 	retryTimes := 0
 
 DO:
 
-	if req.GetBodyLength()<=0{
-		log.Error("DO: data length is zero,",string(data),",is compress:",joint.Compress)
+	if req.GetBodyLength() <= 0 {
+		log.Error("DO: data length is zero,", string(data), ",is compress:", joint.Compress)
 	}
 
 	if cfg.TrafficControl != nil {
@@ -707,7 +715,7 @@ DO:
 		if global.Env().IsDebug {
 			log.Error(err)
 		}
-		return 0, false
+		return 0, FAILURE
 	}
 
 	// Do we need to decompress the response?
@@ -717,115 +725,92 @@ DO:
 	}
 
 	if err != nil {
-		log.Error("status:", resp.StatusCode(), ",", endpoint, ",",err," ", util.SubString(string(util.EscapeNewLine(resbody)), 0, 256))
-		return resp.StatusCode(), false
-	}
-
-	if resp.StatusCode() == 400 {
-
-		if joint.Log400Message {
-
-			bodyString := string(resbody)
-			if rate.GetRateLimiter("log_400_message", endpoint, 1, 1, 5*time.Second).Allow() {
-				log.Warn("status:", resp.StatusCode(), ",",req.URI().String(),",data length:",len(data) ,",data:",util.SubString(util.UnsafeBytesToString(util.EscapeNewLine(data)), 0, 256),",req body:",util.SubString(util.UnsafeBytesToString(util.EscapeNewLine(req.GetRawBody())), 0, 256),",", util.SubString(bodyString, 0, 256))
-			}
-
-			logPath := path.Join(global.Env().GetLogDir(), cfg.Name, "400", "requests.log")
-			logHandler := rotate.GetFileHandler(logPath, joint.RotateConfig)
-
-			logHandler.WriteBytesArray(
-				[]byte("\nURL:"),
-				[]byte(url),
-				[]byte("\nRequest:\n"),
-				[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.MaxRequestBodySize)),
-				[]byte("\nResponse:\n"),
-				[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.MaxResponseBodySize)),
-			)
-		}
-		return resp.StatusCode(), false
+		log.Error("status:", resp.StatusCode(), ",", endpoint, ",", err, " ", util.SubString(string(util.EscapeNewLine(resbody)), 0, 256))
+		return resp.StatusCode(), FAILURE
 	}
 
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated {
 		if resp.StatusCode() == http.StatusOK {
-			//200{"took":2,"errors":true,"items":[
+			//TODO verify each es version's error response
 			hit := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
 			if hit {
-
 				//decode response
-				response:=elastic.BulkResponse{}
-				err:=response.UnmarshalJSON(resbody)
-				if err!=nil{
+				response := elastic.BulkResponse{}
+				err := response.UnmarshalJSON(resbody)
+				if err != nil {
 					panic(err)
 				}
 
-				invalidOffset:=map[int]elastic.BulkActionMetadata{}
-				for i,v:=range response.Items{
-					item:=v.GetItem()
-					if item.Error!=nil{
+				invalidOffset := map[int]elastic.BulkActionMetadata{}
+				for i, v := range response.Items {
+					item := v.GetItem()
+					if item.Error != nil {
 						//fmt.Println(i,",",item.Status,",",item.Error.Type)
 						//TODO log invalid requests
 						//send 400 requests to dedicated queue, the rest go to failure queue
-						invalidOffset[i]=v
+						invalidOffset[i] = v
 					}
 				}
 				//fmt.Println("invalid requests:",invalidOffset)
 
 				var contains400Error bool
-				if len(invalidOffset)>0 && len(invalidOffset)<len(response.Items){
-					requestBytes:= req.GetRawBody()
-					errorItems:=bytebufferpool.Get()
-					retryableItems:=bytebufferpool.Get()
+				if len(invalidOffset) > 0 && len(invalidOffset) < len(response.Items) {
+					requestBytes := req.GetRawBody()
+					errorItems := bytebufferpool.Get()
+					retryableItems := bytebufferpool.Get()
 
-					var offset=0
-					var match=false
-					var retryable=false
+					var offset = 0
+					var match = false
+					var retryable = false
 					var response elastic.BulkActionMetadata
 					//walk bulk message, with invalid id, save to another list
 					WalkBulkRequests(requestBytes, func(eachLine []byte) (skipNextLine bool) {
 						return false
 					}, func(metaBytes []byte, actionStr, index, typeName, id string) (err error) {
 
-						response,match=invalidOffset[offset]
-						if match{
-						//find invalid request
+						response, match = invalidOffset[offset]
+						if match {
+							//find invalid request
 							//fmt.Println(offset,"invalid request:",string(metaBytes),"invalid response:",response.GetItem().Result,response.GetItem().Index,response.GetItem().Type,response.GetItem().Index,response.GetItem().ID,response.GetItem().Error)
-							if response.GetItem().Status>=400 &&  response.GetItem().Status<500 && response.GetItem().Status!=429{
-								retryable=false
-								contains400Error=true
+							if response.GetItem().Status >= 400 && response.GetItem().Status < 500 && response.GetItem().Status != 429 {
+								retryable = false
+								contains400Error = true
 								errorItems.Write(metaBytes)
-							}else{
-								retryable=true
+							} else {
+								retryable = true
 								retryableItems.Write(metaBytes)
 							}
 						}
 						offset++
 						return nil
 					}, func(payloadBytes []byte) {
-						if match{
-							if payloadBytes!=nil&&len(payloadBytes)>0{
-								if retryable{
+						if match {
+							if payloadBytes != nil && len(payloadBytes) > 0 {
+								if retryable {
 									retryableItems.Write(payloadBytes)
-								}else{
+								} else {
 									errorItems.Write(payloadBytes)
 								}
 							}
 						}
 					})
 
-					if errorItems.Len()>0{
-						queue.Push("400-failure",errorItems.Bytes())
+					if errorItems.Len() > 0 {
+						queue.Push(cfg.Name+"_400-failure", errorItems.Bytes())
 						//send to redis channel
 						errorItems.Reset()
 						bytebufferpool.Put(errorItems)
 					}
 
-					if retryableItems.Len()>0{
-						queue.Push("none-400-failure",retryableItems.Bytes())
+					if retryableItems.Len() > 0 {
+						queue.Push(cfg.Name+"_none-400-failure", retryableItems.Bytes())
 						retryableItems.Reset()
 						bytebufferpool.Put(retryableItems)
 					}
 
-
+					if contains400Error {
+						return 400, PARTIAL
+					}
 				}
 
 				if joint.LogInvalid200Message {
@@ -846,10 +831,6 @@ DO:
 					)
 				}
 
-				if contains400Error{
-					return 400,false
-				}
-
 				delayTime := joint.RetryDelayInSeconds
 				if delayTime <= 0 {
 					delayTime = 10
@@ -857,17 +838,19 @@ DO:
 				if joint.MaxRetryTimes <= 0 {
 					joint.MaxRetryTimes = 3
 				}
+
 				if retryTimes >= joint.MaxRetryTimes {
 					log.Errorf("invalid 200, retried %v times, quit retry", retryTimes)
-					return resp.StatusCode(), false
+					return resp.StatusCode(), FAILURE
 				}
+
 				time.Sleep(time.Duration(delayTime) * time.Second)
 				log.Debugf("invalid 200, retried %v times, will try again", retryTimes)
 				retryTimes++
 				goto DO
 			}
 		}
-		return resp.StatusCode(), true
+		return resp.StatusCode(), SUCCESS
 	} else if resp.StatusCode() == 429 {
 		delayTime := joint.RejectDelayInSeconds
 		if delayTime <= 0 {
@@ -879,7 +862,7 @@ DO:
 		}
 		if retryTimes >= joint.MaxRejectRetryTimes {
 			log.Errorf("rejected 429, retried %v times, quit retry", retryTimes)
-			return resp.StatusCode(), false
+			return resp.StatusCode(), FAILURE
 		}
 		log.Debugf("rejected 429, retried %v times, will try again", retryTimes)
 		retryTimes++
@@ -905,7 +888,7 @@ DO:
 			)
 		}
 
-		return resp.StatusCode(), false
+		return resp.StatusCode(), FAILURE
 	}
-	return resp.StatusCode(), true
+
 }

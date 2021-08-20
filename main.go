@@ -66,7 +66,12 @@ func main() {
 		module.RegisterSystemModule(elastic.ElasticModule{})
 		module.RegisterUserPlugin(translog.TranslogModule{})
 		module.RegisterSystemModule(filter.FilterModule{})
+
 		module.RegisterSystemModule(queue.DiskQueue{})
+		module.RegisterSystemModule(&queue.RedisModule{})
+
+		module.RegisterSystemModule(&queue.QueueModule{})
+
 		module.RegisterSystemModule(api.APIModule{})
 		module.RegisterSystemModule(pipeline.PipeModule{})
 		module.RegisterSystemModule(task.TaskModule{})

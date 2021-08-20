@@ -192,3 +192,14 @@ statsd:
   protocol: udp
   namespace: gateway.
   buffer_size: 102400
+
+#redis:
+#  enabled: true
+#  host: localhost
+#  port: 6379
+
+#queue:
+#  - name: dev_400-failure
+#    type: redis
+#  - name: dev_none-400-failure
+#    type: redis

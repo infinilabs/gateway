@@ -204,7 +204,6 @@ func (joint BulkIndexingJoint) NewBulkWorker(bulkSizeInByte int, wg *sync.WaitGr
 			MaxFileSize:  joint.GetIntOrDefault("max_file_size_in_mb", 1024),
 		},
 		Compress:                  joint.GetBool("compress", false),
-		Log400Message:             joint.GetBool("log_400_message", true),
 		LogInvalidMessage:         joint.GetBool("log_invalid_message", true),
 		LogInvalid200Message:      joint.GetBool("log_invalid_200_message", true),
 		LogInvalid200RetryMessage: joint.GetBool("log_200_retry_message", true),
@@ -272,8 +271,19 @@ CLEAN_BUFFER:
 		status, success := bulkProcessor.Bulk(cfg, endpoint, data, &httpClient)
 		log.Debug(cfg.Name, ", success:", success, ", status:", status, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elapsed:", time.Since(start))
 
-		if !success {
+		switch success {
+		case elastic2.SUCCESS:
+			stats.IncrementBy("bulk", "bytes_processed.success", int64(mainBuf.Len()))
+			break
+		case elastic2.PARTIAL:
+			stats.IncrementBy("bulk", "bytes_processed.partial", int64(mainBuf.Len()))
+			//TODO partial failure
+			break
+		case elastic2.FAILURE:
+
+			stats.IncrementBy("bulk", "bytes_processed.failure", int64(mainBuf.Len()))
 			//err := queue.Push(fmt.Sprintf("%v-%v",deadLetterQueueName,status), data)
+
 			err := queue.Push(deadLetterQueueName, data)
 			if err != nil {
 				panic(err)
@@ -281,7 +291,6 @@ CLEAN_BUFFER:
 			if global.Env().IsDebug {
 				log.Warn("re-enqueue bulk messages to dead_letter queue")
 			}
-			stats.IncrementBy("bulk", "bytes_processed_failed", int64(mainBuf.Len()))
 
 			if joint.GetBool("log_dead_letter_requests",false){
 				logPath := path.Join(global.Env().GetLogDir(), cfg.Name, "dead_letter", "requests.log")
@@ -297,8 +306,7 @@ CLEAN_BUFFER:
 				)
 			}
 
-		} else {
-			stats.IncrementBy("bulk", "bytes_processed_success", int64(mainBuf.Len()))
+			break
 		}
 
 		mainBuf.Reset()
@@ -306,8 +314,6 @@ CLEAN_BUFFER:
 		//set services to failure, need manual restart
 		//process dead letter queue first next round
 
-	} else {
-		//fmt.Println("timeout but CLEAN_BUFFER", mainBuf.Len())
 	}
 
 	goto READ_DOCS
