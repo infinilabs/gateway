@@ -27,9 +27,9 @@ import (
 	"infini.sh/framework/modules/filter"
 	"infini.sh/framework/modules/pipeline"
 	"infini.sh/framework/modules/queue"
+	stats2 "infini.sh/framework/modules/stats"
 	"infini.sh/framework/modules/task"
 	stats "infini.sh/framework/plugins/stats_statsd"
-	api2 "infini.sh/gateway/api"
 	"infini.sh/gateway/config"
 	"infini.sh/gateway/pipeline/dump_hash"
 	"infini.sh/gateway/pipeline/index_diff"
@@ -75,12 +75,11 @@ func main() {
 		module.RegisterSystemModule(pipeline.PipeModule{})
 		module.RegisterSystemModule(task.TaskModule{})
 
+		module.RegisterSystemModule(stats2.SimpleStatsModule{})
 		module.RegisterUserPlugin(stats.StatsDModule{})
 		module.RegisterUserPlugin(gateway.GatewayModule{})
 		module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
 		module.RegisterUserPlugin(forcemerge.ForceMergeModule{})
-
-		api2.Init()
 
 		//register pipeline joints
 		pipe.RegisterPipeJoint(indexing.JsonIndexingJoint{})
