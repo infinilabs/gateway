@@ -147,9 +147,20 @@ READ_DOCS:
 	for {
 		idleTimeout.Reset(idleDuration)
 
-		select {
 
-		case pop := <-queue.ReadChan(joint.inputQueueName):
+		pop,timeout,err := queue.PopTimeout(joint.inputQueueName,idleDuration)
+
+		if err!=nil{
+			log.Error(err)
+			panic(err)
+		}
+
+		if timeout{
+			if global.Env().IsDebug{
+				log.Tracef("%v no message input", idleDuration)
+			}
+			goto READ_DOCS
+		}
 
 			stats.IncrementBy("bulk", "bytes_received", int64(mainBuf.Len()))
 
@@ -170,13 +181,6 @@ READ_DOCS:
 				}
 				goto CLEAN_BUFFER
 			}
-
-		case <-idleTimeout.C:
-			if global.Env().IsDebug{
-				log.Tracef("%v no message input", idleDuration)
-			}
-			goto CLEAN_BUFFER
-		}
 
 		goto READ_DOCS
 

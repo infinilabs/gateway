@@ -454,6 +454,10 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				MaxRetryTimes:             this.GetIntOrDefault("max_retry_times", 3),
 				MaxRequestBodySize:        this.GetIntOrDefault("max_logged_request_body_size", 1024),
 				MaxResponseBodySize:       this.GetIntOrDefault("max_logged_response_body_size", 1024),
+
+				FailureRequestsQueue:       this.GetStringOrDefault("failure_queue",fmt.Sprintf("%v-failure",clusterName)),
+				InvalidRequestsQueue:       this.GetStringOrDefault("invalid_queue",fmt.Sprintf("%v-invalid",clusterName)),
+				DeadRequestsQueue:       	this.GetStringOrDefault("dead_queue",fmt.Sprintf("%v-dead",clusterName)),
 			}
 
 			for x, y := range docBuf {
@@ -478,10 +482,10 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				case SUCCESS:
 					break
 				case PARTIAL:
+					log.Error("bulk requests partial failed on endpoint,", x, ", code:", code)
 					break
 				case FAILURE:
-					//TODO
-					log.Error("bulk failed on endpoint,", x, ", code:", code)
+					log.Error("bulk requests failed on endpoint,", x, ", code:", code)
 					return
 				}
 
@@ -622,15 +626,20 @@ type BulkProcessor struct {
 	MaxRetryTimes             int //max_reject_times
 	MaxRequestBodySize        int
 	MaxResponseBodySize       int
+
+	FailureRequestsQueue       string
+	InvalidRequestsQueue       string
+	DeadRequestsQueue          string
 }
 
 type API_STATUS string
 
 const SUCCESS API_STATUS = "success"
-const PARTIAL API_STATUS = "partial"
+const PARTIAL API_STATUS = "partial_success"
 const FAILURE API_STATUS = "failure"
 
 func (joint *BulkProcessor) Bulk(cfg *elastic.ElasticsearchConfig, endpoint string, data []byte, httpClient *fasthttp.Client) (status_code int, status API_STATUS) {
+
 	if data == nil || len(data) == 0 {
 		log.Error("data size is empty,", endpoint)
 		return 0, FAILURE
@@ -641,6 +650,7 @@ func (joint *BulkProcessor) Bulk(cfg *elastic.ElasticsearchConfig, endpoint stri
 	} else {
 		endpoint = "http://" + endpoint
 	}
+
 	url := fmt.Sprintf("%s/_bulk", endpoint)
 
 	req := fasthttp.AcquireRequest()
@@ -652,8 +662,9 @@ func (joint *BulkProcessor) Bulk(cfg *elastic.ElasticsearchConfig, endpoint stri
 
 	req.SetRequestURI(url)
 	req.Header.SetMethod(http.MethodPost)
-	req.Header.SetUserAgent("bulk_indexing")
+	req.Header.SetUserAgent("_bulk")
 
+	//TODO handle response, if client not support gzip, return raw body
 	if joint.Compress {
 		req.Header.Set("Accept-Encoding", "gzip")
 		req.Header.Set("content-encoding", "gzip")
@@ -796,14 +807,14 @@ DO:
 					})
 
 					if errorItems.Len() > 0 {
-						queue.Push(cfg.Name+"_400-failure", errorItems.Bytes())
+						queue.Push(joint.InvalidRequestsQueue, errorItems.Bytes())
 						//send to redis channel
 						errorItems.Reset()
 						bytebufferpool.Put(errorItems)
 					}
 
 					if retryableItems.Len() > 0 {
-						queue.Push(cfg.Name+"_none-400-failure", retryableItems.Bytes())
+						queue.Push(joint.FailureRequestsQueue, retryableItems.Bytes())
 						retryableItems.Reset()
 						bytebufferpool.Put(retryableItems)
 					}
@@ -887,6 +898,8 @@ DO:
 				[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.MaxResponseBodySize)),
 			)
 		}
+
+		queue.Push(joint.FailureRequestsQueue, data)
 
 		return resp.StatusCode(), FAILURE
 	}

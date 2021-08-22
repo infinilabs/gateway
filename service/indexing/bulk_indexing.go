@@ -6,7 +6,6 @@ import (
 	"infini.sh/framework/core/rotate"
 	"infini.sh/framework/lib/bytebufferpool"
 	elastic2 "infini.sh/gateway/proxy/filters/elastic"
-	"path"
 	"runtime"
 	"sync"
 	"time"
@@ -52,7 +51,6 @@ func (joint BulkIndexingJoint) Name() string {
 }
 
 
-
 func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 	defer func() {
 		if !global.Env().IsDebug {
@@ -72,7 +70,8 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 	}()
 
 	workers, _ := joint.GetInt("worker_size", 1)
-	elasticsearch := joint.GetStringOrDefault("elasticsearch", "default")
+	esInstanceVal := joint.MustGetString("elasticsearch")
+
 	enabledShards, checkShards := joint.GetStringArray("shards")
 
 	bulkSizeInKB, _ := joint.GetInt("bulk_size_in_kb", 0)
@@ -92,14 +91,13 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 	}
 
 
-	meta := elastic.GetMetadata(elasticsearch)
+	meta := elastic.GetMetadata(esInstanceVal)
 	wg := sync.WaitGroup{}
 
 	if meta == nil {
 		return errors.New("metadata is nil")
 	}
 
-	esInstanceVal := joint.MustGetString("elasticsearch")
 	indices, isIndex := joint.GetStringArray("index")
 
 	//index,shard,level
@@ -150,12 +148,12 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 		}
 	}
 
-	//start deadline ingest
-	if joint.GetBool("process_dead_letter_queue", false) {
-		deadLetterQueueName := joint.GetStringOrDefault("dead_letter_queue", fmt.Sprintf("%v-failed_bulk_messages", esInstanceVal))
-		v := meta.GetActiveNodeInfo()
-		go joint.NewBulkWorker(bulkSizeInByte, &wg, deadLetterQueueName, v.Http.PublishAddress)
-	}
+	////TODO, auto get new nodes and failure queues
+	////start deadline ingest
+	//if joint.GetBool("process_failure_queue", false) {
+	//	v := meta.GetActiveNodeInfo()
+	//	go joint.NewBulkWorker(bulkSizeInByte, &wg, , v.Http.PublishAddress)
+	//}
 
 	wg.Wait()
 
@@ -187,14 +185,14 @@ func (joint BulkIndexingJoint) NewBulkWorker(bulkSizeInByte int, wg *sync.WaitGr
 	mainBuf := joint.bufferPool.Get()
 	mainBuf.Reset()
 	defer joint.bufferPool.Put(mainBuf)
-	esInstanceVal := joint.MustGetString("elasticsearch")
+
+	clusterName := joint.MustGetString("elasticsearch")
 	validateRequest := joint.GetBool("valid_request", false)
-	deadLetterQueueName := joint.GetStringOrDefault("dead_letter_queue", fmt.Sprintf("%v-failed_bulk_messages", esInstanceVal))
 	timeOut := joint.GetIntOrDefault("idle_timeout_in_second", 5)
 	connections := joint.GetIntOrDefault("max_connection_per_host", 1)
 
 	idleDuration := time.Duration(timeOut) * time.Second
-	cfg := elastic.GetConfig(esInstanceVal)
+	cfg := elastic.GetConfig(clusterName)
 
 	bulkProcessor := elastic2.BulkProcessor{
 		RotateConfig: rotate.RotateConfig{
@@ -208,12 +206,19 @@ func (joint BulkIndexingJoint) NewBulkWorker(bulkSizeInByte int, wg *sync.WaitGr
 		LogInvalid200Message:      joint.GetBool("log_invalid_200_message", true),
 		LogInvalid200RetryMessage: joint.GetBool("log_200_retry_message", true),
 		Log429RetryMessage:        joint.GetBool("log_429_retry_message", true),
+
 		RetryDelayInSeconds:       joint.GetIntOrDefault("retry_delay_in_second", 1),
 		RejectDelayInSeconds:      joint.GetIntOrDefault("reject_retry_delay_in_second", 1),
+
 		MaxRejectRetryTimes:       joint.GetIntOrDefault("max_reject_retry_times", 3),
 		MaxRetryTimes:             joint.GetIntOrDefault("max_retry_times", 3),
+
 		MaxRequestBodySize:        joint.GetIntOrDefault("max_logged_request_body_size", 1024),
 		MaxResponseBodySize:       joint.GetIntOrDefault("max_logged_response_body_size", 1024),
+
+		FailureRequestsQueue:       joint.GetStringOrDefault("failure_queue",fmt.Sprintf("%v-failure",clusterName)),
+		InvalidRequestsQueue:       joint.GetStringOrDefault("invalid_queue",fmt.Sprintf("%v-invalid",clusterName)),
+		DeadRequestsQueue:       	joint.GetStringOrDefault("dead_queue",fmt.Sprintf("%v-dead",clusterName)),
 	}
 
 	httpClient := fasthttp.Client{
@@ -227,6 +232,7 @@ func (joint BulkIndexingJoint) NewBulkWorker(bulkSizeInByte int, wg *sync.WaitGr
 
 READ_DOCS:
 	for {
+
 		//each message is complete bulk message, must be end with \n
 		pop, ok, err := queue.PopTimeout(queueName, idleDuration)
 		if validateRequest {
@@ -245,8 +251,7 @@ READ_DOCS:
 		}
 
 		if len(pop) > 0 {
-			//log.Info("received message,",util.SubString(string(pop),0,100))
-			stats.IncrementBy("bulk", "bytes_received", int64(mainBuf.Len()))
+			stats.IncrementBy("bulk", "bytes.received", int64(mainBuf.Len()))
 			mainBuf.Write(pop)
 		}
 
@@ -255,8 +260,6 @@ READ_DOCS:
 				log.Trace("hit buffer size,", mainBuf.Len(), ", ", queueName, ", submit")
 			}
 			goto CLEAN_BUFFER
-		} else {
-			//fmt.Println("size too small",mainBuf.Len(),"vs",bulkSizeInByte)
 		}
 	}
 
@@ -267,53 +270,22 @@ CLEAN_BUFFER:
 		start := time.Now()
 		data := mainBuf.Bytes()
 		log.Trace(cfg.Name, ", starting submit bulk request")
-
 		status, success := bulkProcessor.Bulk(cfg, endpoint, data, &httpClient)
 		log.Debug(cfg.Name, ", success:", success, ", status:", status, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elapsed:", time.Since(start))
 
 		switch success {
 		case elastic2.SUCCESS:
-			stats.IncrementBy("bulk", "bytes_processed.success", int64(mainBuf.Len()))
+			stats.IncrementBy("bulk", "bytes.success", int64(mainBuf.Len()))
 			break
 		case elastic2.PARTIAL:
-			stats.IncrementBy("bulk", "bytes_processed.partial", int64(mainBuf.Len()))
-			//TODO partial failure
+			stats.IncrementBy("bulk", "bytes.partial", int64(mainBuf.Len()))
 			break
 		case elastic2.FAILURE:
-
-			stats.IncrementBy("bulk", "bytes_processed.failure", int64(mainBuf.Len()))
-			//err := queue.Push(fmt.Sprintf("%v-%v",deadLetterQueueName,status), data)
-
-			err := queue.Push(deadLetterQueueName, data)
-			if err != nil {
-				panic(err)
-			}
-			if global.Env().IsDebug {
-				log.Warn("re-enqueue bulk messages to dead_letter queue")
-			}
-
-			if joint.GetBool("log_dead_letter_requests",false){
-				logPath := path.Join(global.Env().GetLogDir(), cfg.Name, "dead_letter", "requests.log")
-				logHandler := rotate.GetFileHandler(logPath, bulkProcessor.RotateConfig)
-
-				logHandler.WriteBytesArray(
-					[]byte("\nURL:"),
-					[]byte(endpoint),
-					[]byte("\nRequest:\n"),
-					[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, bulkProcessor.MaxRequestBodySize)),
-					[]byte("\nResponse:\n"),
-					[]byte(fmt.Sprintf("status: %v",status)),
-				)
-			}
-
+			stats.IncrementBy("bulk", "bytes.failure", int64(mainBuf.Len()))
 			break
 		}
 
 		mainBuf.Reset()
-		//TODO handle retry and fallback/over, dead letter queue
-		//set services to failure, need manual restart
-		//process dead letter queue first next round
-
 	}
 
 	goto READ_DOCS

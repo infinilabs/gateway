@@ -33,7 +33,6 @@ import (
 	"infini.sh/gateway/config"
 	"infini.sh/gateway/pipeline/dump_hash"
 	"infini.sh/gateway/pipeline/index_diff"
-	indexing2 "infini.sh/gateway/service/bulk_reshuffle"
 	"infini.sh/gateway/service/diskqueue_consumer"
 	"infini.sh/gateway/service/floating_ip"
 	"infini.sh/gateway/service/forcemerge"
@@ -86,7 +85,6 @@ func main() {
 		//register pipeline joints
 		pipe.RegisterPipeJoint(indexing.JsonIndexingJoint{})
 		pipe.RegisterPipeJoint(indexing.BulkIndexingJoint{})
-		pipe.RegisterPipeJoint(indexing2.BulkReshuffleJoint{})
 		pipe.RegisterPipeJoint(diskqueue_consumer.DiskQueueConsumer{})
 		pipe.RegisterPipeJoint(offline_processing.FlowRunner{})
 

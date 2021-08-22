@@ -122,36 +122,33 @@ READ_DOCS:
 			goto HANDLE_PENDING
 		}
 
-		select {
+		 pop,timeout,err := queue.PopTimeout(joint.inputQueueName,idleDuration)
+		 if timeout{
+			 if global.Env().IsDebug{
+				 log.Tracef("%v no message input", idleDuration)
+			 }
+		 	goto READ_DOCS
+		 }
 
-		case pop := <-queue.ReadChan(joint.inputQueueName):
-			ok,status,err:=processMessage(esConfig,pop)
-			if !ok{
-				if global.Env().IsDebug{
-					log.Debug(ok,status,err)
-				}
-				if status>=400 && status< 500{
-					log.Error("push to dead letter queue:",onDeadLetterQueue,",",err)
-					err:=queue.Push(onDeadLetterQueue,pop)
-					if err!=nil{
-						panic(err)
-					}
-				}else{
-					err:=queue.Push(onErrorQueue,pop)
-					if err!=nil{
-						panic(err)
-					}
-				}
-				time.Sleep(5*time.Second)
-			}
-		case <-idleTimeout.C:
+		ok,status,err:=processMessage(esConfig,pop)
+		if !ok{
 			if global.Env().IsDebug{
-				log.Tracef("%v no message input", idleDuration)
+				log.Debug(ok,status,err)
 			}
+			if status>=400 && status< 500{
+				log.Error("push to dead letter queue:",onDeadLetterQueue,",",err)
+				err:=queue.Push(onDeadLetterQueue,pop)
+				if err!=nil{
+					panic(err)
+				}
+			}else{
+				err:=queue.Push(onErrorQueue,pop)
+				if err!=nil{
+					panic(err)
+				}
+			}
+			time.Sleep(5*time.Second)
 		}
-
-		goto READ_DOCS
-
 	}
 
 HANDLE_PENDING:
@@ -162,36 +159,37 @@ HANDLE_PENDING:
 
 	for {
 		idleTimeout1.Reset(idleDuration)
-		select {
 
-		case pop := <-queue.ReadChan(onErrorQueue):
+		 pop,timeout,err :=queue.PopTimeout(onErrorQueue,idleDuration)
 
-			ok,status,err:=processMessage(esConfig,pop)
-			if !ok{
-				if global.Env().IsDebug{
-					log.Debug(ok,status,err)
-				}
-				if status>401 && status< 500{
-					log.Error("push to dead letter queue:",onDeadLetterQueue,",",err)
-					err:=queue.Push(onDeadLetterQueue,pop)
-					if err!=nil{
-						panic(err)
-					}
-				}else{
-					err:=queue.Push(onErrorQueue,pop)
-					if err!=nil{
-						panic(err)
-					}
-				}
-
-				time.Sleep(1*time.Second)
-			}
-		case <-idleTimeout1.C:
+		if timeout{
 			if global.Env().IsDebug{
 				log.Tracef("%v no message input", idleDuration)
 			}
 			goto READ_DOCS
 		}
+
+		ok,status,err:=processMessage(esConfig,pop)
+		if !ok{
+			if global.Env().IsDebug{
+				log.Debug(ok,status,err)
+			}
+			if status>401 && status< 500{
+				log.Error("push to dead letter queue:",onDeadLetterQueue,",",err)
+				err:=queue.Push(onDeadLetterQueue,pop)
+				if err!=nil{
+					panic(err)
+				}
+			}else{
+				err:=queue.Push(onErrorQueue,pop)
+				if err!=nil{
+					panic(err)
+				}
+			}
+
+			time.Sleep(1*time.Second)
+		}
+
 	}
 }
 

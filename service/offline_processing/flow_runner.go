@@ -105,11 +105,19 @@ func (this FlowRunner) Process(c *pipeline.Context) error {
 			default:
 				idleTimeout1.Reset(idleDuration)
 				if !stop {
-					select {
-
-					case pop := <-queue.ReadChan(runnerConfig.InputQueue):
+					pop,timeout,err := queue.PopTimeout(runnerConfig.InputQueue,idleDuration)
+					if err!=nil{
+						log.Error(err)
+						panic(err)
+					}
+					if timeout{
+						if global.Env().IsDebug {
+							log.Tracef("%v no message input", idleDuration)
+						}
+						goto READ_DOCS
+					}
 						ctx := acquireCtx()
-						err := ctx.Request.Decode(pop)
+						err = ctx.Request.Decode(pop)
 						if err != nil {
 							log.Error(err)
 							panic(err)
@@ -118,13 +126,6 @@ func (this FlowRunner) Process(c *pipeline.Context) error {
 						processor(ctx)
 
 						releaseCtx(ctx)
-
-					case <-idleTimeout1.C:
-						if global.Env().IsDebug {
-							log.Tracef("%v no message input", idleDuration)
-						}
-						goto READ_DOCS
-					}
 				}
 			}
 
