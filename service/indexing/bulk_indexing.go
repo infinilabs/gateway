@@ -244,7 +244,7 @@ READ_DOCS:
 		}
 
 		if len(pop) > 0 {
-			stats.IncrementBy("bulk", "bytes.received", int64(mainBuf.Len()))
+			stats.IncrementBy("elasticsearch."+clusterName, "bulk.bytes.received", int64(mainBuf.Len()))
 			mainBuf.Write(pop)
 		}
 
@@ -277,13 +277,13 @@ CLEAN_BUFFER:
 
 		switch success {
 		case elastic2.SUCCESS:
-			stats.IncrementBy("bulk", "bytes.success", int64(mainBuf.Len()))
+			stats.IncrementBy("elasticsearch."+clusterName, "bulk.bytes.success", int64(mainBuf.Len()))
 			break
 		case elastic2.PARTIAL:
-			stats.IncrementBy("bulk", "bytes.partial", int64(mainBuf.Len()))
+			stats.IncrementBy("elasticsearch."+clusterName, "bulk.bytes.partial", int64(mainBuf.Len()))
 			break
 		case elastic2.FAILURE:
-			stats.IncrementBy("bulk", "bytes.failure", int64(mainBuf.Len()))
+			stats.IncrementBy("elasticsearch."+clusterName, "bulk.bytes.failure", int64(mainBuf.Len()))
 			break
 		}
 

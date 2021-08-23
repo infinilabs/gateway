@@ -521,14 +521,14 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 			ctx.Set("bulk_index_stats", indexStatsData)
 			for k, v := range indexStatsData {
 				//统计索引次数
-				stats.IncrementBy("elasticsearch."+clusterName+"."+k, "writes", int64(v))
+				stats.IncrementBy("elasticsearch."+clusterName+".indices", k, int64(v))
 			}
 		}
 		if actionAnalysis {
 			ctx.Set("bulk_action_stats", actionStatsData)
 			for k, v := range actionStatsData {
 				//统计操作次数
-				stats.IncrementBy("elasticsearch."+clusterName+"._all", k, int64(v))
+				stats.IncrementBy("elasticsearch."+clusterName+".operations", k, int64(v))
 			}
 		}
 
@@ -642,7 +642,7 @@ func (joint *BulkProcessor) Bulk(cfg *elastic.ElasticsearchConfig, endpoint stri
 
 	if data == nil || len(data) == 0 {
 		log.Error("data size is empty,", endpoint)
-		stats.Increment(cfg.Name,"5xx_bulk_requests")
+		stats.Increment("elasticsearch."+cfg.Name+".bulk","5xx_requests")
 		return 0, FAILURE
 	}
 
@@ -727,7 +727,7 @@ DO:
 		if global.Env().IsDebug {
 			log.Error(err)
 		}
-		stats.Increment(cfg.Name,"5xx_bulk_requests")
+		stats.Increment("elasticsearch."+cfg.Name+".bulk","5xx_requests")
 		return 0, FAILURE
 	}
 
@@ -738,7 +738,7 @@ DO:
 	}
 
 	if err != nil {
-		stats.Increment(cfg.Name,"5xx_bulk_requests")
+		stats.Increment("elasticsearch."+cfg.Name+".bulk","5xx_requests")
 
 		log.Error("status:", resp.StatusCode(), ",", endpoint, ",", err, " ", util.SubString(string(util.EscapeNewLine(resbody)), 0, 256))
 		return resp.StatusCode(), FAILURE
@@ -746,7 +746,7 @@ DO:
 
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated {
 
-		stats.Increment(cfg.Name,"200_bulk_requests")
+		stats.Increment("elasticsearch."+cfg.Name+".bulk","200_requests")
 
 		if resp.StatusCode() == http.StatusOK {
 			//TODO verify each es version's error response
@@ -817,8 +817,8 @@ DO:
 						}
 					})
 
-					stats.IncrementBy(cfg.Name,"200_invalid_docs", int64(invalidCount))
-					stats.IncrementBy(cfg.Name,"200_failure_docs", int64(failureCount))
+					stats.IncrementBy("elasticsearch."+cfg.Name+".bulk","200_invalid_docs", int64(invalidCount))
+					stats.IncrementBy("elasticsearch."+cfg.Name+".bulk","200_failure_docs", int64(failureCount))
 
 					if errorItems.Len() > 0 {
 						queue.Push(joint.InvalidRequestsQueue, errorItems.Bytes())
@@ -877,7 +877,7 @@ DO:
 		}
 		return resp.StatusCode(), SUCCESS
 	} else if resp.StatusCode() == 429 {
-		stats.Increment(cfg.Name,"429_bulk_requests")
+		stats.Increment("elasticsearch."+cfg.Name+".bulk","429_requests")
 
 		delayTime := joint.RejectDelayInSeconds
 		if delayTime <= 0 {
@@ -896,7 +896,7 @@ DO:
 		goto DO
 	} else {
 
-		stats.Increment(cfg.Name,"5xx_bulk_requests")
+		stats.Increment("elasticsearch."+cfg.Name+".bulk","5xx_requests")
 
 		if joint.LogInvalidMessage {
 			bodyString := string(resbody)
