@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"context"
 	"fmt"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
@@ -15,6 +16,7 @@ import (
 var client *redis.Client
 var l sync.RWMutex
 var inited bool
+var ctx = context.Background()
 
 func (p RedisOutput) getRedisClient() *redis.Client {
 
@@ -35,7 +37,7 @@ func (p RedisOutput) getRedisClient() *redis.Client {
 		DB:       p.GetIntOrDefault("db",0),
 	})
 
-	_, err := client.Ping().Result()
+	_, err := client.Ping(ctx).Result()
 	if err != nil {
 		panic(err)
 	}
@@ -66,7 +68,7 @@ func (filter RedisOutput) Process(ctx *fasthttp.RequestCtx) {
 	}
 
 	if buffer.Len()>0{
-		v,err:=filter.getRedisClient().Publish(filter.MustGetString("channel"),buffer.Bytes()).Result()
+		v,err:=filter.getRedisClient().Publish(ctx,filter.MustGetString("channel"),buffer.Bytes()).Result()
 		if global.Env().IsDebug{
 			log.Trace(v,err)
 		}

@@ -2,6 +2,7 @@ package cache
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	log "github.com/cihub/seelog"
 	"github.com/dgraph-io/ristretto"
@@ -36,6 +37,7 @@ var newLine = []byte("\n")
 var client *redis.Client
 var cache *ristretto.Cache
 var inited bool
+var ctx = context.Background()
 
 var bytesBufferPool = &sync.Pool{
 	New: func() interface{} {
@@ -64,7 +66,7 @@ func (p RequestCache) getRedisClient() *redis.Client {
 		DB:       0,
 	})
 
-	_, err := client.Ping().Result()
+	_, err := client.Ping(ctx).Result()
 	if err != nil {
 		panic(err)
 	}
@@ -112,7 +114,7 @@ func (p RequestCache) GetCache(key string) ([]byte, bool) {
 	}
 	switch p.GetStringOrDefault("cache_type", defaultCacheType) {
 		case cacheRedis:
-			b, err := p.getRedisClient().Get(key).Result()
+			b, err := p.getRedisClient().Get(ctx,key).Result()
 			if err == redis.Nil {
 				return nil, false
 			} else if err != nil {
@@ -159,7 +161,7 @@ func (p RequestCache) SetCache(key string, data []byte, ttl time.Duration) {
 
 	switch p.GetStringOrDefault("cache_type", defaultCacheType) {
 	case cacheRedis:
-		err := p.getRedisClient().Set(key, data, ttl).Err()
+		err := p.getRedisClient().Set(ctx,key, data, ttl).Err()
 		if err != nil {
 			panic(err)
 		}
