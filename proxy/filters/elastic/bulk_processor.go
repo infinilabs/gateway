@@ -642,6 +642,7 @@ func (joint *BulkProcessor) Bulk(cfg *elastic.ElasticsearchConfig, endpoint stri
 
 	if data == nil || len(data) == 0 {
 		log.Error("data size is empty,", endpoint)
+		stats.Increment(cfg.Name,"5xx_bulk_requests")
 		return 0, FAILURE
 	}
 
@@ -726,6 +727,7 @@ DO:
 		if global.Env().IsDebug {
 			log.Error(err)
 		}
+		stats.Increment(cfg.Name,"5xx_bulk_requests")
 		return 0, FAILURE
 	}
 
@@ -736,11 +738,16 @@ DO:
 	}
 
 	if err != nil {
+		stats.Increment(cfg.Name,"5xx_bulk_requests")
+
 		log.Error("status:", resp.StatusCode(), ",", endpoint, ",", err, " ", util.SubString(string(util.EscapeNewLine(resbody)), 0, 256))
 		return resp.StatusCode(), FAILURE
 	}
 
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated {
+
+		stats.Increment(cfg.Name,"200_bulk_requests")
+
 		if resp.StatusCode() == http.StatusOK {
 			//TODO verify each es version's error response
 			hit := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
@@ -774,6 +781,8 @@ DO:
 					var match = false
 					var retryable = false
 					var response elastic.BulkActionMetadata
+					var invalidCount =0
+					var failureCount =0
 					//walk bulk message, with invalid id, save to another list
 					WalkBulkRequests(requestBytes, func(eachLine []byte) (skipNextLine bool) {
 						return false
@@ -787,9 +796,11 @@ DO:
 								retryable = false
 								contains400Error = true
 								errorItems.Write(metaBytes)
+								invalidCount++
 							} else {
 								retryable = true
 								retryableItems.Write(metaBytes)
+								failureCount++
 							}
 						}
 						offset++
@@ -805,6 +816,9 @@ DO:
 							}
 						}
 					})
+
+					stats.IncrementBy(cfg.Name,"200_invalid_docs", int64(invalidCount))
+					stats.IncrementBy(cfg.Name,"200_failure_docs", int64(failureCount))
 
 					if errorItems.Len() > 0 {
 						queue.Push(joint.InvalidRequestsQueue, errorItems.Bytes())
@@ -863,6 +877,8 @@ DO:
 		}
 		return resp.StatusCode(), SUCCESS
 	} else if resp.StatusCode() == 429 {
+		stats.Increment(cfg.Name,"429_bulk_requests")
+
 		delayTime := joint.RejectDelayInSeconds
 		if delayTime <= 0 {
 			delayTime = 5
@@ -879,6 +895,8 @@ DO:
 		retryTimes++
 		goto DO
 	} else {
+
+		stats.Increment(cfg.Name,"5xx_bulk_requests")
 
 		if joint.LogInvalidMessage {
 			bodyString := string(resbody)

@@ -72,7 +72,6 @@ func main() {
 		module.RegisterSystemModule(&queue.QueueModule{})
 
 		module.RegisterSystemModule(api.APIModule{})
-		module.RegisterSystemModule(pipeline.PipeModule{})
 		module.RegisterSystemModule(task.TaskModule{})
 
 		module.RegisterSystemModule(stats2.SimpleStatsModule{})
@@ -80,6 +79,7 @@ func main() {
 		module.RegisterUserPlugin(gateway.GatewayModule{})
 		module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
 		module.RegisterUserPlugin(forcemerge.ForceMergeModule{})
+		module.RegisterSystemModule(pipeline.PipeModule{})
 
 		//register pipeline joints
 		pipe.RegisterPipeJoint(indexing.JsonIndexingJoint{})
