@@ -234,7 +234,7 @@ READ_DOCS:
 	for {
 
 		//each message is complete bulk message, must be end with \n
-		pop, ok, err := queue.PopTimeout(queueName, idleDuration)
+		pop, timeout, err := queue.PopTimeout(queueName, idleDuration)
 		if validateRequest {
 			common.ValidateBulkRequest("write_pop", string(pop))
 		}
@@ -243,17 +243,19 @@ READ_DOCS:
 			panic(err)
 		}
 
-		if ok {
+		if len(pop) > 0 {
+			stats.IncrementBy("bulk", "bytes.received", int64(mainBuf.Len()))
+			mainBuf.Write(pop)
+		}
+
+		if timeout {
 			if global.Env().IsDebug {
 				log.Tracef("%v no message input: %v", idleDuration, queueName)
 			}
 			goto CLEAN_BUFFER
 		}
 
-		if len(pop) > 0 {
-			stats.IncrementBy("bulk", "bytes.received", int64(mainBuf.Len()))
-			mainBuf.Write(pop)
-		}
+
 
 		if mainBuf.Len() > (bulkSizeInByte) {
 			if global.Env().IsDebug {
