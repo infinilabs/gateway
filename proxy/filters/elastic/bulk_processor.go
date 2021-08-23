@@ -477,7 +477,9 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 				endpoint = path.Join(endpoint, pathStr)
 
+				start:=time.Now()
 				code, status := bulkProcessor.Bulk(esConfig, endpoint, data, fastHttpClient)
+				stats.Timing("elasticsearch."+esConfig.Name+".bulk","elapsed_ms",time.Since(start).Milliseconds())
 				switch status {
 				case SUCCESS:
 					break

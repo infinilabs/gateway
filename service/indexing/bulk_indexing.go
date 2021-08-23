@@ -273,6 +273,7 @@ CLEAN_BUFFER:
 		data := mainBuf.Bytes()
 		log.Trace(cfg.Name, ", starting submit bulk request")
 		status, success := bulkProcessor.Bulk(cfg, endpoint, data, &httpClient)
+		stats.Timing("elasticsearch."+cfg.Name+".bulk","elapsed_ms",time.Since(start).Milliseconds())
 		log.Debug(cfg.Name, ", success:", success, ", status:", status, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elapsed:", time.Since(start))
 
 		switch success {
