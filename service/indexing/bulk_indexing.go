@@ -150,10 +150,11 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 
 	////TODO, auto get new nodes and failure queues
 	////start deadline ingest
-	//if joint.GetBool("process_failure_queue", false) {
-	//	v := meta.GetActiveNodeInfo()
-	//	go joint.NewBulkWorker(bulkSizeInByte, &wg, , v.Http.PublishAddress)
-	//}
+	if joint.GetBool("process_failure_queue", false) {
+		v := meta.GetActiveNodeInfo()
+		wg.Add(1)
+		go joint.NewBulkWorker(bulkSizeInByte, &wg, joint.GetStringOrDefault("failure_queue",fmt.Sprintf("%v-failure",esInstanceVal)) , v.Http.PublishAddress)
+	}
 
 	wg.Wait()
 
