@@ -6,7 +6,10 @@ pipeline {
         CI = 'true'
     }
     stages {
-        
+
+        parallel {
+
+
         stage('Build Linux Packages') {
 
             agent {
@@ -45,6 +48,6 @@ pipeline {
                         }
                     }
                 }
-
+    }
     }
 }
