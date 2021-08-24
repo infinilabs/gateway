@@ -152,8 +152,28 @@ func (joint BulkIndexingJoint) Process(c *pipeline.Context) error {
 	////start deadline ingest
 	if joint.GetBool("process_failure_queue", false) {
 		v := meta.GetActiveNodeInfo()
-		wg.Add(1)
-		go joint.NewBulkWorker(bulkSizeInByte, &wg, joint.GetStringOrDefault("failure_queue",fmt.Sprintf("%v-failure",esInstanceVal)) , v.Http.PublishAddress)
+		if v!=nil{
+			wg.Add(1)
+			queueName:=joint.GetStringOrDefault("failure_queue",fmt.Sprintf("%v-failure",esInstanceVal))
+			log.Debug("process bulk failure queue:",queueName)
+			go joint.NewBulkWorker(bulkSizeInByte, &wg, queueName , v.Http.PublishAddress)
+		}else{
+			log.Error("no valid node, skip process_failure_queue")
+		}
+	}
+
+	queues,ok:=joint.GetStringArray("queues")
+	if ok &&len(queues)>0{
+		node := meta.GetActiveNodeInfo()
+		if node!=nil{
+			for _,v:=range queues{
+				log.Debug("process bulk queue:",v)
+				wg.Add(1)
+				go joint.NewBulkWorker(bulkSizeInByte, &wg, v , node.Http.PublishAddress)
+			}
+		}else{
+			log.Error("no valid node, skip process_queue")
+		}
 	}
 
 	wg.Wait()

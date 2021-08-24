@@ -175,8 +175,10 @@ pipelines:
       worker_size: 1
       bulk_size_in_mb: 10  #in MB
       retry_delay_in_second: 5
-      process_dead_letter_queue: true
-      log_dead_letter_requests: false
+      process_failure_queue: true #process failed bulk messages
+      queues: #process other bulk queue
+        - dev-node-failure
+        - dev-invalid
 
 
 floating_ip:
@@ -197,9 +199,7 @@ statsd:
 #  enabled: true
 #  host: localhost
 #  port: 6379
-
+#
 #queue:
-#  - name: dev_400-failure
-#    type: redis
-#  - name: dev_none-400-failure
+#  - name: dev-invalid
 #    type: redis
