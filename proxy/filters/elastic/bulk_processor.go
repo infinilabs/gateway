@@ -206,7 +206,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 			}
 
 			if (actionStr == actionIndex || actionStr == actionDelete) && len(id) == 0 && fixNullID {
-				fmt.Println("generating ID:", actionStr)
 				id = util.GetUUID()
 				idNew = id
 				if global.Env().IsDebug {
@@ -455,6 +454,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				MaxRequestBodySize:        this.GetIntOrDefault("max_logged_request_body_size", 1024),
 				MaxResponseBodySize:       this.GetIntOrDefault("max_logged_response_body_size", 1024),
 
+				SaveFailure:       this.GetBool("save_failure",true),
 				FailureRequestsQueue:       this.GetStringOrDefault("failure_queue",fmt.Sprintf("%v-failure",clusterName)),
 				InvalidRequestsQueue:       this.GetStringOrDefault("invalid_queue",fmt.Sprintf("%v-invalid",clusterName)),
 				DeadRequestsQueue:       	this.GetStringOrDefault("dead_queue",fmt.Sprintf("%v-dead",clusterName)),
@@ -482,6 +482,9 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				stats.Timing("elasticsearch."+esConfig.Name+".bulk","elapsed_ms",time.Since(start).Milliseconds())
 				switch status {
 				case SUCCESS:
+					break
+				case INVALID:
+					log.Error("invalid bulk requests failed on endpoint,", x, ", code:", code)
 					break
 				case PARTIAL:
 					log.Error("bulk requests partial failed on endpoint,", x, ", code:", code)
@@ -629,6 +632,7 @@ type BulkProcessor struct {
 	MaxRequestBodySize        int
 	MaxResponseBodySize       int
 
+	SaveFailure       bool
 	FailureRequestsQueue       string
 	InvalidRequestsQueue       string
 	DeadRequestsQueue          string
@@ -637,7 +641,8 @@ type BulkProcessor struct {
 type API_STATUS string
 
 const SUCCESS API_STATUS = "success"
-const PARTIAL API_STATUS = "partial_success"
+const INVALID API_STATUS = "invalid"
+const PARTIAL API_STATUS = "partial"
 const FAILURE API_STATUS = "failure"
 
 func (joint *BulkProcessor) Bulk(cfg *elastic.ElasticsearchConfig, endpoint string, data []byte, httpClient *fasthttp.Client) (status_code int, status API_STATUS) {
@@ -645,6 +650,11 @@ func (joint *BulkProcessor) Bulk(cfg *elastic.ElasticsearchConfig, endpoint stri
 	if data == nil || len(data) == 0 {
 		log.Error("data size is empty,", endpoint)
 		stats.Increment("elasticsearch."+cfg.Name+".bulk","5xx_requests")
+
+		if joint.SaveFailure{
+			queue.Push(joint.FailureRequestsQueue,data)
+		}
+
 		return 0, FAILURE
 	}
 
@@ -730,6 +740,11 @@ DO:
 			log.Error(err)
 		}
 		stats.Increment("elasticsearch."+cfg.Name+".bulk","5xx_requests")
+
+		if joint.SaveFailure{
+			queue.Push(joint.FailureRequestsQueue,data)
+		}
+
 		return 0, FAILURE
 	}
 
@@ -743,6 +758,11 @@ DO:
 		stats.Increment("elasticsearch."+cfg.Name+".bulk","5xx_requests")
 
 		log.Error("status:", resp.StatusCode(), ",", endpoint, ",", err, " ", util.SubString(string(util.EscapeNewLine(resbody)), 0, 256))
+
+		if joint.SaveFailure{
+			queue.Push(joint.FailureRequestsQueue,data)
+		}
+
 		return resp.StatusCode(), FAILURE
 	}
 
@@ -754,6 +774,25 @@ DO:
 			//TODO verify each es version's error response
 			hit := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
 			if hit {
+
+				if joint.LogInvalid200Message {
+					if rate.GetRateLimiter("log_invalid_200_message", endpoint, 1, 1, 5*time.Second).Allow() {
+						log.Warn("status:", resp.StatusCode(), ",", endpoint, ",", util.SubString(string(util.EscapeNewLine(resbody)), 0, 256))
+					}
+
+					logPath := path.Join(global.Env().GetLogDir(), cfg.Name, "invalid_200", "requests.log")
+					logHandler := rotate.GetFileHandler(logPath, joint.RotateConfig)
+
+					logHandler.WriteBytesArray(
+						[]byte("\nURL:"),
+						[]byte(url),
+						[]byte("\nRequest:\n"),
+						[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.MaxRequestBodySize)),
+						[]byte("\nResponse:\n"),
+						[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.MaxResponseBodySize)),
+					)
+				}
+
 				//decode response
 				response := elastic.BulkResponse{}
 				err := response.UnmarshalJSON(resbody)
@@ -761,19 +800,35 @@ DO:
 					panic(err)
 				}
 
+				var contains400Error bool
+				var invalidCount =0
 				invalidOffset := map[int]elastic.BulkActionMetadata{}
 				for i, v := range response.Items {
 					item := v.GetItem()
 					if item.Error != nil {
+						if item.Status==400{
+							contains400Error = true
+							invalidCount++
+						}
 						//fmt.Println(i,",",item.Status,",",item.Error.Type)
 						//TODO log invalid requests
 						//send 400 requests to dedicated queue, the rest go to failure queue
 						invalidOffset[i] = v
 					}
 				}
-				//fmt.Println("invalid requests:",invalidOffset)
 
-				var contains400Error bool
+				if invalidCount>0&&invalidCount==len(response.Items){
+					//all 400 error
+					if joint.SaveFailure{
+						queue.Push(joint.InvalidRequestsQueue, data)
+					}
+					return 400, INVALID
+				}
+
+				if global.Env().IsDebug{
+					log.Trace("invalid requests:",invalidOffset,len(invalidOffset) , len(response.Items))
+				}
+
 				if len(invalidOffset) > 0 && len(invalidOffset) < len(response.Items) {
 					requestBytes := req.GetRawBody()
 					errorItems := bytebufferpool.Get()
@@ -783,13 +838,12 @@ DO:
 					var match = false
 					var retryable = false
 					var response elastic.BulkActionMetadata
-					var invalidCount =0
+					invalidCount =0
 					var failureCount =0
 					//walk bulk message, with invalid id, save to another list
 					WalkBulkRequests(requestBytes, func(eachLine []byte) (skipNextLine bool) {
 						return false
 					}, func(metaBytes []byte, actionStr, index, typeName, id string) (err error) {
-
 						response, match = invalidOffset[offset]
 						if match {
 							//find invalid request
@@ -823,39 +877,25 @@ DO:
 					stats.IncrementBy("elasticsearch."+cfg.Name+".bulk","200_failure_docs", int64(failureCount))
 
 					if errorItems.Len() > 0 {
-						queue.Push(joint.InvalidRequestsQueue, errorItems.Bytes())
-						//send to redis channel
-						errorItems.Reset()
-						bytebufferpool.Put(errorItems)
+						if joint.SaveFailure{
+							queue.Push(joint.InvalidRequestsQueue, errorItems.Bytes())
+							//send to redis channel
+							errorItems.Reset()
+							bytebufferpool.Put(errorItems)
+						}
 					}
 
 					if retryableItems.Len() > 0 {
-						queue.Push(joint.FailureRequestsQueue, retryableItems.Bytes())
-						retryableItems.Reset()
-						bytebufferpool.Put(retryableItems)
+						if joint.SaveFailure {
+							queue.Push(joint.FailureRequestsQueue, retryableItems.Bytes())
+							retryableItems.Reset()
+							bytebufferpool.Put(retryableItems)
+						}
 					}
 
 					if contains400Error {
 						return 400, PARTIAL
 					}
-				}
-
-				if joint.LogInvalid200Message {
-					if rate.GetRateLimiter("log_invalid_200_message", endpoint, 1, 1, 5*time.Second).Allow() {
-						log.Warn("status:", resp.StatusCode(), ",", endpoint, ",", util.SubString(string(util.EscapeNewLine(resbody)), 0, 256))
-					}
-
-					logPath := path.Join(global.Env().GetLogDir(), cfg.Name, "invalid_200", "requests.log")
-					logHandler := rotate.GetFileHandler(logPath, joint.RotateConfig)
-
-					logHandler.WriteBytesArray(
-						[]byte("\nURL:"),
-						[]byte(url),
-						[]byte("\nRequest:\n"),
-						[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.MaxRequestBodySize)),
-						[]byte("\nResponse:\n"),
-						[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.MaxResponseBodySize)),
-					)
 				}
 
 				delayTime := joint.RetryDelayInSeconds
@@ -868,6 +908,9 @@ DO:
 
 				if retryTimes >= joint.MaxRetryTimes {
 					log.Errorf("invalid 200, retried %v times, quit retry", retryTimes)
+					if joint.SaveFailure{
+						queue.Push(joint.FailureRequestsQueue,data)
+					}
 					return resp.StatusCode(), FAILURE
 				}
 
@@ -891,6 +934,9 @@ DO:
 		}
 		if retryTimes >= joint.MaxRejectRetryTimes {
 			log.Errorf("rejected 429, retried %v times, quit retry", retryTimes)
+			if joint.SaveFailure{
+				queue.Push(joint.FailureRequestsQueue,data)
+			}
 			return resp.StatusCode(), FAILURE
 		}
 		log.Debugf("rejected 429, retried %v times, will try again", retryTimes)
@@ -919,7 +965,9 @@ DO:
 			)
 		}
 
-		queue.Push(joint.FailureRequestsQueue, data)
+		if joint.SaveFailure{
+			queue.Push(joint.FailureRequestsQueue, data)
+		}
 
 		return resp.StatusCode(), FAILURE
 	}

@@ -216,6 +216,7 @@ func (joint BulkIndexingJoint) NewBulkWorker(bulkSizeInByte int, wg *sync.WaitGr
 		MaxRequestBodySize:        joint.GetIntOrDefault("max_logged_request_body_size", 1024),
 		MaxResponseBodySize:       joint.GetIntOrDefault("max_logged_response_body_size", 1024),
 
+		SaveFailure:       			joint.GetBool("save_failure",true),
 		FailureRequestsQueue:       joint.GetStringOrDefault("failure_queue",fmt.Sprintf("%v-failure",clusterName)),
 		InvalidRequestsQueue:       joint.GetStringOrDefault("invalid_queue",fmt.Sprintf("%v-invalid",clusterName)),
 		DeadRequestsQueue:       	joint.GetStringOrDefault("dead_queue",fmt.Sprintf("%v-dead",clusterName)),
@@ -274,11 +275,14 @@ CLEAN_BUFFER:
 		log.Trace(cfg.Name, ", starting submit bulk request")
 		status, success := bulkProcessor.Bulk(cfg, endpoint, data, &httpClient)
 		stats.Timing("elasticsearch."+cfg.Name+".bulk","elapsed_ms",time.Since(start).Milliseconds())
-		log.Debug(cfg.Name, ", success:", success, ", status:", status, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elapsed:", time.Since(start))
+		log.Debug(cfg.Name, ", result:", success, ", status:", status, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elapsed:", time.Since(start))
 
 		switch success {
 		case elastic2.SUCCESS:
 			stats.IncrementBy("elasticsearch."+clusterName+".bulk", "bytes.success", int64(mainBuf.Len()))
+			break
+		case elastic2.INVALID:
+			stats.IncrementBy("elasticsearch."+clusterName+".bulk", "bytes.invalid", int64(mainBuf.Len()))
 			break
 		case elastic2.PARTIAL:
 			stats.IncrementBy("elasticsearch."+clusterName+".bulk", "bytes.partial", int64(mainBuf.Len()))
