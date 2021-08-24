@@ -7,8 +7,9 @@ pipeline {
     }
     stages {
 
-        parallel {
+       stage('build') {
 
+        parallel {
 
         stage('Build Linux Packages') {
 
@@ -48,6 +49,6 @@ pipeline {
                         }
                     }
                 }
-    }
+    } }
     }
 }
