@@ -176,9 +176,9 @@ pipelines:
       bulk_size_in_mb: 10  #in MB
       retry_delay_in_second: 5
       process_failure_queue: true #process failed bulk messages
-      queues: #process other bulk queue
-        - dev-node-failure
-        - dev-invalid
+#      queues: #process other bulk queue
+#        - dev-node-failure
+#        - dev-invalid
 
 
 floating_ip:
@@ -201,5 +201,5 @@ statsd:
 #  port: 6379
 #
 #queue:
-#  - name: dev-invalid
+#  - name: dev-node-yNgVusnXSgqvP2fZeGFSLw
 #    type: redis
