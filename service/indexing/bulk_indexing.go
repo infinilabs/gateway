@@ -241,6 +241,7 @@ func (joint BulkIndexingJoint) NewBulkWorker(bulkSizeInByte int, wg *sync.WaitGr
 		FailureRequestsQueue:       joint.GetStringOrDefault("failure_queue",fmt.Sprintf("%v-failure",clusterName)),
 		InvalidRequestsQueue:       joint.GetStringOrDefault("invalid_queue",fmt.Sprintf("%v-invalid",clusterName)),
 		DeadRequestsQueue:       	joint.GetStringOrDefault("dead_queue",fmt.Sprintf("%v-dead",clusterName)),
+		DocBufferSize: 				joint.GetIntOrDefault("doc_buffer_size",256*1024),
 	}
 
 	httpClient := fasthttp.Client{

@@ -59,6 +59,7 @@ flow:
           level: node
           mode: async
           fix_null_id: true
+          doc_buffer_size: 524288 #512KB, set the value according to the maximum size of a single document
           index_stats_analysis: true
           action_stats_analysis: true
           validate_each_line: false
@@ -171,9 +172,10 @@ pipelines:
     enabled: true
     parameters:
       elasticsearch: "dev"
-      compress: false
+      compress: true
       worker_size: 1
       bulk_size_in_mb: 10  #in MB
+      doc_buffer_size: 524288 #512KB, set the value according to the maximum size of a single document
       retry_delay_in_second: 5
       process_failure_queue: true #process failed bulk messages
 #      queues: #process other bulk queue

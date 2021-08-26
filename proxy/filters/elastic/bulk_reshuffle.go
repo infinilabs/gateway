@@ -95,7 +95,11 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		actionMeta.Reset()
 		defer smallSizedPool.Put(actionMeta)
 
-		docCount, err := WalkBulkRequests(body, func(eachLine []byte) (skipNextLine bool) {
+		var docBuffer []byte
+		docBuffer=p.Get(this.GetIntOrDefault("doc_buffer_size",256*1024)) //doc buffer for bytes scanner
+		defer p.Put(docBuffer)
+
+		docCount, err := WalkBulkRequests(body,docBuffer, func(eachLine []byte) (skipNextLine bool) {
 			if validEachLine {
 				obj := map[string]interface{}{}
 				err := util.FromJSONBytes(eachLine, &obj)
@@ -403,6 +407,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				FailureRequestsQueue:       this.GetStringOrDefault("failure_queue",fmt.Sprintf("%v-failure",clusterName)),
 				InvalidRequestsQueue:       this.GetStringOrDefault("invalid_queue",fmt.Sprintf("%v-invalid",clusterName)),
 				DeadRequestsQueue:       	this.GetStringOrDefault("dead_queue",fmt.Sprintf("%v-dead",clusterName)),
+				DocBufferSize: this.GetIntOrDefault("doc_buffer_size",256*1024),
 			}
 
 			for x, y := range docBuf {

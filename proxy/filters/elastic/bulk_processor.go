@@ -27,7 +27,7 @@ var smallSizedPool = bytebufferpool.NewPool(512, 655360)
 
 var NEWLINEBYTES = []byte("\n")
 var p pool.BufferPool
-func WalkBulkRequests(data []byte, eachLineFunc func(eachLine []byte) (skipNextLine bool), metaFunc func(metaBytes []byte, actionStr, index, typeName, id string) (err error), payloadFunc func(payloadBytes []byte)) (int, error) {
+func WalkBulkRequests(data []byte,docBuff []byte, eachLineFunc func(eachLine []byte) (skipNextLine bool), metaFunc func(metaBytes []byte, actionStr, index, typeName, id string) (err error), payloadFunc func(payloadBytes []byte)) (int, error) {
 
 	nextIsMeta := true
 	skipNextLineProcessing := false
@@ -37,11 +37,13 @@ func WalkBulkRequests(data []byte, eachLineFunc func(eachLine []byte) (skipNextL
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	scanner.Split(util.GetSplitFunc(NEWLINEBYTES))
 
-	var maxSize int
-	maxSize = 512*1024
-	buffer := p.Get(maxSize)
-	defer p.Put(buffer)
-	scanner.Buffer(buffer, maxSize)
+	sizeOfDocBuffer:=len(docBuff)
+	if sizeOfDocBuffer>0{
+		if sizeOfDocBuffer<1024{
+			log.Debug("doc buffer size maybe too small,",sizeOfDocBuffer)
+		}
+		scanner.Buffer(docBuff, sizeOfDocBuffer)
+	}
 
 	for scanner.Scan() {
 		scannedByte := scanner.Bytes()
@@ -152,6 +154,7 @@ type BulkProcessor struct {
 	FailureRequestsQueue       string
 	InvalidRequestsQueue       string
 	DeadRequestsQueue          string
+	DocBufferSize          int
 }
 
 type API_STATUS string
@@ -357,7 +360,12 @@ DO:
 					invalidCount =0
 					var failureCount =0
 					//walk bulk message, with invalid id, save to another list
-					WalkBulkRequests(requestBytes, func(eachLine []byte) (skipNextLine bool) {
+
+					var docBuffer []byte
+					docBuffer=p.Get(joint.DocBufferSize)
+					defer p.Put(docBuffer)
+
+					WalkBulkRequests(requestBytes,docBuffer, func(eachLine []byte) (skipNextLine bool) {
 						return false
 					}, func(metaBytes []byte, actionStr, index, typeName, id string) (err error) {
 						response, match = invalidOffset[offset]
