@@ -388,8 +388,8 @@ START:
 	// modify schema，align with elasticsearch's schema
 	orignalSchema:=string(req.URI().Scheme())
 	useClient:=false
-	if cfg.Schema()!=orignalSchema{
-		req.URI().SetScheme(cfg.Schema())
+	if cfg.GetSchema()!=orignalSchema{
+		req.URI().SetScheme(cfg.GetSchema())
 		ok, pc, endpoint = p.getClient()
 		res = fasthttp.AcquireResponse()
 		useClient=true
