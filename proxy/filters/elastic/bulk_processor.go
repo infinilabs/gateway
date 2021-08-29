@@ -31,7 +31,6 @@ func WalkBulkRequests(data []byte,docBuff []byte, eachLineFunc func(eachLine []b
 
 	nextIsMeta := true
 	skipNextLineProcessing := false
-
 	var docCount = 0
 
 	scanner := bufio.NewScanner(bytes.NewReader(data))
@@ -45,9 +44,12 @@ func WalkBulkRequests(data []byte,docBuff []byte, eachLineFunc func(eachLine []b
 		scanner.Buffer(docBuff, sizeOfDocBuffer)
 	}
 
+	processedBytesCount:=0
 	for scanner.Scan() {
 		scannedByte := scanner.Bytes()
-		if scannedByte == nil || len(scannedByte) <= 0 {
+		bytesCount:=len(scannedByte)
+		processedBytesCount+=bytesCount
+		if scannedByte == nil || bytesCount <= 0 {
 			log.Debug("invalid scanned byte, continue")
 			continue
 		}
@@ -91,6 +93,65 @@ func WalkBulkRequests(data []byte,docBuff []byte, eachLineFunc func(eachLine []b
 			payloadFunc(scannedByte)
 		}
 	}
+
+	if processedBytesCount+sizeOfDocBuffer<=len(data){
+		log.Warn("bulk requests was not fully processed,",processedBytesCount,"/",len(data),", you may need to increase `doc_buffer_size`, re-processing with memory inefficient way now")
+
+		lines:=bytes.Split(data,NEWLINEBYTES)
+
+		//reset
+		nextIsMeta = true
+		skipNextLineProcessing = false
+		docCount = 0
+		processedBytesCount=0
+
+		for _,line:=range lines{
+			bytesCount:=len(line)
+			processedBytesCount+=bytesCount
+			if line == nil || bytesCount <= 0 {
+				log.Debug("invalid line, continue")
+				continue
+			}
+
+			if eachLineFunc != nil {
+				skipNextLineProcessing = eachLineFunc(line)
+			}
+
+			if skipNextLineProcessing {
+				skipNextLineProcessing = false
+				nextIsMeta = true
+				log.Debug("skip body processing")
+				continue
+			}
+
+			if nextIsMeta {
+				nextIsMeta = false
+				var actionStr string
+				var index string
+				var typeName string
+				var id string
+				actionStr, index, typeName, id = parseActionMeta(line)
+
+				err := metaFunc(line, actionStr, index, typeName, id)
+				if err != nil {
+					log.Error(err)
+					return docCount, err
+				}
+
+				docCount++
+
+				if actionStr == actionDelete {
+					nextIsMeta = true
+					payloadFunc(nil)
+				}
+			} else {
+				nextIsMeta = true
+				payloadFunc(line)
+			}
+		}
+
+	}
+
 
 	log.Tracef("total [%v] operations in bulk requests", docCount)
 	return docCount, nil
