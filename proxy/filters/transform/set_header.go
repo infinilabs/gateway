@@ -30,6 +30,30 @@ func (filter SetRequestHeader) Process(ctx *fasthttp.RequestCtx) {
 	}
 }
 
+type SetRequestQueryArgs struct {
+	param.Parameters
+}
+
+func (filter SetRequestQueryArgs) Name() string {
+	return "set_request_query_args"
+}
+
+func (filter SetRequestQueryArgs) Process(ctx *fasthttp.RequestCtx) {
+	args,ok := filter.GetStringMap("args")
+
+	if !ok{
+		return
+	}
+
+	for k,v:=range args{
+		value:=ctx.Request.Header.Peek(k)
+		if len(value)>0{
+			ctx.Request.URI().QueryArgs().Del(k)
+		}
+		ctx.Request.URI().QueryArgs().Set(k,v)
+	}
+}
+
 type SetResponseHeader struct {
 	param.Parameters
 }

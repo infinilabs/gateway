@@ -71,6 +71,7 @@ func Init() {
 
 	common.RegisterFilterPlugin(transform.SetHostname{})
 	common.RegisterFilterPlugin(transform.SetRequestHeader{})
+	common.RegisterFilterPlugin(transform.SetRequestQueryArgs{})
 	common.RegisterFilterPlugin(transform.SetResponseHeader{})
 	common.RegisterFilterPlugin(transform.SetResponse{})
 
