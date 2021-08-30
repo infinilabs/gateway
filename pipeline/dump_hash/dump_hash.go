@@ -53,7 +53,7 @@ type DumpHashConfig struct {
 	Fields     string `config:"fields"`
 }
 
-func NewDumpHashProcessor(c *config.Config) (pipeline.Processor, error) {
+func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := DumpHashConfig{
 		SliceSize:  1,
 		BatchSize:  1000,

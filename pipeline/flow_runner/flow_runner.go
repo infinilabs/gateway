@@ -1,6 +1,7 @@
-package offline_processing
+package flow_runner
 
 import (
+	"fmt"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
@@ -43,24 +44,35 @@ func releaseCtx(ctx *fasthttp.RequestCtx) {
 
 type FlowRunner struct {
 	param.Parameters
+	config *RunnerConfig
 }
 
 var signalChannel chan bool = make(chan bool, 1)
+
+
+func New(c *config.Config) (pipeline.Processor, error) {
+	cfg := RunnerConfig{}
+
+	if err := c.Unpack(&cfg); err != nil {
+		log.Error(err)
+		return nil, fmt.Errorf("failed to unpack the configuration of flow_runner processor: %s", err)
+	}
+
+	runner:= FlowRunner{config: &cfg}
+	return &runner,nil
+}
+
 
 func (this FlowRunner) Stop() error {
 	signalChannel <- true
 	return nil
 }
 
-func (this FlowRunner) Setup(cfg *config.Config) {
-}
-
-func (this FlowRunner) Name() string {
+func (this *FlowRunner) Name() string {
 	return "flow_runner"
 }
 
-
-func (this FlowRunner) Process(c *pipeline.Context) error {
+func (this *FlowRunner) Process(c *pipeline.Context) error {
 	defer func() {
 		if !global.Env().IsDebug {
 			if r := recover(); r != nil {
@@ -82,9 +94,6 @@ func (this FlowRunner) Process(c *pipeline.Context) error {
 		return nil
 	}
 
-	runnerConfig := RunnerConfig{}
-	runnerConfig.InputQueue=this.MustGetString("input_queue")
-	runnerConfig.FlowName=this.MustGetString("flow")
 
 	timeOut := 5
 	idleDuration := time.Duration(timeOut) * time.Second
@@ -93,7 +102,7 @@ func (this FlowRunner) Process(c *pipeline.Context) error {
 	idleTimeout1 := time.NewTimer(idleDuration)
 	defer idleTimeout1.Stop()
 
-	processor := common.GetFlowProcess(runnerConfig.FlowName)
+	processor := common.GetFlowProcess(this.config.FlowName)
 
 	READ_DOCS:
 		stop := false
@@ -105,7 +114,7 @@ func (this FlowRunner) Process(c *pipeline.Context) error {
 			default:
 				idleTimeout1.Reset(idleDuration)
 				if !stop {
-					pop,timeout,err := queue.PopTimeout(runnerConfig.InputQueue,idleDuration)
+					pop,timeout,err := queue.PopTimeout(this.config.InputQueue,idleDuration)
 					if err!=nil{
 						log.Error(err)
 						panic(err)
