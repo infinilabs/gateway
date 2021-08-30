@@ -24,21 +24,20 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/modules/api"
 	"infini.sh/framework/modules/elastic"
-	"infini.sh/framework/modules/filter"
 	"infini.sh/framework/modules/pipeline"
 	"infini.sh/framework/modules/queue"
 	stats2 "infini.sh/framework/modules/stats"
 	"infini.sh/framework/modules/task"
 	stats "infini.sh/framework/plugins/stats_statsd"
 	"infini.sh/gateway/config"
+	"infini.sh/gateway/pipeline/diskqueue_consumer"
 	"infini.sh/gateway/pipeline/dump_hash"
+	"infini.sh/gateway/pipeline/flow_runner"
 	"infini.sh/gateway/pipeline/index_diff"
-	"infini.sh/gateway/service/diskqueue_consumer"
 	"infini.sh/gateway/service/floating_ip"
 	"infini.sh/gateway/service/forcemerge"
 	"infini.sh/gateway/service/gateway"
 	"infini.sh/gateway/service/indexing"
-	"infini.sh/gateway/service/offline_processing"
 	"infini.sh/gateway/service/translog"
 )
 
@@ -64,7 +63,7 @@ func main() {
 		//load core modules first
 		module.RegisterSystemModule(elastic.ElasticModule{})
 		module.RegisterUserPlugin(translog.TranslogModule{})
-		module.RegisterSystemModule(filter.FilterModule{})
+		//module.RegisterSystemModule(filter.FilterModule{})
 
 		module.RegisterSystemModule(queue.DiskQueue{})
 		module.RegisterSystemModule(&queue.RedisModule{})
@@ -84,12 +83,12 @@ func main() {
 		//register pipeline joints
 		pipe.RegisterPipeJoint(indexing.JsonIndexingJoint{})
 		pipe.RegisterPipeJoint(indexing.BulkIndexingJoint{})
-		pipe.RegisterPipeJoint(diskqueue_consumer.DiskQueueConsumer{})
-		pipe.RegisterPipeJoint(offline_processing.FlowRunner{})
 
-		//TODO auto register plugins
+		//offline pipeline processors
 		pipe.RegisterPlugin("index_diff", index_diff.New)
-		pipe.RegisterPlugin("dump_hash", scroll.NewDumpHashProcessor)
+		pipe.RegisterPlugin("dump_hash", scroll.New)
+		pipe.RegisterPlugin("flow_runner", flow_runner.New)
+		pipe.RegisterPlugin("disk_queue_consumer", diskqueue_consumer.New)
 
 		//start each module, with enabled provider
 		module.Start()

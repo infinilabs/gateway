@@ -29,8 +29,8 @@ func TestCompareItems(t *testing.T) {
 		NewCompareItem("9","1"),
 		NewCompareItem("10","1"), //diff right
 		NewCompareItem("12","2"),}
-	module:= IndexDiffJoint{
-		diffConfig: Config{
+	module:= IndexDiffProcessor{
+		config: Config{
 			SourceInputQueue: "source",
 			TargetInputQueue: "target",
 		},
@@ -40,8 +40,8 @@ func TestCompareItems(t *testing.T) {
 	},
 	}
 
-	module.testChan.msgChans[module.diffConfig.GetSortedLeftQueue()]=make(chan CompareItem)
-	module.testChan.msgChans[module.diffConfig.GetSortedRightQueue()]=make(chan CompareItem)
+	module.testChan.msgChans[module.config.GetSortedLeftQueue()]=make(chan CompareItem)
+	module.testChan.msgChans[module.config.GetSortedRightQueue()]=make(chan CompareItem)
 
 	a1:=[]string{}
 	m:=map[string]string{}
@@ -57,7 +57,7 @@ func TestCompareItems(t *testing.T) {
 	go func() {
 		for _,v:=range a{
 			//fmt.Println("InputA:",v.Key)
-			module.testChan.msgChans[module.diffConfig.GetSortedLeftQueue()]<- v
+			module.testChan.msgChans[module.config.GetSortedLeftQueue()]<- v
 		}
 		wg.Done()
 	}()
@@ -66,7 +66,7 @@ func TestCompareItems(t *testing.T) {
 	go func() {
 		for _,v:=range b{
 			//fmt.Println("InputB:",v.Key)
-			module.testChan.msgChans[module.diffConfig.GetSortedRightQueue()]<- v
+			module.testChan.msgChans[module.config.GetSortedRightQueue()]<- v
 		}
 		wg.Done()
 	}()

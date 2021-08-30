@@ -45,12 +45,12 @@ func NewCompareItem(key, hash string) CompareItem {
 	return item
 }
 
-func (module IndexDiffJoint)processMsg(diffResultHandler func(DiffResult)) {
+func (processor *IndexDiffProcessor)processMsg(diffResultHandler func(DiffResult)) {
 	var msgA, msgB CompareItem
 
 MOVEALL:
-	msgA = <-module.testChan.msgChans[module.diffConfig.GetSortedLeftQueue()]
-	msgB = <-module.testChan.msgChans[module.diffConfig.GetSortedRightQueue()]
+	msgA = <-processor.testChan.msgChans[processor.config.GetSortedLeftQueue()]
+	msgB = <-processor.testChan.msgChans[processor.config.GetSortedRightQueue()]
 	//fmt.Println("Pop A:",msgA.Key)
 	//fmt.Println("Pop B:",msgB.Key)
 
@@ -74,7 +74,7 @@ COMPARE:
 			log.Trace("OnlyInTarget :", msgB)
 		}
 
-		msgB = <-module.testChan.msgChans[module.diffConfig.GetSortedRightQueue()]
+		msgB = <-processor.testChan.msgChans[processor.config.GetSortedRightQueue()]
 		//fmt.Println("Pop B:",msgB.Key)
 
 		goto COMPARE
@@ -90,7 +90,7 @@ COMPARE:
 			log.Trace(msgA, ": OnlyInSource")
 		}
 
-		msgA = <-module.testChan.msgChans[module.diffConfig.GetSortedLeftQueue()]
+		msgA = <-processor.testChan.msgChans[processor.config.GetSortedLeftQueue()]
 		//fmt.Println("Pop A:",msgA.Key)
 
 		goto COMPARE
@@ -115,9 +115,9 @@ COMPARE:
 	}
 }
 
-type IndexDiffJoint struct {
-	 diffConfig Config
-	 testChan   CompareChan
+type IndexDiffProcessor struct {
+	 config   Config
+	 testChan CompareChan
 	 wg         sync.WaitGroup
 
 }
@@ -133,19 +133,19 @@ diffConfig:= Config{
 }
 
 	if err := c.Unpack(&diffConfig); err != nil {
-		return nil, fmt.Errorf("failed to unpack the configuration of urldecode processor: %s", err)
+		return nil, fmt.Errorf("failed to unpack the configuration of index_diff processor: %s", err)
 	}
 
-	diff:= &IndexDiffJoint{
-		diffConfig:diffConfig,
+	diff:= &IndexDiffProcessor{
+		config: diffConfig,
 		testChan : CompareChan{
 			msgChans: map[string]chan CompareItem{},
 			stopChan: make(chan struct{}),
 		},
 	}
 
-	diff.testChan.msgChans[diff.diffConfig.GetSortedLeftQueue()] = make(chan CompareItem, diff.diffConfig.BufferSize)
-	diff.testChan.msgChans[diff.diffConfig.GetSortedRightQueue()] = make(chan CompareItem, diff.diffConfig.BufferSize)
+	diff.testChan.msgChans[diff.config.GetSortedLeftQueue()] = make(chan CompareItem, diff.config.BufferSize)
+	diff.testChan.msgChans[diff.config.GetSortedRightQueue()] = make(chan CompareItem, diff.config.BufferSize)
 
 	return diff,nil
 
@@ -157,7 +157,7 @@ type CompareChan struct {
 	stopChan chan struct{}
 }
 
-func (this *IndexDiffJoint) Name() string {
+func (processor *IndexDiffProcessor) Name() string {
 	return "index_diff"
 }
 
@@ -179,7 +179,7 @@ func (cfg *Config) GetSortedRightQueue() string {
 	return cfg.TargetInputQueue + "_sorted"
 }
 
-func (module *IndexDiffJoint) Process(c *pipeline.Context) error {
+func (processor *IndexDiffProcessor) Process(c *pipeline.Context) error {
 
 	defer func() {
 		if !global.Env().IsDebug {
@@ -198,12 +198,12 @@ func (module *IndexDiffJoint) Process(c *pipeline.Context) error {
 		}
 	}()
 
-	queueNames := []string{module.diffConfig.SourceInputQueue, module.diffConfig.TargetInputQueue}
+	queueNames := []string{processor.config.SourceInputQueue, processor.config.TargetInputQueue}
 
 	for _, q := range queueNames {
-		module.wg.Add(1)
+		processor.wg.Add(1)
 		go func(q string) {
-			defer module.wg.Done()
+			defer processor.wg.Done()
 			buffer := bytebufferpool.Get()
 			//build sorted file
 			sorter := extsort.New(nil)
@@ -261,7 +261,7 @@ func (module *IndexDiffJoint) Process(c *pipeline.Context) error {
 					Key:  id,
 					Hash: hash,
 				}
-				module.testChan.msgChans[q+"_sorted"] <- item
+				processor.testChan.msgChans[q+"_sorted"] <- item
 			})
 			if err != nil {
 				panic(err)
@@ -270,17 +270,17 @@ func (module *IndexDiffJoint) Process(c *pipeline.Context) error {
 		}(q)
 	}
 
-	go module.processMsg(func(result DiffResult) {
-		queue.Push(module.diffConfig.DiffQueue, util.MustToJSONBytes(result))
+	go processor.processMsg(func(result DiffResult) {
+		queue.Push(processor.config.DiffQueue, util.MustToJSONBytes(result))
 	})
 
-	module.wg.Wait()
+	processor.wg.Wait()
 
-	if module.diffConfig.TextReportEnabled {
-		module.wg.Add(1)
+	if processor.config.TextReportEnabled {
+		processor.wg.Add(1)
 		go func() {
-			defer module.wg.Done()
-			path1 := path.Join(global.Env().GetLogDir(), "diff_result", fmt.Sprintf("%v_vs_%v", module.diffConfig.SourceInputQueue, module.diffConfig.TargetInputQueue))
+			defer processor.wg.Done()
+			path1 := path.Join(global.Env().GetLogDir(), "diff_result", fmt.Sprintf("%v_vs_%v", processor.config.SourceInputQueue, processor.config.TargetInputQueue))
 			os.MkdirAll(path1, 0775)
 			file := path.Join(path1, util.FormatTimeForFileName(time.Now())+".log")
 			str := "    ___ _  __  __     __                 _ _   \n"
@@ -301,13 +301,13 @@ func (module *IndexDiffJoint) Process(c *pipeline.Context) error {
 			timeOut := 5 * time.Second
 			for {
 
-				v, timeout, err := queue.PopTimeout(module.diffConfig.DiffQueue, timeOut)
+				v, timeout, err := queue.PopTimeout(processor.config.DiffQueue, timeOut)
 				if timeout {
 
-					if len(module.testChan.msgChans[module.diffConfig.GetSortedLeftQueue()]) > 0 ||
-						len(module.testChan.msgChans[module.diffConfig.GetSortedRightQueue()]) > 0 {
+					if len(processor.testChan.msgChans[processor.config.GetSortedLeftQueue()]) > 0 ||
+						len(processor.testChan.msgChans[processor.config.GetSortedRightQueue()]) > 0 {
 						time.Sleep(5 * time.Second)
-						log.Debug("waiting for:", len(module.testChan.msgChans[module.diffConfig.GetSortedLeftQueue()]), ",", len(module.testChan.msgChans[module.diffConfig.GetSortedRightQueue()]))
+						log.Debug("waiting for:", len(processor.testChan.msgChans[processor.config.GetSortedLeftQueue()]), ",", len(processor.testChan.msgChans[processor.config.GetSortedRightQueue()]))
 						goto WAIT
 					}
 					goto RESULT
@@ -378,7 +378,7 @@ func (module *IndexDiffJoint) Process(c *pipeline.Context) error {
 			}
 
 		}()
-		module.wg.Wait()
+		processor.wg.Wait()
 	}
 
 

@@ -35,11 +35,11 @@ import (
 )
 
 type DumpHashProcessor struct {
-	cfg    DumpHashConfig
+	config Config
 	client elastic.API
 }
 
-type DumpHashConfig struct {
+type Config struct {
 //字段名称必须是大写
 	BatchSize int    `config:"batch_size"`
 	SliceSize       int    `config:"slice_size"`
@@ -54,7 +54,7 @@ type DumpHashConfig struct {
 }
 
 func New(c *config.Config) (pipeline.Processor, error) {
-	cfg := DumpHashConfig{
+	cfg := Config{
 		SliceSize:  1,
 		BatchSize:  1000,
 		ScrollTime: "5m",
@@ -72,13 +72,13 @@ func New(c *config.Config) (pipeline.Processor, error) {
 	}
 
 	return &DumpHashProcessor{
-		cfg:    cfg,
+		config: cfg,
 		client: client,
 	}, nil
 
 }
 
-func (joint *DumpHashProcessor) Name() string {
+func (processor *DumpHashProcessor) Name() string {
 	return "dump_hash"
 }
 
@@ -96,22 +96,22 @@ var scrollResponseV7Pool = &sync.Pool{
 	},
 }
 
-func (joint *DumpHashProcessor) Process(c *pipeline.Context) error {
+func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 
 	start := time.Now()
 	wg := sync.WaitGroup{}
 	var statsLock sync.RWMutex
 	var totalSize int
 
-	file:=path.Join(global.Env().GetDataDir(), "diff", joint.cfg.OutputQueueName)
+	file:=path.Join(global.Env().GetDataDir(), "diff", processor.config.OutputQueueName)
 	if util.FileExists(file){
 		log.Warn("target file exists:",file,",you may need to remove it first")
 	}
 
-	for slice := 0; slice < joint.cfg.SliceSize; slice++ {
+	for slice := 0; slice < processor.config.SliceSize; slice++ {
 
 		tempSlice := slice
-		scrollResponse1, err := joint.client.NewScroll(joint.cfg.Indices, joint.cfg.ScrollTime, joint.cfg.BatchSize, joint.cfg.Query, tempSlice, joint.cfg.SliceSize, joint.cfg.Fields, joint.cfg.SortField, joint.cfg.SortType)
+		scrollResponse1, err := processor.client.NewScroll(processor.config.Indices, processor.config.ScrollTime, processor.config.BatchSize, processor.config.Query, tempSlice, processor.config.SliceSize, processor.config.Fields, processor.config.SortField, processor.config.SortType)
 		if err != nil {
 			log.Error(err)
 			continue
@@ -125,7 +125,7 @@ func (joint *DumpHashProcessor) Process(c *pipeline.Context) error {
 		statsLock.Unlock()
 
 		if docSize > 0 {
-			processingDocs(docs, joint.cfg.OutputQueueName)
+			processingDocs(docs, processor.config.OutputQueueName)
 		}
 
 		log.Debugf("slice %v docs: %v", tempSlice, scrollResponse1.GetHitsTotal())
@@ -141,13 +141,13 @@ func (joint *DumpHashProcessor) Process(c *pipeline.Context) error {
 			var scrollResponse interface{}
 			initScrollID := scrollResponse1.GetScrollId()
 
-			version := joint.client.GetMajorVersion()
+			version := processor.client.GetMajorVersion()
 
 			for {
-				data, err := joint.client.NextScroll(joint.cfg.ScrollTime, initScrollID)
+				data, err := processor.client.NextScroll(processor.config.ScrollTime, initScrollID)
 
 				if err != nil {
-					log.Error("failed to scroll,", joint.cfg.Elasticsearch, joint.cfg.Indices, string(data), err)
+					log.Error("failed to scroll,", processor.config.Elasticsearch, processor.config.Indices, string(data), err)
 					return
 				}
 
@@ -157,7 +157,7 @@ func (joint *DumpHashProcessor) Process(c *pipeline.Context) error {
 					err = scrollResponse.(*elastic.ScrollResponseV7).UnmarshalJSON(data)
 
 					if err != nil {
-						log.Error("failed to scroll,", joint.cfg.Elasticsearch, joint.cfg.Indices, string(data), err)
+						log.Error("failed to scroll,", processor.config.Elasticsearch, processor.config.Indices, string(data), err)
 						return
 					}
 				} else {
@@ -184,7 +184,7 @@ func (joint *DumpHashProcessor) Process(c *pipeline.Context) error {
 
 				statsLock.Lock()
 				totalSize += docSize
-				stats.Gauge(fmt.Sprintf("scroll_total_received-%v", tempSlice), joint.cfg.OutputQueueName, int64(totalSize))
+				stats.Gauge(fmt.Sprintf("scroll_total_received-%v", tempSlice), processor.config.OutputQueueName, int64(totalSize))
 				statsLock.Unlock()
 
 				if docSize == 0 {
@@ -192,7 +192,7 @@ func (joint *DumpHashProcessor) Process(c *pipeline.Context) error {
 					break
 				}
 
-				processingDocs(docs, joint.cfg.OutputQueueName)
+				processingDocs(docs, processor.config.OutputQueueName)
 
 				if version >= 7 {
 					scrollResponseV7Pool.Put(scrollResponse)
@@ -201,7 +201,7 @@ func (joint *DumpHashProcessor) Process(c *pipeline.Context) error {
 				}
 
 			}
-			log.Debugf("%v - %v, slice %v is done", joint.cfg.Elasticsearch, joint.cfg.Indices, tempSlice)
+			log.Debugf("%v - %v, slice %v is done", processor.config.Elasticsearch, processor.config.Indices, tempSlice)
 
 		}()
 
@@ -211,7 +211,7 @@ func (joint *DumpHashProcessor) Process(c *pipeline.Context) error {
 
 	duration := time.Now().Sub(start).Seconds()
 
-	log.Infof("dump finished, es: %v, index: %v, docs: %v, duration: %vs, qps: %v ", joint.cfg.Elasticsearch, joint.cfg.Indices, totalSize, duration, math.Ceil(float64(totalSize)/math.Ceil((duration))))
+	log.Infof("dump finished, es: %v, index: %v, docs: %v, duration: %vs, qps: %v ", processor.config.Elasticsearch, processor.config.Indices, totalSize, duration, math.Ceil(float64(totalSize)/math.Ceil((duration))))
 
 	return nil
 }

@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 	log "github.com/cihub/seelog"
+	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/global"
-	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/rate"
@@ -20,13 +20,39 @@ import (
 )
 
 type DiskQueueConsumer struct {
-	param.Parameters
-	inputQueueName string
+	config Config
 }
 
-func (joint DiskQueueConsumer) Name() string {
+func (processor *DiskQueueConsumer) Name() string {
 	return "disk_queue_consumer"
 }
+
+type Config struct {
+	NumOfWorkers int   `json:"worker_size,omitempty"`
+	IdleTimeoutInSecond int   `json:"idle_timeout_in_second,omitempty"`
+	InputQueue string   `json:"input_queue,omitempty"`
+	Elasticsearch string   `json:"elasticsearch,omitempty"`
+	WaitingAfter []string   `json:"waiting_after,omitempty"`
+
+}
+
+func New(c *config.Config) (pipeline.Processor, error) {
+	cfg:= Config{
+		NumOfWorkers: 1,
+		IdleTimeoutInSecond: 5,
+	}
+
+	if err := c.Unpack(&cfg); err != nil {
+		return nil, fmt.Errorf("failed to unpack the configuration of urldecode processor: %s", err)
+	}
+
+	processor:= &DiskQueueConsumer{
+		config: cfg,
+	}
+
+	return processor,nil
+}
+
 
 var fastHttpClient = &fasthttp.Client{
 	Name: "disk_queue_consumer",
@@ -34,7 +60,7 @@ var fastHttpClient = &fasthttp.Client{
 	TLSConfig: &tls.Config{InsecureSkipVerify: true},
 }
 
-func (joint DiskQueueConsumer) Process(c *pipeline.Context) error {
+func (processor *DiskQueueConsumer) Process(c *pipeline.Context) error {
 	defer func() {
 		if !global.Env().IsDebug {
 			if r := recover(); r != nil {
@@ -52,14 +78,11 @@ func (joint DiskQueueConsumer) Process(c *pipeline.Context) error {
 		}
 	}()
 
-	workers, _ := joint.GetInt("worker_size", 1)
-	joint.inputQueueName = joint.MustGetString("input_queue")
-
 	wg := sync.WaitGroup{}
 	totalSize := 0
-	for i := 0; i < workers; i++ {
+	for i := 0; i < processor.config.NumOfWorkers; i++ {
 		wg.Add(1)
-		go joint.NewBulkWorker(&totalSize, &wg)
+		go processor.NewBulkWorker(&totalSize, &wg)
 	}
 
 	wg.Wait()
@@ -67,7 +90,7 @@ func (joint DiskQueueConsumer) Process(c *pipeline.Context) error {
 	return nil
 }
 
-func (joint DiskQueueConsumer) NewBulkWorker(count *int, wg *sync.WaitGroup) {
+func (processor *DiskQueueConsumer) NewBulkWorker(count *int, wg *sync.WaitGroup) {
 
 	defer func() {
 		if !global.Env().IsDebug {
@@ -87,24 +110,23 @@ func (joint DiskQueueConsumer) NewBulkWorker(count *int, wg *sync.WaitGroup) {
 		}
 	}()
 
-	timeOut := joint.GetIntOrDefault("idle_timeout_in_second", 5)
-	esInstanceVal := joint.MustGetString("elasticsearch")
-	waitingAfter,waitingOtherQueue := joint.GetStringArray("waiting_after")
+	timeOut := processor.config.IdleTimeoutInSecond
+	esInstanceVal := processor.config.Elasticsearch
+	waitingAfter := processor.config.WaitingAfter
 	esConfig := elastic.GetConfig(esInstanceVal)
 
 	idleDuration := time.Duration(timeOut) * time.Second
 	idleTimeout := time.NewTimer(idleDuration)
 	defer idleTimeout.Stop()
 
-	onErrorQueue:=joint.inputQueueName+"_pending"
-	onDeadLetterQueue:=joint.inputQueueName+"_dead_letter"
+	onErrorQueue:= processor.config.InputQueue+"_pending"
+	onDeadLetterQueue:= processor.config.InputQueue+"_dead_letter"
 
 READ_DOCS:
 	for {
 		idleTimeout.Reset(idleDuration)
 
-		if waitingOtherQueue{
-			if len(waitingAfter)>0{
+		if len(waitingAfter)>0{
 				for _,v:=range waitingAfter{
 					depth:=queue.Depth(v)
 					if depth>0{
@@ -114,7 +136,6 @@ READ_DOCS:
 					}
 				}
 			}
-		}
 
 		//handle message on error queue
 		if queue.Depth(onErrorQueue)>0{
@@ -122,7 +143,7 @@ READ_DOCS:
 			goto HANDLE_PENDING
 		}
 
-		 pop,timeout,err := queue.PopTimeout(joint.inputQueueName,idleDuration)
+		 pop,timeout,err := queue.PopTimeout(processor.config.InputQueue,idleDuration)
 		 if timeout{
 			 if global.Env().IsDebug{
 				 log.Tracef("%v no message input", idleDuration)
@@ -130,7 +151,7 @@ READ_DOCS:
 		 	goto READ_DOCS
 		 }
 
-		ok,status,err:=processMessage(esConfig,pop)
+		ok,status,err:= processMessage(esConfig,pop)
 		if !ok{
 			if global.Env().IsDebug{
 				log.Debug(ok,status,err)
@@ -169,7 +190,7 @@ HANDLE_PENDING:
 			goto READ_DOCS
 		}
 
-		ok,status,err:=processMessage(esConfig,pop)
+		ok,status,err:= processMessage(esConfig,pop)
 		if !ok{
 			if global.Env().IsDebug{
 				log.Debug(ok,status,err)
@@ -211,7 +232,7 @@ func processMessage(esConfig *elastic.ElasticsearchConfig,pop []byte)(bool,int,e
 
 	req.Header.SetHost(endpoint)
 	resp:=fasthttp.AcquireResponse()
-	err=fastHttpClient.Do(req, resp)
+	err= fastHttpClient.Do(req, resp)
 	if err != nil {
 		return false,resp.StatusCode(), err
 	}

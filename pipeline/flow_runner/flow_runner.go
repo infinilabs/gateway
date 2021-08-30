@@ -5,7 +5,6 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
-	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/util"
@@ -16,7 +15,7 @@ import (
 	"time"
 )
 
-type RunnerConfig struct {
+type Config struct {
 	FlowName   string `config:"flow"`
 	InputQueue string `config:"input_queue"`
 }
@@ -43,15 +42,14 @@ func releaseCtx(ctx *fasthttp.RequestCtx) {
 }
 
 type FlowRunner struct {
-	param.Parameters
-	config *RunnerConfig
+	config *Config
 }
 
 var signalChannel chan bool = make(chan bool, 1)
 
 
 func New(c *config.Config) (pipeline.Processor, error) {
-	cfg := RunnerConfig{}
+	cfg := Config{}
 
 	if err := c.Unpack(&cfg); err != nil {
 		log.Error(err)
@@ -89,11 +87,6 @@ func (this *FlowRunner) Process(c *pipeline.Context) error {
 			}
 		}
 	}()
-
-	if !this.GetBool("enabled",true){
-		return nil
-	}
-
 
 	timeOut := 5
 	idleDuration := time.Duration(timeOut) * time.Second
