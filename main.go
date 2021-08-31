@@ -30,14 +30,15 @@ import (
 	"infini.sh/framework/modules/task"
 	stats "infini.sh/framework/plugins/stats_statsd"
 	"infini.sh/gateway/config"
+	"infini.sh/gateway/pipeline/bulk_indexing"
 	"infini.sh/gateway/pipeline/diskqueue_consumer"
 	"infini.sh/gateway/pipeline/dump_hash"
 	"infini.sh/gateway/pipeline/flow_runner"
 	"infini.sh/gateway/pipeline/index_diff"
+	"infini.sh/gateway/pipeline/json_indexing"
 	"infini.sh/gateway/service/floating_ip"
 	"infini.sh/gateway/service/forcemerge"
 	"infini.sh/gateway/service/gateway"
-	"infini.sh/gateway/service/indexing"
 	"infini.sh/gateway/service/translog"
 )
 
@@ -80,15 +81,13 @@ func main() {
 		module.RegisterUserPlugin(forcemerge.ForceMergeModule{})
 		module.RegisterSystemModule(pipeline.PipeModule{})
 
-		//register pipeline joints
-		pipe.RegisterPipeJoint(indexing.JsonIndexingJoint{})
-		pipe.RegisterPipeJoint(indexing.BulkIndexingJoint{})
-
 		//offline pipeline processors
 		pipe.RegisterPlugin("index_diff", index_diff.New)
 		pipe.RegisterPlugin("dump_hash", scroll.New)
 		pipe.RegisterPlugin("flow_runner", flow_runner.New)
 		pipe.RegisterPlugin("disk_queue_consumer", diskqueue_consumer.New)
+		pipe.RegisterPlugin("bulk_indexing", bulk_indexing.New)
+		pipe.RegisterPlugin("json_indexing", json_indexing.New)
 
 		//start each module, with enabled provider
 		module.Start()

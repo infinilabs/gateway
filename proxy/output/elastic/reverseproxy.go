@@ -118,15 +118,17 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		log.Trace("elasticsearch client nodes refreshing")
 	}
 	cfg := p.proxyConfig
-	metadata := elastic.GetMetadata(cfg.Elasticsearch)
+
+	ws := []int{}
+	esConfig := elastic.GetConfig(cfg.Elasticsearch)
+
+	metadata := elastic.GetOrInitMetadata(esConfig)
 
 	if metadata == nil && !force {
 		log.Trace("metadata is nil and not forced, skip nodes refresh")
 		return
 	}
 
-	ws := []int{}
-	esConfig := elastic.GetConfig(cfg.Elasticsearch)
 	endpoints := []string{}
 	checkMetadata := false
 	if metadata != nil && len(metadata.Nodes) > 0 {
@@ -216,7 +218,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 
 	if len(hostClients) == 0 {
 		log.Error("proxy upstream is empty")
-		esConfig.ReportFailure()
+		metadata.ReportFailure()
 		return
 	}
 
@@ -348,7 +350,7 @@ func cleanHopHeaders(req *fasthttp.Request) {
 
 var failureMessage = []string{"connection refused", "connection reset", "no such host", "timed out", "Connection: close"}
 
-func (p *ReverseProxy) DelegateRequest(elasticsearch string, cfg *elastic.ElasticsearchConfig, myctx *fasthttp.RequestCtx) {
+func (p *ReverseProxy) DelegateRequest(elasticsearch string, cfg *elastic.ElasticsearchMetadata, myctx *fasthttp.RequestCtx) {
 
 	stats.Increment("cache", "strike")
 
@@ -366,7 +368,7 @@ START:
 	var ok bool
 	var endpoint string
 	//使用算法来获取合适的 client
-	switch cfg.ClientMode{
+	switch cfg.Config.ClientMode{
 	case "client":
 		ok, pc, endpoint = p.getClient()
 		break
@@ -388,8 +390,8 @@ START:
 	// modify schema，align with elasticsearch's schema
 	orignalSchema:=string(req.URI().Scheme())
 	useClient:=false
-	if cfg.GetSchema()!=orignalSchema{
-		req.URI().SetScheme(cfg.GetSchema())
+	if cfg.Config.GetSchema()!=orignalSchema{
+		req.URI().SetScheme(cfg.Config.GetSchema())
 		ok, pc, endpoint = p.getClient()
 		res = fasthttp.AcquireResponse()
 		useClient=true
@@ -399,11 +401,11 @@ START:
 		log.Tracef("send request [%v] to upstream [%v]", req.URI().String(), endpoint)
 	}
 
-	if cfg.TrafficControl != nil {
+	if cfg.Config.TrafficControl != nil {
 	RetryRateLimit:
 
-		if cfg.TrafficControl.MaxQpsPerNode > 0 {
-			if !rate.GetRateLimiterPerSecond(cfg.Name, endpoint+"max_qps", int(cfg.TrafficControl.MaxQpsPerNode)).Allow() {
+		if cfg.Config.TrafficControl.MaxQpsPerNode > 0 {
+			if !rate.GetRateLimiterPerSecond(cfg.Config.ID, endpoint+"max_qps", int(cfg.Config.TrafficControl.MaxQpsPerNode)).Allow() {
 				if global.Env().IsDebug {
 					log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), myctx.RemoteAddr().String())
 				}
@@ -412,8 +414,8 @@ START:
 			}
 		}
 
-		if cfg.TrafficControl.MaxBytesPerNode > 0 {
-			if !rate.GetRateLimiterPerSecond(cfg.Name, endpoint+"max_bps", int(cfg.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(), req.GetRequestLength()) {
+		if cfg.Config.TrafficControl.MaxBytesPerNode > 0 {
+			if !rate.GetRateLimiterPerSecond(cfg.Config.ID, endpoint+"max_bps", int(cfg.Config.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(), req.GetRequestLength()) {
 				if global.Env().IsDebug {
 					log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), myctx.RemoteAddr().String())
 				}
@@ -435,7 +437,7 @@ START:
 		if util.ContainsAnyInArray(err.Error(), failureMessage) {
 			//record translog, update failure ticket
 			if global.Env().IsDebug {
-				if !rate.GetRateLimiterPerSecond(cfg.Name, endpoint+"on_error", 1).Allow() {
+				if !rate.GetRateLimiterPerSecond(cfg.Config.ID, endpoint+"on_error", 1).Allow() {
 					log.Errorf("elasticsearch [%v] is on fire now, %v", p.proxyConfig.Elasticsearch,err)
 					time.Sleep(1 * time.Second)
 				}

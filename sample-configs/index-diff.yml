@@ -42,17 +42,10 @@ pipelines_v2:
               source_queue: 'source_docs'
               target_queue: 'target_docs'
 
-#pipelines:
+#pipelines_v2:
 #  - name: diff_result_ingest
-#    enabled: true
-#    start:
-#      joint: json_indexing
-#      enabled: true
-#      parameters:
-#        index_name: "diff_result"
-#        index_type: "doc"
-#        elasticsearch: "source"
-#        input_queue: "diff_result"
-#        timeout: "1s"
-#        worker_size: 1
-#        bulk_size_in_mb: 1 #in MB
+#    processors:
+#      - json_indexing:
+#          index_name: "diff_result"
+#          elasticsearch: "source"
+#          input_queue: "diff_result"

@@ -141,15 +141,11 @@ flow:
       - name: request_logging
         parameters:
           queue_name: request_logging
-          max_request_body_size: 1024
-          max_response_body_size: 1024
-          #          min_elapsed_time_in_ms: 500 # only record slow requests
-          bulk_stats_details: true
 
 router:
   - name: my_router
     default_flow: primary-flow
-#    tracing_flow: request_logging
+    tracing_flow: request_logging
 
 elasticsearch:
   - name: primary
@@ -175,69 +171,34 @@ elasticsearch:
         enabled: true
         interval: 60s
 
-pipelines:
-  - name: disk_queue_primary-failure-consumer
-    enabled: true
-    start:
-      joint: flow_runner
-      enabled: true
-      parameters:
-        input_queue: "primary-500"
-        flow: primary-flow-post-processing
-#  - name: disk_queue_primary-deadletter-consumer #TODO dead_letter failure should always go to dead_letter, no back to 500 queue, which will cause infiniloop
-#    enabled: true
-#    start:
-#      joint: flow_runner
-#      enabled: true
-#      parameters:
-#        input_queue: "primary_dead_letter"
-#        flow: primary-flow-post-processing
-  - name: disk_queue_backup-deadletter-consumer
-    enabled: true
-    start:
-      joint: flow_runner
-      enabled: true
-      parameters:
-        input_queue: "backup_dead_letter"
-        flow: primary-flow-post-processing
-  - name: disk_queue_backup-consumer
-    enabled: true
-    start:
-      joint: disk_queue_consumer
-      enabled: true
-      parameters:
-        input_queue: "backup"
-        elasticsearch: "backup"
-        waiting_after: [ "backup-500"]
-        timeout: "1s"
-        worker_size: 20
-  - name: disk_queue_primary-consumer
-    enabled: true
-    start:
-      joint: disk_queue_consumer
-      enabled: true
-      parameters:
-        input_queue: "primary"
-        elasticsearch: "primary"
-        waiting_after: [ "primary-500" ]
-        timeout: "1s"
-        worker_size: 20
+pipelines_v2:
   - name: request_logging_index
-    enabled: true
-    start:
-      joint: json_indexing
-      enabled: true
-      parameters:
-        index_name: "gateway_requests"
-        elasticsearch: "backup"
-        input_queue: "request_logging"
-        timeout: "1s"
-        worker_size: 1
-        bulk_size_in_mb: 1 #in MB
-statsd:
-  enabled: true
-  host: 127.0.0.1
-  port: 8125
-  protocol: udp
-  namespace: dc-replica.
-  buffer_size: 102400
+    processors:
+      - json_indexing:
+          index_name: "gateway_requests"
+          elasticsearch: "backup"
+          input_queue: "request_logging"
+  - name: disk_queue_primary-failure-consumer
+    processors:
+      - flow_runner:
+          input_queue: "primary-500"
+          flow: primary-flow-post-processing
+  - name: disk_queue_backup-deadletter-consumer
+    processors:
+      - flow_runner:
+          input_queue: "backup_dead_letter"
+          flow: primary-flow-post-processing
+  - name: disk_queue_backup-consumer
+    processors:
+      - disk_queue_consumer:
+          input_queue: "backup"
+          elasticsearch: "backup"
+          waiting_after: [ "backup-500"]
+          worker_size: 20
+  - name: disk_queue_backup-consumer
+    processors:
+      - disk_queue_consumer:
+          input_queue: "primary"
+          elasticsearch: "primary"
+          waiting_after: [ "primary-500" ]
+          worker_size: 20

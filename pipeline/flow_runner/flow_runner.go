@@ -41,11 +41,11 @@ func releaseCtx(ctx *fasthttp.RequestCtx) {
 	ctxPool.Put(ctx)
 }
 
-type FlowRunner struct {
+type FlowRunnerProcessor struct {
 	config *Config
 }
 
-var signalChannel chan bool = make(chan bool, 1)
+var signalChannel = make(chan bool, 1)
 
 
 func New(c *config.Config) (pipeline.Processor, error) {
@@ -56,21 +56,21 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		return nil, fmt.Errorf("failed to unpack the configuration of flow_runner processor: %s", err)
 	}
 
-	runner:= FlowRunner{config: &cfg}
+	runner:= FlowRunnerProcessor{config: &cfg}
 	return &runner,nil
 }
 
 
-func (this FlowRunner) Stop() error {
+func (processor FlowRunnerProcessor) Stop() error {
 	signalChannel <- true
 	return nil
 }
 
-func (this *FlowRunner) Name() string {
+func (processor *FlowRunnerProcessor) Name() string {
 	return "flow_runner"
 }
 
-func (this *FlowRunner) Process(c *pipeline.Context) error {
+func (processor *FlowRunnerProcessor) Process(c *pipeline.Context) error {
 	defer func() {
 		if !global.Env().IsDebug {
 			if r := recover(); r != nil {
@@ -83,19 +83,14 @@ func (this *FlowRunner) Process(c *pipeline.Context) error {
 				case string:
 					v = r.(string)
 				}
-				log.Error("error in FlowRunner,", v)
+				log.Error("error in FlowRunnerProcessor,", v)
 			}
 		}
 	}()
 
 	timeOut := 5
 	idleDuration := time.Duration(timeOut) * time.Second
-	idleTimeout := time.NewTimer(idleDuration)
-	defer idleTimeout.Stop()
-	idleTimeout1 := time.NewTimer(idleDuration)
-	defer idleTimeout1.Stop()
-
-	processor := common.GetFlowProcess(this.config.FlowName)
+	flowProcessor := common.GetFlowProcess(processor.config.FlowName)
 
 	READ_DOCS:
 		stop := false
@@ -105,9 +100,8 @@ func (this *FlowRunner) Process(c *pipeline.Context) error {
 				stop = true
 				return nil
 			default:
-				idleTimeout1.Reset(idleDuration)
 				if !stop {
-					pop,timeout,err := queue.PopTimeout(this.config.InputQueue,idleDuration)
+					pop,timeout,err := queue.PopTimeout(processor.config.InputQueue,idleDuration)
 					if err!=nil{
 						log.Error(err)
 						panic(err)
@@ -125,7 +119,7 @@ func (this *FlowRunner) Process(c *pipeline.Context) error {
 							panic(err)
 						}
 
-						processor(ctx)
+						flowProcessor(ctx)
 
 						releaseCtx(ctx)
 				}

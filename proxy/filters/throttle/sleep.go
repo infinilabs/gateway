@@ -1,12 +1,12 @@
 package throttle
 
 import (
+	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/rate"
 	"infini.sh/framework/lib/fasthttp"
-	log "github.com/cihub/seelog"
 	"time"
 )
 
@@ -54,7 +54,7 @@ func (filter ElasticsearchHealthCheckFilter) Process(ctx *fasthttp.RequestCtx) {
 			log.Trace(esName,result)
 		}
 		if result.StatusCode==200||result.StatusCode==403{
-			cfg:=elastic.GetConfig(esName)
+			cfg:=elastic.GetMetadata(esName)
 			if cfg!=nil{
 				cfg.ReportSuccess()
 			}

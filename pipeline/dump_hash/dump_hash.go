@@ -40,17 +40,17 @@ type DumpHashProcessor struct {
 }
 
 type Config struct {
-//字段名称必须是大写
-	BatchSize int    `config:"batch_size"`
+	//字段名称必须是大写
+	BatchSize       int    `config:"batch_size"`
 	SliceSize       int    `config:"slice_size"`
 	Elasticsearch   string `config:"elasticsearch"`
 	OutputQueueName string `config:"output_queue"`
-	SortType  string `config:"sort_type"`
-	SortField string `config:"sort_field"`
-	Indices    string `config:"indices"`
-	Query      string `config:"query"`
-	ScrollTime string `config:"scroll_time"`
-	Fields     string `config:"fields"`
+	SortType        string `config:"sort_type"`
+	SortField       string `config:"sort_field"`
+	Indices         string `config:"indices"`
+	Query           string `config:"query"`
+	ScrollTime      string `config:"scroll_time"`
+	Fields          string `config:"fields"`
 }
 
 func New(c *config.Config) (pipeline.Processor, error) {
@@ -103,9 +103,9 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 	var statsLock sync.RWMutex
 	var totalSize int
 
-	file:=path.Join(global.Env().GetDataDir(), "diff", processor.config.OutputQueueName)
-	if util.FileExists(file){
-		log.Warn("target file exists:",file,",you may need to remove it first")
+	file := path.Join(global.Env().GetDataDir(), "diff", processor.config.OutputQueueName)
+	if util.FileExists(file) {
+		log.Warn("target file exists:", file, ",you may need to remove it first")
 	}
 
 	for slice := 0; slice < processor.config.SliceSize; slice++ {

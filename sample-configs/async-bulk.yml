@@ -25,8 +25,6 @@ flow:
           level: node
           mode: async
           fix_null_id: true
-          index_stats_analysis: true
-          action_stats_analysis: true
       - name: elasticsearch
         parameters:
           elasticsearch: dev  #elasticsearch configure reference name
@@ -45,9 +43,7 @@ flow:
       - name: request_logging
         parameters:
           queue_name: request_logging
-          max_request_body_size: 1024
-          max_response_body_size: 1024
-          bulk_stats_details: true
+
 router:
   - name: my_router
     default_flow: async_bulk
@@ -70,34 +66,20 @@ elasticsearch:
         enabled: true
         interval: 60s
 
-pipelines:
+pipelines_v2:
   - name: request_logging_index
-    enabled: true
-    start:
-      joint: json_indexing
-      enabled: true
-      parameters:
-        index_name: "gateway_requests"
-        elasticsearch: "dev"
-        input_queue: "request_logging"
-        timeout: "1s"
-        worker_size: 1
-        bulk_size_in_mb: 10 #in MB
+    processors:
+      - json_indexing:
+          index_name: "gateway_requests"
+          elasticsearch: "dev"
+          input_queue: "request_logging"
   - name: bulk_request_ingest
-    enabled: true
-    start:
-      joint: bulk_indexing
-      enabled: true
-      parameters:
-        elasticsearch: "dev"
-        compress: false
-        worker_size: 1
-        bulk_size_in_mb: 5  #in MB
-        idle_timeout_in_second: 5
-        retry_delay_in_second: 1
-        reject_retry_delay_in_second: 1
-        max_retry_times: 3
-        max_reject_retry_times: 3
-        max_logged_request_body_size: 1024
-        max_logged_response_body_size: 1024
-        process_dead_letter_queue: true
+    processors:
+      - bulk_indexing:
+          elasticsearch: "dev"
+          compress: true
+          worker_size: 10
+          retry_delay_in_seconds: 5
+          process_failure_queue: true #process failed bulk messages
+    #      queues: #process other bulk queue
+    #        - dev-node-failure

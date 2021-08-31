@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	log "github.com/cihub/seelog"
+	pool "github.com/libp2p/go-buffer-pool"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/queue"
@@ -19,7 +20,6 @@ import (
 	"path"
 	"strings"
 	"time"
-	pool "github.com/libp2p/go-buffer-pool"
 )
 
 var bufferPool = bytebufferpool.NewPool(65536, 655360)
@@ -27,7 +27,8 @@ var smallSizedPool = bytebufferpool.NewPool(512, 655360)
 
 var NEWLINEBYTES = []byte("\n")
 var p pool.BufferPool
-func WalkBulkRequests(data []byte,docBuff []byte, eachLineFunc func(eachLine []byte) (skipNextLine bool), metaFunc func(metaBytes []byte, actionStr, index, typeName, id string) (err error), payloadFunc func(payloadBytes []byte)) (int, error) {
+
+func WalkBulkRequests(data []byte, docBuff []byte, eachLineFunc func(eachLine []byte) (skipNextLine bool), metaFunc func(metaBytes []byte, actionStr, index, typeName, id string) (err error), payloadFunc func(payloadBytes []byte)) (int, error) {
 
 	nextIsMeta := true
 	skipNextLineProcessing := false
@@ -36,19 +37,19 @@ func WalkBulkRequests(data []byte,docBuff []byte, eachLineFunc func(eachLine []b
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	scanner.Split(util.GetSplitFunc(NEWLINEBYTES))
 
-	sizeOfDocBuffer:=len(docBuff)
-	if sizeOfDocBuffer>0{
-		if sizeOfDocBuffer<1024{
-			log.Debug("doc buffer size maybe too small,",sizeOfDocBuffer)
+	sizeOfDocBuffer := len(docBuff)
+	if sizeOfDocBuffer > 0 {
+		if sizeOfDocBuffer < 1024 {
+			log.Debug("doc buffer size maybe too small,", sizeOfDocBuffer)
 		}
 		scanner.Buffer(docBuff, sizeOfDocBuffer)
 	}
 
-	processedBytesCount:=0
+	processedBytesCount := 0
 	for scanner.Scan() {
 		scannedByte := scanner.Bytes()
-		bytesCount:=len(scannedByte)
-		processedBytesCount+=bytesCount
+		bytesCount := len(scannedByte)
+		processedBytesCount += bytesCount
 		if scannedByte == nil || bytesCount <= 0 {
 			log.Debug("invalid scanned byte, continue")
 			continue
@@ -78,7 +79,9 @@ func WalkBulkRequests(data []byte,docBuff []byte, eachLineFunc func(eachLine []b
 
 			err := metaFunc(scannedByte, actionStr, index, typeName, id)
 			if err != nil {
-				log.Error(err)
+				if global.Env().IsDebug{
+					log.Error(err)
+				}
 				return docCount, err
 			}
 
@@ -94,20 +97,20 @@ func WalkBulkRequests(data []byte,docBuff []byte, eachLineFunc func(eachLine []b
 		}
 	}
 
-	if processedBytesCount+sizeOfDocBuffer<=len(data){
-		log.Warn("bulk requests was not fully processed,",processedBytesCount,"/",len(data),", you may need to increase `doc_buffer_size`, re-processing with memory inefficient way now")
+	if processedBytesCount+sizeOfDocBuffer <= len(data) {
+		log.Warn("bulk requests was not fully processed,", processedBytesCount, "/", len(data), ", you may need to increase `doc_buffer_size`, re-processing with memory inefficient way now")
 
-		lines:=bytes.Split(data,NEWLINEBYTES)
+		lines := bytes.Split(data, NEWLINEBYTES)
 
 		//reset
 		nextIsMeta = true
 		skipNextLineProcessing = false
 		docCount = 0
-		processedBytesCount=0
+		processedBytesCount = 0
 
-		for _,line:=range lines{
-			bytesCount:=len(line)
-			processedBytesCount+=bytesCount
+		for _, line := range lines {
+			bytesCount := len(line)
+			processedBytesCount += bytesCount
 			if line == nil || bytesCount <= 0 {
 				log.Debug("invalid line, continue")
 				continue
@@ -151,7 +154,6 @@ func WalkBulkRequests(data []byte,docBuff []byte, eachLineFunc func(eachLine []b
 		}
 
 	}
-
 
 	log.Tracef("total [%v] operations in bulk requests", docCount)
 	return docCount, nil
@@ -197,25 +199,45 @@ var fastHttpClient = &fasthttp.Client{
 	TLSConfig:           &tls.Config{InsecureSkipVerify: true},
 }
 
-type BulkProcessor struct {
-	RotateConfig              rotate.RotateConfig
-	Compress                  bool
-	LogInvalidMessage         bool
-	LogInvalid200Message      bool
-	LogInvalid200RetryMessage bool
-	Log429RetryMessage        bool
-	RetryDelayInSeconds       int
-	RejectDelayInSeconds      int
-	MaxRejectRetryTimes       int //max_reject_retry_times
-	MaxRetryTimes             int //max_reject_times
-	MaxRequestBodySize        int
-	MaxResponseBodySize       int
+type BulkProcessorConfig struct {
+	Compress                  bool `config:"compress"`
+	LogInvalidMessage         bool `config:"log_invalid_message"`
+	LogInvalid200Message      bool `config:"log_invalid_200_message"`
+	LogInvalid200RetryMessage bool `config:"log_200_retry_message"`
+	Log429RetryMessage        bool `config:"log_429_retry_message"`
+	RetryDelayInSeconds       int  `config:"retry_delay_in_seconds"`
+	RejectDelayInSeconds      int  `config:"reject_retry_delay_in_seconds"`
+	MaxRejectRetryTimes       int  `config:"max_reject_retry_times"`
+	MaxRetryTimes             int  `config:"max_retry_times"`
+	MaxRequestBodySize        int  `config:"max_logged_request_body_size"`
+	MaxResponseBodySize       int  `config:"max_logged_response_body_size"`
 
-	SaveFailure       bool
-	FailureRequestsQueue       string
-	InvalidRequestsQueue       string
-	DeadRequestsQueue          string
-	DocBufferSize          int
+	SaveFailure          bool   `config:"save_failure"`
+	FailureRequestsQueue string `config:"failure_queue"`
+	InvalidRequestsQueue string `config:"invalid_queue"`
+	DeadRequestsQueue    string `config:"dead_queue"`
+	DocBufferSize        int    `config:"doc_buffer_size"`
+}
+
+var DefaultConfig = BulkProcessorConfig{
+		Compress:                  false,
+		LogInvalidMessage:         true,
+		LogInvalid200Message:      true,
+		LogInvalid200RetryMessage: true,
+		Log429RetryMessage:        true,
+		RetryDelayInSeconds:  1,
+		RejectDelayInSeconds: 1,
+		MaxRejectRetryTimes:  3,
+		MaxRetryTimes:       3,
+		MaxRequestBodySize:  1024,
+		MaxResponseBodySize: 1024,
+		SaveFailure:          true,
+		DocBufferSize:       256*1024,
+}
+
+type BulkProcessor struct {
+	RotateConfig rotate.RotateConfig
+	Config       BulkProcessorConfig
 }
 
 type API_STATUS string
@@ -229,10 +251,10 @@ func (joint *BulkProcessor) Bulk(cfg *elastic.ElasticsearchConfig, endpoint stri
 
 	if data == nil || len(data) == 0 {
 		log.Error("data size is empty,", endpoint)
-		stats.Increment("elasticsearch."+cfg.Name+".bulk","5xx_requests")
+		stats.Increment("elasticsearch."+cfg.Name+".bulk", "5xx_requests")
 
-		if joint.SaveFailure{
-			queue.Push(joint.FailureRequestsQueue,data)
+		if joint.Config.SaveFailure {
+			queue.Push(joint.Config.FailureRequestsQueue, data)
 		}
 
 		return 0, FAILURE
@@ -258,7 +280,7 @@ func (joint *BulkProcessor) Bulk(cfg *elastic.ElasticsearchConfig, endpoint stri
 	req.Header.SetUserAgent("_bulk")
 
 	//TODO handle response, if client not support gzip, return raw body
-	if joint.Compress {
+	if joint.Config.Compress {
 		req.Header.Set("Accept-Encoding", "gzip")
 		req.Header.Set("content-encoding", "gzip")
 	}
@@ -271,7 +293,7 @@ func (joint *BulkProcessor) Bulk(cfg *elastic.ElasticsearchConfig, endpoint stri
 	}
 
 	if len(data) > 0 {
-		if joint.Compress {
+		if joint.Config.Compress {
 			_, err := fasthttp.WriteGzipLevel(req.BodyWriter(), data, fasthttp.CompressBestSpeed)
 			if err != nil {
 				panic(err)
@@ -281,17 +303,17 @@ func (joint *BulkProcessor) Bulk(cfg *elastic.ElasticsearchConfig, endpoint stri
 		}
 
 		if req.GetBodyLength() <= 0 {
-			log.Error("INIT: after set, but body is zero,", len(data), ",is compress:", joint.Compress)
+			log.Error("INIT: after set, but body is zero,", len(data), ",is compress:", joint.Config.Compress)
 		}
 	} else {
-		log.Error("INIT: data length is zero,", string(data), ",is compress:", joint.Compress)
+		log.Error("INIT: data length is zero,", string(data), ",is compress:", joint.Config.Compress)
 	}
 	retryTimes := 0
 
 DO:
 
 	if req.GetBodyLength() <= 0 {
-		log.Error("DO: data length is zero,", string(data), ",is compress:", joint.Compress)
+		log.Error("DO: data length is zero,", string(data), ",is compress:", joint.Config.Compress)
 	}
 
 	if cfg.TrafficControl != nil {
@@ -319,10 +341,10 @@ DO:
 		if global.Env().IsDebug {
 			log.Error(err)
 		}
-		stats.Increment("elasticsearch."+cfg.Name+".bulk","5xx_requests")
+		stats.Increment("elasticsearch."+cfg.Name+".bulk", "5xx_requests")
 
-		if joint.SaveFailure{
-			queue.Push(joint.FailureRequestsQueue,data)
+		if joint.Config.SaveFailure {
+			queue.Push(joint.Config.FailureRequestsQueue, data)
 		}
 
 		return 0, FAILURE
@@ -335,12 +357,12 @@ DO:
 	}
 
 	if err != nil {
-		stats.Increment("elasticsearch."+cfg.Name+".bulk","5xx_requests")
+		stats.Increment("elasticsearch."+cfg.Name+".bulk", "5xx_requests")
 
 		log.Error("status:", resp.StatusCode(), ",", endpoint, ",", err, " ", util.SubString(string(util.EscapeNewLine(resbody)), 0, 256))
 
-		if joint.SaveFailure{
-			queue.Push(joint.FailureRequestsQueue,data)
+		if joint.Config.SaveFailure {
+			queue.Push(joint.Config.FailureRequestsQueue, data)
 		}
 
 		return resp.StatusCode(), FAILURE
@@ -348,14 +370,14 @@ DO:
 
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated {
 
-		stats.Increment("elasticsearch."+cfg.Name+".bulk","200_requests")
+		stats.Increment("elasticsearch."+cfg.Name+".bulk", "200_requests")
 
 		if resp.StatusCode() == http.StatusOK {
 			//TODO verify each es version's error response
 			hit := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
 			if hit {
 
-				if joint.LogInvalid200Message {
+				if joint.Config.LogInvalid200Message {
 					if rate.GetRateLimiter("log_invalid_200_message", endpoint, 1, 1, 5*time.Second).Allow() {
 						log.Warn("status:", resp.StatusCode(), ",", endpoint, ",", util.SubString(string(util.EscapeNewLine(resbody)), 0, 256))
 					}
@@ -367,9 +389,9 @@ DO:
 						[]byte("\nURL:"),
 						[]byte(url),
 						[]byte("\nRequest:\n"),
-						[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.MaxRequestBodySize)),
+						[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.Config.MaxRequestBodySize)),
 						[]byte("\nResponse:\n"),
-						[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.MaxResponseBodySize)),
+						[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.Config.MaxResponseBodySize)),
 					)
 				}
 
@@ -381,12 +403,12 @@ DO:
 				}
 
 				var contains400Error bool
-				var invalidCount =0
+				var invalidCount = 0
 				invalidOffset := map[int]elastic.BulkActionMetadata{}
 				for i, v := range response.Items {
 					item := v.GetItem()
 					if item.Error != nil {
-						if item.Status==400{
+						if item.Status == 400 {
 							contains400Error = true
 							invalidCount++
 						}
@@ -397,16 +419,16 @@ DO:
 					}
 				}
 
-				if invalidCount>0&&invalidCount==len(response.Items){
+				if invalidCount > 0 && invalidCount == len(response.Items) {
 					//all 400 error
-					if joint.SaveFailure{
-						queue.Push(joint.InvalidRequestsQueue, data)
+					if joint.Config.SaveFailure {
+						queue.Push(joint.Config.InvalidRequestsQueue, data)
 					}
 					return 400, INVALID
 				}
 
-				if global.Env().IsDebug{
-					log.Trace("invalid requests:",invalidOffset,len(invalidOffset) , len(response.Items))
+				if global.Env().IsDebug {
+					log.Trace("invalid requests:", invalidOffset, len(invalidOffset), len(response.Items))
 				}
 
 				if len(invalidOffset) > 0 && len(invalidOffset) < len(response.Items) {
@@ -418,15 +440,15 @@ DO:
 					var match = false
 					var retryable = false
 					var response elastic.BulkActionMetadata
-					invalidCount =0
-					var failureCount =0
+					invalidCount = 0
+					var failureCount = 0
 					//walk bulk message, with invalid id, save to another list
 
 					var docBuffer []byte
-					docBuffer=p.Get(joint.DocBufferSize)
+					docBuffer = p.Get(joint.Config.DocBufferSize)
 					defer p.Put(docBuffer)
 
-					WalkBulkRequests(requestBytes,docBuffer, func(eachLine []byte) (skipNextLine bool) {
+					WalkBulkRequests(requestBytes, docBuffer, func(eachLine []byte) (skipNextLine bool) {
 						return false
 					}, func(metaBytes []byte, actionStr, index, typeName, id string) (err error) {
 						response, match = invalidOffset[offset]
@@ -458,22 +480,21 @@ DO:
 						}
 					})
 
-					if invalidCount>0{
-						stats.IncrementBy("elasticsearch."+cfg.Name+".bulk","200_invalid_docs", int64(invalidCount))
+					if invalidCount > 0 {
+						stats.IncrementBy("elasticsearch."+cfg.Name+".bulk", "200_invalid_docs", int64(invalidCount))
 					}
 
-					if failureCount>0{
-						stats.IncrementBy("elasticsearch."+cfg.Name+".bulk","200_failure_docs", int64(failureCount))
+					if failureCount > 0 {
+						stats.IncrementBy("elasticsearch."+cfg.Name+".bulk", "200_failure_docs", int64(failureCount))
 					}
 
-					if len(invalidOffset)>0{
-						stats.Increment("elasticsearch."+cfg.Name+".bulk","200_partial_requests")
+					if len(invalidOffset) > 0 {
+						stats.Increment("elasticsearch."+cfg.Name+".bulk", "200_partial_requests")
 					}
-
 
 					if errorItems.Len() > 0 {
-						if joint.SaveFailure{
-							queue.Push(joint.InvalidRequestsQueue, errorItems.Bytes())
+						if joint.Config.SaveFailure {
+							queue.Push(joint.Config.InvalidRequestsQueue, errorItems.Bytes())
 							//send to redis channel
 							errorItems.Reset()
 							bytebufferpool.Put(errorItems)
@@ -481,8 +502,8 @@ DO:
 					}
 
 					if retryableItems.Len() > 0 {
-						if joint.SaveFailure {
-							queue.Push(joint.FailureRequestsQueue, retryableItems.Bytes())
+						if joint.Config.SaveFailure {
+							queue.Push(joint.Config.FailureRequestsQueue, retryableItems.Bytes())
 							retryableItems.Reset()
 							bytebufferpool.Put(retryableItems)
 						}
@@ -493,18 +514,18 @@ DO:
 					}
 				}
 
-				delayTime := joint.RetryDelayInSeconds
+				delayTime := joint.Config.RetryDelayInSeconds
 				if delayTime <= 0 {
 					delayTime = 10
 				}
-				if joint.MaxRetryTimes <= 0 {
-					joint.MaxRetryTimes = 3
+				if joint.Config.MaxRetryTimes <= 0 {
+					joint.Config.MaxRetryTimes = 3
 				}
 
-				if retryTimes >= joint.MaxRetryTimes {
+				if retryTimes >= joint.Config.MaxRetryTimes {
 					log.Errorf("invalid 200, retried %v times, quit retry", retryTimes)
-					if joint.SaveFailure{
-						queue.Push(joint.FailureRequestsQueue,data)
+					if joint.Config.SaveFailure {
+						queue.Push(joint.Config.FailureRequestsQueue, data)
 					}
 					return resp.StatusCode(), FAILURE
 				}
@@ -517,36 +538,35 @@ DO:
 		}
 		return resp.StatusCode(), SUCCESS
 	} else if resp.StatusCode() == 429 {
-		stats.Increment("elasticsearch."+cfg.Name+".bulk","429_requests")
+		stats.Increment("elasticsearch."+cfg.Name+".bulk", "429_requests")
 
-		delayTime := joint.RejectDelayInSeconds
+		delayTime := joint.Config.RejectDelayInSeconds
 		if delayTime <= 0 {
 			delayTime = 5
 		}
 		time.Sleep(time.Duration(delayTime) * time.Second)
-		if joint.MaxRejectRetryTimes <= 0 {
-			joint.MaxRejectRetryTimes = 12 //1min
+		if joint.Config.MaxRejectRetryTimes <= 0 {
+			joint.Config.MaxRejectRetryTimes = 12 //1min
 		}
-		if retryTimes >= joint.MaxRejectRetryTimes {
+		if retryTimes >= joint.Config.MaxRejectRetryTimes {
 			log.Errorf("rejected 429, retried %v times, quit retry", retryTimes)
-			if joint.SaveFailure{
-				queue.Push(joint.FailureRequestsQueue,data)
+			if joint.Config.SaveFailure {
+				queue.Push(joint.Config.FailureRequestsQueue, data)
 			}
 			return resp.StatusCode(), FAILURE
 		}
 		log.Debugf("rejected 429, retried %v times, will try again", retryTimes)
 		retryTimes++
 		goto DO
-	}else if resp.StatusCode()==400{
+	} else if resp.StatusCode() == 400 {
 		//handle 400 error
-		if joint.SaveFailure{
-			queue.Push(joint.InvalidRequestsQueue, data)
+		if joint.Config.SaveFailure {
+			queue.Push(joint.Config.InvalidRequestsQueue, data)
 		}
 
-		stats.Increment("elasticsearch."+cfg.Name+".bulk","400_requests")
+		stats.Increment("elasticsearch."+cfg.Name+".bulk", "400_requests")
 
-
-		if joint.LogInvalidMessage {
+		if joint.Config.LogInvalidMessage {
 			if rate.GetRateLimiter("log_invalid_messages", endpoint, 1, 1, 5*time.Second).Allow() {
 				log.Warn("status:", resp.StatusCode(), ",", endpoint, ",", util.SubString(util.UnsafeBytesToString(resbody), 0, 256))
 			}
@@ -558,18 +578,18 @@ DO:
 				[]byte("\nURL:"),
 				[]byte(url),
 				[]byte("\nRequest:\n"),
-				[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.MaxRequestBodySize)),
+				[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.Config.MaxRequestBodySize)),
 				[]byte("\nResponse:\n"),
-				[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.MaxResponseBodySize)),
+				[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.Config.MaxResponseBodySize)),
 			)
 		}
 
 		return resp.StatusCode(), INVALID
 	} else {
 
-		stats.Increment("elasticsearch."+cfg.Name+".bulk","5xx_requests")
+		stats.Increment("elasticsearch."+cfg.Name+".bulk", "5xx_requests")
 
-		if joint.LogInvalidMessage {
+		if joint.Config.LogInvalidMessage {
 			if rate.GetRateLimiter("log_invalid_messages", endpoint, 1, 1, 5*time.Second).Allow() {
 				log.Warn("status:", resp.StatusCode(), ",", endpoint, ",", util.SubString(util.UnsafeBytesToString(resbody), 0, 256))
 			}
@@ -581,14 +601,14 @@ DO:
 				[]byte("\nURL:"),
 				[]byte(url),
 				[]byte("\nRequest:\n"),
-				[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.MaxRequestBodySize)),
+				[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.Config.MaxRequestBodySize)),
 				[]byte("\nResponse:\n"),
-				[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.MaxResponseBodySize)),
+				[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.Config.MaxResponseBodySize)),
 			)
 		}
 
-		if joint.SaveFailure{
-			queue.Push(joint.FailureRequestsQueue, data)
+		if joint.Config.SaveFailure {
+			queue.Push(joint.Config.FailureRequestsQueue, data)
 		}
 
 		return resp.StatusCode(), FAILURE

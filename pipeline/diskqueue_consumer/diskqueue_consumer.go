@@ -28,17 +28,16 @@ func (processor *DiskQueueConsumer) Name() string {
 }
 
 type Config struct {
-	NumOfWorkers int   `json:"worker_size,omitempty"`
-	IdleTimeoutInSecond int   `json:"idle_timeout_in_second,omitempty"`
-	InputQueue string   `json:"input_queue,omitempty"`
-	Elasticsearch string   `json:"elasticsearch,omitempty"`
-	WaitingAfter []string   `json:"waiting_after,omitempty"`
-
+	NumOfWorkers        int      `config:"worker_size"`
+	IdleTimeoutInSecond int      `config:"idle_timeout_in_seconds"`
+	InputQueue          string   `config:"input_queue"`
+	Elasticsearch       string   `config:"elasticsearch"`
+	WaitingAfter        []string `config:"waiting_after"`
 }
 
 func New(c *config.Config) (pipeline.Processor, error) {
-	cfg:= Config{
-		NumOfWorkers: 1,
+	cfg := Config{
+		NumOfWorkers:        1,
 		IdleTimeoutInSecond: 5,
 	}
 
@@ -46,18 +45,17 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		return nil, fmt.Errorf("failed to unpack the configuration of urldecode processor: %s", err)
 	}
 
-	processor:= &DiskQueueConsumer{
+	processor := &DiskQueueConsumer{
 		config: cfg,
 	}
 
-	return processor,nil
+	return processor, nil
 }
 
-
 var fastHttpClient = &fasthttp.Client{
-	Name: "disk_queue_consumer",
+	Name:                          "disk_queue_consumer",
 	DisableHeaderNamesNormalizing: false,
-	TLSConfig: &tls.Config{InsecureSkipVerify: true},
+	TLSConfig:                     &tls.Config{InsecureSkipVerify: true},
 }
 
 func (processor *DiskQueueConsumer) Process(c *pipeline.Context) error {
@@ -116,173 +114,163 @@ func (processor *DiskQueueConsumer) NewBulkWorker(count *int, wg *sync.WaitGroup
 	esConfig := elastic.GetConfig(esInstanceVal)
 
 	idleDuration := time.Duration(timeOut) * time.Second
-	idleTimeout := time.NewTimer(idleDuration)
-	defer idleTimeout.Stop()
-
-	onErrorQueue:= processor.config.InputQueue+"_pending"
-	onDeadLetterQueue:= processor.config.InputQueue+"_dead_letter"
+	onErrorQueue := processor.config.InputQueue + "_pending"
+	onDeadLetterQueue := processor.config.InputQueue + "_dead_letter"
 
 READ_DOCS:
 	for {
-		idleTimeout.Reset(idleDuration)
 
-		if len(waitingAfter)>0{
-				for _,v:=range waitingAfter{
-					depth:=queue.Depth(v)
-					if depth>0{
-						log.Debugf("%v has pending %v messages, cleanup it first",v,depth)
-						time.Sleep(5*time.Second)
-						goto READ_DOCS
-					}
+		if len(waitingAfter) > 0 {
+			for _, v := range waitingAfter {
+				depth := queue.Depth(v)
+				if depth > 0 {
+					log.Debugf("%v has pending %v messages, cleanup it first", v, depth)
+					time.Sleep(5 * time.Second)
+					goto READ_DOCS
 				}
 			}
+		}
 
 		//handle message on error queue
-		if queue.Depth(onErrorQueue)>0{
-			log.Debug(onErrorQueue," has pending message, clear it first")
+		if queue.Depth(onErrorQueue) > 0 {
+			log.Debug(onErrorQueue, " has pending message, clear it first")
 			goto HANDLE_PENDING
 		}
 
-		 pop,timeout,err := queue.PopTimeout(processor.config.InputQueue,idleDuration)
-		 if timeout{
-			 if global.Env().IsDebug{
-				 log.Tracef("%v no message input", idleDuration)
-			 }
-		 	goto READ_DOCS
-		 }
+		pop, _, err := queue.PopTimeout(processor.config.InputQueue, idleDuration)
 
-		ok,status,err:= processMessage(esConfig,pop)
-		if !ok{
-			if global.Env().IsDebug{
-				log.Debug(ok,status,err)
-			}
-			if status>=400 && status< 500{
-				log.Error("push to dead letter queue:",onDeadLetterQueue,",",err)
-				err:=queue.Push(onDeadLetterQueue,pop)
-				if err!=nil{
-					panic(err)
+		if len(pop)>0{
+			ok, status, err := processMessage(esConfig, pop)
+			if !ok {
+				if global.Env().IsDebug {
+					log.Debug(ok, status, err)
 				}
-			}else{
-				err:=queue.Push(onErrorQueue,pop)
-				if err!=nil{
-					panic(err)
+				if status >= 400 && status < 500 {
+					log.Error("push to dead letter queue:", onDeadLetterQueue, ",", err)
+					err := queue.Push(onDeadLetterQueue, pop)
+					if err != nil {
+						panic(err)
+					}
+				} else {
+					err := queue.Push(onErrorQueue, pop)
+					if err != nil {
+						panic(err)
+					}
 				}
+				time.Sleep(5 * time.Second)
 			}
-			time.Sleep(5*time.Second)
 		}
+
+		if err!=nil{
+			log.Error(err)
+			panic(err)
+		}
+
 	}
 
 HANDLE_PENDING:
-	idleTimeout1 := time.NewTimer(idleDuration)
-	defer idleTimeout1.Stop()
 
-	log.Trace("handle pending messages ",onErrorQueue)
-
+	log.Trace("handle pending messages ", onErrorQueue)
 	for {
-		idleTimeout1.Reset(idleDuration)
-
-		 pop,timeout,err :=queue.PopTimeout(onErrorQueue,idleDuration)
-
-		if timeout{
-			if global.Env().IsDebug{
-				log.Tracef("%v no message input", idleDuration)
-			}
-			goto READ_DOCS
-		}
-
-		ok,status,err:= processMessage(esConfig,pop)
-		if !ok{
-			if global.Env().IsDebug{
-				log.Debug(ok,status,err)
-			}
-			if status>401 && status< 500{
-				log.Error("push to dead letter queue:",onDeadLetterQueue,",",err)
-				err:=queue.Push(onDeadLetterQueue,pop)
-				if err!=nil{
-					panic(err)
+		pop, _, err := queue.PopTimeout(onErrorQueue, idleDuration)
+		if len(pop)>0{
+			ok, status, err := processMessage(esConfig, pop)
+			if !ok {
+				if global.Env().IsDebug {
+					log.Debug(ok, status, err)
 				}
-			}else{
-				err:=queue.Push(onErrorQueue,pop)
-				if err!=nil{
-					panic(err)
+				if status > 401 && status < 500 {
+					log.Error("push to dead letter queue:", onDeadLetterQueue, ",", err)
+					err := queue.Push(onDeadLetterQueue, pop)
+					if err != nil {
+						panic(err)
+					}
+				} else {
+					err := queue.Push(onErrorQueue, pop)
+					if err != nil {
+						panic(err)
+					}
 				}
+
+				time.Sleep(1 * time.Second)
 			}
-
-			time.Sleep(1*time.Second)
 		}
-
+		if err!=nil{
+			log.Error(err)
+			panic(err)
+		}
 	}
 }
 
-func processMessage(esConfig *elastic.ElasticsearchConfig,pop []byte)(bool,int,error)  {
-	req:=fasthttp.AcquireRequest()
-	err:=req.Decode(pop)
-	if err!=nil{
-		log.Error("failed to decode request, ",esConfig.Name)
-		return false,408,err
+func processMessage(esConfig *elastic.ElasticsearchConfig, pop []byte) (bool, int, error) {
+	req := fasthttp.AcquireRequest()
+	err := req.Decode(pop)
+	if err != nil {
+		log.Error("failed to decode request, ", esConfig.Name)
+		return false, 408, err
 	}
 
-	if global.Env().IsDebug{
+	if global.Env().IsDebug {
 		log.Trace(err)
 		log.Trace(req.Header.String())
 		log.Trace(string(req.GetRawBody()))
 	}
 
-	endpoint:=esConfig.GetHost()
+	endpoint := esConfig.GetHost()
 
 	req.Header.SetHost(endpoint)
-	resp:=fasthttp.AcquireResponse()
-	err= fastHttpClient.Do(req, resp)
+	resp := fasthttp.AcquireResponse()
+	err = fastHttpClient.Do(req, resp)
 	if err != nil {
-		return false,resp.StatusCode(), err
+		return false, resp.StatusCode(), err
 	}
 
-	if esConfig.TrafficControl!=nil{
+	if esConfig.TrafficControl != nil {
 	RetryRateLimit:
 
-		if esConfig.TrafficControl.MaxQpsPerNode>0{
-			if !rate.GetRateLimiterPerSecond(esConfig.Name,endpoint+"max_qps", int(esConfig.TrafficControl.MaxQpsPerNode)).Allow(){
-				time.Sleep(10*time.Millisecond)
+		if esConfig.TrafficControl.MaxQpsPerNode > 0 {
+			if !rate.GetRateLimiterPerSecond(esConfig.Name, endpoint+"max_qps", int(esConfig.TrafficControl.MaxQpsPerNode)).Allow() {
+				time.Sleep(10 * time.Millisecond)
 				goto RetryRateLimit
 			}
 		}
 
-		if esConfig.TrafficControl.MaxBytesPerNode>0{
-			if !rate.GetRateLimiterPerSecond(esConfig.Name,endpoint+"max_bps", int(esConfig.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(),req.GetRequestLength()){
-				time.Sleep(10*time.Millisecond)
+		if esConfig.TrafficControl.MaxBytesPerNode > 0 {
+			if !rate.GetRateLimiterPerSecond(esConfig.Name, endpoint+"max_bps", int(esConfig.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(), req.GetRequestLength()) {
+				time.Sleep(10 * time.Millisecond)
 				goto RetryRateLimit
 			}
 		}
 
 	}
 
-	if global.Env().IsDebug{
+	if global.Env().IsDebug {
 		log.Trace(err)
 		log.Trace(resp.StatusCode())
 		log.Trace(string(resp.GetRawBody()))
 	}
 
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated || resp.StatusCode() == http.StatusNotFound {
-		if resp.StatusCode() == http.StatusOK && util.ContainStr(string(req.RequestURI()),"_bulk") {
+		if resp.StatusCode() == http.StatusOK && util.ContainStr(string(req.RequestURI()), "_bulk") {
 			//handle bulk response partial failure
-			data:=map[string]interface{}{}
-			util.FromJSONBytes(resp.GetRawBody(),&data)
-			err,ok2:=data["errors"]
-			if ok2{
-				if err==true{
-					if global.Env().IsDebug{
-						log.Error("disk_queue checking bulk response, invalid, ",ok2,",",err,",",util.SubString(string(resp.GetRawBody()),0,256))
+			data := map[string]interface{}{}
+			util.FromJSONBytes(resp.GetRawBody(), &data)
+			err, ok2 := data["errors"]
+			if ok2 {
+				if err == true {
+					if global.Env().IsDebug {
+						log.Error("disk_queue checking bulk response, invalid, ", ok2, ",", err, ",", util.SubString(string(resp.GetRawBody()), 0, 256))
 					}
-					return false,resp.StatusCode(), errors.New(fmt.Sprintf("%v",err))
+					return false, resp.StatusCode(), errors.New(fmt.Sprintf("%v", err))
 				}
 			}
 		}
-		return true,resp.StatusCode(),nil
-	}else{
-		if global.Env().IsDebug{
-			log.Warn(err,resp.StatusCode(),util.SubString(string(req.GetRawBody()),0,512),util.SubString(string(resp.GetRawBody()),0,256))
+		return true, resp.StatusCode(), nil
+	} else {
+		if global.Env().IsDebug {
+			log.Warn(err, resp.StatusCode(), util.SubString(string(req.GetRawBody()), 0, 512), util.SubString(string(resp.GetRawBody()), 0, 256))
 		}
-		return false,resp.StatusCode(), errors.New(fmt.Sprintf("invalid status code, %v %v %v",resp.StatusCode(),err,util.SubString(string(resp.GetRawBody()),0,256)))
+		return false, resp.StatusCode(), errors.New(fmt.Sprintf("invalid status code, %v %v %v", resp.StatusCode(), err, util.SubString(string(resp.GetRawBody()), 0, 256)))
 	}
 
 }

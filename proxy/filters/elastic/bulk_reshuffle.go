@@ -55,7 +55,9 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 			versionLock.Unlock()
 		}
 
-		metadata := elastic.GetMetadata(clusterName)
+		esConfig := elastic.GetConfig(clusterName)
+
+		metadata := elastic.GetOrInitMetadata(esConfig)
 		if metadata == nil {
 			if rate.GetRateLimiter("cluster_metadata", clusterName, 1, 1, 5*time.Second).Allow() {
 				log.Warnf("elasticsearch [%v] metadata is nil, skip reshuffle", clusterName)
@@ -63,8 +65,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 			time.Sleep(10 * time.Second)
 			return
 		}
-
-		esConfig := elastic.GetConfig(clusterName)
 
 		body := ctx.Request.GetRawBody()
 
@@ -224,7 +224,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 			indexSettings, ok := metadata.Indices[index]
 
 			if !ok {
-				metadata = elastic.GetMetadata(clusterName)
+				metadata = elastic.GetOrInitMetadata(esConfig)
 				if global.Env().IsDebug {
 					log.Trace("index was not found in index settings,", index, ",", string(metaBytes))
 				}
@@ -378,7 +378,9 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		})
 
 		if err != nil {
-			log.Error(err)
+			if global.Env().IsDebug{
+				log.Error(err)
+			}
 			return
 		}
 
@@ -391,23 +393,25 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					MaxFileCount: this.GetIntOrDefault("max_file_count", 100),
 					MaxFileSize:  this.GetIntOrDefault("max_file_size_in_mb", 1024),
 				},
-				Compress:                  this.GetBool("compress", false),
-				LogInvalidMessage:         this.GetBool("log_invalid_message", true),
-				LogInvalid200Message:      this.GetBool("log_invalid_200_message", true),
-				LogInvalid200RetryMessage: this.GetBool("log_200_retry_message", true),
-				Log429RetryMessage:        this.GetBool("log_429_retry_message", true),
-				RetryDelayInSeconds:       this.GetIntOrDefault("retry_delay_in_second", 1),
-				RejectDelayInSeconds:      this.GetIntOrDefault("reject_retry_delay_in_second", 1),
-				MaxRejectRetryTimes:       this.GetIntOrDefault("max_reject_retry_times", 3),
-				MaxRetryTimes:             this.GetIntOrDefault("max_retry_times", 3),
-				MaxRequestBodySize:        this.GetIntOrDefault("max_logged_request_body_size", 1024),
-				MaxResponseBodySize:       this.GetIntOrDefault("max_logged_response_body_size", 1024),
+				Config: BulkProcessorConfig{
+					Compress:                  this.GetBool("compress", false),
+					LogInvalidMessage:         this.GetBool("log_invalid_message", true),
+					LogInvalid200Message:      this.GetBool("log_invalid_200_message", true),
+					LogInvalid200RetryMessage: this.GetBool("log_200_retry_message", true),
+					Log429RetryMessage:        this.GetBool("log_429_retry_message", true),
+					RetryDelayInSeconds:       this.GetIntOrDefault("retry_delay_in_seconds", 1),
+					RejectDelayInSeconds:      this.GetIntOrDefault("reject_retry_delay_in_seconds", 1),
+					MaxRejectRetryTimes:       this.GetIntOrDefault("max_reject_retry_times", 3),
+					MaxRetryTimes:             this.GetIntOrDefault("max_retry_times", 3),
+					MaxRequestBodySize:        this.GetIntOrDefault("max_logged_request_body_size", 1024),
+					MaxResponseBodySize:       this.GetIntOrDefault("max_logged_response_body_size", 1024),
 
-				SaveFailure:       this.GetBool("save_failure",true),
-				FailureRequestsQueue:       this.GetStringOrDefault("failure_queue",fmt.Sprintf("%v-failure",clusterName)),
-				InvalidRequestsQueue:       this.GetStringOrDefault("invalid_queue",fmt.Sprintf("%v-invalid",clusterName)),
-				DeadRequestsQueue:       	this.GetStringOrDefault("dead_queue",fmt.Sprintf("%v-dead",clusterName)),
-				DocBufferSize: this.GetIntOrDefault("doc_buffer_size",256*1024),
+					SaveFailure:       this.GetBool("save_failure",true),
+					FailureRequestsQueue:       this.GetStringOrDefault("failure_queue",fmt.Sprintf("%v-failure",clusterName)),
+					InvalidRequestsQueue:       this.GetStringOrDefault("invalid_queue",fmt.Sprintf("%v-invalid",clusterName)),
+					DeadRequestsQueue:       	this.GetStringOrDefault("dead_queue",fmt.Sprintf("%v-dead",clusterName)),
+					DocBufferSize: this.GetIntOrDefault("doc_buffer_size",256*1024),
+				},
 			}
 
 			for x, y := range docBuf {

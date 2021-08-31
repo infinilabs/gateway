@@ -45,7 +45,7 @@ func NewCompareItem(key, hash string) CompareItem {
 	return item
 }
 
-func (processor *IndexDiffProcessor)processMsg(diffResultHandler func(DiffResult)) {
+func (processor *IndexDiffProcessor) processMsg(diffResultHandler func(DiffResult)) {
 	var msgA, msgB CompareItem
 
 MOVEALL:
@@ -116,29 +116,28 @@ COMPARE:
 }
 
 type IndexDiffProcessor struct {
-	 config   Config
-	 testChan CompareChan
-	 wg         sync.WaitGroup
-
+	config   Config
+	testChan CompareChan
+	wg       sync.WaitGroup
 }
 
 func New(c *config.Config) (pipeline.Processor, error) {
-diffConfig:= Config{
-	Enabled: true,
-	TextReportEnabled: true,
-	BufferSize:        1,
-	SourceInputQueue:  "source",
-	TargetInputQueue:  "target",
-	DiffQueue:         "diff_result",
-}
+	diffConfig := Config{
+		Enabled:           true,
+		TextReportEnabled: true,
+		BufferSize:        1,
+		SourceInputQueue:  "source",
+		TargetInputQueue:  "target",
+		DiffQueue:         "diff_result",
+	}
 
 	if err := c.Unpack(&diffConfig); err != nil {
 		return nil, fmt.Errorf("failed to unpack the configuration of index_diff processor: %s", err)
 	}
 
-	diff:= &IndexDiffProcessor{
+	diff := &IndexDiffProcessor{
 		config: diffConfig,
-		testChan : CompareChan{
+		testChan: CompareChan{
 			msgChans: map[string]chan CompareItem{},
 			stopChan: make(chan struct{}),
 		},
@@ -147,10 +146,9 @@ diffConfig:= Config{
 	diff.testChan.msgChans[diff.config.GetSortedLeftQueue()] = make(chan CompareItem, diff.config.BufferSize)
 	diff.testChan.msgChans[diff.config.GetSortedRightQueue()] = make(chan CompareItem, diff.config.BufferSize)
 
-	return diff,nil
+	return diff, nil
 
 }
-
 
 type CompareChan struct {
 	msgChans map[string]chan CompareItem
@@ -242,7 +240,7 @@ func (processor *IndexDiffProcessor) Process(c *pipeline.Context) error {
 					panic(err)
 				}
 			} else {
-				log.Warn("target file exists:",sortedFile,",you may need to remove it first")
+				log.Warn("target file exists:", sortedFile, ",you may need to remove it first")
 			}
 
 			//popup sorted list
@@ -380,7 +378,6 @@ func (processor *IndexDiffProcessor) Process(c *pipeline.Context) error {
 		}()
 		processor.wg.Wait()
 	}
-
 
 	log.Infof("index diff finished.")
 

@@ -43,8 +43,6 @@ func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
 
 	esRef := filter.MustGetString("elasticsearch")
 
-	cfg:=elastic.GetConfig(esRef)
-
 	instance1, ok := proxyList.Load(esRef)
 	if instance1!=nil{
 		instance=instance1.(*ReverseProxy)
@@ -83,10 +81,12 @@ func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
 		proxyList.Store(esRef,instance)
 	}
 
-	if !cfg.IsAvailable(){
-		if rate.GetRateLimiter("cluster_check_health",cfg.Name,1,1,time.Second*1).Allow(){
+	cfg:=elastic.GetMetadata(esRef)
+
+	if cfg!=nil&&!cfg.IsAvailable(){
+		if rate.GetRateLimiter("cluster_check_health",cfg.Config.ID,1,1,time.Second*1).Allow(){
 			log.Error(fmt.Sprintf("cluster [%v] is not available",esRef))
-			result:=elastic.GetClient(cfg.Name).ClusterHealth()
+			result:=elastic.GetClient(cfg.Config.Name).ClusterHealth()
 			if result.StatusCode==200{
 				cfg.ReportSuccess()
 			}

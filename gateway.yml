@@ -22,6 +22,10 @@ entry:
 flow:
   - name: echo
     filter_v2:
+      - set_request_query_args:
+          args:
+            - preference -> primary_first
+            - size -> 50
       - set_response:
           when:
             equals:
@@ -36,6 +40,7 @@ flow:
           status: 404
           content_type: "text/plain; charset=utf-8"
           body: "root path"
+      - dump_url:
   - name: cache_first
     filter:
 #      - name: translog
@@ -58,15 +63,6 @@ flow:
           elasticsearch: dev
           level: node
           mode: async
-          fix_null_id: true
-          doc_buffer_size: 524288 #512KB, set the value according to the maximum size of a single document
-          index_stats_analysis: true
-          action_stats_analysis: true
-          validate_each_line: false
-          validate_metadata: false
-          validate_request: false
-          validate_payload: false
-          max_logged_response_body_size: 4096
       - name: elasticsearch
         parameters:
           elasticsearch: dev  #elasticsearch configure reference name
@@ -94,12 +90,11 @@ flow:
           max_request_body_size: 1024
           max_response_body_size: 1024
 #          min_elapsed_time_in_ms: 500 # only record slow requests
-          bulk_stats_details: true
 router:
   - name: my_router
 #    default_flow: echo
     default_flow: cache_first
-#    tracing_flow: request_logging
+    tracing_flow: request_logging
 
 
 elasticsearch:
@@ -152,35 +147,27 @@ elasticsearch:
 #    - echo: #done
 #        message: racing finished
 
-pipelines:
+pipelines_v2:
 - name: request_logging_index
-  enabled: true
-  start:
-    joint: json_indexing
-    enabled: true
-    parameters:
-      index_name: "gateway_requests"
-      elasticsearch: "dev"
-      input_queue: "request_logging"
-      timeout: "1s"
-      worker_size: 1
-      bulk_size_in_mb: 10 #in MB
+  processors:
+    - json_indexing:
+        index_name: "gateway_requests"
+        elasticsearch: "dev"
+        input_queue: "request_logging"
+        idle_timeout_in_seconds: 1
+        worker_size: 1
+        bulk_size_in_mb: 10 #in MB
 - name: bulk_request_ingest
-  enabled: true
-  start:
-    joint: bulk_indexing
-    enabled: true
-    parameters:
-      elasticsearch: "dev"
-      compress: true
-      worker_size: 1
-      bulk_size_in_mb: 10  #in MB
-      doc_buffer_size: 524288 #512KB, set the value according to the maximum size of a single document
-      retry_delay_in_second: 5
-      process_failure_queue: true #process failed bulk messages
-#      queues: #process other bulk queue
-#        - dev-node-failure
-#        - dev-invalid
+  processors:
+    - bulk_indexing:
+        elasticsearch: "dev"
+        compress: true
+        worker_size: 10
+        bulk_size_in_mb: 10  #in MB
+        retry_delay_in_seconds: 5
+        process_failure_queue: true #process failed bulk messages
+  #      queues: #process other bulk queue
+  #        - dev-node-failure
 
 
 floating_ip:
@@ -189,13 +176,13 @@ floating_ip:
 ##  netmask: 255.255.255.0 #optional
 ##  interface: en1         #optional
 
-statsd:
-  enabled: true
-  host: 127.0.0.1
-  port: 8125
-  protocol: udp
-  namespace: gateway.
-  buffer_size: 102400
+#statsd:
+#  enabled: true
+#  host: 127.0.0.1
+#  port: 8125
+#  protocol: udp
+#  namespace: gateway.
+#  buffer_size: 102400
 
 #redis:
 #  enabled: true
@@ -205,3 +192,6 @@ statsd:
 #queue:
 #  - name: dev-node-yNgVusnXSgqvP2fZeGFSLw
 #    type: redis
+
+#disk_queue:
+#  max_bytes_per_file: 1024

@@ -48,9 +48,6 @@ flow:
           elasticsearch: dev
           level: node
           mode: sync
-          fix_null_id: true
-          index_stats_analysis: true
-          action_stats_analysis: true
       - name: elasticsearch #catchup all left requests
         parameters:
           elasticsearch: dev
