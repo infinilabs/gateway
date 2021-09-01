@@ -1,4 +1,4 @@
-package disk_queue
+package queue
 
 import (
 	log "github.com/cihub/seelog"
@@ -13,7 +13,7 @@ type DiskEnqueueFilter struct {
 }
 
 func (filter DiskEnqueueFilter) Name() string {
-	return "disk_queue"
+	return "queue"
 }
 
 func (filter DiskEnqueueFilter) Process(ctx *fasthttp.RequestCtx) {

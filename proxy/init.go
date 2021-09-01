@@ -11,7 +11,7 @@ import (
 	"infini.sh/gateway/proxy/filters/sample"
 	"infini.sh/gateway/proxy/filters/throttle"
 	"infini.sh/gateway/proxy/filters/transform"
-	"infini.sh/gateway/proxy/output/disk_queue"
+	"infini.sh/gateway/proxy/output/queue"
 	"infini.sh/gateway/proxy/output/elastic"
 	"infini.sh/gateway/proxy/output/kafka"
 	"infini.sh/gateway/proxy/output/logging"
@@ -77,7 +77,7 @@ func Init() {
 
 	common.RegisterFilterPlugin(auth.SetBasicAuth{})
 
-	common.RegisterFilterPlugin(disk_queue.DiskEnqueueFilter{})
+	common.RegisterFilterPlugin(queue.DiskEnqueueFilter{})
 	common.RegisterFilterPlugin(translog.TranslogOutput{})
 
 	common.RegisterFilterPlugin(throttle.DropFilter{})

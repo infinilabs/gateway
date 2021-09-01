@@ -31,11 +31,11 @@ import (
 	stats "infini.sh/framework/plugins/stats_statsd"
 	"infini.sh/gateway/config"
 	"infini.sh/gateway/pipeline/bulk_indexing"
-	"infini.sh/gateway/pipeline/diskqueue_consumer"
 	"infini.sh/gateway/pipeline/dump_hash"
 	"infini.sh/gateway/pipeline/flow_runner"
 	"infini.sh/gateway/pipeline/index_diff"
 	"infini.sh/gateway/pipeline/json_indexing"
+	"infini.sh/gateway/pipeline/queue_consumer"
 	"infini.sh/gateway/service/floating_ip"
 	"infini.sh/gateway/service/forcemerge"
 	"infini.sh/gateway/service/gateway"
@@ -85,7 +85,7 @@ func main() {
 		pipe.RegisterPlugin("index_diff", index_diff.New)
 		pipe.RegisterPlugin("dump_hash", scroll.New)
 		pipe.RegisterPlugin("flow_runner", flow_runner.New)
-		pipe.RegisterPlugin("disk_queue_consumer", diskqueue_consumer.New)
+		pipe.RegisterPlugin("queue_consumer", queue_consumer.New)
 		pipe.RegisterPlugin("bulk_indexing", bulk_indexing.New)
 		pipe.RegisterPlugin("json_indexing", json_indexing.New)
 

@@ -1,4 +1,4 @@
-package diskqueue_consumer
+package queue_consumer
 
 import (
 	"crypto/tls"
@@ -24,7 +24,7 @@ type DiskQueueConsumer struct {
 }
 
 func (processor *DiskQueueConsumer) Name() string {
-	return "disk_queue_consumer"
+	return "queue_consumer"
 }
 
 type Config struct {
@@ -53,7 +53,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 }
 
 var fastHttpClient = &fasthttp.Client{
-	Name:                          "disk_queue_consumer",
+	Name:                          "queue_consumer",
 	DisableHeaderNamesNormalizing: false,
 	TLSConfig:                     &tls.Config{InsecureSkipVerify: true},
 }
@@ -259,7 +259,7 @@ func processMessage(esConfig *elastic.ElasticsearchConfig, pop []byte) (bool, in
 			if ok2 {
 				if err == true {
 					if global.Env().IsDebug {
-						log.Error("disk_queue checking bulk response, invalid, ", ok2, ",", err, ",", util.SubString(string(resp.GetRawBody()), 0, 256))
+						log.Error("checking bulk response, invalid, ", ok2, ",", err, ",", util.SubString(string(resp.GetRawBody()), 0, 256))
 					}
 					return false, resp.StatusCode(), errors.New(fmt.Sprintf("%v", err))
 				}
