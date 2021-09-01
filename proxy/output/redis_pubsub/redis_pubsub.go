@@ -15,7 +15,6 @@ import (
 
 var client *redis.Client
 var l sync.RWMutex
-var inited bool
 var ctx = context.Background()
 
 func (p RedisPubSub) getRedisClient() *redis.Client {
@@ -75,9 +74,10 @@ func (filter RedisPubSub) Process(ctx *fasthttp.RequestCtx) {
 		if err!=nil{
 			panic(err)
 		}
-		buffer.Reset()
-		bytebufferpool.Put(buffer)
 	}
+
+	buffer.Reset()
+	bytebufferpool.Put(buffer)
 
 }
 
