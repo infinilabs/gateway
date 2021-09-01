@@ -1,11 +1,11 @@
 package disk_queue
 
 import (
+	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/lib/fasthttp"
-	log "github.com/cihub/seelog"
 )
 
 type DiskEnqueueFilter struct {
@@ -13,7 +13,7 @@ type DiskEnqueueFilter struct {
 }
 
 func (filter DiskEnqueueFilter) Name() string {
-	return "disk_enqueue"
+	return "disk_queue"
 }
 
 func (filter DiskEnqueueFilter) Process(ctx *fasthttp.RequestCtx) {

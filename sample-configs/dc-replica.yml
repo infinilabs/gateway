@@ -33,13 +33,13 @@ flow:
               - set_basic_auth: #覆盖身份信息
                   username: test
                   password: testtest
-              - disk_enqueue:
+              - disk_queue:
                   queue_name: "backup"
             else:
-              - disk_enqueue:
+              - disk_queue:
                   queue_name: "primary-500"
         else:
-          - disk_enqueue:
+          - disk_queue:
               queue_name: "primary-500"
           - sleep:
               sleep_in_million_seconds: 1000
@@ -64,12 +64,12 @@ flow:
             - queue_has_lag: [ "primary", "primary-500" ]
             - cluster_available: ["primary"]
         then: #集群可用但是集群有堆积的情况，先入队列，追加到队尾，确保操作顺序的一致性
-          - disk_enqueue:
+          - disk_queue:
               queue_name: "primary"
           - set_basic_auth: #覆盖身份信息
               username: test
               password: testtest
-          - disk_enqueue:
+          - disk_queue:
               queue_name: "backup"
           - set_response:
               status: 202
@@ -106,10 +106,10 @@ flow:
               - set_basic_auth: #覆盖身份信息
                   username: test
                   password: testtest
-              - disk_enqueue:
+              - disk_queue:
                   queue_name: "backup"
             else: #集群可用的情况下但是失败了，可能存在脏写，将请求放入写入失败队列，后续可以选择两边集群都重做一次，最终确保一致性，写 translog，后续提供 UI 可以进行三方检查：主、备集群和本地日志
-              - disk_enqueue:
+              - disk_queue:
                   queue_name: "primary-500"
   - name: cache_first
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
