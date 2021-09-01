@@ -15,7 +15,7 @@ import (
 	"infini.sh/gateway/proxy/output/elastic"
 	"infini.sh/gateway/proxy/output/kafka"
 	"infini.sh/gateway/proxy/output/logging"
-	"infini.sh/gateway/proxy/output/redis"
+	"infini.sh/gateway/proxy/output/redis_pubsub"
 	"infini.sh/gateway/proxy/output/translog"
 )
 
@@ -83,6 +83,6 @@ func Init() {
 	common.RegisterFilterPlugin(throttle.DropFilter{})
 	common.RegisterFilterPlugin(throttle.ElasticsearchHealthCheckFilter{})
 
-	common.RegisterFilterPlugin(redis.RedisOutput{})
+	common.RegisterFilterPlugin(redis_pubsub.RedisPubSub{})
 
 }

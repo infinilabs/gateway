@@ -1,4 +1,4 @@
-package redis
+package redis_pubsub
 
 import (
 	"context"
@@ -18,7 +18,7 @@ var l sync.RWMutex
 var inited bool
 var ctx = context.Background()
 
-func (p RedisOutput) getRedisClient() *redis.Client {
+func (p RedisPubSub) getRedisClient() *redis.Client {
 
 	if client != nil {
 		return client
@@ -45,15 +45,15 @@ func (p RedisOutput) getRedisClient() *redis.Client {
 	return client
 }
 
-type RedisOutput struct {
+type RedisPubSub struct {
 	param.Parameters
 }
 
-func (filter RedisOutput) Name() string {
-	return "redis"
+func (filter RedisPubSub) Name() string {
+	return "redis_pubsub"
 }
 
-func (filter RedisOutput) Process(ctx *fasthttp.RequestCtx) {
+func (filter RedisPubSub) Process(ctx *fasthttp.RequestCtx) {
 
 	buffer:=bytebufferpool.Get()
 
