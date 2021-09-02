@@ -219,7 +219,7 @@ var flowConfigs map[string]FlowConfig = make(map[string]FlowConfig)
 var routerConfigs map[string]RouterConfig = make(map[string]RouterConfig)
 
 func RegisterFilterPlugin(filter RequestFilter) {
-	log.Trace("register filter: ",filter.Name())
+	log.Debug("register filter: ",filter.Name())
 	filterPluginTypes[filter.Name()] = filter
 }
 
