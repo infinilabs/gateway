@@ -15,7 +15,7 @@ func (filter RequestUserFilter) Name() string {
 }
 
 func (filter RequestUserFilter) Process(ctx *fasthttp.RequestCtx) {
-	exists,user,_:=ctx.ParseBasicAuth()
+	exists,user,_:=ctx.Request.ParseBasicAuth()
 	if !exists{
 		if global.Env().IsDebug{
 			log.Tracef("user not exist")

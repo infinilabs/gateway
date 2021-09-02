@@ -230,7 +230,7 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 		request.Request.Header = m
 	}
 
-	exists, user, _ := ctx.ParseBasicAuth()
+	exists, user, _ := ctx.Request.ParseBasicAuth()
 	if exists {
 		request.Request.User = string(user)
 	}

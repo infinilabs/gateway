@@ -7,14 +7,15 @@ import (
 	"infini.sh/gateway/proxy/filters/debug"
 	elastic2 "infini.sh/gateway/proxy/filters/elastic"
 	"infini.sh/gateway/proxy/filters/filter"
+	"infini.sh/gateway/proxy/filters/ldap"
 	"infini.sh/gateway/proxy/filters/routing"
 	"infini.sh/gateway/proxy/filters/sample"
 	"infini.sh/gateway/proxy/filters/throttle"
 	"infini.sh/gateway/proxy/filters/transform"
-	"infini.sh/gateway/proxy/output/queue"
 	"infini.sh/gateway/proxy/output/elastic"
 	"infini.sh/gateway/proxy/output/kafka"
 	"infini.sh/gateway/proxy/output/logging"
+	"infini.sh/gateway/proxy/output/queue"
 	"infini.sh/gateway/proxy/output/redis_pubsub"
 	"infini.sh/gateway/proxy/output/translog"
 )
@@ -84,5 +85,8 @@ func Init() {
 	common.RegisterFilterPlugin(throttle.ElasticsearchHealthCheckFilter{})
 
 	common.RegisterFilterPlugin(redis_pubsub.RedisPubSub{})
+
+	common.RegisterFilterPlugin(ldap.LDAPFilter{})
+
 
 }

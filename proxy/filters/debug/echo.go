@@ -59,7 +59,7 @@ func (filter DumpUrl) Process(ctx *fasthttp.RequestCtx) {
 	fmt.Println("uri: ", ctx.Request.URI().String())
 	fmt.Println("query_args: ", ctx.Request.URI().QueryArgs().String())
 	fmt.Println("query_string: ", string(ctx.Request.URI().QueryString()))
-	_,user,pass:=ctx.ParseBasicAuth()
+	_,user,pass:=ctx.Request.ParseBasicAuth()
 	fmt.Println("username: ", string(user) )
 	fmt.Println("password: ", string(pass) )
 	_,apiID,apiKey:=ctx.ParseAPIKey()
