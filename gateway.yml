@@ -51,6 +51,14 @@ flow:
 #          max_file_age: 2
 #          max_file_count: 50
 #          max_file_size_in_mb: 1024
+#      - name: ldap_auth
+#        parameters:
+#          host: "ldap.forumsys.com"
+#          port: 389
+#          base_dn: "dc=example,dc=com"
+#          bind_dn: "cn=read-only-admin,dc=example,dc=com"
+#          bind_password: "password"
+#          filter: "(uid=%s)"
       - name: get_cache
         parameters:
           pass_patterns:
@@ -194,4 +202,4 @@ floating_ip:
 #    type: redis
 
 #disk_queue:
-#  max_bytes_per_file: 1024
+#  max_bytes_per_file: 1073741824
