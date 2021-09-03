@@ -155,8 +155,18 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 			}
 		}
 	} else { //node level
+
+		//wait for nodes info
+		var nodesFailureCount =0
+		NODESINFO:
 		if meta.Nodes == nil {
-			return errors.New("nodes is nil")
+			nodesFailureCount++
+			if nodesFailureCount>10{
+				log.Debug("enough wait for none nil nodes")
+				return errors.New("nodes is nil")
+			}
+			time.Sleep(10*time.Second)
+			goto NODESINFO
 		}
 
 		//TODO only get data nodes or filtred nodes

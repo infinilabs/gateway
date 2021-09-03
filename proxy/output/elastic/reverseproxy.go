@@ -129,9 +129,15 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		return
 	}
 
+	//metadata not changed
+	if metadata != nil && metadata.NodesTopologyVersion==p.lastNodesTopologyVersion{
+		return
+	}
+
 	endpoints := []string{}
 	checkMetadata := false
 	if metadata != nil && len(metadata.Nodes) > 0 {
+
 		oldV := p.lastNodesTopologyVersion
 		p.lastNodesTopologyVersion = metadata.NodesTopologyVersion
 
@@ -152,6 +158,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		}
 		log.Tracef("discovery %v nodes: [%v]", len(endpoints), util.JoinArray(endpoints, ", "))
 	}
+
 	if len(endpoints) == 0 {
 		endpoints = append(endpoints, esConfig.GetHost())
 		if checkMetadata {

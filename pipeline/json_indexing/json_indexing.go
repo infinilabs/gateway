@@ -21,6 +21,7 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
+	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
@@ -151,6 +152,19 @@ func (processor *IndexingMergeProcessor) NewBulkWorker(count *int, bulkSizeInByt
 	idleDuration := time.Duration(processor.config.IdleTimeoutInSeconds) * time.Second
 
 	client := elastic.GetClient(processor.config.Elasticsearch)
+
+	metadata:= elastic.GetMetadata(processor.config.Elasticsearch)
+
+	var checkCount =0
+	CHECK_AVAIABLE:
+	if !metadata.IsAvailable(){
+		checkCount++
+		if checkCount>10{
+			panic(errors.Errorf("cluster [%v] is not available",processor.config.Elasticsearch))
+		}
+		time.Sleep(10*time.Second)
+		goto CHECK_AVAIABLE
+	}
 
 	if processor.config.TypeName == "" {
 		if client.GetMajorVersion() < 7 {
