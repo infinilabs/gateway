@@ -4,6 +4,7 @@
 package ldap
 
 import (
+	"crypto/tls"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
@@ -22,19 +23,25 @@ func (filter LDAPFilter) Name() string {
 
 func (filter LDAPFilter) Process(ctx *fasthttp.RequestCtx) {
 
+	isTLS := filter.GetBool("tls", false)
+
 	cfg := ldap.Config{
-		Host:        filter.MustGetString("host"),
-		Port:         filter.GetIntOrDefault("port",389),
-		BaseDN:      filter.MustGetString("base_dn"),
+		Host:         filter.MustGetString("host"),
+		Port:         filter.GetIntOrDefault("port", 389),
 		BindDN:       filter.MustGetString("bind_dn"),
-		BindPassword: filter.GetStringOrDefault("bind_password",""),
-		Filter:      filter.GetStringOrDefault("filter",""),
+		BindPassword: filter.GetStringOrDefault("bind_password", ""),
+		BaseDN:       filter.MustGetString("base_dn"),
+		Filter:       filter.GetStringOrDefault("filter", ""),
+	}
+
+	if isTLS {
+		cfg.TLS = &tls.Config{InsecureSkipVerify: true}
 	}
 
 	user, err := ldap.New(&cfg).Authenticate(ctx.Context(), &ctx.Request)
 
 	if err != nil {
-		log.Debug("invalid credentials, ",err)
+		log.Debug("invalid credentials, ", err)
 		code := http.StatusUnauthorized
 		ctx.SetStatusCode(code)
 		ctx.SetBody([]byte(http.StatusText(code)))
@@ -42,8 +49,8 @@ func (filter LDAPFilter) Process(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	if global.Env().IsDebug{
-		if user!=nil{
+	if global.Env().IsDebug {
+		if user != nil {
 			log.Trace(user)
 		}
 		log.Debugf("user %s success authenticated", user.GetUserName())
