@@ -120,6 +120,10 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 		processor.initLocker.Unlock()
 	}
 
+	//wait for nodes info
+	var nodesFailureCount =0
+	NODESINFO:
+
 	meta := elastic.GetMetadata(processor.config.Elasticsearch)
 	wg := sync.WaitGroup{}
 
@@ -156,9 +160,7 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 		}
 	} else { //node level
 
-		//wait for nodes info
-		var nodesFailureCount =0
-		NODESINFO:
+
 		if meta.Nodes == nil {
 			nodesFailureCount++
 			if nodesFailureCount>10{
@@ -169,7 +171,7 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 			goto NODESINFO
 		}
 
-		//TODO only get data nodes or filtred nodes
+		//TODO only get data nodes or filtered nodes
 		for k, v := range meta.Nodes {
 			queueName := common.GetNodeLevelShuffleKey(processor.config.Elasticsearch, k)
 

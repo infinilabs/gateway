@@ -153,10 +153,11 @@ func (processor *IndexingMergeProcessor) NewBulkWorker(count *int, bulkSizeInByt
 
 	client := elastic.GetClient(processor.config.Elasticsearch)
 
+	var checkCount =0
+
+	CHECK_AVAIABLE:
 	metadata:= elastic.GetMetadata(processor.config.Elasticsearch)
 
-	var checkCount =0
-	CHECK_AVAIABLE:
 	if !metadata.IsAvailable(){
 		checkCount++
 		if checkCount>10{
