@@ -51,7 +51,7 @@ func setupGoGuardian() {
 		Port:         389,
 		Host:         "ldap.forumsys.com",
 		BindPassword: "password",
-		Filter:       "(uid=%s)",
+		UserFilter:       "(uid=%s)",
 	}
 	cacheObj = libcache.FIFO.New(0)
 	cacheObj.SetTTL(time.Minute * 5)

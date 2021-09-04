@@ -47,7 +47,10 @@ type Config struct {
 	// Filter for the User Object Filter.
 	// if username nedded more than once use fmt index pattern (%[1]s).
 	// Otherwise %s.
-	Filter string
+	UserFilter string
+	GroupFilter string
+	UIDAttribute string
+	GroupAttribute string
 }
 
 func dial(cfg *Config) (conn, error) {
@@ -90,7 +93,7 @@ func (c client) authenticate(ctx context.Context, r *fasthttp.Request, userName,
 	result, err := l.Search(&ldap.SearchRequest{
 		BaseDN:     c.cfg.BaseDN,
 		Scope:      ldap.ScopeWholeSubtree,
-		Filter:     fmt.Sprintf(c.cfg.Filter, userName),
+		Filter:     fmt.Sprintf(c.cfg.UserFilter, userName),
 		Attributes: c.cfg.Attributes,
 	})
 
@@ -110,20 +113,40 @@ func (c client) authenticate(ctx context.Context, r *fasthttp.Request, userName,
 
 	id := ""
 	ext := map[string][]string{}
+	groups := []string{}
 
 	for _, attr := range result.Entries[0].Attributes {
 		name := attr.Name
 		values := attr.Values
 
-		if name == "uid" {
+		if name == c.cfg.UIDAttribute {
 			id = values[0]
 			continue
+		}
+
+		if name==c.cfg.GroupAttribute{
+			groups = append(groups,values...)
 		}
 
 		ext[name] = values
 	}
 
-	return auth.NewUserInfo(util.UnsafeBytesToString(userName), id, nil, ext), nil
+	//
+	//result, err = l.Search(ldap.NewSearchRequest(
+	//	c.cfg.BaseDN,
+	//	ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
+	//	fmt.Sprintf(c.cfg.GroupFilter, userName),
+	//	[]string{c.cfg.GroupAttribute}, // can it be something else than "cn"?
+	//	nil,
+	//))
+	//
+	//fmt.Println(result,err)
+	//
+	//for _, entry := range result.Entries {
+	//	groups = append(groups, entry.GetAttributeValue(c.cfg.GroupAttribute))
+	//}
+
+	return auth.NewUserInfo(util.UnsafeBytesToString(userName), id, groups, ext), nil
 }
 
 // GetAuthenticateFunc return function to authenticate request using LDAP.

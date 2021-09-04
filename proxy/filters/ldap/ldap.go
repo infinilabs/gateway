@@ -8,6 +8,7 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/lib/guardian/auth/strategies/ldap"
 	"net/http"
@@ -31,7 +32,15 @@ func (filter LDAPFilter) Process(ctx *fasthttp.RequestCtx) {
 		BindDN:       filter.MustGetString("bind_dn"),
 		BindPassword: filter.GetStringOrDefault("bind_password", ""),
 		BaseDN:       filter.MustGetString("base_dn"),
-		Filter:       filter.GetStringOrDefault("filter", ""),
+		UserFilter:       filter.GetStringOrDefault("user_filter", "(uid=%s)"),
+		GroupFilter:       filter.GetStringOrDefault("group_filter", "(memberUid=%s)"),
+		UIDAttribute:       filter.GetStringOrDefault("uid_attribute", "uid"),
+		GroupAttribute:       filter.GetStringOrDefault("group_attribute", "cn"),
+	}
+
+	attrs,ok:= filter.GetStringArray("attributes")
+	if ok{
+		cfg.Attributes=attrs
 	}
 
 	if isTLS {
@@ -50,9 +59,23 @@ func (filter LDAPFilter) Process(ctx *fasthttp.RequestCtx) {
 	}
 
 	if global.Env().IsDebug {
+		log.Debug("id:",user.GetID(),", username:",user.GetUserName(),", groups:",util.JoinArray(user.GetGroups()," => "))
+
 		if user != nil {
 			log.Trace(user)
 		}
 		log.Debugf("user %s success authenticated", user.GetUserName())
 	}
+
+	if filter.GetBool("require_group",true){
+		if len(user.GetGroups())==0{
+			log.Debug(user.GetUserName()," has no group")
+			code := http.StatusUnauthorized
+			ctx.SetStatusCode(code)
+			ctx.SetBody([]byte("user has no group information"))
+			ctx.Finished()
+			return
+		}
+	}
+
 }
