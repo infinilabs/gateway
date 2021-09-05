@@ -10,7 +10,7 @@ Use [Github's reactions feature](https://github.com/blog/2119-add-reactions-to-p
 
 * **This tracker is for issues with the INFINI Gateway only.**
 
-* Search for the issue [here](https://github.com/infinilabs/gateway/search?q=&type=Issues) to check if it was already reported. You may use labels for filtering the [issue list](https://github.com/infinilabs/gateway/issues) by clicking any of these related to the problem you want to report or request.
+* Search for the issue [here](https://github.com/infinilabs/gateway/search?q=&type=Issues) or the disucssions [here](https://github.com/infinilabs/gateway/discussions) to check if it was already reported. You may use labels for filtering the [issue list](https://github.com/infinilabs/gateway/issues) by clicking any of these related to the problem you want to report or request.
 
 ## Filing a bug
 
