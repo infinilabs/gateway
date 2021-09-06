@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: gateway bug report
-    url: https://github.com/infinilabs/gateway/issues/new/choose
-    about: Create a bug report over at the gateway repository.
+  - name: Gateway help or general discussions
+    url: https://github.com/infinilabs/gateway/discussions
+    about: Please use Discussions as the place to connect with other members of our community, for help and sharing.
