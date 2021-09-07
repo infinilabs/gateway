@@ -13,10 +13,10 @@ func TestLDAPFunctions(t *testing.T) {
 	cfg := ldap.Config{
 		BaseDN:       "dc=example,dc=com",
 		BindDN:       "cn=read-only-admin,dc=example,dc=com",
-		Port:         "389",
+		Port:         389,
 		Host:         "ldap.forumsys.com",
 		BindPassword: "password",
-		Filter:       "(uid=%s)",
+		UserFilter:       "(uid=%s)",
 	}
 
 	r:=fasthttp.AcquireRequest()

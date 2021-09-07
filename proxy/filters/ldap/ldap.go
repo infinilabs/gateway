@@ -10,6 +10,7 @@ import (
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/gateway/common"
 	"infini.sh/gateway/lib/guardian/auth/strategies/ldap"
 	"net/http"
 )
@@ -77,5 +78,9 @@ func (filter LDAPFilter) Process(ctx *fasthttp.RequestCtx) {
 			return
 		}
 	}
+
+	ctx.Set("user_id",user.GetID())
+	ctx.Set("user_name",user.GetUserName())
+	ctx.Set("user_roles",common.GetLDAPGroupsMappingRoles(user.GetGroups()))
 
 }

@@ -8,6 +8,7 @@ import (
 	elastic2 "infini.sh/gateway/proxy/filters/elastic"
 	"infini.sh/gateway/proxy/filters/filter"
 	"infini.sh/gateway/proxy/filters/ldap"
+	"infini.sh/gateway/proxy/filters/rbac"
 	"infini.sh/gateway/proxy/filters/routing"
 	"infini.sh/gateway/proxy/filters/sample"
 	"infini.sh/gateway/proxy/filters/throttle"
@@ -87,6 +88,7 @@ func Init() {
 	common.RegisterFilterPlugin(redis_pubsub.RedisPubSub{})
 
 	common.RegisterFilterPlugin(ldap.LDAPFilter{})
+	common.RegisterFilterPlugin(rbac.RBACFilter{})
 
 
 }
