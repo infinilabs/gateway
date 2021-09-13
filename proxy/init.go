@@ -77,6 +77,7 @@ func Init() {
 	common.RegisterFilterPlugin(transform.SetResponseHeader{})
 	common.RegisterFilterPlugin(transform.SetResponse{})
 	common.RegisterFilterPlugin(transform.RequestBodyJsonSet{})
+	common.RegisterFilterPlugin(transform.RequestBodyJsonDel{})
 
 	common.RegisterFilterPlugin(auth.SetBasicAuth{})
 

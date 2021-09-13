@@ -34,7 +34,6 @@ func (filter RequestBodyJsonSet) Process(ctx *fasthttp.RequestCtx) {
 
 		for path,value:=range paths{
 			pathArray:=strings.Split(path,".")
-
 			v,t,offset,err:=jsonparser.Get(bodyBytes,pathArray...)
 			if t==jsonparser.NotExist&&ignoreNotFound{
 				log.Debugf("path:%v, value:%v, %v, %v, %v, %v",path,value,err,v,t,offset)
