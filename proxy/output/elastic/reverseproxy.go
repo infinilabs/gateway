@@ -392,6 +392,7 @@ START:
 	if !ok {
 		//TODO no client available, throw error directly
 		log.Error("no client available")
+		return
 	}
 
 	// modify schema，align with elasticsearch's schema
