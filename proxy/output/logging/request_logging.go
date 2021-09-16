@@ -73,7 +73,7 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 	defer reqPool.Put(request.Request)
 
 
-	minTimeElapsed,ok:=this.GetInt("min_elapsed_time_in_ms",-1)
+	minTimeElapsed,_:=this.GetInt("min_elapsed_time_in_ms",-1)
 	if minTimeElapsed>0{
 		if minTimeElapsed >= int(request.Response.ElapsedTimeInMs) {
 			ctx.Finished()
@@ -116,11 +116,10 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 
 	reqBody:=string(ctx.Request.GetRawBody())
 
-	maxRequestBodySize,ok:=this.GetInt("max_request_body_size",1024)
-	if ok{
-		if len(reqBody)>maxRequestBodySize{
-			reqBody=reqBody[0:maxRequestBodySize]
-		}
+	maxRequestBodySize,_:=this.GetInt("max_request_body_size",1024)
+
+	if len(reqBody)>maxRequestBodySize{
+		reqBody=reqBody[0:maxRequestBodySize]
 	}
 
 	request.Request.Body = reqBody
@@ -196,11 +195,9 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 		log.Debug("response body:",string(respBody))
 	}
 
-	maxResponseBodySize,ok:=this.GetInt("max_response_body_size",1024)
-	if ok{
-		if len(respBody)>maxResponseBodySize{
-			respBody=respBody[0:maxResponseBodySize]
-		}
+	maxResponseBodySize,_:=this.GetInt("max_response_body_size",1024)
+	if len(respBody)>maxResponseBodySize{
+		respBody=respBody[0:maxResponseBodySize]
 	}
 
 	request.Response.Body=respBody
@@ -279,6 +276,8 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 	//fmt.Println("logging now", string(w.Bytes()))
 
 	//fmt.Println(string(w.Bytes()))
+
+
 
 
 	err = queue.Push(this.GetStringOrDefault("queue_name", "request_logging"), w.Bytes())
