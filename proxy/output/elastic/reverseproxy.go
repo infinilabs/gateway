@@ -130,7 +130,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 	}
 
 	//metadata not changed
-	if metadata != nil && metadata.NodesTopologyVersion==p.lastNodesTopologyVersion{
+	if metadata != nil && (metadata.NodesTopologyVersion==p.lastNodesTopologyVersion&&metadata.NodesTopologyVersion>0){
 		return
 	}
 
@@ -235,6 +235,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 	log.Infof("elasticsearch [%v] endpoints: [%v] => [%v]", esConfig.Name, util.JoinArray(p.endpoints, ", "), util.JoinArray(endpoints, ", "))
 	p.endpoints = endpoints
 	log.Trace(esConfig.Name, " elasticsearch client nodes refreshed")
+
 }
 
 func NewReverseProxy(cfg *ProxyConfig) *ReverseProxy {
@@ -309,6 +310,7 @@ RANDOM:
 }
 
 func (p *ReverseProxy) getClient() (clientAvailable bool, client *fasthttp.Client, endpoint string) {
+
 	if clients == nil {
 		panic("ReverseProxy has been closed")
 	}
