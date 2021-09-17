@@ -448,7 +448,7 @@ START:
 			//record translog, update failure ticket
 			if global.Env().IsDebug {
 				if !rate.GetRateLimiterPerSecond(cfg.Config.ID, endpoint+"on_error", 1).Allow() {
-					log.Errorf("elasticsearch [%v] is on fire now, %v", p.proxyConfig.Elasticsearch,err)
+					log.Errorf("elasticsearch [%v][%v] is on fire now, %v", p.proxyConfig.Elasticsearch,endpoint,err)
 					time.Sleep(1 * time.Second)
 				}
 			}
