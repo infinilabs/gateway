@@ -1,4 +1,4 @@
-package filter
+package throttle
 
 import (
 	"infini.sh/framework/core/param"
@@ -8,17 +8,17 @@ import (
 	log "src/github.com/cihub/seelog"
 )
 
-type DeadlockCheckFilter struct {
+type RetryLimiter struct {
 	param.Parameters
 }
 
-func (filter DeadlockCheckFilter) Name() string {
-	return "deadlock_checker"
+func (filter RetryLimiter) Name() string {
+	return "retry_limiter"
 }
 
 const RetryKey = "RETRIED_TIMES"
 
-func (filter DeadlockCheckFilter) Process(ctx *fasthttp.RequestCtx) {
+func (filter RetryLimiter) Process(ctx *fasthttp.RequestCtx) {
 
 	timeBytes:=ctx.Request.Header.Peek(RetryKey)
 	times:=0
@@ -32,7 +32,7 @@ func (filter DeadlockCheckFilter) Process(ctx *fasthttp.RequestCtx) {
 	if times>filter.GetIntOrDefault("max_retry_times",3){
 		log.Debugf("hit max retry times")
 		ctx.Finished()
-		queue.Push(filter.MustGetString("deadlock_queue"),ctx.Request.Encode())
+		queue.Push(filter.MustGetString("queue_name"),ctx.Request.Encode())
 		return
 	}
 

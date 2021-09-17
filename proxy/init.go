@@ -93,7 +93,7 @@ func Init() {
 	common.RegisterFilterPlugin(rbac.RBACFilter{})
 
 
-	common.RegisterFilterPlugin(filter.DeadlockCheckFilter{})
+	common.RegisterFilterPlugin(throttle.RetryLimiter{})
 
 
 }
