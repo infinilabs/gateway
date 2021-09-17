@@ -5,7 +5,7 @@ import (
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
-	log "src/github.com/cihub/seelog"
+	log "github.com/cihub/seelog"
 )
 
 type RetryLimiter struct {

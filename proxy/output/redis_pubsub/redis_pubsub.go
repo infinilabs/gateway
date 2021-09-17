@@ -8,7 +8,7 @@ import (
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
-	"src/github.com/go-redis/redis"
+	"github.com/go-redis/redis"
 	"sync"
 )
 
