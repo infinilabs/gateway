@@ -93,38 +93,40 @@ func (processor *FlowRunnerProcessor) Process(c *pipeline.Context) error {
 	flowProcessor := common.GetFlowProcess(processor.config.FlowName)
 
 	READ_DOCS:
-		stop := false
 		for {
 			select {
 			case <-signalChannel:
-				stop = true
 				return nil
 			default:
-				if !stop {
 					pop,timeout,err := queue.PopTimeout(processor.config.InputQueue,idleDuration)
 					if err!=nil{
 						log.Error(err)
 						panic(err)
 					}
 					if timeout{
-						if global.Env().IsDebug {
-							log.Tracef("%v no message input", idleDuration)
+
+						if queue.Depth(processor.config.InputQueue)>0{
+							log.Warnf("%v %v no message but queue has lag, queue may broken",processor.config.InputQueue, idleDuration)
+						}else{
+							if global.Env().IsDebug {
+								log.Tracef("%v %v no message input",processor.config.InputQueue, idleDuration)
+							}
 						}
+
 						goto READ_DOCS
 					}
-						ctx := acquireCtx()
-						err = ctx.Request.Decode(pop)
-						if err != nil {
-							log.Error(err)
-							panic(err)
-						}
 
-						flowProcessor(ctx)
+					ctx := acquireCtx()
+					err = ctx.Request.Decode(pop)
+					if err != nil {
+						log.Error(err)
+						panic(err)
+					}
 
-						releaseCtx(ctx)
+					flowProcessor(ctx)
+
+					releaseCtx(ctx)
 				}
-			}
-
 		}
 
 	return nil
