@@ -27,6 +27,7 @@ func Init() {
 	common.RegisterFilterPlugin(debug.DumpHeader{})
 	common.RegisterFilterPlugin(debug.DumpUrl{})
 	common.RegisterFilterPlugin(debug.DumpRequestBody{})
+	common.RegisterFilterPlugin(debug.DumpStatusCode{})
 	common.RegisterFilterPlugin(debug.DumpResponseBody{})
 	common.RegisterFilterPlugin(debug.DumpContext{})
 

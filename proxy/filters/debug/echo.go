@@ -6,6 +6,7 @@ package debug
 import (
 	"fmt"
 	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 )
 
@@ -92,6 +93,18 @@ func (filter DumpResponseBody) Name() string {
 
 func (filter DumpResponseBody) Process(ctx *fasthttp.RequestCtx) {
 	fmt.Println("response_body: ", string(ctx.Response.GetRawBody()))
+}
+
+type DumpStatusCode struct {
+	param.Parameters
+}
+
+func (filter DumpStatusCode) Name() string {
+	return "dump_status_code"
+}
+
+func (filter DumpStatusCode) Process(ctx *fasthttp.RequestCtx) {
+	fmt.Println("status_code: ", util.IntToString(ctx.Response.StatusCode()))
 }
 
 type DumpContext struct {
