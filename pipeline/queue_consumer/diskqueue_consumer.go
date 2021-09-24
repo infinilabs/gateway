@@ -7,6 +7,7 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
+	"infini.sh/framework/core/elastic/model"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
@@ -58,7 +59,7 @@ var fastHttpClient = &fasthttp.Client{
 	TLSConfig:                     &tls.Config{InsecureSkipVerify: true},
 }
 
-func (processor *DiskQueueConsumer) Process(c *pipeline.Context) error {
+func (processor *DiskQueueConsumer) Process(ctx *pipeline.Context) error {
 	defer func() {
 		if !global.Env().IsDebug {
 			if r := recover(); r != nil {
@@ -80,7 +81,7 @@ func (processor *DiskQueueConsumer) Process(c *pipeline.Context) error {
 	totalSize := 0
 	for i := 0; i < processor.config.NumOfWorkers; i++ {
 		wg.Add(1)
-		go processor.NewBulkWorker(&totalSize, &wg)
+		go processor.NewBulkWorker(ctx,&totalSize, &wg)
 	}
 
 	wg.Wait()
@@ -88,7 +89,7 @@ func (processor *DiskQueueConsumer) Process(c *pipeline.Context) error {
 	return nil
 }
 
-func (processor *DiskQueueConsumer) NewBulkWorker(count *int, wg *sync.WaitGroup) {
+func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context,count *int, wg *sync.WaitGroup) {
 
 	defer func() {
 		if !global.Env().IsDebug {
@@ -119,6 +120,10 @@ func (processor *DiskQueueConsumer) NewBulkWorker(count *int, wg *sync.WaitGroup
 
 READ_DOCS:
 	for {
+
+		if ctx.IsCanceled(){
+			return
+		}
 
 		if len(waitingAfter) > 0 {
 			for _, v := range waitingAfter {
@@ -172,6 +177,11 @@ HANDLE_PENDING:
 
 	log.Trace("handle pending messages ", onErrorQueue)
 	for {
+
+		if ctx.IsCanceled(){
+			return
+		}
+
 		pop, _, err := queue.PopTimeout(onErrorQueue, idleDuration)
 		if len(pop)>0{
 			ok, status, err := processMessage(esConfig, pop)
@@ -202,7 +212,7 @@ HANDLE_PENDING:
 	}
 }
 
-func processMessage(esConfig *elastic.ElasticsearchConfig, pop []byte) (bool, int, error) {
+func processMessage(esConfig *model.ElasticsearchConfig, pop []byte) (bool, int, error) {
 	req := fasthttp.AcquireRequest()
 	err := req.Decode(pop)
 	if err != nil {

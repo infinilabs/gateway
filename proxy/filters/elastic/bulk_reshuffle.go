@@ -5,6 +5,7 @@ import (
 	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/elastic"
+	"infini.sh/framework/core/elastic/model"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
@@ -432,7 +433,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				endpoint = path.Join(endpoint, pathStr)
 
 				start:=time.Now()
-				code, status := bulkProcessor.Bulk(esConfig, endpoint, data, fastHttpClient)
+				code, status := bulkProcessor.Bulk(metadata, endpoint, data, fastHttpClient)
 				stats.Timing("elasticsearch."+esConfig.Name+".bulk","elapsed_ms",time.Since(start).Milliseconds())
 				switch status {
 				case SUCCESS:
@@ -619,7 +620,7 @@ func updateJsonWithNewIndex(action string,scannedByte []byte, index, typeName, i
 func safetyParseActionMeta(scannedByte []byte) (action , index, typeName, id string) {
 
 	////{ "index" : { "_index" : "test", "_id" : "1" } }
-	var meta = elastic.BulkActionMetadata{}
+	var meta = model.BulkActionMetadata{}
 	meta.UnmarshalJSON(scannedByte)
 	if meta.Index != nil {
 		index = meta.Index.Index

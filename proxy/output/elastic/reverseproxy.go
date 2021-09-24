@@ -3,7 +3,9 @@ package elastic
 import (
 	"crypto/tls"
 	"fmt"
+	"infini.sh/framework/core/elastic/model"
 	"math/rand"
+	"strings"
 	"time"
 
 	log "github.com/cihub/seelog"
@@ -28,7 +30,7 @@ type ReverseProxy struct {
 var hostClients = map[string]*fasthttp.HostClient{}
 var clients = map[string]*fasthttp.Client{}
 
-func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
+func isEndpointValid(node model.NodesInfo, cfg *ProxyConfig) bool {
 
 	log.Tracef("valid endpoint %v", node.Http.PublishAddress)
 	var hasExclude = false
@@ -129,6 +131,11 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		return
 	}
 
+	if !esConfig.Discovery.Enabled && !force{
+		log.Trace("discovery is not enabled, skip nodes refresh")
+		return
+	}
+
 	//metadata not changed
 	if metadata != nil && (metadata.NodesTopologyVersion==p.lastNodesTopologyVersion&&metadata.NodesTopologyVersion>0){
 		return
@@ -154,6 +161,14 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 				continue
 			}
 
+			arry:=strings.Split(y.Http.PublishAddress,":")
+			if len(arry)==2{
+				if !util.TestTCPPort(arry[0],arry[1]){
+					log.Debugf("[%v] endpoint [%v] is not available",y.Name,y.Http.PublishAddress)
+					continue
+				}
+			}
+
 			endpoints = append(endpoints, y.Http.PublishAddress)
 		}
 		log.Tracef("discovery %v nodes: [%v]", len(endpoints), util.JoinArray(endpoints, ", "))
@@ -162,7 +177,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 	if len(endpoints) == 0 {
 		endpoints = append(endpoints, esConfig.GetHost())
 		if checkMetadata {
-			log.Warnf("no matched endpoint, fallback to seed: %v", endpoints)
+			log.Debugf("no matched endpoint, fallback to seed: %v", endpoints)
 		}
 	}
 
@@ -226,6 +241,11 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 	if len(hostClients) == 0 {
 		log.Error("proxy upstream is empty")
 		metadata.ReportFailure()
+		return
+	}
+
+	if util.JoinArray(endpoints, ", ")==util.JoinArray(p.endpoints, ", "){
+		log.Debug("endpoints no change, skip")
 		return
 	}
 
@@ -359,7 +379,7 @@ func cleanHopHeaders(req *fasthttp.Request) {
 
 var failureMessage = []string{"connection refused", "connection reset", "no such host", "timed out", "Connection: close"}
 
-func (p *ReverseProxy) DelegateRequest(elasticsearch string, cfg *elastic.ElasticsearchMetadata, myctx *fasthttp.RequestCtx) {
+func (p *ReverseProxy) DelegateRequest(elasticsearch string, cfg *model.ElasticsearchMetadata, myctx *fasthttp.RequestCtx) {
 
 	stats.Increment("cache", "strike")
 

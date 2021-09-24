@@ -45,9 +45,9 @@ type HttpRequest struct {
 	RemoteIP     string    `json:"remote_ip,omitempty"`
 	IsTLS        bool      `json:"tls"`
 	TLSDidResume bool      `json:"tls_reuse,omitempty"`
-	Request      *Request  `json:"request,omitempty"`
-	Response     *Response `json:"response,omitempty"`
-	DataFlow     *DataFlow `json:"flow,omitempty"`
+	Request      Request  `json:"request,omitempty"`
+	Response     Response `json:"response,omitempty"`
+	DataFlow     DataFlow `json:"flow,omitempty"`
 	Elastic map[string]interface{} `json:"elastic,omitempty"`
 }
 

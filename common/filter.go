@@ -66,7 +66,7 @@ func New(cfg PluginConfig) (*RequestFilters, error) {
 			return nil, err
 		}
 
-		log.Debug("action:",actionName,",",actionCfg)
+		log.Trace("action:",actionName,",",actionCfg)
 
 		if !actionCfg.HasField("_meta:config_id"){
 			actionCfg.SetString("_meta:config_id",-1,util.GetUUID())
@@ -85,7 +85,7 @@ func New(cfg PluginConfig) (*RequestFilters, error) {
 	}
 
 	if len(procs.List) > 0 {
-		log.Debugf("Generated new processors: %v", procs)
+		log.Debugf("generated new processors: %v", procs)
 	}
 	return procs, nil
 }

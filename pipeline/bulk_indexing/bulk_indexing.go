@@ -154,7 +154,7 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 
 				for i := 0; i < processor.config.NumOfWorkers; i++ {
 					wg.Add(1)
-					go processor.NewBulkWorker(bulkSizeInByte, &wg, queueName, nodeInfo.Http.PublishAddress)
+					go processor.NewBulkWorker(c,bulkSizeInByte, &wg, queueName, nodeInfo.Http.PublishAddress)
 				}
 			}
 		}
@@ -182,7 +182,7 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 
 			for i := 0; i < processor.config.NumOfWorkers; i++ {
 				wg.Add(1)
-				go processor.NewBulkWorker(bulkSizeInByte, &wg, queueName, v.Http.PublishAddress)
+				go processor.NewBulkWorker(c,bulkSizeInByte, &wg, queueName, v.Http.PublishAddress)
 			}
 		}
 	}
@@ -197,7 +197,7 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 				processor.config.FailureQueueName = fmt.Sprintf("%v-failure", processor.config.Elasticsearch)
 			}
 			log.Debug("process bulk failure queue:", processor.config.FailureQueueName)
-			go processor.NewBulkWorker(bulkSizeInByte, &wg, processor.config.FailureQueueName, v.Http.PublishAddress)
+			go processor.NewBulkWorker(c,bulkSizeInByte, &wg, processor.config.FailureQueueName, v.Http.PublishAddress)
 		} else {
 			log.Error("no valid node, skip process_failure_queue")
 		}
@@ -209,7 +209,8 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 			for _, v := range processor.config.Queues {
 				log.Debug("process bulk queue:", v)
 				wg.Add(1)
-				go processor.NewBulkWorker(bulkSizeInByte, &wg, v, node.Http.PublishAddress)
+				//TODO node.Http.PublishAddress 拿错地址，不可用怎么处理
+				go processor.NewBulkWorker(c,bulkSizeInByte, &wg, v, node.Http.PublishAddress)
 			}
 		} else {
 			log.Error("no valid node, skip process_queue")
@@ -221,7 +222,7 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 	return nil
 }
 
-func (processor *BulkIndexingProcessor) NewBulkWorker(bulkSizeInByte int, wg *sync.WaitGroup, queueName string, endpoint string) {
+func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context,bulkSizeInByte int, wg *sync.WaitGroup, queueName string, endpoint string) {
 
 	defer func() {
 		if !global.Env().IsDebug {
@@ -248,7 +249,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(bulkSizeInByte int, wg *sy
 	defer processor.bufferPool.Put(mainBuf)
 
 	idleDuration := time.Duration(processor.config.IdleTimeoutInSecond) * time.Second
-	cfg := elastic.GetConfig(processor.config.Elasticsearch)
+	meta := elastic.GetMetadata(processor.config.Elasticsearch)
 
 	bulkProcessor := elastic2.BulkProcessor{
 		RotateConfig: processor.config.RotateConfig,
@@ -280,6 +281,9 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(bulkSizeInByte int, wg *sy
 
 READ_DOCS:
 	for {
+		if ctx.IsCanceled(){
+			goto CLEAN_BUFFER
+		}
 
 		//each message is complete bulk message, must be end with \n
 		pop, _, err := queue.PopTimeout(queueName, idleDuration)
@@ -320,10 +324,10 @@ CLEAN_BUFFER:
 
 		start := time.Now()
 		data := mainBuf.Bytes()
-		log.Trace(cfg.Name, ", starting submit bulk request")
-		status, success := bulkProcessor.Bulk(cfg, endpoint, data, &httpClient)
-		stats.Timing("elasticsearch."+cfg.Name+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
-		log.Debug(cfg.Name, ", result:", success, ", status:", status, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elapsed:", time.Since(start))
+		log.Trace(meta.Config.Name, ", starting submit bulk request")
+		status, success := bulkProcessor.Bulk(meta, endpoint, data, &httpClient)
+		stats.Timing("elasticsearch."+meta.Config.Name+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
+		log.Debug(meta.Config.Name,", ",endpoint, ", result:", success, ", status:", status, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elapsed:", time.Since(start))
 
 		switch success {
 		case elastic2.SUCCESS:
@@ -341,6 +345,11 @@ CLEAN_BUFFER:
 		}
 
 		mainBuf.Reset()
+	}
+
+	if ctx.IsCanceled(){
+		wg.Done()
+		return
 	}
 
 	goto READ_DOCS

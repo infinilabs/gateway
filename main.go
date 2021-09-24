@@ -50,7 +50,11 @@ func main() {
 	terminalHeader += ("/ /_\\\\/  _  \\/ / //__   \\  /\\  /  _  \\/ \\ \n")
 	terminalHeader += ("\\____/\\_/ \\_/\\/  \\__/    \\/  \\/\\_/ \\_/\\_/ \n\n")
 
-	terminalFooter := ("Thanks for using INFINI GATEWAY, have a good day!")
+	terminalFooter := ("   __ _  __ ____ __ _  __ __    __ _____ __                         \n")
+	terminalFooter += ("  / // |/ // __// // |/ // /   / //_  _//  \\                        \n")
+	terminalFooter += (" / // || // _/ / // || // /   / /_ / / / o |                        \n")
+	terminalFooter += ("/_//_/|_//_/  /_//_/|_//_/() /___//_/ /__,'    \n\n")
+	terminalFooter += ("©INFINI.LTD, All Rights Reserved.\n")
 
 	app := framework.NewApp("gateway", "A light-weight, powerful and high-performance elasticsearch gateway.",
 		util.TrimSpaces(config.Version), util.TrimSpaces(config.LastCommitLog), util.TrimSpaces(config.BuildDate), util.TrimSpaces(config.EOLDate), terminalHeader, terminalFooter)
@@ -71,15 +75,15 @@ func main() {
 
 		module.RegisterSystemModule(&queue.QueueModule{})
 
-		module.RegisterSystemModule(api.APIModule{})
-		module.RegisterSystemModule(task.TaskModule{})
+		module.RegisterSystemModule(&api.APIModule{})
+		module.RegisterSystemModule(&task.TaskModule{})
 
-		module.RegisterSystemModule(stats2.SimpleStatsModule{})
-		module.RegisterUserPlugin(stats.StatsDModule{})
+		module.RegisterSystemModule(&stats2.SimpleStatsModule{})
+		module.RegisterUserPlugin(&stats.StatsDModule{})
 		module.RegisterUserPlugin(gateway.GatewayModule{})
 		module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
 		module.RegisterUserPlugin(forcemerge.ForceMergeModule{})
-		module.RegisterSystemModule(pipeline.PipeModule{})
+		module.RegisterSystemModule(&pipeline.PipeModule{})
 
 		//offline pipeline processors
 		pipe.RegisterPlugin("index_diff", index_diff.New)

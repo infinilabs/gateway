@@ -70,7 +70,7 @@ func (processor *FlowRunnerProcessor) Name() string {
 	return "flow_runner"
 }
 
-func (processor *FlowRunnerProcessor) Process(c *pipeline.Context) error {
+func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 	defer func() {
 		if !global.Env().IsDebug {
 			if r := recover(); r != nil {
@@ -94,6 +94,12 @@ func (processor *FlowRunnerProcessor) Process(c *pipeline.Context) error {
 
 	READ_DOCS:
 		for {
+
+			if ctx.IsCanceled(){
+				return nil
+			}
+
+
 			select {
 			case <-signalChannel:
 				return nil

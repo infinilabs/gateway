@@ -76,7 +76,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 
 //TODO 合并批量处理的操作，这里只用来合并请求和构造 bulk 请求。
 //TODO 重启子进程，当子进程挂了之后
-func (processor *IndexingMergeProcessor) Process(c *pipeline.Context) error {
+func (processor *IndexingMergeProcessor) Process(ctx *pipeline.Context) error {
 	defer func() {
 		if !global.Env().IsDebug {
 			if r := recover(); r != nil {
@@ -112,7 +112,7 @@ func (processor *IndexingMergeProcessor) Process(c *pipeline.Context) error {
 	totalSize := 0
 	for i := 0; i < processor.config.NumOfWorkers; i++ {
 		wg.Add(1)
-		go processor.NewBulkWorker(&totalSize, bulkSizeInByte, &wg)
+		go processor.NewBulkWorker(ctx,&totalSize, bulkSizeInByte, &wg)
 	}
 
 	wg.Wait()
@@ -120,7 +120,7 @@ func (processor *IndexingMergeProcessor) Process(c *pipeline.Context) error {
 	return nil
 }
 
-func (processor *IndexingMergeProcessor) NewBulkWorker(count *int, bulkSizeInByte int, wg *sync.WaitGroup) {
+func (processor *IndexingMergeProcessor) NewBulkWorker(ctx *pipeline.Context,count *int, bulkSizeInByte int, wg *sync.WaitGroup) {
 
 	defer func() {
 		if !global.Env().IsDebug {
@@ -178,6 +178,11 @@ func (processor *IndexingMergeProcessor) NewBulkWorker(count *int, bulkSizeInByt
 
 READ_DOCS:
 	for {
+
+		if ctx.IsCanceled(){
+			goto CLEAN_BUFFER
+		}
+
 		pop, _, err := queue.PopTimeout(processor.config.InputQueue, idleDuration)
 		if err != nil {
 			log.Error(err)
@@ -212,9 +217,9 @@ READ_DOCS:
 			goto CLEAN_BUFFER
 		}
 
-		goto READ_DOCS
+		}
 
-	CLEAN_BUFFER:
+CLEAN_BUFFER:
 
 		lastCommit=time.Now()
 
@@ -236,5 +241,9 @@ READ_DOCS:
 			log.Trace("clean buffer, and execute bulk insert")
 		}
 
-	}
+		if ctx.IsCanceled(){
+			wg.Done()
+			return
+		}
+	goto READ_DOCS
 }

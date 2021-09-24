@@ -65,12 +65,12 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 	}
 
 	request := requstObjPool.Get().(*model.HttpRequest)
-	request.Request = reqPool.Get().(*model.Request)
-	request.Response = resPool.Get().(*model.Response)
+	request.Request = *reqPool.Get().(*model.Request)
+	request.Response = *resPool.Get().(*model.Response)
 
 	defer requstObjPool.Put(request)
-	defer resPool.Put(request.Response)
-	defer reqPool.Put(request.Request)
+	defer resPool.Put(&request.Response)
+	defer reqPool.Put(&request.Request)
 
 
 	minTimeElapsed,_:=this.GetInt("min_elapsed_time_in_ms",-1)
@@ -149,10 +149,10 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 
 			if this.GetBool("bulk_stats_details",true){
 				actionStats:=ctx.Get("bulk_action_stats")
-				bulk_status["stats"]=util.MapStr{
-					"index":indexStats,
-					"action":actionStats,
-				}
+				stats:=map[string]interface{}{}
+				stats["index"]=indexStats
+				stats["action"]=actionStats
+				bulk_status["stats"]=stats
 			}
 
 			request.Elastic["bulk_stats"]=bulk_status
@@ -167,7 +167,7 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 		request.Elastic["cluster_name"]=stats
 	}
 
-	request.DataFlow = &model.DataFlow{}
+	request.DataFlow = model.DataFlow{}
 	request.DataFlow.From = request.RemoteIP
 
 	request.DataFlow.Process=ctx.GetRequestProcess()
@@ -245,43 +245,14 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 		request.Response.Header = m
 	}
 
-	//lock.Lock()
-	var w *fastjson_marshal.Writer
-	v := writerPool.Get()
-	if v != nil {
-		w = v.(*fastjson_marshal.Writer)
-		w.Reset()
-	}
+	bytes,err:=util.ToJSONBytes(request)
 
-	defer writerPool.Put(w)
-
-	err := request.MarshalFastJSON(w)
-	if err != nil {
-		panic(err)
-	}
-
-	////verify json
-	//if false {
-	//	data := w.Bytes()
-	//	v := model.HttpRequest{}
-	//	util.MustFromJSONBytes(data, &v)
-	//}
-
-	//var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	//bytes, err := json.Marshal(&request)
+	//bytes,err := request.MarshalJSON()
 	//if err != nil {
 	//	panic(err)
 	//}
 
-	//fmt.Println("logging now", string(w.Bytes()))
-
-	//fmt.Println(string(w.Bytes()))
-
-
-
-
-	err = queue.Push(this.GetStringOrDefault("queue_name", "request_logging"), w.Bytes())
-	//lock.Unlock()
+	err = queue.Push(this.GetStringOrDefault("queue_name", "request_logging"), bytes)
 	if err != nil {
 		panic(err)
 	}
