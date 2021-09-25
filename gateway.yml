@@ -20,66 +20,17 @@ entry:
 #      enabled: true
 
 flow:
-  - name: echo
+  - name: default_flow
     filter_v2:
-      - set_request_query_args:
-          args:
-            - preference -> primary_first
-            - size -> 50
-      - set_response:
+      - bulk_reshuffle:
           when:
-            equals:
-              _ctx.request.path: /favicon.ico
-          status: 404
-          content_type: "text/plain; charset=utf-8"
-          body: "oops, favicon.ico"
-      - set_response:
-          when:
-            equals:
-              _ctx.request.path: /
-          status: 404
-          content_type: "text/plain; charset=utf-8"
-          body: "root path"
-      - dump_url:
-  - name: cache_first
-    filter:
-#      - name: translog
-#        parameters:
-#          category: dev
-#          filename: translog.log
-#          compress: true
-#          max_file_age: 2
-#          max_file_count: 50
-#          max_file_size_in_mb: 1024
-      - name: ldap_auth
-        parameters:
-          host: "ldap.forumsys.com"
-          port: 389
-          base_dn: "dc=example,dc=com"
-          bind_dn: "cn=read-only-admin,dc=example,dc=com"
-          bind_password: "password"
-          filter: "(uid=%s)"
-      - name: rbac
-        parameters:
-          users:
-            - tesla
-#          roles:
-#            - admin
-          action: allow
-      - name: get_cache
-        parameters:
-          pass_patterns:
-            - _cat
-      - name: bulk_reshuffle
-        when:
-          contains:
-            _ctx.request.path: /_bulk
-        parameters:
+            contains:
+              _ctx.request.path: /_bulk
           elasticsearch: dev
           level: node
           mode: async
-      - name: elasticsearch
-        parameters:
+          fix_null_id: true
+      - elasticsearch:
           elasticsearch: dev  #elasticsearch configure reference name
           max_connection_per_host: 100 #max tcp connection to upstream, default for all nodes
           max_response_size: -1 #default for all nodes
@@ -87,28 +38,22 @@ flow:
           refresh: # refresh upstream nodes list, need to enable this feature to use elasticsearch nodes auto discovery
             enabled: true
             interval: 60s
-          filter:
-            tags:
-                exclude:
-                - temp: cold
-            roles:
-              exclude:
-                - master
-      - name: set_cache
-        parameters:
-          cache_ttl: 10s
+#          filter:
+#            tags:
+#                exclude:
+#                - temp: cold
+#            roles:
+#              exclude:
+#                - master
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
-    filter:
-      - name: request_logging
-        parameters:
+    filter_v2:
+      - request_logging:
           queue_name: request_logging
           max_request_body_size: 1024
           max_response_body_size: 1024
-#          min_elapsed_time_in_ms: 500 # only record slow requests
 router:
   - name: my_router
-#    default_flow: echo
-    default_flow: cache_first
+    default_flow: default_flow
     tracing_flow: request_logging
 
 
@@ -127,18 +72,6 @@ elasticsearch:
     refresh:
       enabled: true
       interval: 60s
-
-#elastic:
-#  elasticsearch: dev
-#  store:
-#    enabled: true
-#  monitoring:
-#    enabled: false
-#  orm:
-#    enabled: true
-#    init_template: true
-#    template_name: ".gateway-default"
-#    index_prefix: "gateway_"
 
 #pipelines_v2:
 #  - name: index_diff_service
@@ -177,12 +110,12 @@ pipelines_v2:
     - bulk_indexing:
         elasticsearch: "dev"
         compress: true
-        worker_size: 10
-        bulk_size_in_mb: 10  #in MB
+        worker_size: 1
+        bulk_size_in_mb: 1  #in MB
         retry_delay_in_seconds: 5
-        process_failure_queue: true #process failed bulk messages
-  #      queues: #process other bulk queue
-  #        - dev-node-failure
+#        process_failure_queue: true #process failed bulk messages
+#        queues: #process other bulk queue
+#          - dev-node-failure
 
 
 floating_ip:
