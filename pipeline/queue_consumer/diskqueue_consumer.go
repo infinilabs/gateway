@@ -122,6 +122,7 @@ READ_DOCS:
 	for {
 
 		if ctx.IsCanceled(){
+			wg.Done()
 			return
 		}
 
@@ -179,6 +180,7 @@ HANDLE_PENDING:
 	for {
 
 		if ctx.IsCanceled(){
+			wg.Done()
 			return
 		}
 
