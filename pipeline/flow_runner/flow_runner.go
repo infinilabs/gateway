@@ -84,6 +84,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 					v = r.(string)
 				}
 				log.Error("error in FlowRunnerProcessor,", v)
+				ctx.Failed()
 			}
 		}
 	}()

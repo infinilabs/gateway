@@ -177,7 +177,7 @@ func (cfg *Config) GetSortedRightQueue() string {
 	return cfg.TargetInputQueue + "_sorted"
 }
 
-func (processor *IndexDiffProcessor) Process(c *pipeline.Context) error {
+func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 
 	defer func() {
 		if !global.Env().IsDebug {
@@ -192,6 +192,7 @@ func (processor *IndexDiffProcessor) Process(c *pipeline.Context) error {
 					v = r.(string)
 				}
 				log.Error("error in index_diff service", v)
+				ctx.Failed()
 			}
 		}
 	}()

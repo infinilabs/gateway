@@ -135,9 +135,10 @@ func (processor *IndexingMergeProcessor) NewBulkWorker(ctx *pipeline.Context,cou
 					v = r.(string)
 				}
 				log.Error("error in json indexing worker,", v)
-				wg.Done()
+				ctx.Failed()
 			}
 		}
+		wg.Done()
 	}()
 
 	log.Trace("start bulk worker")
@@ -242,7 +243,6 @@ CLEAN_BUFFER:
 		}
 
 		if ctx.IsCanceled(){
-			wg.Done()
 			return
 		}
 	goto READ_DOCS

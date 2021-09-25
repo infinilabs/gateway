@@ -104,9 +104,10 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context,count *i
 					v = r.(string)
 				}
 				log.Error("error in json indexing worker,", v)
-				wg.Done()
+				ctx.Failed()
 			}
 		}
+		wg.Done()
 	}()
 
 	timeOut := processor.config.IdleTimeoutInSecond
@@ -122,7 +123,6 @@ READ_DOCS:
 	for {
 
 		if ctx.IsCanceled(){
-			wg.Done()
 			return
 		}
 
@@ -180,7 +180,6 @@ HANDLE_PENDING:
 	for {
 
 		if ctx.IsCanceled(){
-			wg.Done()
 			return
 		}
 

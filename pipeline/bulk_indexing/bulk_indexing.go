@@ -237,9 +237,10 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context,bulk
 					v = r.(string)
 				}
 				log.Error("error in indexer,", v)
-				wg.Done()
+				ctx.Failed()
 			}
 		}
+		wg.Done()
 	}()
 
 	log.Debug("start worker:", queueName, ", endpoint:", endpoint)
@@ -348,7 +349,6 @@ CLEAN_BUFFER:
 	}
 
 	if ctx.IsCanceled(){
-		wg.Done()
 		return
 	}
 
