@@ -7,7 +7,6 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
-	"infini.sh/framework/core/elastic/model"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
@@ -213,7 +212,7 @@ HANDLE_PENDING:
 	}
 }
 
-func processMessage(esConfig *model.ElasticsearchConfig, pop []byte) (bool, int, error) {
+func processMessage(esConfig *elastic.ElasticsearchConfig, pop []byte) (bool, int, error) {
 	req := fasthttp.AcquireRequest()
 	err := req.Decode(pop)
 	if err != nil {

@@ -3,7 +3,6 @@ package elastic
 import (
 	"crypto/tls"
 	"fmt"
-	"infini.sh/framework/core/elastic/model"
 	"math/rand"
 	"strings"
 	"time"
@@ -30,7 +29,7 @@ type ReverseProxy struct {
 var hostClients = map[string]*fasthttp.HostClient{}
 var clients = map[string]*fasthttp.Client{}
 
-func isEndpointValid(node model.NodesInfo, cfg *ProxyConfig) bool {
+func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 
 	log.Tracef("valid endpoint %v", node.Http.PublishAddress)
 	var hasExclude = false
@@ -379,7 +378,7 @@ func cleanHopHeaders(req *fasthttp.Request) {
 
 var failureMessage = []string{"connection refused", "connection reset", "no such host", "timed out", "Connection: close"}
 
-func (p *ReverseProxy) DelegateRequest(elasticsearch string, cfg *model.ElasticsearchMetadata, myctx *fasthttp.RequestCtx) {
+func (p *ReverseProxy) DelegateRequest(elasticsearch string, cfg *elastic.ElasticsearchMetadata, myctx *fasthttp.RequestCtx) {
 
 	stats.Increment("cache", "strike")
 

@@ -8,7 +8,6 @@ import (
 	log "github.com/cihub/seelog"
 	pool "github.com/libp2p/go-buffer-pool"
 	"infini.sh/framework/core/elastic"
-	"infini.sh/framework/core/elastic/model"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/rate"
@@ -248,7 +247,7 @@ const INVALID API_STATUS = "invalid"
 const PARTIAL API_STATUS = "partial"
 const FAILURE API_STATUS = "failure"
 
-func (joint *BulkProcessor) Bulk(meta *model.ElasticsearchMetadata, host string, data []byte, httpClient *fasthttp.Client) (status_code int, status API_STATUS) {
+func (joint *BulkProcessor) Bulk(meta *elastic.ElasticsearchMetadata, host string, data []byte, httpClient *fasthttp.Client) (status_code int, status API_STATUS) {
 
 	if data == nil || len(data) == 0 {
 		log.Error("bulk data is empty,", host)
@@ -406,7 +405,7 @@ DO:
 				}
 
 				//decode response
-				response := model.BulkResponse{}
+				response := elastic.BulkResponse{}
 				err := response.UnmarshalJSON(resbody)
 				if err != nil {
 					panic(err)
@@ -414,7 +413,7 @@ DO:
 
 				var contains400Error bool
 				var invalidCount = 0
-				invalidOffset := map[int]model.BulkActionMetadata{}
+				invalidOffset := map[int]elastic.BulkActionMetadata{}
 				for i, v := range response.Items {
 					item := v.GetItem()
 					if item.Error != nil {
@@ -449,7 +448,7 @@ DO:
 					var offset = 0
 					var match = false
 					var retryable = false
-					var response model.BulkActionMetadata
+					var response elastic.BulkActionMetadata
 					invalidCount = 0
 					var failureCount = 0
 					//walk bulk message, with invalid id, save to another list

@@ -5,7 +5,6 @@ import (
 	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/elastic"
-	"infini.sh/framework/core/elastic/model"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
@@ -620,7 +619,7 @@ func updateJsonWithNewIndex(action string,scannedByte []byte, index, typeName, i
 func safetyParseActionMeta(scannedByte []byte) (action , index, typeName, id string) {
 
 	////{ "index" : { "_index" : "test", "_id" : "1" } }
-	var meta = model.BulkActionMetadata{}
+	var meta = elastic.BulkActionMetadata{}
 	meta.UnmarshalJSON(scannedByte)
 	if meta.Index != nil {
 		index = meta.Index.Index
