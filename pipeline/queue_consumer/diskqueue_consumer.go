@@ -112,7 +112,7 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context,count *i
 	timeOut := processor.config.IdleTimeoutInSecond
 	esInstanceVal := processor.config.Elasticsearch
 	waitingAfter := processor.config.WaitingAfter
-	elasticsearchMetadata := elastic.GetMetadata(esInstanceVal)
+	metadata := elastic.GetMetadata(esInstanceVal)
 
 	idleDuration := time.Duration(timeOut) * time.Second
 	onErrorQueue := processor.config.InputQueue + "_pending"
@@ -122,6 +122,11 @@ READ_DOCS:
 	for {
 
 		if ctx.IsCanceled(){
+			return
+		}
+
+		if !metadata.IsAvailable(){
+			log.Debugf("cluster [%v] is not available, task stop",metadata.Config.Name)
 			return
 		}
 
@@ -145,7 +150,7 @@ READ_DOCS:
 		pop, _, err := queue.PopTimeout(processor.config.InputQueue, idleDuration)
 
 		if len(pop)>0{
-			ok, status, err := processMessage(elasticsearchMetadata, pop)
+			ok, status, err := processMessage(metadata, pop)
 			if !ok {
 				if global.Env().IsDebug {
 					log.Debug(ok, status, err)
@@ -182,9 +187,14 @@ HANDLE_PENDING:
 			return
 		}
 
+		if !metadata.IsAvailable(){
+			log.Errorf("cluster [%v] is not availability, task stop",metadata.Config.Name)
+			return
+		}
+
 		pop, _, err := queue.PopTimeout(onErrorQueue, idleDuration)
 		if len(pop)>0{
-			ok, status, err := processMessage(elasticsearchMetadata, pop)
+			ok, status, err := processMessage(metadata, pop)
 			if !ok {
 				if global.Env().IsDebug {
 					log.Debug(ok, status, err)
