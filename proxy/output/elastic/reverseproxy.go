@@ -26,6 +26,7 @@ type ReverseProxy struct {
 	lastNodesTopologyVersion int
 }
 
+//TODO concurrent map writes issue
 var hostClients = map[string]*fasthttp.HostClient{}
 var clients = map[string]*fasthttp.Client{}
 
@@ -239,7 +240,6 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 
 	if len(hostClients) == 0 {
 		log.Error("proxy upstream is empty")
-		metadata.ReportFailure()
 		return
 	}
 
@@ -378,7 +378,7 @@ func cleanHopHeaders(req *fasthttp.Request) {
 
 var failureMessage = []string{"connection refused", "connection reset", "no such host", "timed out", "Connection: close"}
 
-func (p *ReverseProxy) DelegateRequest(elasticsearch string, cfg *elastic.ElasticsearchMetadata, myctx *fasthttp.RequestCtx) {
+func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.ElasticsearchMetadata, myctx *fasthttp.RequestCtx) {
 
 	stats.Increment("cache", "strike")
 
@@ -394,20 +394,20 @@ START:
 
 	var pc fasthttp.ClientAPI
 	var ok bool
-	var endpoint string
+	var host string
 	//使用算法来获取合适的 client
-	switch cfg.Config.ClientMode{
+	switch metadata.Config.ClientMode{
 	case "client":
-		ok, pc, endpoint = p.getClient()
+		ok, pc, host = p.getClient()
 		break
 	case "host":
-		ok, pc, endpoint = p.getHostClient()
+		ok, pc, host = p.getHostClient()
 		break
 	//case "pipeline":
-		//ok, pc, endpoint = p.getHostClient()
+		//ok, pc, host = p.getHostClient()
 		//break
 	default:
-		ok, pc, endpoint = p.getClient()
+		ok, pc, host = p.getClient()
 	}
 
 	if !ok {
@@ -419,22 +419,22 @@ START:
 	// modify schema，align with elasticsearch's schema
 	orignalSchema:=string(req.URI().Scheme())
 	useClient:=false
-	if cfg.GetSchema()!=orignalSchema{
-		req.URI().SetScheme(cfg.GetSchema())
-		ok, pc, endpoint = p.getClient()
+	if metadata.GetSchema()!=orignalSchema{
+		req.URI().SetScheme(metadata.GetSchema())
+		ok, pc, host = p.getClient()
 		res = fasthttp.AcquireResponse()
 		useClient=true
 	}
 
 	if global.Env().IsDebug {
-		log.Tracef("send request [%v] to upstream [%v]", req.URI().String(), endpoint)
+		log.Tracef("send request [%v] to upstream [%v]", req.URI().String(), host)
 	}
 
-	if cfg.Config.TrafficControl != nil {
+	if metadata.Config.TrafficControl != nil {
 	RetryRateLimit:
 
-		if cfg.Config.TrafficControl.MaxQpsPerNode > 0 {
-			if !rate.GetRateLimiterPerSecond(cfg.Config.ID, endpoint+"max_qps", int(cfg.Config.TrafficControl.MaxQpsPerNode)).Allow() {
+		if metadata.Config.TrafficControl.MaxQpsPerNode > 0 {
+			if !rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"max_qps", int(metadata.Config.TrafficControl.MaxQpsPerNode)).Allow() {
 				if global.Env().IsDebug {
 					log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), myctx.RemoteAddr().String())
 				}
@@ -443,8 +443,8 @@ START:
 			}
 		}
 
-		if cfg.Config.TrafficControl.MaxBytesPerNode > 0 {
-			if !rate.GetRateLimiterPerSecond(cfg.Config.ID, endpoint+"max_bps", int(cfg.Config.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(), req.GetRequestLength()) {
+		if metadata.Config.TrafficControl.MaxBytesPerNode > 0 {
+			if !rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"max_bps", int(metadata.Config.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(), req.GetRequestLength()) {
 				if global.Env().IsDebug {
 					log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), myctx.RemoteAddr().String())
 				}
@@ -455,7 +455,7 @@ START:
 	}
 
 
-	req.URI().SetHost(endpoint)
+	req.URI().SetHost(host)
 
 	err := pc.Do(req, res)
 
@@ -466,12 +466,12 @@ START:
 		if util.ContainsAnyInArray(err.Error(), failureMessage) {
 			//record translog, update failure ticket
 			if global.Env().IsDebug {
-				if !rate.GetRateLimiterPerSecond(cfg.Config.ID, endpoint+"on_error", 1).Allow() {
-					log.Errorf("elasticsearch [%v][%v] is on fire now, %v", p.proxyConfig.Elasticsearch,endpoint,err)
+				if !rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"on_error", 1).Allow() {
+					log.Errorf("elasticsearch [%v][%v] is on fire now, %v", p.proxyConfig.Elasticsearch, host,err)
 					time.Sleep(1 * time.Second)
 				}
 			}
-			cfg.ReportFailure()
+			elastic.GetOrInitHost(host).ReportFailure()
 			//server failure flow
 		} else if res.StatusCode() == 429 {
 			retry++
@@ -518,9 +518,9 @@ START:
 		myctx.Set("elastic_cluster_name", []string{elasticsearch})
 	}
 
-	myctx.Response.Header.Set("UPSTREAM", endpoint)
+	myctx.Response.Header.Set("UPSTREAM", host)
 
-	myctx.SetDestination(endpoint)
+	myctx.SetDestination(host)
 
 }
 
