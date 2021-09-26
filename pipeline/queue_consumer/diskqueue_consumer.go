@@ -112,7 +112,7 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context,count *i
 	timeOut := processor.config.IdleTimeoutInSecond
 	esInstanceVal := processor.config.Elasticsearch
 	waitingAfter := processor.config.WaitingAfter
-	esConfig := elastic.GetConfig(esInstanceVal)
+	elasticsearchMetadata := elastic.GetMetadata(esInstanceVal)
 
 	idleDuration := time.Duration(timeOut) * time.Second
 	onErrorQueue := processor.config.InputQueue + "_pending"
@@ -145,7 +145,7 @@ READ_DOCS:
 		pop, _, err := queue.PopTimeout(processor.config.InputQueue, idleDuration)
 
 		if len(pop)>0{
-			ok, status, err := processMessage(esConfig, pop)
+			ok, status, err := processMessage(elasticsearchMetadata, pop)
 			if !ok {
 				if global.Env().IsDebug {
 					log.Debug(ok, status, err)
@@ -184,7 +184,7 @@ HANDLE_PENDING:
 
 		pop, _, err := queue.PopTimeout(onErrorQueue, idleDuration)
 		if len(pop)>0{
-			ok, status, err := processMessage(esConfig, pop)
+			ok, status, err := processMessage(elasticsearchMetadata, pop)
 			if !ok {
 				if global.Env().IsDebug {
 					log.Debug(ok, status, err)
@@ -212,11 +212,11 @@ HANDLE_PENDING:
 	}
 }
 
-func processMessage(esConfig *elastic.ElasticsearchConfig, pop []byte) (bool, int, error) {
+func processMessage(metadata *elastic.ElasticsearchMetadata, pop []byte) (bool, int, error) {
 	req := fasthttp.AcquireRequest()
 	err := req.Decode(pop)
 	if err != nil {
-		log.Error("failed to decode request, ", esConfig.Name)
+		log.Error("failed to decode request, ", metadata.Config.Name)
 		return false, 408, err
 	}
 
@@ -226,27 +226,27 @@ func processMessage(esConfig *elastic.ElasticsearchConfig, pop []byte) (bool, in
 		log.Trace(string(req.GetRawBody()))
 	}
 
-	endpoint := esConfig.GetHost()
+	host := metadata.GetActiveHost()
 
-	req.Header.SetHost(endpoint)
+	req.Header.SetHost(host)
 	resp := fasthttp.AcquireResponse()
 	err = fastHttpClient.Do(req, resp)
 	if err != nil {
 		return false, resp.StatusCode(), err
 	}
 
-	if esConfig.TrafficControl != nil {
+	if metadata.Config.TrafficControl != nil {
 	RetryRateLimit:
 
-		if esConfig.TrafficControl.MaxQpsPerNode > 0 {
-			if !rate.GetRateLimiterPerSecond(esConfig.Name, endpoint+"max_qps", int(esConfig.TrafficControl.MaxQpsPerNode)).Allow() {
+		if metadata.Config.TrafficControl.MaxQpsPerNode > 0 {
+			if !rate.GetRateLimiterPerSecond(metadata.Config.Name, host+"max_qps", int(metadata.Config.TrafficControl.MaxQpsPerNode)).Allow() {
 				time.Sleep(10 * time.Millisecond)
 				goto RetryRateLimit
 			}
 		}
 
-		if esConfig.TrafficControl.MaxBytesPerNode > 0 {
-			if !rate.GetRateLimiterPerSecond(esConfig.Name, endpoint+"max_bps", int(esConfig.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(), req.GetRequestLength()) {
+		if metadata.Config.TrafficControl.MaxBytesPerNode > 0 {
+			if !rate.GetRateLimiterPerSecond(metadata.Config.Name, host+"max_bps", int(metadata.Config.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(), req.GetRequestLength()) {
 				time.Sleep(10 * time.Millisecond)
 				goto RetryRateLimit
 			}

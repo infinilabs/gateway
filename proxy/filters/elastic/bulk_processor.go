@@ -264,12 +264,12 @@ func (joint *BulkProcessor) Bulk(meta *elastic.ElasticsearchMetadata, host strin
 	available:=elastic.IsHostAvailable(host)
 
 	if !available{
-		newEndpoint:=elastic.GetAvailableHost(meta.Config.Name)
+		newEndpoint:=meta.GetActiveHost()
 		log.Warnf("[%v] is not available, try: [%v]", host,newEndpoint)
 		host =newEndpoint
 	}
 
-	if meta.Config.IsTLS() {
+	if meta.IsTLS() {
 		host = "https://" + host
 	} else {
 		host = "http://" + host

@@ -140,7 +140,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		return
 	}
 
-	endpoints := []string{}
+	hosts := []string{}
 	checkMetadata := false
 	if metadata != nil && len(metadata.Nodes) > 0 {
 
@@ -168,19 +168,19 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 				}
 			}
 
-			endpoints = append(endpoints, y.Http.PublishAddress)
+			hosts = append(hosts, y.Http.PublishAddress)
 		}
-		log.Tracef("discovery %v nodes: [%v]", len(endpoints), util.JoinArray(endpoints, ", "))
+		log.Tracef("discovery %v nodes: [%v]", len(hosts), util.JoinArray(hosts, ", "))
 	}
 
-	if len(endpoints) == 0 {
-		endpoints = append(endpoints, esConfig.GetHost())
+	if len(hosts) == 0 {
+		hosts = metadata.GetSeedHosts()
 		if checkMetadata {
-			log.Debugf("no matched endpoint, fallback to seed: %v", endpoints)
+			log.Debugf("no matched endpoint, fallback to seed: %v", hosts)
 		}
 	}
 
-	for _, endpoint := range endpoints {
+	for _, endpoint := range hosts {
 		_, ok := hostClients[endpoint]
 		if !ok {
 			hostClients[endpoint] = &fasthttp.HostClient{
@@ -201,7 +201,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 				//RetryIf: func(request *fasthttp.Request) bool {
 				//
 				//},
-				IsTLS: esConfig.IsTLS(),
+				IsTLS: metadata.IsTLS(),
 				TLSConfig: &tls.Config{
 					InsecureSkipVerify: cfg.TLSInsecureSkipVerify,
 				},
@@ -243,16 +243,16 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		return
 	}
 
-	if util.JoinArray(endpoints, ", ")==util.JoinArray(p.endpoints, ", "){
-		log.Debug("endpoints no change, skip")
+	if util.JoinArray(hosts, ", ")==util.JoinArray(p.endpoints, ", "){
+		log.Debug("hosts no change, skip")
 		return
 	}
 
 	//replace with new hostClients
 	//TODO add locker
 	p.bla = balancer.NewBalancer(ws)
-	log.Infof("elasticsearch [%v] endpoints: [%v] => [%v]", esConfig.Name, util.JoinArray(p.endpoints, ", "), util.JoinArray(endpoints, ", "))
-	p.endpoints = endpoints
+	log.Infof("elasticsearch [%v] hosts: [%v] => [%v]", esConfig.Name, util.JoinArray(p.endpoints, ", "), util.JoinArray(hosts, ", "))
+	p.endpoints = hosts
 	log.Trace(esConfig.Name, " elasticsearch client nodes refreshed")
 
 }
@@ -419,8 +419,8 @@ START:
 	// modify schema，align with elasticsearch's schema
 	orignalSchema:=string(req.URI().Scheme())
 	useClient:=false
-	if cfg.Config.GetSchema()!=orignalSchema{
-		req.URI().SetScheme(cfg.Config.GetSchema())
+	if cfg.GetSchema()!=orignalSchema{
+		req.URI().SetScheme(cfg.GetSchema())
 		ok, pc, endpoint = p.getClient()
 		res = fasthttp.AcquireResponse()
 		useClient=true
