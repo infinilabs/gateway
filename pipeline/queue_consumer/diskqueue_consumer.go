@@ -15,6 +15,7 @@ import (
 	"infini.sh/framework/lib/fasthttp"
 	"net/http"
 	"runtime"
+	"github.com/buger/jsonparser"
 	"sync"
 	"time"
 )
@@ -273,16 +274,12 @@ func processMessage(metadata *elastic.ElasticsearchMetadata, pop []byte) (bool, 
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated || resp.StatusCode() == http.StatusNotFound {
 		if resp.StatusCode() == http.StatusOK && util.ContainStr(string(req.RequestURI()), "_bulk") {
 			//handle bulk response partial failure
-			data := map[string]interface{}{}
-			util.FromJSONBytes(resp.GetRawBody(), &data)
-			err, ok2 := data["errors"]
-			if ok2 {
-				if err == true {
+			va,err:=jsonparser.GetBoolean(resp.GetRawBody(),"errors")
+			if va&&err==nil {
 					if global.Env().IsDebug {
-						log.Error("checking bulk response, invalid, ", ok2, ",", err, ",", util.SubString(string(resp.GetRawBody()), 0, 256))
+						log.Error("error in bulk requests,",util.SubString(string(resp.GetRawBody()), 0, 256))
 					}
 					return false, resp.StatusCode(), errors.New(fmt.Sprintf("%v", err))
-				}
 			}
 		}
 		return true, resp.StatusCode(), nil
