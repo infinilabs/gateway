@@ -1,11 +1,11 @@
 package throttle
 
 import (
+	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
-	log "github.com/cihub/seelog"
 )
 
 type RetryLimiter struct {
@@ -32,6 +32,7 @@ func (filter RetryLimiter) Process(ctx *fasthttp.RequestCtx) {
 	if times>filter.GetIntOrDefault("max_retry_times",3){
 		log.Debugf("hit max retry times")
 		ctx.Finished()
+		ctx.Request.Header.Del(RetryKey)
 		queue.Push(filter.MustGetString("queue_name"),ctx.Request.Encode())
 		return
 	}
