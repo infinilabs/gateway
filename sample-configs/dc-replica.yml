@@ -21,6 +21,9 @@ flow:
       - if:
           cluster_available: ["primary"]
         then:
+          - retry_limiter:
+              queue_name: "dead_retry_messages"
+              max_retry_times: 5
           - elasticsearch:
               elasticsearch: "primary"
               max_connection_per_host: 1000
@@ -37,43 +40,31 @@ flow:
                   queue_name: "backup"
             else:
               - queue:
-                  queue_name: "primary-500"
+                  queue_name: "primary-invalid"
         else:
           - queue:
-              queue_name: "primary-500"
+              queue_name: "primary-unavailable"
           - sleep:
-              sleep_in_million_seconds: 1000
+              sleep_in_million_seconds: 10000
           - elasticsearch_health_check:
               elasticsearch: "primary"
-#      - sample:
-#          ratio: 0.1
-      - set_request_header:
-          headers:
-          - PostProcessing -> true
-      - flow:
-          flows:
-            - request_logging
+#      - flow:
+#          flows:
+#            - request_logging
   - name: primary-flow
     filter_v2:
-      - translog:
       - set_basic_auth: #覆盖身份信息
           username: elastic
           password: changeme
       - if:
           and:
-            - queue_has_lag: [ "primary", "primary-500" ]
+            - queue_has_lag: [ "primary>10", "primary-500>10" ]
             - cluster_available: ["primary"]
-        then: #集群可用但是集群有堆积的情况，先入队列，追加到队尾，确保操作顺序的一致性
-          - queue:
-              queue_name: "primary"
-          - set_basic_auth: #覆盖身份信息
-              username: test
-              password: testtest
-          - queue:
-              queue_name: "backup"
+        then: #集群可用但是集群有堆积的情况，不处理客户端请求，待服务恢复之后再提供服务
           - set_response:
-              status: 202
-              body: "202 Accepted"
+              status: 503
+              content_type: "application/json"
+              body: '{"error":true,"message":"503 Service Unavailable"}'
         else: # 集群不可用或者集群可用且没有堆积的情况，都直接转发给集群先处理
           - if: #集群如果已经变成不可用状态，则直接丢弃请求，让客户端选择处理，或者也可落地队列确保不丢数据
               not:
@@ -81,16 +72,11 @@ flow:
             then: #如果集群不可用，则直接拒绝客户端请求
               - set_response:
                   status: 503
-                  body: "503 Service Unavailable"
+                  content_type: "application/json"
+                  body: '{"error":true,"message":"503 Service Unavailable"}'
               - elasticsearch_health_check: #由请求触发的限速模式下的主动检查后端监控情况
                   elasticsearch: "primary"
               - drop:
-#          - set_request_header: #覆盖 Header 信息
-#              headers:
-#                - Trial -> true
-#                - Department -> Engineering
-#          - set_hostname: #覆盖域名主机信息
-#              hostname: api.infini.sh
           - elasticsearch: #集群可用，直接处理请求
               elasticsearch: "primary"
               max_connection_per_host: 1000
@@ -140,6 +126,8 @@ flow:
     filter:
       - name: request_logging
         parameters:
+          max_request_body_size: 1024
+          max_response_body_size: 1024
           queue_name: request_logging
 
 router:
@@ -150,10 +138,12 @@ router:
 elasticsearch:
   - name: primary
     enabled: true
-    endpoint: http://localhost:9200
+    endpoint: http://192.168.3.188:9204
     basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
       username: elastic
       password: changeme
+    traffic_control:
+      max_qps_per_node: 1000
     discovery: # auto discovery elasticsearch cluster nodes
       enabled: false
       refresh:
@@ -161,7 +151,7 @@ elasticsearch:
         interval: 60s
   - name: backup
     enabled: true
-    endpoint: http://localhost:9201
+    endpoint: http://192.168.3.188:9206
     basic_auth:
       username: test
       password: testtest
@@ -173,32 +163,76 @@ elasticsearch:
 
 pipelines_v2:
   - name: request_logging_index
+    auto_start: true
+    keep_running: true
     processors:
       - json_indexing:
           index_name: "gateway_requests"
           elasticsearch: "backup"
           input_queue: "request_logging"
+          when:
+            cluster_available: [ "backup" ]
+  - name: queue_primary-dead_retry-consumer
+    auto_start: false
+    processors:
+      - flow_runner:
+          input_queue: "dead_retry_messages"
+          flow: primary-flow-post-processing
+          when:
+            cluster_available: [ "primary" ]
   - name: queue_primary-failure-consumer
+    auto_start: true
+    keep_running: true
     processors:
       - flow_runner:
           input_queue: "primary-500"
           flow: primary-flow-post-processing
+          when:
+            cluster_available: [ "primary" ]
+  - name: queue_primary-invalid-consumer
+    auto_start: false
+    processors:
+      - flow_runner:
+          input_queue: "primary-invalid"
+          flow: primary-flow-post-processing
+          when:
+            cluster_available: [ "primary" ]
+  - name: queue_primary-unavailable-consumer
+    auto_start: true
+    keep_running: true
+    processors:
+      - flow_runner:
+          input_queue: "primary-unavailable"
+          flow: primary-flow-post-processing
+          when:
+            cluster_available: [ "primary" ]
   - name: queue_backup-deadletter-consumer
+    auto_start: false
     processors:
       - flow_runner:
           input_queue: "backup_dead_letter"
           flow: primary-flow-post-processing
+          when:
+            cluster_available: ["backup"]
   - name: queue_backup-consumer
+    auto_start: true
+    keep_running: true
     processors:
       - queue_consumer:
           input_queue: "backup"
           elasticsearch: "backup"
           waiting_after: [ "backup-500"]
           worker_size: 20
-  - name: queue_backup-consumer
+          when:
+            cluster_available: [ "backup" ]
+  - name: queue_primary-consumer
+    auto_start: true
+    keep_running: true
     processors:
       - queue_consumer:
           input_queue: "primary"
           elasticsearch: "primary"
           waiting_after: [ "primary-500" ]
           worker_size: 20
+          when:
+            cluster_available: [ "primary" ]
