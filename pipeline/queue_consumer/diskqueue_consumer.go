@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
@@ -15,7 +16,6 @@ import (
 	"infini.sh/framework/lib/fasthttp"
 	"net/http"
 	"runtime"
-	"github.com/buger/jsonparser"
 	"sync"
 	"time"
 )
@@ -116,8 +116,8 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context,count *i
 	metadata := elastic.GetMetadata(esInstanceVal)
 
 	idleDuration := time.Duration(timeOut) * time.Second
-	onErrorQueue := processor.config.InputQueue + "_pending"
-	onDeadLetterQueue := processor.config.InputQueue + "_dead_letter"
+	pendingQueue := processor.config.InputQueue + "_pending"
+	deadLetterQueue := processor.config.InputQueue + "_dead_letter"
 
 READ_DOCS:
 	for {
@@ -143,8 +143,8 @@ READ_DOCS:
 		}
 
 		//handle message on error queue
-		if queue.Depth(onErrorQueue) > 0 {
-			log.Debug(onErrorQueue, " has pending message, clear it first")
+		if queue.Depth(pendingQueue) > 0 {
+			log.Debug(pendingQueue, " has pending message, clear it first")
 			goto HANDLE_PENDING
 		}
 
@@ -156,14 +156,17 @@ READ_DOCS:
 				if global.Env().IsDebug {
 					log.Debug(ok, status, err)
 				}
+
+				//TODO handle 429
+
 				if status >= 400 && status < 500 {
-					log.Error("push to dead letter queue:", onDeadLetterQueue, ",", err)
-					err := queue.Push(onDeadLetterQueue, pop)
+					log.Error("push to dead letter queue:", deadLetterQueue, ",", err)
+					err := queue.Push(deadLetterQueue, pop)
 					if err != nil {
 						panic(err)
 					}
 				} else {
-					err := queue.Push(onErrorQueue, pop)
+					err := queue.Push(pendingQueue, pop)
 					if err != nil {
 						panic(err)
 					}
@@ -181,7 +184,7 @@ READ_DOCS:
 
 HANDLE_PENDING:
 
-	log.Trace("handle pending messages ", onErrorQueue)
+	log.Trace("handle pending messages ", pendingQueue)
 	for {
 
 		if ctx.IsCanceled(){
@@ -189,11 +192,17 @@ HANDLE_PENDING:
 		}
 
 		if !metadata.IsAvailable(){
-			log.Errorf("cluster [%v] is not availability, task stop",metadata.Config.Name)
+			log.Errorf("cluster [%v] is not available, task stop",metadata.Config.Name)
 			return
 		}
 
-		pop, _, err := queue.PopTimeout(onErrorQueue, idleDuration)
+		pop, timeout, err := queue.PopTimeout(pendingQueue, idleDuration)
+
+		//if no pending message left, goto the main progress
+		if timeout{
+			goto READ_DOCS
+		}
+
 		if len(pop)>0{
 			ok, status, err := processMessage(metadata, pop)
 			if !ok {
@@ -201,13 +210,13 @@ HANDLE_PENDING:
 					log.Debug(ok, status, err)
 				}
 				if status > 401 && status < 500 {
-					log.Error("push to dead letter queue:", onDeadLetterQueue, ",", err)
-					err := queue.Push(onDeadLetterQueue, pop)
+					log.Error("push to dead letter queue:", deadLetterQueue, ",", err)
+					err := queue.Push(deadLetterQueue, pop)
 					if err != nil {
 						panic(err)
 					}
 				} else {
-					err := queue.Push(onErrorQueue, pop)
+					err := queue.Push(pendingQueue, pop)
 					if err != nil {
 						panic(err)
 					}
