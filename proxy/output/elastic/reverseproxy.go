@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/cihub/seelog"
@@ -26,10 +27,9 @@ type ReverseProxy struct {
 	lastNodesTopologyVersion int
 }
 
-//TODO concurrent map writes issue
 var hostClients = map[string]*fasthttp.HostClient{}
 var clients = map[string]*fasthttp.Client{}
-
+var locker = sync.RWMutex{}
 func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 
 	log.Tracef("valid endpoint %v", node.Http.PublishAddress)
@@ -115,6 +115,9 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 }
 
 func (p *ReverseProxy) refreshNodes(force bool) {
+
+	locker.Lock()
+	defer locker.Unlock()
 
 	if global.Env().IsDebug {
 		log.Trace("elasticsearch client nodes refreshing")
@@ -329,6 +332,9 @@ RANDOM:
 }
 
 func (p *ReverseProxy) getClient() (clientAvailable bool, client *fasthttp.Client, endpoint string) {
+
+	locker.RLock()
+	defer locker.RUnlock()
 
 	if clients == nil {
 		panic("ReverseProxy has been closed")
