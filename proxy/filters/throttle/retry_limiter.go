@@ -16,7 +16,7 @@ func (filter RetryLimiter) Name() string {
 	return "retry_limiter"
 }
 
-const RetryKey = "RETRIED_TIMES"
+const RetryKey = "Retried_times"
 
 func (filter RetryLimiter) Process(ctx *fasthttp.RequestCtx) {
 
