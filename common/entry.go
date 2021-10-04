@@ -8,12 +8,17 @@ import (
 )
 
 type EntryConfig struct {
-	Enabled           bool                 `config:"enabled"`
-	SafetyShutdown    bool                 `config:"safety_shutdown"`
-	ReduceMemoryUsage bool                 `config:"reduce_memory_usage"`
+	Enabled           bool `config:"enabled"`
+	DirtyShutdown     bool `config:"dirty_shutdown"`
+	ReduceMemoryUsage bool `config:"reduce_memory_usage"`
 	Name              string               `config:"name"`
 	ReadTimeout       int                  `config:"read_timeout"`
 	WriteTimeout      int                  `config:"write_timeout"`
+
+	ReadBufferSize int   `config:"read_buffer_size"`
+	WriteBufferSize int  `config:"write_buffer_size"`
+
+	MaxRequestBodySize    int                  `config:"max_request_body_size"`
 	MaxConcurrency    int                  `config:"max_concurrency"`
 	TLSConfig         config.TLSConfig     `config:"tls"`
 	NetworkConfig     config.NetworkConfig `config:"network"`

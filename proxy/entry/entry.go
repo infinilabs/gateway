@@ -145,8 +145,6 @@ func (this *Entrypoint) Start() error {
 			log.Debugf("tracing flow placed: %s",this.routerConfig.TracingFlow)
 		}
 
-
-
 		this.router.TraceHandler =common.GetFlowProcess(this.routerConfig.TracingFlow)
 	}
 
@@ -155,12 +153,26 @@ func (this *Entrypoint) Start() error {
 	}
 
 	if this.config.ReadTimeout<=0{
-		this.config.ReadTimeout=120
+		this.config.ReadTimeout=30
 	}
 
 	if this.config.WriteTimeout<=0{
-		this.config.WriteTimeout=120
+		this.config.WriteTimeout=30
 	}
+
+	if this.config.ReadBufferSize<=0{
+		this.config.ReadBufferSize=4*4096
+	}
+
+	if this.config.WriteBufferSize<=0{
+		this.config.WriteBufferSize=4*4096
+	}
+
+	if this.config.MaxRequestBodySize<=0{
+		this.config.MaxRequestBodySize=200 * 1024 * 1024
+	}
+
+
 
 	this.server = &fasthttp.Server{
 		Name:                          "INFINI",
@@ -169,14 +181,15 @@ func (this *Entrypoint) Start() error {
 		TraceHandler:                  this.router.TraceHandler,
 		Concurrency:                   this.config.MaxConcurrency,
 		LogAllErrors:                  false,
-		MaxRequestBodySize:            200 * 1024 * 1024,
+		MaxRequestBodySize:            this.config.MaxRequestBodySize, //200 * 1024 * 1024,
 		GetOnly:                       false,
 		ReduceMemoryUsage:             this.config.ReduceMemoryUsage,
 		//TCPKeepalivePeriod:  		   time.Duration(this.config.ReadTimeout) * time.Second,
 		//IdleTimeout:  				   time.Duration(this.config.ReadTimeout) * time.Second,
 		ReadTimeout:                   time.Duration(this.config.ReadTimeout) * time.Second,
 		WriteTimeout:                  time.Duration(this.config.WriteTimeout) * time.Second,
-		ReadBufferSize:                64 * 1024,
+		ReadBufferSize:                this.config.ReadBufferSize,//16 * 1024,
+		WriteBufferSize:               this.config.WriteBufferSize,
 	}
 
 	schema := "http://"
@@ -300,8 +313,8 @@ func (this *Entrypoint) Stop() error {
 		return nil
 	}
 
-	if !this.config.SafetyShutdown {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*500))
+	if this.config.DirtyShutdown {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*5000))
 		defer cancel()
 		go func(ctx context.Context) {
 			this.server.Shutdown()
