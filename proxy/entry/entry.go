@@ -172,8 +172,6 @@ func (this *Entrypoint) Start() error {
 		this.config.MaxRequestBodySize=200 * 1024 * 1024
 	}
 
-
-
 	this.server = &fasthttp.Server{
 		Name:                          "INFINI",
 		DisableHeaderNamesNormalizing: true,
@@ -331,4 +329,11 @@ func (this *Entrypoint) Stop() error {
 	}
 
 	return nil
+}
+
+func (this *Entrypoint) Stats() util.MapStr {
+	data:=util.MapStr{
+		"open_connections":this.server.GetOpenConnectionsCount(),
+	}
+	return data
 }

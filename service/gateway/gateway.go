@@ -2,13 +2,17 @@ package gateway
 
 import (
 	log "github.com/cihub/seelog"
+	"infini.sh/framework/core/api"
+	httprouter "infini.sh/framework/core/api/router"
 	. "infini.sh/framework/core/config"
 	"infini.sh/framework/core/env"
 	"infini.sh/framework/core/stats"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
 	"infini.sh/gateway/proxy"
 	entry2 "infini.sh/gateway/proxy/entry"
+	"net/http"
 )
 
 func ProxyHandler(ctx *fasthttp.RequestCtx) {
@@ -64,20 +68,23 @@ func ProxyHandler(ctx *fasthttp.RequestCtx) {
 }
 
 type GatewayModule struct {
+	 api.Handler
+	 entryConfigs []common.EntryConfig
+	 entryPoints  map[string]*entry2.Entrypoint
 }
 
-func (this GatewayModule) Name() string {
+func (this *GatewayModule) Name() string {
 	return "gateway"
 }
 
-var entryConfigs []common.EntryConfig
+func (module *GatewayModule) Setup(cfg *Config) {
 
-func (module GatewayModule) Setup(cfg *Config) {
+	module.entryConfigs =[]common.EntryConfig{}
+	module.entryPoints = map[string]*entry2.Entrypoint{}
 
 	proxy.Init()
 
-	entryConfigs = []common.EntryConfig{}
-	ok, err := env.ParseConfig("entry", &entryConfigs)
+	ok, err := env.ParseConfig("entry", &module.entryConfigs)
 	if ok && err != nil {
 		panic(err)
 	}
@@ -105,28 +112,31 @@ func (module GatewayModule) Setup(cfg *Config) {
 		}
 	}
 
+	api.HandleAPIMethod(api.GET, "/entry/stats", module.getEntries)
+	api.HandleAPIMethod(api.POST, "/entry/:id/_start", module.startEntry)
+	api.HandleAPIMethod(api.POST, "/entry/:id/_stop", module.stopEntry)
+
 }
 
-var entryPoints = map[string]*entry2.Entrypoint{}
 
-func (module GatewayModule) Start() error {
+func (module *GatewayModule) Start() error {
 
-	for _, v := range entryConfigs {
+	for _, v := range module.entryConfigs {
 		entry := entry2.NewEntrypoint(v)
 		log.Trace("start entry:", entry.Name())
 		err := entry.Start()
 		if err != nil {
 			panic(err)
 		}
-		entryPoints[v.Name] = entry
+		module.entryPoints[v.Name] = entry
 	}
 
 	return nil
 }
 
-func (module GatewayModule) Stop() error {
+func (module *GatewayModule) Stop() error {
 
-	for _, v := range entryPoints {
+	for _, v := range module.entryPoints {
 		err := v.Stop()
 		if err != nil {
 			panic(err)
@@ -134,4 +144,44 @@ func (module GatewayModule) Stop() error {
 	}
 
 	return nil
+}
+
+func (this *GatewayModule) getEntries(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+	data:=util.MapStr{}
+	for k,v:=range this.entryPoints{
+		data[k]=v.Stats()
+	}
+	this.WriteJSON(w,data,200)
+}
+
+func (this *GatewayModule) startEntry(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+	id:=ps.ByName("id")
+	v,ok:=this.entryPoints[id]
+	if ok{
+		err:=v.Start()
+		if err!=nil{
+			this.Error500(w,err.Error())
+			return
+		}
+		this.WriteAckJSON(w,true,200,nil)
+		return
+	}else{
+		this.Error404(w)
+	}
+}
+
+func (this *GatewayModule) stopEntry(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+	id:=ps.ByName("id")
+	v,ok:=this.entryPoints[id]
+	if ok{
+		err:=v.Stop()
+		if err!=nil{
+			this.Error500(w,err.Error())
+			return
+		}
+		this.WriteAckJSON(w,true,200,nil)
+		return
+	}else{
+		this.Error404(w)
+	}
 }
