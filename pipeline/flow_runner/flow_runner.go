@@ -83,7 +83,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 				case string:
 					v = r.(string)
 				}
-				log.Error("error in FlowRunnerProcessor,", v)
+				log.Errorf("error in flow_runner [%v], [%v]",processor.config.FlowName, v)
 				ctx.Failed()
 			}
 		}

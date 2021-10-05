@@ -138,7 +138,7 @@ func (this BulkResponseValidate) Process(ctx *fasthttp.RequestCtx) {
 				})
 
 				//if invalidCount > 0 {
-				//	stats.IncrementBy("elasticsearch."+meta.Config.Name+".bulk", "200_invalid_docs", int64(invalidCount))
+				//	stats.IncrementBy("elasticsearch."+meta+".bulk", "200_invalid_docs", int64(invalidCount))
 				//}
 				//
 				//if failureCount > 0 {
@@ -150,56 +150,22 @@ func (this BulkResponseValidate) Process(ctx *fasthttp.RequestCtx) {
 				//}
 
 				if nonRetryableItems.Len() > 0 {
-					//if joint.Config.SaveFailure {
 						nonRetryableItems.WriteByte('\n')
 						bytes:=ctx.Request.OverrideBodyEncode(nonRetryableItems.Bytes())
 						queue.Push(this.MustGetString("invalid_queue"),bytes)
 						//send to redis channel
 						nonRetryableItems.Reset()
 						bytebufferpool.Put(nonRetryableItems)
-					//}
 				}
 
 				if retryableItems.Len() > 0 {
-					//if joint.Config.SaveFailure {
 						retryableItems.WriteByte('\n')
 						bytes:=ctx.Request.OverrideBodyEncode( retryableItems.Bytes())
 						queue.Push(this.MustGetString("failure_queue"),bytes)
 						retryableItems.Reset()
 						bytebufferpool.Put(retryableItems)
-					//}
 				}
-
-				//if global.Env().IsDebug {
-				//	log.Tracef("bulk requests failed: [%v] retryable, [%v] non_retryable, in [%v] total requests", len(ret),len(invalidOffset), len(failureOffset), len(response.Items))
-				//}
-
-				//if contains400Error {
-				//	return 400, PARTIAL
-				//}
 			}
-
-			//delayTime := joint.Config.RetryDelayInSeconds
-			//if delayTime <= 0 {
-			//	delayTime = 10
-			//}
-			//if joint.Config.MaxRetryTimes <= 0 {
-			//	joint.Config.MaxRetryTimes = 3
-			//}
-			//
-			//if retryTimes >= joint.Config.MaxRetryTimes {
-			//	log.Errorf("invalid 200, retried %v times, quit retry", retryTimes)
-			//	if joint.Config.SaveFailure {
-			//		queue.Push(joint.Config.FailureRequestsQueue, data)
-			//	}
-			//	return resp.StatusCode(), FAILURE
-			//}
-			//
-			//time.Sleep(time.Duration(delayTime) * time.Second)
-			//log.Debugf("invalid 200, retried %v times, will try again", retryTimes)
-			//retryTimes++
-			//goto DO
-			//return resp.StatusCode(), SUCCESS
 
 			if contains400Error{
 				ctx.Response.SetStatusCode(this.GetIntOrDefault("invalid_status", 400))
@@ -213,81 +179,4 @@ func (this BulkResponseValidate) Process(ctx *fasthttp.RequestCtx) {
 
 		}
 	}
-
-	//else if ctx.Response.StatusCode() == 429 {
-	//
-	//	delayTime := this.Config.RejectDelayInSeconds
-	//	if delayTime <= 0 {
-	//		delayTime = 5
-	//	}
-	//	time.Sleep(time.Duration(delayTime) * time.Second)
-	//	if joint.Config.MaxRejectRetryTimes <= 0 {
-	//		joint.Config.MaxRejectRetryTimes = 12 //1min
-	//	}
-	//	if retryTimes >= joint.Config.MaxRejectRetryTimes {
-	//		log.Errorf("rejected 429, retried %v times, quit retry", retryTimes)
-	//		if joint.Config.SaveFailure {
-	//			queue.Push(joint.Config.FailureRequestsQueue, data)
-	//		}
-	//		return resp.StatusCode(), FAILURE
-	//	}
-	//	log.Debugf("rejected 429, retried %v times, will try again", retryTimes)
-	//	retryTimes++
-	//	goto DO
-	//} else if ctx.Response.StatusCode() == 400 {
-	//	//handle 400 error
-	//	if joint.Config.SaveFailure {
-	//		queue.Push(joint.Config.InvalidRequestsQueue, data)
-	//	}
-	//
-	//	stats.Increment("elasticsearch."+meta.Config.Name+".bulk", "400_requests")
-	//
-	//	if joint.Config.LogInvalidMessage {
-	//		if rate.GetRateLimiter("log_invalid_messages", host, 1, 1, 5*time.Second).Allow() {
-	//			log.Warn("status:", resp.StatusCode(), ",", host, ",", util.SubString(util.UnsafeBytesToString(resbody), 0, 256))
-	//		}
-	//
-	//		logPath := path.Join(global.Env().GetLogDir(), meta.Config.Name, "invalid", "requests.log")
-	//		logHandler := rotate.GetFileHandler(logPath, joint.RotateConfig)
-	//
-	//		logHandler.WriteBytesArray(
-	//			[]byte("\nURL:"),
-	//			[]byte(url),
-	//			[]byte("\nRequest:\n"),
-	//			[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.Config.MaxRequestBodySize)),
-	//			[]byte("\nResponse:\n"),
-	//			[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.Config.MaxResponseBodySize)),
-	//		)
-	//	}
-	//
-	//	return resp.StatusCode(), INVALID
-	//} else {
-	//
-	//	stats.Increment("elasticsearch."+meta.Config.Name+".bulk", "5xx_requests")
-	//
-	//	if joint.Config.LogInvalidMessage {
-	//		if rate.GetRateLimiter("log_invalid_messages", host, 1, 1, 5*time.Second).Allow() {
-	//			log.Warn("status:", resp.StatusCode(), ",", host, ",", util.SubString(util.UnsafeBytesToString(resbody), 0, 256))
-	//		}
-	//
-	//		logPath := path.Join(global.Env().GetLogDir(), meta.Config.Name, "invalid", "requests.log")
-	//		logHandler := rotate.GetFileHandler(logPath, joint.RotateConfig)
-	//
-	//		logHandler.WriteBytesArray(
-	//			[]byte("\nURL:"),
-	//			[]byte(url),
-	//			[]byte("\nRequest:\n"),
-	//			[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.Config.MaxRequestBodySize)),
-	//			[]byte("\nResponse:\n"),
-	//			[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.Config.MaxResponseBodySize)),
-	//		)
-	//	}
-	//
-	//	if joint.Config.SaveFailure {
-	//		queue.Push(joint.Config.FailureRequestsQueue, data)
-	//	}
-	//
-	//	return ctx.Response.StatusCode(), FAILURE
-	//}
-
 }

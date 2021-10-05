@@ -23,8 +23,6 @@ func (filter Elasticsearch) Name() string {
 
 var proxyList = sync.Map{}
 
-var initLock sync.Mutex
-
 var faviconPath=[]byte("/favicon.ico")
 
 //var singleSetCache singleflight.Group
@@ -79,6 +77,9 @@ func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
 
 		instance = NewReverseProxy(&proxyConfig)
 		proxyList.Store(esRef,instance)
+
+		log.Debugf("init elasticsearch proxy instance: %v, %v, %v",esRef,instance1, ok )
+
 	}
 
 	cfg:=elastic.GetMetadata(esRef)
@@ -95,6 +96,7 @@ func (filter Elasticsearch) Process(ctx *fasthttp.RequestCtx) {
 		ctx.Response.SwapBody([]byte(fmt.Sprintf("cluster [%v] is not available",esRef)))
 		ctx.SetStatusCode(500)
 		ctx.Finished()
+		log.Infof("cluster [%v] not available",esRef)
 		time.Sleep(1*time.Second)
 		return
 	}

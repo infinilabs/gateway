@@ -409,7 +409,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 					SaveFailure:       this.GetBool("save_failure",true),
 					FailureRequestsQueue:       this.GetStringOrDefault("failure_queue",fmt.Sprintf("%v-failure",clusterName)),
 					InvalidRequestsQueue:       this.GetStringOrDefault("invalid_queue",fmt.Sprintf("%v-invalid",clusterName)),
-					DeadRequestsQueue:       	this.GetStringOrDefault("dead_queue",fmt.Sprintf("%v-dead",clusterName)),
+					//DeadRequestsQueue:       	this.GetStringOrDefault("dead_queue",fmt.Sprintf("%v-dead_letter",clusterName)),
 					DocBufferSize: this.GetIntOrDefault("doc_buffer_size",256*1024),
 				},
 			}

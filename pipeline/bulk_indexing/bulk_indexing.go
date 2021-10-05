@@ -265,9 +265,9 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context,bulk
 		bulkProcessor.Config.InvalidRequestsQueue = fmt.Sprintf("%v-invalid", processor.config.Elasticsearch)
 	}
 
-	if bulkProcessor.Config.DeadRequestsQueue == "" {
-		bulkProcessor.Config.DeadRequestsQueue = fmt.Sprintf("%v-dead", processor.config.Elasticsearch)
-	}
+	//if bulkProcessor.Config.DeadRequestsQueue == "" {
+	//	bulkProcessor.Config.DeadRequestsQueue = fmt.Sprintf("%v-dead_letter", processor.config.Elasticsearch)
+	//}
 
 	httpClient := fasthttp.Client{
 		MaxConnsPerHost:     processor.config.MaxConnectionPerHost,
