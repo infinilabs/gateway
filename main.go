@@ -66,24 +66,24 @@ func main() {
 	app.Start(func() {
 
 		//load core modules first
+		module.RegisterSystemModule(&api.APIModule{})
+
+		module.RegisterSystemModule(&stats2.SimpleStatsModule{})
+		module.RegisterUserPlugin(&stats.StatsDModule{})
+
 		module.RegisterSystemModule(elastic.ElasticModule{})
 		module.RegisterUserPlugin(translog.TranslogModule{})
 		//module.RegisterSystemModule(filter.FilterModule{})
 
 		module.RegisterSystemModule(queue.DiskQueue{})
 		module.RegisterSystemModule(&queue.RedisModule{})
-
 		module.RegisterSystemModule(&queue.QueueModule{})
 
-		module.RegisterSystemModule(&api.APIModule{})
 		module.RegisterSystemModule(&task.TaskModule{})
-
-		module.RegisterSystemModule(&stats2.SimpleStatsModule{})
-		module.RegisterUserPlugin(&stats.StatsDModule{})
-		module.RegisterUserPlugin(gateway.GatewayModule{})
-		module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
+		module.RegisterUserPlugin(&gateway.GatewayModule{})
 		module.RegisterUserPlugin(forcemerge.ForceMergeModule{})
 		module.RegisterSystemModule(&pipeline.PipeModule{})
+		module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
 
 		//offline pipeline processors
 		pipe.RegisterPlugin("index_diff", index_diff.New)
