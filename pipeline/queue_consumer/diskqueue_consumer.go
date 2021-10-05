@@ -12,6 +12,7 @@ import (
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/rate"
+	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"net/http"
@@ -85,7 +86,7 @@ func (processor *DiskQueueConsumer) Process(ctx *pipeline.Context) error {
 	}
 
 	wg.Wait()
-
+	//log.Error("DiskQueueConsumer finished.")
 	return nil
 }
 
@@ -108,6 +109,7 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context,count *i
 			}
 		}
 		wg.Done()
+		//log.Error("DiskQueueConsumer inner finished.")
 	}()
 
 	timeOut := processor.config.IdleTimeoutInSecond
@@ -123,6 +125,7 @@ READ_DOCS:
 	for {
 
 		if ctx.IsCanceled(){
+			//log.Error("received cancel signal:")
 			return
 		}
 
@@ -171,7 +174,6 @@ READ_DOCS:
 						panic(err)
 					}
 				}
-				time.Sleep(5 * time.Second)
 			}
 		}
 
@@ -188,6 +190,7 @@ HANDLE_PENDING:
 	for {
 
 		if ctx.IsCanceled(){
+			//log.Error("received cancel signal:")
 			return
 		}
 
@@ -209,6 +212,7 @@ HANDLE_PENDING:
 				if global.Env().IsDebug {
 					log.Debug(ok, status, err)
 				}
+
 				if status > 401 && status < 500 {
 					log.Error("push to dead letter queue:", deadLetterQueue, ",", err)
 					err := queue.Push(deadLetterQueue, pop)
@@ -221,8 +225,6 @@ HANDLE_PENDING:
 						panic(err)
 					}
 				}
-
-				time.Sleep(1 * time.Second)
 			}
 		}
 		if err!=nil{
@@ -256,22 +258,39 @@ func processMessage(metadata *elastic.ElasticsearchMetadata, pop []byte) (bool, 
 	}
 
 	if metadata.Config.TrafficControl != nil {
+
+		if metadata.Config.TrafficControl.MaxWaitTimeInMs<=0{
+			metadata.Config.TrafficControl.MaxWaitTimeInMs=10*1000
+		}
+		maxTime:=time.Duration(metadata.Config.TrafficControl.MaxWaitTimeInMs)*time.Millisecond
+		startTime:=time.Now()
 	RetryRateLimit:
 
-		if metadata.Config.TrafficControl.MaxQpsPerNode > 0 {
-			if !rate.GetRateLimiterPerSecond(metadata.Config.Name, host+"max_qps", int(metadata.Config.TrafficControl.MaxQpsPerNode)).Allow() {
-				time.Sleep(10 * time.Millisecond)
-				goto RetryRateLimit
+		if time.Now().Sub(startTime)<maxTime{
+			if metadata.Config.TrafficControl.MaxQpsPerNode > 0 {
+				if !rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"max_qps", int(metadata.Config.TrafficControl.MaxQpsPerNode)).Allow() {
+					stats.Increment(metadata.Config.ID,host+"-max_qps_throttled")
+					if global.Env().IsDebug {
+						log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), host)
+					}
+					time.Sleep(10 * time.Millisecond)
+					goto RetryRateLimit
+				}
 			}
-		}
 
-		if metadata.Config.TrafficControl.MaxBytesPerNode > 0 {
-			if !rate.GetRateLimiterPerSecond(metadata.Config.Name, host+"max_bps", int(metadata.Config.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(), req.GetRequestLength()) {
-				time.Sleep(10 * time.Millisecond)
-				goto RetryRateLimit
+			if metadata.Config.TrafficControl.MaxBytesPerNode > 0 {
+				if !rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"max_bps", int(metadata.Config.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(), req.GetRequestLength()) {
+					stats.Increment(metadata.Config.ID,host+"-max_bps_throttled")
+					if global.Env().IsDebug {
+						log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), host)
+					}
+					time.Sleep(10 * time.Millisecond)
+					goto RetryRateLimit
+				}
 			}
+		}else{
+			log.Warn("reached max traffic control time, throttle quitting")
 		}
-
 	}
 
 	if global.Env().IsDebug {
@@ -280,15 +299,17 @@ func processMessage(metadata *elastic.ElasticsearchMetadata, pop []byte) (bool, 
 		log.Trace(string(resp.GetRawBody()))
 	}
 
+	stats.Increment("diskqueue_consumer",util.IntToString(resp.StatusCode()))
+
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated || resp.StatusCode() == http.StatusNotFound {
-		if resp.StatusCode() == http.StatusOK && util.ContainStr(string(req.RequestURI()), "_bulk") {
+		if util.ContainStr(string(req.RequestURI()), "_bulk") {
 			//handle bulk response partial failure
 			va,err:=jsonparser.GetBoolean(resp.GetRawBody(),"errors")
-			if va&&err==nil {
-					if global.Env().IsDebug {
-						log.Error("error in bulk requests,",util.SubString(string(resp.GetRawBody()), 0, 256))
-					}
-					return false, resp.StatusCode(), errors.New(fmt.Sprintf("%v", err))
+			if va{
+				stats.Increment("diskqueue_consumer","bulk_requests_errors")
+				log.Error("error in bulk requests,",util.SubString(string(resp.GetRawBody()), 0, 256))
+				time.Sleep(1*time.Second)
+				return false, resp.StatusCode(), errors.New(fmt.Sprintf("%v", err))
 			}
 		}
 		return true, resp.StatusCode(), nil

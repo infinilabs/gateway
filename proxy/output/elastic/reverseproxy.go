@@ -254,7 +254,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 	//replace with new hostClients
 	//TODO add locker
 	p.bla = balancer.NewBalancer(ws)
-	log.Infof("elasticsearch [%v] hosts: [%v] => [%v]", esConfig.Name, util.JoinArray(p.endpoints, ", "), util.JoinArray(hosts, ", "))
+	log.Infof("elasticsearch [%v] hosts: [%v] => [%v], force: %v", esConfig.Name, util.JoinArray(p.endpoints, ", "), util.JoinArray(hosts, ", "),force)
 	p.endpoints = hosts
 	log.Trace(esConfig.Name, " elasticsearch client nodes refreshed")
 
@@ -437,26 +437,38 @@ START:
 	}
 
 	if metadata.Config.TrafficControl != nil {
+
+		if metadata.Config.TrafficControl.MaxWaitTimeInMs<=0{
+			metadata.Config.TrafficControl.MaxWaitTimeInMs=10*1000
+		}
+		maxTime:=time.Duration(metadata.Config.TrafficControl.MaxWaitTimeInMs)*time.Millisecond
+		startTime:=time.Now()
 	RetryRateLimit:
 
-		if metadata.Config.TrafficControl.MaxQpsPerNode > 0 {
-			if !rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"max_qps", int(metadata.Config.TrafficControl.MaxQpsPerNode)).Allow() {
-				if global.Env().IsDebug {
-					log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), myctx.RemoteAddr().String())
+		if time.Now().Sub(startTime)<maxTime{
+			if metadata.Config.TrafficControl.MaxQpsPerNode > 0 {
+				if !rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"max_qps", int(metadata.Config.TrafficControl.MaxQpsPerNode)).Allow() {
+					stats.Increment(metadata.Config.ID,host+"-max_qps_throttled")
+					if global.Env().IsDebug {
+						log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), myctx.RemoteAddr().String())
+					}
+					time.Sleep(10 * time.Millisecond)
+					goto RetryRateLimit
 				}
-				time.Sleep(10 * time.Millisecond)
-				goto RetryRateLimit
 			}
-		}
 
-		if metadata.Config.TrafficControl.MaxBytesPerNode > 0 {
-			if !rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"max_bps", int(metadata.Config.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(), req.GetRequestLength()) {
-				if global.Env().IsDebug {
-					log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), myctx.RemoteAddr().String())
+			if metadata.Config.TrafficControl.MaxBytesPerNode > 0 {
+				if !rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"max_bps", int(metadata.Config.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(), req.GetRequestLength()) {
+					stats.Increment(metadata.Config.ID,host+"-max_bps_throttled")
+					if global.Env().IsDebug {
+						log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), myctx.RemoteAddr().String())
+					}
+					time.Sleep(10 * time.Millisecond)
+					goto RetryRateLimit
 				}
-				time.Sleep(10 * time.Millisecond)
-				goto RetryRateLimit
 			}
+		}else{
+			log.Warn("reached max traffic control time, throttle quitting")
 		}
 	}
 
@@ -465,11 +477,14 @@ START:
 
 	err := pc.Do(req, res)
 
+	stats.Increment("reverse_proxy","do")
+
 	// restore schema
 	req.URI().SetScheme(orignalSchema)
 
 	if  err != nil {
 		if util.ContainsAnyInArray(err.Error(), failureMessage) {
+			stats.Increment("reverse_proxy","backend_failure")
 			//record translog, update failure ticket
 			if global.Env().IsDebug {
 				if !rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"on_error", 1).Allow() {
@@ -485,6 +500,7 @@ START:
 				if p.proxyConfig.retryDelayInMs > 0 {
 					time.Sleep(time.Duration(p.proxyConfig.retryDelayInMs) * time.Millisecond)
 				}
+				stats.Increment("reverse_proxy","429_busy_retry")
 				goto START
 			} else {
 				log.Debugf("reached max retries, failed to proxy request: %v, %v", err, string(req.RequestURI()))

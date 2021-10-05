@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"fmt"
+	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
 	pool "github.com/libp2p/go-buffer-pool"
 	"infini.sh/framework/core/elastic"
@@ -155,7 +156,10 @@ func WalkBulkRequests(data []byte, docBuff []byte, eachLineFunc func(eachLine []
 
 	}
 
-	log.Tracef("total [%v] operations in bulk requests", docCount)
+	if global.Env().IsDebug{
+		log.Tracef("total [%v] operations in bulk requests", docCount)
+	}
+
 	return docCount, nil
 }
 
@@ -190,7 +194,6 @@ var startPart = []byte("{\"took\":0,\"errors\":false,\"items\":[")
 var itemPart = []byte("{\"index\":{\"_index\":\"fake-index\",\"_type\":\"doc\",\"_id\":\"1\",\"_version\":1,\"result\":\"created\",\"_shards\":{\"total\":1,\"successful\":1,\"failed\":0},\"_seq_no\":1,\"_primary_term\":1,\"status\":200}}")
 var endPart = []byte("]}")
 
-//TODO 提取出来，作为公共方法，和 indexing/bulking_indexing 的方法合并
 var fastHttpClient = &fasthttp.Client{
 	MaxConnDuration:     0,
 	MaxIdleConnDuration: 0,
@@ -213,9 +216,10 @@ type BulkProcessorConfig struct {
 	MaxResponseBodySize       int  `config:"max_logged_response_body_size"`
 
 	SaveFailure          bool   `config:"save_failure"`
+
 	FailureRequestsQueue string `config:"failure_queue"`
 	InvalidRequestsQueue string `config:"invalid_queue"`
-	DeadRequestsQueue    string `config:"dead_queue"`
+	//DeadRequestsQueue    string `config:"dead_queue"`
 	DocBufferSize        int    `config:"doc_buffer_size"`
 }
 
@@ -247,11 +251,11 @@ const INVALID API_STATUS = "invalid"
 const PARTIAL API_STATUS = "partial"
 const FAILURE API_STATUS = "failure"
 
-func (joint *BulkProcessor) Bulk(meta *elastic.ElasticsearchMetadata, host string, data []byte, httpClient *fasthttp.Client) (status_code int, status API_STATUS) {
+func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host string, data []byte, httpClient *fasthttp.Client) (status_code int, status API_STATUS) {
 
 	if data == nil || len(data) == 0 {
 		log.Error("bulk data is empty,", host)
-		stats.Increment("elasticsearch."+meta.Config.Name+".bulk", "5xx_requests")
+		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "5xx_requests")
 
 		if joint.Config.SaveFailure {
 			queue.Push(joint.Config.FailureRequestsQueue, data)
@@ -264,12 +268,12 @@ func (joint *BulkProcessor) Bulk(meta *elastic.ElasticsearchMetadata, host strin
 	available:=elastic.IsHostAvailable(host)
 
 	if !available{
-		newEndpoint:=meta.GetActiveHost()
+		newEndpoint:= metadata.GetActiveHost()
 		log.Warnf("[%v] is not available, try: [%v]", host,newEndpoint)
 		host =newEndpoint
 	}
 
-	if meta.IsTLS() {
+	if metadata.IsTLS() {
 		host = "https://" + host
 	} else {
 		host = "http://" + host
@@ -296,9 +300,9 @@ func (joint *BulkProcessor) Bulk(meta *elastic.ElasticsearchMetadata, host strin
 
 	req.Header.SetContentType("application/x-ndjson")
 
-	if meta.Config.BasicAuth != nil {
-		req.URI().SetUsername(meta.Config.BasicAuth.Username)
-		req.URI().SetPassword(meta.Config.BasicAuth.Password)
+	if metadata.Config.BasicAuth != nil {
+		req.URI().SetUsername(metadata.Config.BasicAuth.Username)
+		req.URI().SetPassword(metadata.Config.BasicAuth.Password)
 	}
 
 	if len(data) > 0 {
@@ -325,23 +329,40 @@ DO:
 		log.Error("DO: data length is zero,", string(data), ",is compress:", joint.Config.Compress)
 	}
 
-	if meta.Config.TrafficControl != nil {
+	if metadata.Config.TrafficControl != nil {
+
+		if metadata.Config.TrafficControl.MaxWaitTimeInMs<=0{
+			metadata.Config.TrafficControl.MaxWaitTimeInMs=10*1000
+		}
+		maxTime:=time.Duration(metadata.Config.TrafficControl.MaxWaitTimeInMs)*time.Millisecond
+		startTime:=time.Now()
 	RetryRateLimit:
 
-		if meta.Config.TrafficControl.MaxQpsPerNode > 0 {
-			if !rate.GetRateLimiterPerSecond(meta.Config.Name, host+"max_qps", int(meta.Config.TrafficControl.MaxQpsPerNode)).Allow() {
-				time.Sleep(10 * time.Millisecond)
-				goto RetryRateLimit
+		if time.Now().Sub(startTime)<maxTime{
+			if metadata.Config.TrafficControl.MaxQpsPerNode > 0 {
+				if !rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"max_qps", int(metadata.Config.TrafficControl.MaxQpsPerNode)).Allow() {
+					stats.Increment(metadata.Config.ID,host+"-max_qps_throttled")
+					if global.Env().IsDebug {
+						log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), host)
+					}
+					time.Sleep(10 * time.Millisecond)
+					goto RetryRateLimit
+				}
 			}
-		}
 
-		if meta.Config.TrafficControl.MaxBytesPerNode > 0 {
-			if !rate.GetRateLimiterPerSecond(meta.Config.Name, host+"max_bps", int(meta.Config.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(), req.GetRequestLength()) {
-				time.Sleep(10 * time.Millisecond)
-				goto RetryRateLimit
+			if metadata.Config.TrafficControl.MaxBytesPerNode > 0 {
+				if !rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"max_bps", int(metadata.Config.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(), req.GetRequestLength()) {
+					stats.Increment(metadata.Config.ID,host+"-max_bps_throttled")
+					if global.Env().IsDebug {
+						log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), host)
+					}
+					time.Sleep(10 * time.Millisecond)
+					goto RetryRateLimit
+				}
 			}
+		}else{
+			log.Warn("reached max traffic control time, throttle quitting")
 		}
-
 	}
 
 	err := httpClient.Do(req, resp)
@@ -350,7 +371,7 @@ DO:
 		if global.Env().IsDebug {
 			log.Error(err)
 		}
-		stats.Increment("elasticsearch."+meta.Config.Name+".bulk", "5xx_requests")
+		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "5xx_requests")
 
 		if joint.Config.SaveFailure {
 			queue.Push(joint.Config.FailureRequestsQueue, data)
@@ -366,7 +387,7 @@ DO:
 	}
 
 	if err != nil {
-		stats.Increment("elasticsearch."+meta.Config.Name+".bulk", "5xx_requests")
+		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "5xx_requests")
 
 		log.Error("status:", resp.StatusCode(), ",", host, ",", err, " ", util.SubString(string(util.EscapeNewLine(resbody)), 0, 256))
 
@@ -379,19 +400,20 @@ DO:
 
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated {
 
-		stats.Increment("elasticsearch."+meta.Config.Name+".bulk", "200_requests")
+		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "200_requests")
 
 		if resp.StatusCode() == http.StatusOK {
-			//TODO verify each es version's error response
-			hit := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
-			if hit {
+
+			onError,err:=jsonparser.GetBoolean(data,"errors")
+
+			if onError&&err==nil {
 
 				if joint.Config.LogInvalid200Message {
 					if rate.GetRateLimiter("log_invalid_200_message", host, 1, 1, 5*time.Second).Allow() {
 						log.Warn("status:", resp.StatusCode(), ",", host, ",", util.SubString(string(util.EscapeNewLine(resbody)), 0, 256))
 					}
 
-					logPath := path.Join(global.Env().GetLogDir(), meta.Config.Name, "invalid_200", "requests.log")
+					logPath := path.Join(global.Env().GetLogDir(), metadata.Config.Name, "invalid_200", "requests.log")
 					logHandler := rotate.GetFileHandler(logPath, joint.RotateConfig)
 
 					logHandler.WriteBytesArray(
@@ -490,15 +512,15 @@ DO:
 					})
 
 					if invalidCount > 0 {
-						stats.IncrementBy("elasticsearch."+meta.Config.Name+".bulk", "200_invalid_docs", int64(invalidCount))
+						stats.IncrementBy("elasticsearch."+metadata.Config.Name+".bulk", "200_invalid_docs", int64(invalidCount))
 					}
 
 					if failureCount > 0 {
-						stats.IncrementBy("elasticsearch."+meta.Config.Name+".bulk", "200_failure_docs", int64(failureCount))
+						stats.IncrementBy("elasticsearch."+metadata.Config.Name+".bulk", "200_failure_docs", int64(failureCount))
 					}
 
 					if len(invalidOffset) > 0 {
-						stats.Increment("elasticsearch."+meta.Config.Name+".bulk", "200_partial_requests")
+						stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "200_partial_requests")
 					}
 
 					if errorItems.Len() > 0 {
@@ -547,7 +569,7 @@ DO:
 		}
 		return resp.StatusCode(), SUCCESS
 	} else if resp.StatusCode() == 429 {
-		stats.Increment("elasticsearch."+meta.Config.Name+".bulk", "429_requests")
+		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "429_requests")
 
 		delayTime := joint.Config.RejectDelayInSeconds
 		if delayTime <= 0 {
@@ -573,14 +595,14 @@ DO:
 			queue.Push(joint.Config.InvalidRequestsQueue, data)
 		}
 
-		stats.Increment("elasticsearch."+meta.Config.Name+".bulk", "400_requests")
+		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "400_requests")
 
 		if joint.Config.LogInvalidMessage {
 			if rate.GetRateLimiter("log_invalid_messages", host, 1, 1, 5*time.Second).Allow() {
 				log.Warn("status:", resp.StatusCode(), ",", host, ",", util.SubString(util.UnsafeBytesToString(resbody), 0, 256))
 			}
 
-			logPath := path.Join(global.Env().GetLogDir(), meta.Config.Name, "invalid", "requests.log")
+			logPath := path.Join(global.Env().GetLogDir(), metadata.Config.Name, "invalid", "requests.log")
 			logHandler := rotate.GetFileHandler(logPath, joint.RotateConfig)
 
 			logHandler.WriteBytesArray(
@@ -596,14 +618,14 @@ DO:
 		return resp.StatusCode(), INVALID
 	} else {
 
-		stats.Increment("elasticsearch."+meta.Config.Name+".bulk", "5xx_requests")
+		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "5xx_requests")
 
 		if joint.Config.LogInvalidMessage {
 			if rate.GetRateLimiter("log_invalid_messages", host, 1, 1, 5*time.Second).Allow() {
 				log.Warn("status:", resp.StatusCode(), ",", host, ",", util.SubString(util.UnsafeBytesToString(resbody), 0, 256))
 			}
 
-			logPath := path.Join(global.Env().GetLogDir(), meta.Config.Name, "invalid", "requests.log")
+			logPath := path.Join(global.Env().GetLogDir(), metadata.Config.Name, "invalid", "requests.log")
 			logHandler := rotate.GetFileHandler(logPath, joint.RotateConfig)
 
 			logHandler.WriteBytesArray(
