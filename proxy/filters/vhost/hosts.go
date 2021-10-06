@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	router2 "infini.sh/gateway/proxy/router"
+	router2 "infini.sh/framework/lib/router"
 	"log"
 
 	"infini.sh/framework/lib/fasthttp"

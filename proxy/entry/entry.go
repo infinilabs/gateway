@@ -17,9 +17,9 @@ import (
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/framework/lib/fasthttp/reuseport"
 	"infini.sh/gateway/common"
-	r "infini.sh/gateway/proxy/router"
+	//r "infini.sh/gateway/proxy/router"
+	r "infini.sh/framework/lib/router"
 	"net"
-	"net/http"
 	"os"
 	"path"
 	"time"
@@ -95,10 +95,6 @@ func (this *Entrypoint) Start() error {
 			for _,y:=range rule.Flow{
 
 				cfg:=common.GetFlowConfig(y)
-				//for _,z:=range cfg.Filters{
-				//	f:=common.GetFilterInstanceWithConfig(&z)
-				//	flow.JoinFilter(&z,f)
-				//}
 
 				if len(cfg.FiltersV2)>0{
 					flow1, err := common.New(cfg.FiltersV2)
@@ -118,11 +114,7 @@ func (this *Entrypoint) Start() error {
 				for _,u:=range rule.PathPattern{
 					log.Debugf("apply filter flow: [%s] [%s] [ %s ]",v,u,flow.ToString())
 					if v=="*"{
-						this.router.Handle(http.MethodGet,u,flow.Process)
-						this.router.Handle(http.MethodPost,u,flow.Process)
-						this.router.Handle(http.MethodPut,u,flow.Process)
-						this.router.Handle(http.MethodDelete,u,flow.Process)
-						this.router.Handle(http.MethodHead,u,flow.Process)
+						this.router.ANY(u,flow.Process)
 					}else{
 						this.router.Handle(v,u,flow.Process)
 					}
