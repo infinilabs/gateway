@@ -4,13 +4,13 @@ path.logs: log
 elasticsearch:
   - name: source
     enabled: true
-    endpoint: http://localhost:9200
+    endpoint: http://192.168.3.188:9204
     basic_auth:
       username: test
       password: testtest
   - name: target
     enabled: true
-    endpoint: http://localhost:9201
+    endpoint: http://192.168.3.188:9206
     basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
       username: test
       password: testtest
@@ -21,15 +21,18 @@ pipelines_v2:
     - dag:
         parallel:
           - dump_hash: #dump es1's doc
-              indices: "medcl-test"
+              indices: "medcl-a"
               scroll_time: "10m"
               elasticsearch: "source"
+#              query: "field1:elastic"
+#              fields: "name,age"
               output_queue: "source_docs"
               batch_size: 10000
               slice_size: 5
           - dump_hash: #dump es2's doc
-              indices: "medcl-test"
+              indices: "medcl-a"
               scroll_time: "10m"
+#              query: "field1:elastic"
               batch_size: 10000
               slice_size: 5
               elasticsearch: "target"
