@@ -13,8 +13,16 @@ entry:
       enabled: false
 
 flow:
+  - name: primary-read-flow
+    filter_v2:
+      - elasticsearch: #集群可用，直接处理请求
+          elasticsearch: "primary"
+          max_connection_per_host: 1000
   - name: primary-flow-post-processing
     filter_v2:
+      - retry_limiter:
+          queue_name: "primary-deadlock-requests"
+          max_retry_times: 3
       - set_basic_auth: #覆盖身份信息
           username: elastic
           password: changeme
@@ -22,13 +30,24 @@ flow:
           cluster_available: ["primary"]
         then:
           - retry_limiter:
-              queue_name: "dead_retry_messages"
+              queue_name: "primary_deadletter_requests"
               max_retry_times: 5
           - elasticsearch:
               elasticsearch: "primary"
               max_connection_per_host: 1000
+          - dump_request_body:
+              when:
+                in:
+                  _ctx.response.status: [ 400 ]
+          - dump_response_body:
+              when:
+                in:
+                  _ctx.response.status: [ 400 ]
           - bulk_response_validate:
-              invalid_status: 500
+              invalid_status: 400
+              failure_status: 507
+              invalid_queue: "primary_invalid_bulk_requests"
+              failure_queue: "primary_failure_bulk_requests"
           - if:
               in:
                 _ctx.response.status: [ 403,404,200,201 ]
@@ -36,35 +55,44 @@ flow:
               - set_basic_auth: #覆盖身份信息
                   username: test
                   password: testtest
+              - set_request_header:
+                  headers:
+                  - Tag -> primary-flow-post-processing
+#              - dump_url:
+#              - dump_status_code:
               - queue:
                   queue_name: "backup"
             else:
               - queue:
-                  queue_name: "primary-invalid"
+                  queue_name: "primary_failure_requests"
         else:
           - queue:
-              queue_name: "primary-unavailable"
+              queue_name: "primary_failure_requests"
           - sleep:
               sleep_in_million_seconds: 10000
           - elasticsearch_health_check:
               elasticsearch: "primary"
-#      - flow:
-#          flows:
-#            - request_logging
-  - name: primary-flow
+      - flow:
+          flows:
+            - request_logging
+  - name: primary-write-flow
     filter_v2:
+      - retry_limiter:
+          queue_name: "primary_deadletter_requests"
+          max_retry_times: 5
       - set_basic_auth: #覆盖身份信息
           username: elastic
           password: changeme
       - if:
           and:
-            - queue_has_lag: [ "primary>10", "primary-500>10" ]
+            - queue_has_lag: [ "primary>100", "primary_failure_requests>100", "primary_failure_bulk_requests>100" ]
             - cluster_available: ["primary"]
         then: #集群可用但是集群有堆积的情况，不处理客户端请求，待服务恢复之后再提供服务
           - set_response:
               status: 503
               content_type: "application/json"
               body: '{"error":true,"message":"503 Service Unavailable"}'
+          - drop:
         else: # 集群不可用或者集群可用且没有堆积的情况，都直接转发给集群先处理
           - if: #集群如果已经变成不可用状态，则直接丢弃请求，让客户端选择处理，或者也可落地队列确保不丢数据
               not:
@@ -81,7 +109,10 @@ flow:
               elasticsearch: "primary"
               max_connection_per_host: 1000
           - bulk_response_validate: #如果是 bulk 请求，还需要进一步验证是否存在部分请求失败的错误异常
-              invalid_status: 507
+              invalid_status: 400
+              failure_status: 507
+              invalid_queue: "primary_invalid_bulk_requests"
+              failure_queue: "primary_failure_bulk_requests"
               when:
                 contains:
                   _ctx.request.path: /_bulk
@@ -92,36 +123,57 @@ flow:
               - set_basic_auth: #覆盖身份信息
                   username: test
                   password: testtest
+              - set_request_header:
+                  headers:
+                    - Tag -> primary-write-processing
+#              - dump_url:
+#              - dump_status_code:
               - queue:
                   queue_name: "backup"
             else: #集群可用的情况下但是失败了，可能存在脏写，将请求放入写入失败队列，后续可以选择两边集群都重做一次，最终确保一致性，写 translog，后续提供 UI 可以进行三方检查：主、备集群和本地日志
               - queue:
-                  queue_name: "primary-500"
-  - name: cache_first
-    filter: #comment out any filter sections, like you don't need cache or rate-limiter
-      - name: get_cache
-        parameters:
-          pass_patterns:
-            - _cat
-      - name: elasticsearch
-        parameters:
-          elasticsearch: backup  #elasticsearch configure reference name
-          max_connection_per_host: 1000 #max tcp connection to upstream, default for all nodes
-          max_response_size: -1 #default for all nodes
-          balancer: weight
-          refresh: # refresh upstream nodes list, need to enable this feature to use elasticsearch nodes auto discovery
-            enabled: true
-            interval: 60s
-          filter:
-            tags:
-              exclude:
-                - temp: cold
-            roles:
-              exclude:
-                - master
-      - name: set_cache
-        parameters:
-          cache_ttl: 30s
+                  queue_name: "primary_failure_requests"
+  - name: backup-replicate-flow
+    filter_v2:
+          - retry_limiter:
+              queue_name: "backup-deadlock-requests"
+              max_retry_times: 3
+          - if:
+              not:
+                cluster_available: ["backup"]
+            then: #如果集群不可用
+              - elasticsearch_health_check: #由请求触发的限速模式下的主动检查后端监控情况
+                  elasticsearch: "backup"
+              - queue:
+                  queue_name: "backup_failure_requests"
+              - drop:
+          - bulk_reshuffle:
+              when:
+                contains:
+                  _ctx.request.path: /_bulk
+              elasticsearch: backup
+              level: node
+              mode: async
+              fix_null_id: true
+          - elasticsearch: #集群可用，直接处理请求
+              elasticsearch: "backup"
+              max_connection_per_host: 1000
+          - bulk_response_validate: #如果是 bulk 请求，还需要进一步验证是否存在部分请求失败的错误异常
+              invalid_status: 400
+              failure_status: 507
+              invalid_queue: "backup_invalid_bulk_requests"
+              failure_queue: "backup_failure_bulk_requests"
+              when:
+                contains:
+                  _ctx.request.path: /_bulk
+          - if: #判断是否成功
+              not:
+                in:
+                  _ctx.response.status: [ 404,200,201 ]
+            then: #继续入队重试
+              - queue:
+                  queue_name: "backup_failure_requests"
+
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
       - name: request_logging
@@ -132,8 +184,16 @@ flow:
 
 router:
   - name: my_router
-    default_flow: primary-flow
-    tracing_flow: request_logging
+    default_flow: primary-write-flow
+#    tracing_flow: request_logging
+    rules:
+      - method:
+          - "GET"
+          - "HEAD"
+        pattern:
+          - /
+        flow:
+          - primary-read-flow
 
 elasticsearch:
   - name: primary
@@ -142,10 +202,10 @@ elasticsearch:
     basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
       username: elastic
       password: changeme
-    traffic_control:
-      max_qps_per_node: 1000
+#    traffic_control:
+#      max_qps_per_node: 1000
     discovery: # auto discovery elasticsearch cluster nodes
-      enabled: false
+      enabled: true
       refresh:
         enabled: true
         interval: 60s
@@ -156,7 +216,7 @@ elasticsearch:
       username: test
       password: testtest
     discovery: # auto discovery elasticsearch cluster nodes
-      enabled: false
+      enabled: true
       refresh:
         enabled: true
         interval: 60s
@@ -176,7 +236,7 @@ pipelines_v2:
     auto_start: false
     processors:
       - flow_runner:
-          input_queue: "dead_retry_messages"
+          input_queue: "primary_deadletter_requests"
           flow: primary-flow-post-processing
           when:
             cluster_available: [ "primary" ]
@@ -185,54 +245,47 @@ pipelines_v2:
     keep_running: true
     processors:
       - flow_runner:
-          input_queue: "primary-500"
+          input_queue: "primary_failure_requests"
           flow: primary-flow-post-processing
           when:
             cluster_available: [ "primary" ]
-  - name: queue_primary-invalid-consumer
-    auto_start: false
-    processors:
-      - flow_runner:
-          input_queue: "primary-invalid"
-          flow: primary-flow-post-processing
-          when:
-            cluster_available: [ "primary" ]
-  - name: queue_primary-unavailable-consumer
+  - name: queue_primary-bulk-failure-consumer
     auto_start: true
     keep_running: true
     processors:
       - flow_runner:
-          input_queue: "primary-unavailable"
+          input_queue: "primary_failure_bulk_requests"
           flow: primary-flow-post-processing
           when:
             cluster_available: [ "primary" ]
-  - name: queue_backup-deadletter-consumer
-    auto_start: false
-    processors:
-      - flow_runner:
-          input_queue: "backup_dead_letter"
-          flow: primary-flow-post-processing
-          when:
-            cluster_available: ["backup"]
-  - name: queue_backup-consumer
+#  - name: backup-requests-replication
+#    auto_start: true
+#    keep_running: true
+#    processors:
+#      - flow_runner:
+#          input_queue: "backup"
+#          flow: backup-replicate-flow
+#          when:
+#            cluster_available: [ "backup" ]
+#  - name: backup-bulk_requests-replication
+#    auto_start: true
+#    keep_running: true
+#    processors:
+#      - bulk_indexing:
+#          elasticsearch: "backup"
+#          compress: true
+#          worker_size: 10
+#          retry_delay_in_seconds: 5
+#          process_failure_queue: true
+
+  - name: queue_backup-replicator
     auto_start: true
     keep_running: true
     processors:
       - queue_consumer:
           input_queue: "backup"
           elasticsearch: "backup"
-          waiting_after: [ "backup-500"]
+          waiting_after: [ "backup_failure_requests"]
           worker_size: 20
           when:
             cluster_available: [ "backup" ]
-  - name: queue_primary-consumer
-    auto_start: true
-    keep_running: true
-    processors:
-      - queue_consumer:
-          input_queue: "primary"
-          elasticsearch: "primary"
-          waiting_after: [ "primary-500" ]
-          worker_size: 20
-          when:
-            cluster_available: [ "primary" ]
