@@ -17,6 +17,7 @@ elasticsearch:
 
 pipelines_v2:
   - name: index_diff_service
+    auto_start: true
     processors:
     - dag:
         parallel:

@@ -13,7 +13,6 @@ entry:
     enabled: true
     router: my_router
     max_concurrency: 1000
-#    reduce_memory_usage: true
     network:
       binding: 0.0.0.0:8000
 #    tls:
@@ -38,13 +37,6 @@ flow:
           refresh: # refresh upstream nodes list, need to enable this feature to use elasticsearch nodes auto discovery
             enabled: true
             interval: 60s
-#          filter:
-#            tags:
-#                exclude:
-#                - temp: cold
-#            roles:
-#              exclude:
-#                - master
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter_v2:
       - request_logging:
@@ -55,6 +47,7 @@ router:
   - name: my_router
     default_flow: default_flow
     tracing_flow: request_logging
+
 
 
 elasticsearch:

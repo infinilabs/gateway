@@ -68,12 +68,14 @@ elasticsearch:
 
 pipelines_v2:
   - name: request_logging_index
+    auto_start: true
     processors:
       - json_indexing:
           index_name: "gateway_requests"
           elasticsearch: "dev"
           input_queue: "request_logging"
   - name: bulk_request_ingest
+    auto_start: true
     processors:
       - bulk_indexing:
           elasticsearch: "dev"
