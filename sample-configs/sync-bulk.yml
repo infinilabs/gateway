@@ -60,10 +60,11 @@ router:
     default_flow: cache_first
     rules:
       - method:
-          - "POST"
+          - PUT
+          - POST
         pattern:
-#          - '/index125/_bulk'
-          - '/_bulk'
+          - "/_bulk"
+          - "/{index_name}/_bulk"
         flow:
           - online_indexing_merge
 

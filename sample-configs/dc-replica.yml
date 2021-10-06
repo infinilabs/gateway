@@ -191,7 +191,7 @@ router:
           - "GET"
           - "HEAD"
         pattern:
-          - /
+          - "/{any:*}"
         flow:
           - primary-read-flow
 
