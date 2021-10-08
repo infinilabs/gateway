@@ -4,12 +4,14 @@
 package elastic
 
 import (
+	"fmt"
 	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/queue"
+	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
@@ -49,13 +51,28 @@ func (this BulkResponseValidate) Process(ctx *fasthttp.RequestCtx) {
 			invalidOffset := map[int]elastic.BulkActionMetadata{}
 			//failureOffset := map[int]elastic.BulkActionMetadata{}
 			var invalidCount =0
+			var statsCodeStats=map[int]int{}
 			for i, v := range response.Items {
 				item := v.GetItem()
+
+				x,ok:=statsCodeStats[item.Status]
+				if!ok{
+					x=0
+				}
+				x++
+				statsCodeStats[item.Status]=x
+
 				if item.Error != nil {
 					invalidCount++
 					invalidOffset[i]=v
 				}
 			}
+
+
+			for x,y:=range statsCodeStats{
+				stats.IncrementBy("bulk_items",fmt.Sprintf("%v",x), int64(y))
+			}
+
 
 			if invalidCount>0{
 
@@ -80,24 +97,6 @@ func (this BulkResponseValidate) Process(ctx *fasthttp.RequestCtx) {
 				}, func(metaBytes []byte, actionStr, index, typeName, id string) (err error) {
 					response, match = invalidOffset[offset]
 					if match {
-
-						//switch response.GetItem().Status {
-						//case 0:
-						//	//network connection issue
-						//	//failureOffset[i] = v
-						//	retryableItems.Write(metaBytes)
-						//case 429:
-						//	retryableItems.Write(metaBytes)
-						//	break
-						//default:
-						//	if item.Status>= 400 && item.Status<500{
-						//		invalidOffset[i] = v
-						//	}else if item.Status>=500{
-						//		failureOffset[i] = v
-						//	}else{
-						//		//assume they are successful requests
-						//	}
-						//}
 
 						//find invalid request
 						if response.GetItem().Status >= 400 && response.GetItem().Status < 500 && response.GetItem().Status != 429 {
@@ -136,18 +135,6 @@ func (this BulkResponseValidate) Process(ctx *fasthttp.RequestCtx) {
 						}
 					}
 				})
-
-				//if invalidCount > 0 {
-				//	stats.IncrementBy("elasticsearch."+meta+".bulk", "200_invalid_docs", int64(invalidCount))
-				//}
-				//
-				//if failureCount > 0 {
-				//	stats.IncrementBy("elasticsearch."+meta.Config.Name+".bulk", "200_failure_docs", int64(failureCount))
-				//}
-				//
-				//if len(invalidOffset) > 0 {
-				//	stats.Increment("elasticsearch."+meta.Config.Name+".bulk", "200_partial_requests")
-				//}
 
 				if nonRetryableItems.Len() > 0 {
 						nonRetryableItems.WriteByte('\n')

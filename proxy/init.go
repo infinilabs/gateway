@@ -18,6 +18,7 @@ import (
 	"infini.sh/gateway/proxy/output/logging"
 	"infini.sh/gateway/proxy/output/queue"
 	"infini.sh/gateway/proxy/output/redis_pubsub"
+	queue2 "infini.sh/gateway/proxy/output/stats"
 	"infini.sh/gateway/proxy/output/translog"
 )
 
@@ -95,6 +96,7 @@ func Init() {
 
 
 	common.RegisterFilterPlugin(throttle.RetryLimiter{})
+	common.RegisterFilterPlugin(queue2.StatsFilter{})
 
 
 }
