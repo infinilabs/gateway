@@ -48,9 +48,24 @@ flow:
               failure_status: 507
               invalid_queue: "primary_invalid_bulk_requests"
               failure_queue: "primary_failure_bulk_requests"
+          - if: #429 重试
+              in:
+                _ctx.response.status: [ 429 ]
+            then:
+              - queue:
+                  queue_name: "primary_failure_requests"
+              - drop:
+          - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
+              range:
+                _ctx.response.status.gte: 400
+                _ctx.response.status.lt: 500
+            then:
+              #              - queue:
+              #                  queue_name: "primary_invalid_requests"
+              - drop:
           - if:
               in:
-                _ctx.response.status: [ 403,404,200,201 ]
+                _ctx.response.status: [ 200,201 ]
             then:
               - set_basic_auth: #覆盖身份信息
                   username: test
@@ -116,9 +131,24 @@ flow:
               when:
                 contains:
                   _ctx.request.path: /_bulk
-          - if: #验证主集群的操作是否成功写入
+          - if: #429 重试
               in:
-                _ctx.response.status: [ 403,404,200,201 ]
+                _ctx.response.status: [ 429 ]
+            then:
+              - queue:
+                  queue_name: "primary_failure_requests"
+              - drop:
+          - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
+              range:
+                _ctx.response.status.gte: 400
+                _ctx.response.status.lt: 500
+            then:
+#              - queue:
+#                  queue_name: "primary_invalid_requests"
+              - drop:
+          - if: #正常的请求, 复制到备份集群
+              in:
+                _ctx.response.status: [200,201]
             then: #仅正常处理的集群才转发给后端集群
               - set_basic_auth: #覆盖身份信息
                   username: test
@@ -126,8 +156,6 @@ flow:
               - set_request_header:
                   headers:
                     - Tag -> primary-write-processing
-#              - dump_url:
-#              - dump_status_code:
               - queue:
                   queue_name: "backup"
             else: #集群可用的情况下但是失败了，可能存在脏写，将请求放入写入失败队列，后续可以选择两边集群都重做一次，最终确保一致性，写 translog，后续提供 UI 可以进行三方检查：主、备集群和本地日志
@@ -173,14 +201,20 @@ flow:
             then: #继续入队重试
               - queue:
                   queue_name: "backup_failure_requests"
-
+          - flow:
+              flows:
+                - request_logging
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
-    filter:
-      - name: request_logging
-        parameters:
+    filter_v2:
+      - stats:
+      - request_logging:
+          queue_name: request_logging
           max_request_body_size: 1024
           max_response_body_size: 1024
-          queue_name: request_logging
+          when:
+            not:
+              equals:
+                _ctx.response.status: 200
 
 router:
   - name: my_router
@@ -192,6 +226,21 @@ router:
           - "HEAD"
         pattern:
           - "/{any:*}"
+        flow:
+          - primary-read-flow
+      - method:
+          - "POST"
+          - "GET"
+        pattern:
+          - "/_refresh"
+          - "/_count"
+          - "/_search"
+          - "/_msearch"
+          - "/_mget"
+          - "/{any_index}/_count"
+          - "/{any_index}/_search"
+          - "/{any_index}/_msearch"
+          - "/{any_index}/_mget"
         flow:
           - primary-read-flow
 
