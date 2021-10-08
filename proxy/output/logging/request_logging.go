@@ -28,6 +28,7 @@ var writerPool *sync.Pool
 var requstObjPool *sync.Pool
 var reqPool *sync.Pool
 var resPool *sync.Pool
+var reqFlowPool *sync.Pool
 
 func initPool() {
 	if writerPool != nil {
@@ -54,6 +55,11 @@ func initPool() {
 			return new(model.Response)
 		},
 	}
+	reqFlowPool = &sync.Pool {
+		New: func() interface{} {
+			return new(model.DataFlow)
+		},
+	}
 }
 
 func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
@@ -65,12 +71,14 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 	}
 
 	request := requstObjPool.Get().(*model.HttpRequest)
-	request.Request = *reqPool.Get().(*model.Request)
-	request.Response = *resPool.Get().(*model.Response)
+	request.Request = reqPool.Get().(*model.Request)
+	request.Response = resPool.Get().(*model.Response)
+	request.DataFlow =reqFlowPool.Get().(*model.DataFlow)
 
 	defer requstObjPool.Put(request)
-	defer resPool.Put(&request.Response)
-	defer reqPool.Put(&request.Request)
+	defer resPool.Put(request.Response)
+	defer reqPool.Put(request.Request)
+	defer reqFlowPool.Put(request.DataFlow)
 
 
 	minTimeElapsed,_:=this.GetInt("min_elapsed_time_in_ms",-1)
@@ -167,7 +175,7 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 		request.Elastic["cluster_name"]=stats
 	}
 
-	request.DataFlow = model.DataFlow{}
+	//request.DataFlow = &model.DataFlow{}
 	request.DataFlow.From = request.RemoteIP
 
 	request.DataFlow.Process=ctx.GetRequestProcess()
@@ -245,12 +253,10 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 		request.Response.Header = m
 	}
 
-	bytes,err:=util.ToJSONBytes(request)
-
-	//bytes,err := request.MarshalJSON()
-	//if err != nil {
-	//	panic(err)
-	//}
+	bytes,err := request.MarshalJSON()
+	if err != nil {
+		panic(err)
+	}
 
 	err = queue.Push(this.GetStringOrDefault("queue_name", "request_logging"), bytes)
 	if err != nil {
