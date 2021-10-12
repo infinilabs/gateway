@@ -1,29 +1,54 @@
 package filter
 
 import (
+	"fmt"
 	log "github.com/cihub/seelog"
+	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 )
 
 type ResponseHeaderFilter struct {
-	RequestFilterBase
+	genericFilter *RequestFilter
+	Include []map[string]string `config:"include"`
+	Exclude []map[string]string `config:"exclude"`
 }
 
-func (filter ResponseHeaderFilter) Name() string {
+func (filter *ResponseHeaderFilter) Name() string {
 	return "response_header_filter"
 }
 
-func (filter ResponseHeaderFilter) Process(ctx *fasthttp.RequestCtx) {
+
+func NewResponseHeaderFilter(c *config.Config) (pipeline.Filter, error) {
+
+	runner := ResponseHeaderFilter {
+	}
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	runner.genericFilter= &RequestFilter {
+		Action: "deny",
+		Status:403,
+	}
+
+	if err := c.Unpack(runner.genericFilter); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	return &runner, nil
+}
+
+func (filter *ResponseHeaderFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	if global.Env().IsDebug {
 		log.Debug("headers:", string(util.EscapeNewLine(ctx.Response.Header.Header())))
 	}
 
-	exclude, ok := filter.GetMapArray("exclude")
-	if ok {
-		for _, x := range exclude {
+	if len(filter.Exclude)>0 {
+		for _, x := range filter.Exclude {
 			for k, v := range x {
 				v1 := ctx.Response.Header.Peek(k)
 				match := util.ToString(v) == string(v1)
@@ -31,7 +56,7 @@ func (filter ResponseHeaderFilter) Process(ctx *fasthttp.RequestCtx) {
 					log.Debugf("exclude header [%v]: %v vs %v, match: %v", k, v, string(v1), match)
 				}
 				if match {
-					filter.Filter(ctx)
+					filter.genericFilter.Filter(ctx)
 					if global.Env().IsDebug {
 						log.Debugf("rule matched, this request has been filtered: %v", ctx.Request.URI().String())
 					}
@@ -41,9 +66,8 @@ func (filter ResponseHeaderFilter) Process(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	include, ok := filter.GetMapArray("include")
-	if ok {
-		for _, x := range include {
+	if len(filter.Include)>0 {
+		for _, x := range filter.Include {
 			for k, v := range x {
 				v1 := ctx.Response.Header.Peek(k)
 				match := util.ToString(v) == string(v1)
@@ -58,7 +82,7 @@ func (filter ResponseHeaderFilter) Process(ctx *fasthttp.RequestCtx) {
 				}
 			}
 		}
-		filter.Filter(ctx)
+		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {
 			log.Debugf("no rule matched, this request has been filtered: %v", ctx.Request.URI().String())
 		}

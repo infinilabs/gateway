@@ -5,6 +5,7 @@ import (
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"reflect"
@@ -12,37 +13,16 @@ import (
 	"sync"
 )
 
-/*
-# Rules：
-METHOD 			PATH 						FLOW
-GET 			/							name=cache_first flow =[ get_cache >> forward >> set_cache ]
-GET				/_cat/*item					name=forward flow=[forward]
-POST || PUT		/:index/_doc/*id			name=forward flow=[forward]
-POST || PUT		/:index/_bulk || /_bulk 	name=async_indexing_via_translog flow=[ save_translog ]
-POST || GET		/*index/_search				name=cache_first flow=[ get_cache >> forward >> set_cache ]
-POST || PUT		/:index/_bulk || /_bulk 	name=async_dual_writes flow=[ save_translog{name=dual_writes_id1, retention=7days, max_size=10gb} ]
-POST || PUT		/:index/_bulk || /_bulk 	name=sync_dual_writes flow=[ mirror_forward ]
-GET				/audit/*operations			name=secured_audit_access flow=[ basic_auth >> flow{name=cache_first} ]
-*/
 
 type FilterFlow struct {
 	ID string
-	Filters []RequestFilter
+	Filters []pipeline.Filter
 }
 
-func (flow *FilterFlow) JoinFilter(filter RequestFilter) *FilterFlow {
+func (flow *FilterFlow) JoinFilter(filter pipeline.Filter) *FilterFlow {
 	flow.Filters=append(flow.Filters,filter)
 	return flow
 }
-
-//func (flow *FilterFlow) JoinFlows(flows ...FilterFlow) *FilterFlow {
-//	for _, v := range flows {
-//		for _, x := range v.Filters {
-//			flow.Filters = append(flow.Filters, x)
-//		}
-//	}
-//	return flow
-//}
 
 func (flow *FilterFlow) ToString() string {
 	str:=strings.Builder{}
@@ -70,7 +50,7 @@ func (flow *FilterFlow) Process(ctx *fasthttp.RequestCtx) {
 			log.Debugf("processing filter [%v] [%v]",v.Name(),v)
 		}
 		ctx.AddFlowProcess(v.Name())
-		v.Process(ctx)
+		v.Filter(ctx)
 	}
 }
 
@@ -88,7 +68,7 @@ func MustGetFlow(flowID string) FilterFlow {
 	}
 
 	if len(cfg.FiltersV2)>0{
-		flow1, err := New(cfg.FiltersV2)
+		flow1, err := pipeline.NewFilter(cfg.FiltersV2)
 		if err != nil {
 			panic(err)
 		}
@@ -112,17 +92,8 @@ func GetFlowProcess(flowID string) func(ctx *fasthttp.RequestCtx) {
 	return flow.Process
 }
 
-//func JoinFlows(flowID ...string) FilterFlow {
-//	flow := FilterFlow{}
-//	for _, v := range flowID {
-//		temp := MustGetFlow(v)
-//		flow.JoinFlows(flow, temp)
-//	}
-//	return flow
-//}
-
 //get filter plugins
-func GetFilter(name string) RequestFilter {
+func GetFilter(name string) pipeline.Filter {
 	v, ok := filterPluginTypes[name]
 	if !ok{
 		panic(errors.Errorf("filter [%s] not found",name))
@@ -131,7 +102,7 @@ func GetFilter(name string) RequestFilter {
 }
 
 
-func GetFilterInstanceWithConfig(cfg *FilterConfig) RequestFilter {
+func GetFilterInstanceWithConfig(cfg *FilterConfig) pipeline.Filter {
 		if global.Env().IsDebug {
 			log.Tracef("get filter instance [%v] [%v]", cfg.Name,cfg.ID)
 		}
@@ -160,12 +131,12 @@ func GetFilterInstanceWithConfig(cfg *FilterConfig) RequestFilter {
 		if f.IsValid() && f.CanSet() && f.Kind() == reflect.Map {
 			f.Set(reflect.ValueOf(cfg.Parameters))
 		}
-		x:= v.Interface().(RequestFilter)
+		x:= v.Interface().(pipeline.Filter)
 		filterInstances[cfg.ID]=x
 		return x
 }
 
-func GetFilterInstanceWithConfigV2(filterName string,cfg *config.Config) RequestFilter {
+func GetFilterInstanceWithConfigV2(filterName string,cfg *config.Config) pipeline.Filter {
 		if global.Env().IsDebug {
 			log.Debugf("get filter [%v]", filterName)
 		}
@@ -203,28 +174,24 @@ func GetFilterInstanceWithConfigV2(filterName string,cfg *config.Config) Request
 		if f.IsValid() && f.CanSet() && f.Kind() == reflect.Map {
 			f.Set(reflect.ValueOf(parameters))
 		}
-		x:= v.Interface().(RequestFilter)
+		x:= v.Interface().(pipeline.Filter)
 
 		filterInstances[id]=x
 		return x
 }
 
-var filterPluginTypes map[string]RequestFilter = make(map[string]RequestFilter)
+var filterPluginTypes map[string]pipeline.Filter = make(map[string]pipeline.Filter)
 
-var filterInstances map[string]RequestFilter = make(map[string]RequestFilter)
+var filterInstances map[string]pipeline.Filter = make(map[string]pipeline.Filter)
 var flows map[string]FilterFlow = make(map[string]FilterFlow)
 
 var routingRules map[string]RuleConfig = make(map[string]RuleConfig)
 var flowConfigs map[string]FlowConfig = make(map[string]FlowConfig)
 var routerConfigs map[string]RouterConfig = make(map[string]RouterConfig)
 
-func RegisterFilterPlugin(filter RequestFilter) {
+func RegisterFilterPlugin(filter pipeline.Filter) {
 	log.Debug("register filter: ",filter.Name())
 	filterPluginTypes[filter.Name()] = filter
-}
-
-func RegisterFlow(flow FilterFlow) {
-	flows[flow.ID] = flow
 }
 
 func RegisterFlowConfig(flow FlowConfig) {
@@ -239,9 +206,6 @@ func RegisterFlowConfig(flow FlowConfig) {
 	flowConfigs[flow.Name] = flow
 }
 
-func RegisterRoutingRule(rule RuleConfig) {
-	routingRules[rule.ID] = rule
-}
 func RegisterRouterConfig(config RouterConfig) {
 	routerConfigs[config.Name] = config
 }
@@ -250,14 +214,6 @@ func GetRouter(name string) RouterConfig {
 	v,ok:=  routerConfigs[name]
 	if !ok{
 		panic(errors.Errorf("router [%s] not found",name))
-	}
-	return v
-}
-
-func GetRule(id string) RuleConfig {
-	v,ok:= routingRules[id]
-	if !ok{
-		panic(errors.Errorf("rule [%s] not found",id))
 	}
 	return v
 }

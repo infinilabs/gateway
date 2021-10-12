@@ -1,47 +1,71 @@
-package elastic
+package date_range_precision_tuning
 
 import (
-	"infini.sh/framework/core/param"
+	"fmt"
+	"infini.sh/framework/core/config"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 )
 
 type DatePrecisionTuning struct {
-	param.Parameters
+	config *Config
 }
 
-func (this DatePrecisionTuning) Name() string {
+
+type Config struct {
+	PathKeywords []string    `config:"path_keywords"`
+	TimePrecision int    `config:"time_precision"`
+}
+
+var defaultConfig = Config{
+	PathKeywords:  builtinKeywords,
+	TimePrecision: 4,
+}
+
+
+func New(c *config.Config) (pipeline.Filter, error) {
+	cfg:=defaultConfig
+	if err := c.Unpack(&cfg); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	if cfg.TimePrecision>9{
+		cfg.TimePrecision=9
+	}
+
+	if cfg.TimePrecision<0{
+		cfg.TimePrecision=0
+	}
+
+	runner := DatePrecisionTuning{config: &cfg}
+
+	return &runner, nil
+}
+
+func (this *DatePrecisionTuning) Name() string {
 	return "date_range_precision_tuning"
 }
 
 var builtinKeywords=[]string{"_search","_async_search"}
-func (this DatePrecisionTuning) Process(ctx *fasthttp.RequestCtx) {
+func (this *DatePrecisionTuning) Filter(ctx *fasthttp.RequestCtx) {
 
 	if ctx.Request.GetBodyLength()<=0{
+		fmt.Println("return")
+
 		return
 	}
 
 	path:=string(ctx.RequestURI())
-	keywords,ok:=this.GetStringArray("path_keywords")
-	if !ok{
-		keywords=builtinKeywords
-	}
 
-	if util.ContainsAnyInArray(path,keywords){
+	if util.ContainsAnyInArray(path,this.config.PathKeywords){
 			//request normalization
 			//timestamp precision processing, scale time from million seconds to seconds, for cache reuse, for search optimization purpose
 			//{"range":{"@timestamp":{"gte":"2019-09-26T08:21:12.152Z","lte":"2020-09-26T08:21:12.152Z","format":"strict_date_optional_time"}
 			//==>
 			//{"range":{"@timestamp":{"gte":"2019-09-26T08:21:00.000Z","lte":"2020-09-26T08:21:00.000Z","format":"strict_date_optional_time"}
-			body := ctx.Request.Body()
-			precisionLimit,_:=this.GetInt("time_precision",4)
+			body := ctx.Request.GetRawBody()
 			//0-9: 时分秒微妙 00:00:00:000
-			if precisionLimit>9{
-				precisionLimit=9
-			}
-			if precisionLimit<0{
-				precisionLimit=0
-			}
 
 			//TODO get time field from index pattern settings
 			ok := util.ProcessJsonData(&body, []byte("range"), 150,[][]byte{[]byte("gte"),[]byte("lte")},false,[]byte("gte"), []byte("}"),128 , func(data []byte,start, end int) {
@@ -57,7 +81,7 @@ func (this DatePrecisionTuning) Process(ctx *fasthttp.RequestCtx) {
 					}
 					if startProcess && v > 47 && v < 58 {
 						precisionOffset++
-						if precisionOffset <= precisionLimit {
+						if precisionOffset <= this.config.TimePrecision {
 							continue
 						} else if precisionOffset > 9 {
 							startProcess = false
@@ -113,6 +137,9 @@ func (this DatePrecisionTuning) Process(ctx *fasthttp.RequestCtx) {
 
 				}
 			})
+
+			fmt.Println(ok)
+
 			if ok {
 				ctx.Request.SetBody(body)
 			}

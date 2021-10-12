@@ -1,26 +1,35 @@
 package transform
 
 import (
-	"infini.sh/framework/core/param"
+	"fmt"
+	"infini.sh/framework/core/config"
+	"infini.sh/framework/core/pipeline"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 )
 
 type SetRequestHeader struct {
-	param.Parameters
+	Headers map[string]string `config:"headers"`
 }
 
-func (filter SetRequestHeader) Name() string {
+func (filter *SetRequestHeader) Name() string {
 	return "set_request_header"
 }
 
-func (filter SetRequestHeader) Process(ctx *fasthttp.RequestCtx) {
-	headers,ok := filter.GetStringMap("headers")
+func NewSetRequestHeader(c *config.Config) (pipeline.Filter, error) {
 
-	if !ok{
-		return
+	runner := SetRequestHeader{
+	}
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	for k,v:=range headers{
+	return &runner, nil
+}
+
+func (filter *SetRequestHeader) Filter(ctx *fasthttp.RequestCtx) {
+
+	for k,v:=range filter.Headers{
 		//remove old one
 		value:=ctx.Request.Header.Peek(k)
 		if len(value)>0{
@@ -31,21 +40,15 @@ func (filter SetRequestHeader) Process(ctx *fasthttp.RequestCtx) {
 }
 
 type SetRequestQueryArgs struct {
-	param.Parameters
+	Args map[string]string `config:"args"`
 }
 
-func (filter SetRequestQueryArgs) Name() string {
+func (filter *SetRequestQueryArgs) Name() string {
 	return "set_request_query_args"
 }
 
-func (filter SetRequestQueryArgs) Process(ctx *fasthttp.RequestCtx) {
-	args,ok := filter.GetStringMap("args")
-
-	if !ok{
-		return
-	}
-
-	for k,v:=range args{
+func (filter *SetRequestQueryArgs) Filter(ctx *fasthttp.RequestCtx) {
+	for k,v:=range filter.Args{
 		value:=ctx.Request.Header.Peek(k)
 		if len(value)>0{
 			ctx.Request.URI().QueryArgs().Del(k)
@@ -54,22 +57,28 @@ func (filter SetRequestQueryArgs) Process(ctx *fasthttp.RequestCtx) {
 	}
 }
 
-type SetResponseHeader struct {
-	param.Parameters
+func NewSetRequestQueryArgs(c *config.Config) (pipeline.Filter, error) {
+
+	runner := SetRequestQueryArgs{
+	}
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	return &runner, nil
 }
 
-func (filter SetResponseHeader) Name() string {
+type SetResponseHeader struct {
+	Headers map[string]string `config:"headers"`
+}
+
+func (filter *SetResponseHeader) Name() string {
 	return "set_response_header"
 }
 
-func (filter SetResponseHeader) Process(ctx *fasthttp.RequestCtx) {
-	headers,ok := filter.GetStringMap("headers")
+func (filter *SetResponseHeader) Filter(ctx *fasthttp.RequestCtx) {
 
-	if !ok{
-		return
-	}
-
-	for k,v:=range headers{
+	for k,v:=range filter.Headers{
 		//remove old one
 		value:=ctx.Response.Header.Peek(k)
 		if len(value)>0{
@@ -79,44 +88,76 @@ func (filter SetResponseHeader) Process(ctx *fasthttp.RequestCtx) {
 	}
 }
 
-type SetHostname struct {
-	param.Parameters
+func NewSetResponseHeader(c *config.Config) (pipeline.Filter, error) {
+
+	runner := SetResponseHeader{
+	}
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	return &runner, nil
 }
 
-func (filter SetHostname) Name() string {
+type SetHostname struct {
+	Hostname string `config:"hostname"`
+}
+
+func (filter *SetHostname) Name() string {
 	return "set_hostname"
 }
 
-func (filter SetHostname) Process(ctx *fasthttp.RequestCtx) {
+func (filter *SetHostname) Filter(ctx *fasthttp.RequestCtx) {
 
-	data, exists := filter.GetString("hostname")
-	if exists {
-		ctx.Request.SetHost(data)
+	if filter.Hostname!=""{
+		ctx.Request.SetHost(filter.Hostname)
 	}
+}
+
+func NewSetHostname(c *config.Config) (pipeline.Filter, error) {
+
+	runner := SetHostname{
+	}
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	return &runner, nil
 }
 
 type SetResponse struct {
-	param.Parameters
+	Status int `config:"status"`
+	ContentType string `config:"content_type"`
+	Body string `config:"body"`
 }
 
-func (filter SetResponse) Name() string {
+func (filter *SetResponse) Name() string {
 	return "set_response"
 }
 
-func (filter SetResponse) Process(ctx *fasthttp.RequestCtx) {
+func (filter *SetResponse) Filter(ctx *fasthttp.RequestCtx) {
 
-	status,hasStatus := filter.GetInt64("status",200)
-	if hasStatus{
-		ctx.Response.SetStatusCode(int(status))
+	if filter.Status>0{
+		ctx.Response.SetStatusCode(filter.Status)
 	}
 
-	contentType,hasContentType := filter.GetString("content_type")
-	if hasContentType{
-		ctx.SetContentType(contentType)
+	if filter.ContentType!=""{
+		ctx.SetContentType(filter.ContentType)
 	}
 
-	message,hasMessage := filter.GetString("body")
-	if hasMessage{
-		ctx.Response.SetBody([]byte(message))
+	if filter.Body!=""{
+		ctx.Response.SetBody(util.UnsafeStringToBytes(filter.Body))
 	}
+}
+
+func NewSetResponse(c *config.Config) (pipeline.Filter, error) {
+
+	runner := SetResponse{
+
+	}
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	return &runner, nil
 }

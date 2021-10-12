@@ -223,21 +223,21 @@ type BulkProcessorConfig struct {
 	DocBufferSize        int    `config:"doc_buffer_size"`
 }
 
-var DefaultConfig = BulkProcessorConfig{
-		Compress:                  false,
-		LogInvalidMessage:         true,
-		LogInvalid200Message:      true,
-		LogInvalid200RetryMessage: true,
-		Log429RetryMessage:        true,
-		RetryDelayInSeconds:  1,
-		RejectDelayInSeconds: 1,
-		MaxRejectRetryTimes:  3,
-		MaxRetryTimes:       3,
-		MaxRequestBodySize:  1024,
-		MaxResponseBodySize: 1024,
-		SaveFailure:          true,
-		DocBufferSize:       256*1024,
-}
+//var defaultConfig = BulkProcessorConfig{
+//		Compress:                  false,
+//		LogInvalidMessage:         true,
+//		LogInvalid200Message:      true,
+//		LogInvalid200RetryMessage: true,
+//		Log429RetryMessage:        true,
+//		RetryDelayInSeconds:  1,
+//		RejectDelayInSeconds: 1,
+//		MaxRejectRetryTimes:  3,
+//		MaxRetryTimes:       3,
+//		MaxRequestBodySize:  1024,
+//		MaxResponseBodySize: 1024,
+//		SaveFailure:          true,
+//		DocBufferSize:       256*1024,
+//}
 
 type BulkProcessor struct {
 	RotateConfig rotate.RotateConfig
@@ -321,8 +321,14 @@ func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host s
 	} else {
 		log.Error("INIT: data length is zero,", string(data), ",is compress:", joint.Config.Compress)
 	}
-	retryTimes := 0
 
+	// modify schema，align with elasticsearch's schema
+	orignalSchema:=string(req.URI().Scheme())
+	if metadata.GetSchema()!=orignalSchema{
+		req.URI().SetScheme(metadata.GetSchema())
+	}
+
+	retryTimes := 0
 DO:
 
 	if req.GetBodyLength() <= 0 {
@@ -366,6 +372,9 @@ DO:
 	}
 
 	err := httpClient.Do(req, resp)
+
+	// restore schema
+	req.URI().SetScheme(orignalSchema)
 
 	if resp == nil {
 		if global.Env().IsDebug {

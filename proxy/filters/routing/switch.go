@@ -4,55 +4,66 @@
 package routing
 
 import (
+	"fmt"
+	log "github.com/cihub/seelog"
+	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
-	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
-	log "github.com/cihub/seelog"
 	"strings"
 )
 
 type SwitchFlowFilter struct {
-	param.Parameters
+	PathRules     []SwitchRule `config:"path_rules"`
+	RemovePrefix     bool `config:"remove_prefix"`
+	ContinueAfterMatch     bool `config:"continue"`
 }
 
-func (filter SwitchFlowFilter) Name() string {
+func (filter *SwitchFlowFilter) Name() string {
 	return "switch"
 }
 
 type SwitchRule struct {
-
+	Prefix     string `config:"prefix"`
+	Flow     string `config:"flow"`
 }
 
-func (filter SwitchFlowFilter) Process(ctx *fasthttp.RequestCtx) {
-	v,ok:=filter.GetMapArray("path_rules")
-	if !ok{
+func (filter *SwitchFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
+	if len(filter.PathRules)==0{
 		return
 	}
 
 	path:=string(ctx.RequestURI())
 	paths:=strings.Split(path,"/")
 	indexPart:= paths[1]
-	continueAfterMatch := filter.GetBool("continue", false)
 
-	for _,item:=range v{
-		prefix:=item["prefix"].(string)
-		if strings.HasPrefix(indexPart,prefix){
-			//removePrefix:=item["remove_prefix"].(bool)
-			//if removePrefix{
-				nexIndex:=strings.TrimLeft(indexPart,prefix)
+	for _,item:=range filter.PathRules{
+		if strings.HasPrefix(indexPart,item.Prefix){
+			if filter.RemovePrefix{
+				nexIndex:=strings.TrimLeft(indexPart,item.Prefix)
 				paths[1]=nexIndex
 				ctx.Request.SetRequestURI(strings.Join(paths,"/"))
-				flowName:=item["flow"].(string)
-				flow:=common.MustGetFlow(flowName)
+				flow:=common.MustGetFlow(item.Flow)
 				if global.Env().IsDebug{
 					log.Debugf("request [%v] go on flow: [%s]",ctx.URI().String(),flow.ToString())
 				}
 				flow.Process(ctx)
-				if !continueAfterMatch {
+				if !filter.ContinueAfterMatch {
 					ctx.Finished()
 				}
-			//}
+			}
 		}
 	}
+}
+
+func NewSwitchFlowFilter(c *config.Config) (pipeline.Filter, error) {
+	runner := SwitchFlowFilter{
+		RemovePrefix: true,
+	}
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	return &runner, nil
 }

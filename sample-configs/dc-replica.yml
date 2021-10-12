@@ -14,12 +14,12 @@ entry:
 
 flow:
   - name: primary-read-flow
-    filter_v2:
+    filter:
       - elasticsearch: #集群可用，直接处理请求
           elasticsearch: "primary"
           max_connection_per_host: 1000
   - name: primary-flow-post-processing
-    filter_v2:
+    filter:
       - retry_limiter:
           queue_name: "primary-deadlock-requests"
           max_retry_times: 3
@@ -74,7 +74,7 @@ flow:
           flows:
             - request_logging
   - name: primary-write-flow
-    filter_v2:
+    filter:
       - retry_limiter:
           queue_name: "primary_deadletter_requests"
           max_retry_times: 5
@@ -139,53 +139,10 @@ flow:
             else: #集群可用的情况下但是失败了，可能存在脏写，将请求放入写入失败队列，后续可以选择两边集群都重做一次，最终确保一致性，写 translog，后续提供 UI 可以进行三方检查：主、备集群和本地日志
               - queue:
                   queue_name: "primary_failure_requests"
-  - name: backup-replicate-flow
-    filter_v2:
-          - retry_limiter:
-              queue_name: "backup-deadlock-requests"
-              max_retry_times: 3
-          - if:
-              not:
-                cluster_available: ["backup"]
-            then: #如果集群不可用
-              - elasticsearch_health_check: #由请求触发的限速模式下的主动检查后端监控情况
-                  elasticsearch: "backup"
-              - queue:
-                  queue_name: "backup_failure_requests"
-              - drop:
-          - bulk_reshuffle:
-              when:
-                contains:
-                  _ctx.request.path: /_bulk
-              elasticsearch: backup
-              level: node
-              mode: async
-              fix_null_id: true
-          - elasticsearch: #集群可用，直接处理请求
-              elasticsearch: "backup"
-              max_connection_per_host: 1000
-          - bulk_response_validate: #如果是 bulk 请求，还需要进一步验证是否存在部分请求失败的错误异常
-              invalid_status: 400
-              failure_status: 507
-              invalid_queue: "backup_invalid_bulk_requests"
-              failure_queue: "backup_failure_bulk_requests"
-              when:
-                contains:
-                  _ctx.request.path: /_bulk
-          - if: #判断是否成功
-              not:
-                in:
-                  _ctx.response.status: [ 404,200,201 ]
-            then: #继续入队重试
-              - queue:
-                  queue_name: "backup_failure_requests"
-          - flow:
-              flows:
-                - request_logging
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
-    filter_v2:
+    filter:
       - stats:
-      - request_logging:
+      - logging:
           queue_name: request_logging
           max_request_body_size: 1024
           max_response_body_size: 1024
@@ -229,6 +186,8 @@ elasticsearch:
     basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
       username: elastic
       password: changeme
+#    traffic_control:
+#      max_qps_per_node: 1000
     discovery: # auto discovery elasticsearch cluster nodes
       enabled: true
       refresh:
@@ -283,26 +242,6 @@ pipelines_v2:
           flow: primary-flow-post-processing
           when:
             cluster_available: [ "primary" ]
-#  - name: backup-requests-replication
-#    auto_start: true
-#    keep_running: true
-#    processors:
-#      - flow_runner:
-#          input_queue: "backup"
-#          flow: backup-replicate-flow
-#          when:
-#            cluster_available: [ "backup" ]
-#  - name: backup-bulk_requests-replication
-#    auto_start: true
-#    keep_running: true
-#    processors:
-#      - bulk_indexing:
-#          elasticsearch: "backup"
-#          compress: true
-#          worker_size: 10
-#          retry_delay_in_seconds: 5
-#          process_failure_queue: true
-
   - name: queue_backup-replicator
     auto_start: true
     keep_running: true

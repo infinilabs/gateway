@@ -4,47 +4,35 @@
 package routing
 
 import (
+	"fmt"
+	log "github.com/cihub/seelog"
+	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
-	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
 	"math/rand"
-	log "github.com/cihub/seelog"
 	"sync"
 )
 
 type RatioRoutingFlowFilter struct {
-	param.Parameters
+	randPool *sync.Pool
+	Ratio     float32 `config:"ratio"`
+	Flow     string `config:"flow"`
+	ContinueAfterMatch     bool `config:"continue"`
+	flow  common.FilterFlow
 }
 
-func (filter RatioRoutingFlowFilter) Name() string {
+func (filter *RatioRoutingFlowFilter) Name() string {
 	return "ratio"
 }
 
-var randPool *sync.Pool
+func (filter *RatioRoutingFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 
-func initPool() {
-	if randPool!=nil{
-		return
-	}
-	randPool = &sync.Pool {
-		New: func()interface{} {
-			return rand.New(rand.NewSource(100))
-		},
-	}
-}
+	v:=int(filter.Ratio*100)
 
-func (filter RatioRoutingFlowFilter) Process(ctx *fasthttp.RequestCtx) {
-
-	initPool()
-
-	ratio:=filter.GetFloat32OrDefault("ratio",0.1)
-	continueAfterMatch :=filter.GetBool("continue",false)
-
-	v:=int(ratio*100)
-
-	seeds:=randPool.Get().(*rand.Rand)
-	defer randPool.Put(seeds)
+	seeds:=filter.randPool.Get().(*rand.Rand)
+	defer filter.randPool.Put(seeds)
 
 	r:=seeds.Intn(100)
 
@@ -54,15 +42,33 @@ func (filter RatioRoutingFlowFilter) Process(ctx *fasthttp.RequestCtx) {
 
 	if  r <= v{
 		ctx.Resume()
-		flowName:=filter.MustGetString("flow")
-		flow:=common.MustGetFlow(flowName)
 		if global.Env().IsDebug{
-			log.Debugf("request [%v] go on flow: [%s]",ctx.URI().String(),flow.ToString())
+			log.Debugf("request [%v] go on flow: [%s]",ctx.URI().String(),filter.Flow)
 		}
-		flow.Process(ctx)
-		if !continueAfterMatch {
+		filter.flow.Process(ctx)
+		if !filter.ContinueAfterMatch {
 			ctx.Finished()
 		}
 	}
 
+}
+
+func NewRatioRoutingFlowFilter(c *config.Config) (pipeline.Filter, error) {
+
+	runner := RatioRoutingFlowFilter{
+		Ratio: 0.1,
+		randPool : &sync.Pool {
+		New: func()interface{} {
+		return rand.New(rand.NewSource(100))
+	},
+	},
+	}
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	runner.flow=common.MustGetFlow(runner.Flow)
+
+
+	return &runner, nil
 }

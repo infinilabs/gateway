@@ -86,12 +86,12 @@ func main() {
 		module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
 
 		//offline pipeline processors
-		pipe.RegisterPlugin("index_diff", index_diff.New)
-		pipe.RegisterPlugin("dump_hash", scroll.New)
-		pipe.RegisterPlugin("flow_runner", flow_runner.New)
-		pipe.RegisterPlugin("queue_consumer", queue_consumer.New)
-		pipe.RegisterPlugin("bulk_indexing", bulk_indexing.New)
-		pipe.RegisterPlugin("json_indexing", json_indexing.New)
+		pipe.RegisterProcessorPlugin("index_diff", index_diff.New)
+		pipe.RegisterProcessorPlugin("dump_hash", scroll.New)
+		pipe.RegisterProcessorPlugin("flow_runner", flow_runner.New)
+		pipe.RegisterProcessorPlugin("queue_consumer", queue_consumer.New)
+		pipe.RegisterProcessorPlugin("bulk_indexing", bulk_indexing.New)
+		pipe.RegisterProcessorPlugin("json_indexing", json_indexing.New)
 
 		//start each module, with enabled provider
 		module.Start()

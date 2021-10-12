@@ -1,4 +1,4 @@
-package elastic
+package date_range_precision_tuning
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 )
 
 func TestDatePrecisionTuning(t *testing.T) {
-	filter:=DatePrecisionTuning{}
+	filter:= DatePrecisionTuning{config: &defaultConfig}
 	ctx:=&fasthttp.RequestCtx{}
 	ctx.Request=fasthttp.Request{}
 	ctx.Request.SetRequestURI("/_search")
@@ -18,72 +18,72 @@ func TestDatePrecisionTuning(t *testing.T) {
 	data:=[]byte("{\"range\":{\"@timestamp\":{\"gte\":\"2019-09-26T08:21:12.152Z\",\"lte\":\"2020-09-26T08:21:12.152Z\",\"format\":\"strict_date_optional_time\"}")
 	ctx.Request.SetBody(data)
 
-	filter.Set("time_precision",0)
-	filter.Process(ctx)
+	filter.config.TimePrecision=0
+	filter.Filter(ctx)
 	rePrecisedBody:=string(ctx.Request.Body())
 	fmt.Println(rePrecisedBody)
 	assert.Equal(t,rePrecisedBody,"{\"range\":{\"@timestamp\":{\"gte\":\"2019-09-26T00:00:00.000Z\",\"lte\":\"2020-09-26T23:59:59.999Z\",\"format\":\"strict_date_optional_time\"}")
 
 	ctx.Request.SetBody(data)
-	filter.Set("time_precision",1)
-	filter.Process(ctx)
+	filter.config.TimePrecision=1
+	filter.Filter(ctx)
 	rePrecisedBody=string(ctx.Request.Body())
 	fmt.Println(rePrecisedBody)
 	assert.Equal(t,rePrecisedBody,"{\"range\":{\"@timestamp\":{\"gte\":\"2019-09-26T00:00:00.000Z\",\"lte\":\"2020-09-26T09:59:59.999Z\",\"format\":\"strict_date_optional_time\"}")
 
 	ctx.Request.SetBody(data)
-	filter.Set("time_precision",2)
-	filter.Process(ctx)
+	filter.config.TimePrecision=2
+	filter.Filter(ctx)
 	rePrecisedBody=string(ctx.Request.Body())
 	fmt.Println(rePrecisedBody)
 	assert.Equal(t,rePrecisedBody,"{\"range\":{\"@timestamp\":{\"gte\":\"2019-09-26T08:00:00.000Z\",\"lte\":\"2020-09-26T08:59:59.999Z\",\"format\":\"strict_date_optional_time\"}")
 
 	ctx.Request.SetBody(data)
-	filter.Set("time_precision",3)
-	filter.Process(ctx)
+	filter.config.TimePrecision=3
+	filter.Filter(ctx)
 	rePrecisedBody=string(ctx.Request.Body())
 	fmt.Println(rePrecisedBody)
 	assert.Equal(t,rePrecisedBody,"{\"range\":{\"@timestamp\":{\"gte\":\"2019-09-26T08:20:00.000Z\",\"lte\":\"2020-09-26T08:29:59.999Z\",\"format\":\"strict_date_optional_time\"}")
 
 	ctx.Request.SetBody(data)
-	filter.Set("time_precision",4)
-	filter.Process(ctx)
+	filter.config.TimePrecision=4
+	filter.Filter(ctx)
 	rePrecisedBody=string(ctx.Request.Body())
 	fmt.Println(rePrecisedBody)
 	assert.Equal(t,rePrecisedBody,"{\"range\":{\"@timestamp\":{\"gte\":\"2019-09-26T08:21:00.000Z\",\"lte\":\"2020-09-26T08:21:59.999Z\",\"format\":\"strict_date_optional_time\"}")
 
 
 	ctx.Request.SetBody(data)
-	filter.Set("time_precision",5)
-	filter.Process(ctx)
+	filter.config.TimePrecision=5
+	filter.Filter(ctx)
 	rePrecisedBody=string(ctx.Request.Body())
 	fmt.Println(rePrecisedBody)
 	assert.Equal(t,rePrecisedBody,"{\"range\":{\"@timestamp\":{\"gte\":\"2019-09-26T08:21:10.000Z\",\"lte\":\"2020-09-26T08:21:19.999Z\",\"format\":\"strict_date_optional_time\"}")
 
 	ctx.Request.SetBody(data)
-	filter.Set("time_precision",6)
-	filter.Process(ctx)
+	filter.config.TimePrecision=6
+	filter.Filter(ctx)
 	rePrecisedBody=string(ctx.Request.Body())
 	fmt.Println(rePrecisedBody)
 	assert.Equal(t,rePrecisedBody,"{\"range\":{\"@timestamp\":{\"gte\":\"2019-09-26T08:21:12.000Z\",\"lte\":\"2020-09-26T08:21:12.999Z\",\"format\":\"strict_date_optional_time\"}")
 
 	ctx.Request.SetBody(data)
-	filter.Set("time_precision",7)
-	filter.Process(ctx)
+	filter.config.TimePrecision=7
+	filter.Filter(ctx)
 	rePrecisedBody=string(ctx.Request.Body())
 	fmt.Println(rePrecisedBody)
 	assert.Equal(t,rePrecisedBody,"{\"range\":{\"@timestamp\":{\"gte\":\"2019-09-26T08:21:12.100Z\",\"lte\":\"2020-09-26T08:21:12.199Z\",\"format\":\"strict_date_optional_time\"}")
 
 	ctx.Request.SetBody(data)
-	filter.Set("time_precision",8)
-	filter.Process(ctx)
+	filter.config.TimePrecision=8
+	filter.Filter(ctx)
 	rePrecisedBody=string(ctx.Request.Body())
 	fmt.Println(rePrecisedBody)
 	assert.Equal(t,rePrecisedBody,"{\"range\":{\"@timestamp\":{\"gte\":\"2019-09-26T08:21:12.150Z\",\"lte\":\"2020-09-26T08:21:12.159Z\",\"format\":\"strict_date_optional_time\"}")
 
 	ctx.Request.SetBody(data)
-	filter.Set("time_precision",9)
-	filter.Process(ctx)
+	filter.config.TimePrecision=9
+	filter.Filter(ctx)
 	rePrecisedBody=string(ctx.Request.Body())
 	fmt.Println(rePrecisedBody)
 	assert.Equal(t,rePrecisedBody,"{\"range\":{\"@timestamp\":{\"gte\":\"2019-09-26T08:21:12.152Z\",\"lte\":\"2020-09-26T08:21:12.152Z\",\"format\":\"strict_date_optional_time\"}")
@@ -91,7 +91,7 @@ func TestDatePrecisionTuning(t *testing.T) {
 }
 
 func TestDatePrecisionTuning1(t *testing.T) {
-	filter:=DatePrecisionTuning{}
+	filter:= DatePrecisionTuning{config: &defaultConfig}
 
 	ctx:=&fasthttp.RequestCtx{}
 	ctx.Request=fasthttp.Request{}
@@ -102,15 +102,16 @@ func TestDatePrecisionTuning1(t *testing.T) {
 	fmt.Println(string(data))
 
 	ctx.Request.SetBody(data)
-	filter.Set("time_precision",0)
-	filter.Process(ctx)
+	filter.config.TimePrecision=0
+	filter.Filter(ctx)
 	rePrecisedBody:=string(ctx.Request.Body())
 	fmt.Println(rePrecisedBody)
 	assert.Equal(t,rePrecisedBody,"{\"range\":{\"@timestamp\":{\"gte\":\"2019-09-26T00:00:00.000Z\",\"lte\":\"2020-09-26T23:59:59.999Z\",\"format\":\"strict_date_optional_time\"}")
 
+
 	ctx.Request.SetBody(data)
-	filter.Set("time_precision",9)
-	filter.Process(ctx)
+	filter.config.TimePrecision=9
+	filter.Filter(ctx)
 	rePrecisedBody=string(ctx.Request.Body())
 	fmt.Println(rePrecisedBody)
 	assert.Equal(t,rePrecisedBody,"{\"range\":{\"@timestamp\":{\"gte\":\"2019-09-26T22:21:12.152Z\",\"lte\":\"2020-09-26T22:21:12.152Z\",\"format\":\"strict_date_optional_time\"}")
@@ -119,7 +120,7 @@ func TestDatePrecisionTuning1(t *testing.T) {
 
 func TestDatePrecisionTuning2(t *testing.T) {
 
-	filter:=DatePrecisionTuning{}
+	filter:= DatePrecisionTuning{config: &defaultConfig}
 	ctx:=&fasthttp.RequestCtx{}
 	ctx.Request=fasthttp.Request{}
 	ctx.Request.SetRequestURI("/_search")
@@ -203,8 +204,8 @@ func TestDatePrecisionTuning2(t *testing.T) {
 	fmt.Println(ok)
 
 	ctx.Request.SetBody(data)
-	filter.Set("time_precision",4)
-	filter.Process(ctx)
+	filter.config.TimePrecision=4
+	filter.Filter(ctx)
 	rePrecisedBody:=string(ctx.Request.Body())
 	fmt.Println(rePrecisedBody)
 	//assert.Equal(t,rePrecisedBody,"{\"range\":{\"@timestamp\":{\"gte\":\"2019-09-26T00:00:00.000Z\",\"lte\":\"2020-09-26T23:59:59.999Z\",\"format\":\"strict_date_optional_time\"}")
@@ -213,7 +214,7 @@ func TestDatePrecisionTuning2(t *testing.T) {
 
 func TestDatePrecisionTuning3(t *testing.T) {
 
-	filter:=DatePrecisionTuning{}
+	filter:= DatePrecisionTuning{config: &defaultConfig}
 	ctx:=&fasthttp.RequestCtx{}
 	ctx.Request=fasthttp.Request{}
 	ctx.Request.SetRequestURI("/_search")
@@ -222,8 +223,8 @@ func TestDatePrecisionTuning3(t *testing.T) {
 	data:=[]byte("{\n  \"query\": {\n    \"query_string\": {\n      \"default_field\": \"title\",\n      \"query\": \"this range AND gte TO goodbye 2019-09-26T00:10:00.000Z thus\"\n    }\n  }\n}")
 	ctx.Request.SetBody(data)
 
-	filter.Set("time_precision",0)
-	filter.Process(ctx)
+	filter.config.TimePrecision=0
+	filter.Filter(ctx)
 	rePrecisedBody:=string(ctx.Request.Body())
 	fmt.Println(rePrecisedBody)
 	assert.Equal(t,rePrecisedBody,"{\n  \"query\": {\n    \"query_string\": {\n      \"default_field\": \"title\",\n      \"query\": \"this range AND gte TO goodbye 2019-09-26T00:10:00.000Z thus\"\n    }\n  }\n}")

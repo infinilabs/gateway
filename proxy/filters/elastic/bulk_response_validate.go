@@ -7,9 +7,10 @@ import (
 	"fmt"
 	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
+	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/global"
-	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
@@ -19,14 +20,14 @@ import (
 )
 
 type BulkResponseValidate struct {
-	param.Parameters
+	config *Config
 }
 
-func (this BulkResponseValidate) Name() string {
+func (this *BulkResponseValidate) Name() string {
 	return "bulk_response_validate"
 }
 
-func (this BulkResponseValidate) Process(ctx *fasthttp.RequestCtx) {
+func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 	path := string(ctx.URI().Path())
 	if string(ctx.Request.Header.Method()) != "POST" || !util.ContainStr(path, "_bulk") {
 		return
@@ -50,31 +51,29 @@ func (this BulkResponseValidate) Process(ctx *fasthttp.RequestCtx) {
 			//busyRejectOffset := map[int]elastic.BulkActionMetadata{}
 			invalidOffset := map[int]elastic.BulkActionMetadata{}
 			//failureOffset := map[int]elastic.BulkActionMetadata{}
-			var invalidCount =0
-			var statsCodeStats=map[int]int{}
+			var invalidCount = 0
+			var statsCodeStats = map[int]int{}
 			for i, v := range response.Items {
 				item := v.GetItem()
 
-				x,ok:=statsCodeStats[item.Status]
-				if!ok{
-					x=0
+				x, ok := statsCodeStats[item.Status]
+				if !ok {
+					x = 0
 				}
 				x++
-				statsCodeStats[item.Status]=x
+				statsCodeStats[item.Status] = x
 
 				if item.Error != nil {
 					invalidCount++
-					invalidOffset[i]=v
+					invalidOffset[i] = v
 				}
 			}
 
-
-			for x,y:=range statsCodeStats{
-				stats.IncrementBy("bulk_items",fmt.Sprintf("%v",x), int64(y))
+			for x, y := range statsCodeStats {
+				stats.IncrementBy("bulk_items", fmt.Sprintf("%v", x), int64(y))
 			}
 
-
-			if invalidCount>0{
+			if invalidCount > 0 {
 
 				requestBytes := ctx.Request.GetRawBody()
 				nonRetryableItems := bytebufferpool.Get()
@@ -89,7 +88,7 @@ func (this BulkResponseValidate) Process(ctx *fasthttp.RequestCtx) {
 				//walk bulk message, with invalid id, save to another list
 
 				var docBuffer []byte
-				docBuffer = p.Get(this.GetIntOrDefault("doc_buffer_size",256*1024))
+				docBuffer = p.Get(this.config.DocBufferSize)
 				defer p.Put(docBuffer)
 
 				WalkBulkRequests(requestBytes, docBuffer, func(eachLine []byte) (skipNextLine bool) {
@@ -137,33 +136,55 @@ func (this BulkResponseValidate) Process(ctx *fasthttp.RequestCtx) {
 				})
 
 				if nonRetryableItems.Len() > 0 {
-						nonRetryableItems.WriteByte('\n')
-						bytes:=ctx.Request.OverrideBodyEncode(nonRetryableItems.Bytes())
-						queue.Push(this.MustGetString("invalid_queue"),bytes)
-						//send to redis channel
-						nonRetryableItems.Reset()
-						bytebufferpool.Put(nonRetryableItems)
+					nonRetryableItems.WriteByte('\n')
+					bytes := ctx.Request.OverrideBodyEncode(nonRetryableItems.Bytes())
+					queue.Push(this.config.InvalidQueue, bytes)
+					//send to redis channel
+					nonRetryableItems.Reset()
+					bytebufferpool.Put(nonRetryableItems)
 				}
 
 				if retryableItems.Len() > 0 {
-						retryableItems.WriteByte('\n')
-						bytes:=ctx.Request.OverrideBodyEncode( retryableItems.Bytes())
-						queue.Push(this.MustGetString("failure_queue"),bytes)
-						retryableItems.Reset()
-						bytebufferpool.Put(retryableItems)
+					retryableItems.WriteByte('\n')
+					bytes := ctx.Request.OverrideBodyEncode(retryableItems.Bytes())
+					queue.Push(this.config.FailureQueue, bytes)
+					retryableItems.Reset()
+					bytebufferpool.Put(retryableItems)
 				}
 			}
 
-			if contains400Error{
-				ctx.Response.SetStatusCode(this.GetIntOrDefault("invalid_status", 400))
-			}else{
-				ctx.Response.SetStatusCode(this.GetIntOrDefault("failure_status", 500))
+			if contains400Error {
+				ctx.Response.SetStatusCode(this.config.InvalidStatus)
+			} else {
+				ctx.Response.SetStatusCode(this.config.FailureStatus)
 			}
 
-			if this.GetBool("continue_on_error",false){
+			if this.config.ContinueOnError {
 				ctx.Finished()
 			}
 
 		}
 	}
+}
+
+type Config struct {
+	DocBufferSize   int    `config:"doc_buffer_size"`
+	InvalidQueue    string `config:"invalid_queue"`
+	FailureQueue    string `config:"failure_queue"`
+	InvalidStatus   int    `config:"invalid_status"`
+	FailureStatus   int    `config:"failure_status"`
+	ContinueOnError bool   `config:"continue_on_error"`
+}
+
+func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
+	cfg := Config{
+		DocBufferSize: 256 * 1024,
+	}
+	if err := c.Unpack(&cfg); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	runner := BulkResponseValidate{config: &cfg}
+
+	return &runner, nil
 }

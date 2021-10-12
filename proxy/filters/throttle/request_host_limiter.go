@@ -1,41 +1,66 @@
 package throttle
 
 import (
+	"fmt"
 	log "github.com/cihub/seelog"
+	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/lib/fasthttp"
 )
 
 type RequestHostLimitFilter struct {
-	RequestLimiterBase
+	limiter *GenericLimiter
+	Host []string    `config:"host"`
 }
 
-func (filter RequestHostLimitFilter) Name() string {
+func NewRequestHostLimitFilter(c *config.Config) (pipeline.Filter, error) {
+
+	runner := RequestHostLimitFilter{
+	}
+
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	limiter:=genericLimiter
+	runner.limiter=&limiter
+
+	if err := c.Unpack(runner.limiter); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	runner.limiter.init()
+
+	return &runner, nil
+}
+
+
+func (filter *RequestHostLimitFilter) Name() string {
 	return "request_host_limiter"
 }
 
-func (filter RequestHostLimitFilter) Process(ctx *fasthttp.RequestCtx) {
+func (filter *RequestHostLimitFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	hostStr :=string(ctx.Host())
 
-	hosts, ok := filter.GetStringArray("host")
 
 	if global.Env().IsDebug {
-		log.Trace("host rules: ", len(hosts), ", host: ", hostStr)
+		log.Trace("host rules: ", len(filter.Host), ", host: ", hostStr)
 	}
 
-	if ok&&len(hosts) > 0 {
-		for _, v := range hosts {
+	if len(filter.Host) > 0 {
+		for _, v := range filter.Host {
 			if v == hostStr {
 				if global.Env().IsDebug {
 					log.Debug(hostStr, "met check rules")
 				}
-				filter.internalProcess("host", hostStr,ctx)
+				filter.limiter.internalProcess("host", hostStr,ctx)
 				return
 			}
 		}
 		return
 	}
 
-	filter.internalProcess("host", hostStr,ctx)
+	filter.limiter.internalProcess("host", hostStr,ctx)
 }

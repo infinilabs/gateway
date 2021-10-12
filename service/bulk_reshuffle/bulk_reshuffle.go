@@ -146,7 +146,7 @@ package indexing
 //	return "bulk_reshuffle"
 //}
 //
-//func (joint BulkReshuffleJoint) Process(c *pipeline.Context) error {
+//func (joint BulkReshuffleJoint) Filter(c *pipeline.Context) error {
 //	defer func() {
 //		if !global.Env().IsDebug {
 //			if r := recover(); r != nil {

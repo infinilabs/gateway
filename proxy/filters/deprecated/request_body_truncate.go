@@ -1,4 +1,4 @@
-package transform
+package deprecated
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ func (filter RequestBodyTruncate) Name() string {
 	return "request_body_truncate"
 }
 
-func (filter RequestBodyTruncate) Process(ctx *fasthttp.RequestCtx) {
+func (filter RequestBodyTruncate) Filter(ctx *fasthttp.RequestCtx) {
 	size:=filter.GetIntOrDefault("max_size",1024)
 	addHeader:=filter.GetBool("add_header",true)
 

@@ -7,22 +7,93 @@ import (
 	log "github.com/cihub/seelog"
 	"github.com/dgraph-io/ristretto"
 	"github.com/go-redis/redis"
+	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
-	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
 	ccache "infini.sh/framework/lib/cache"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
 	"math/rand"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
 )
 
 type RequestCache struct {
-	param.Parameters
+	config *Config
+}
+
+
+type Config struct {
+	CacheType string    `config:"cache_type"`
+	PassPatterns []string    `config:"pass_patterns"`
+	ValidatedStatus []int    `config:"validated_status_code"`
+	MinResponseSize int    `config:"min_response_size"`
+	MaxResponseSize int    `config:"max_response_size"`
+
+	RedisHost string    `config:"redis_host"`
+	RedisPort int    `config:"redis_port"`
+
+
+	MaxCachedSize int64    `config:"max_cached_size"`
+	MaxCachedItem int64    `config:"max_cached_item"`
+
+	AsyncSearchCacheTTL string    `config:"async_search_cache_ttl"`
+	CacheTTL string    `config:"cache_ttl"`
+	asyncSearchCacheTTL time.Duration
+	cacheTTL time.Duration
+
+}
+
+var defaultConfig=Config{
+	PassPatterns:[]string{"_bulk","_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"},
+	ValidatedStatus:[]int{200,201,404,403,413,400,301},
+	AsyncSearchCacheTTL:"30m",
+	MinResponseSize:-1,
+	MaxResponseSize:int(^uint(0) >> 1),
+	MaxCachedSize:1000000000,
+	MaxCachedItem:1000000,
+	CacheType:defaultCacheType,
+}
+
+func NewGet(c *config.Config) (pipeline.Filter, error) {
+
+	cfg := defaultConfig
+
+	if err := c.Unpack(&cfg); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	cfg.asyncSearchCacheTTL=util.GetDurationOrDefault(cfg.AsyncSearchCacheTTL,10*time.Minute)
+	cfg.cacheTTL=util.GetDurationOrDefault(cfg.CacheTTL,10*time.Second)
+
+	runner := RequestCacheGet{config: &cfg}
+	runner.RequestCache.config=&cfg
+
+	runner.initCache()
+
+	return &runner, nil
+}
+
+func NewSet(c *config.Config) (pipeline.Filter, error) {
+
+	cfg := defaultConfig
+
+	if err := c.Unpack(&cfg); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	cfg.asyncSearchCacheTTL=util.GetDurationOrDefault(cfg.AsyncSearchCacheTTL,10*time.Minute)
+	cfg.cacheTTL=util.GetDurationOrDefault(cfg.CacheTTL,10*time.Second)
+
+	runner := RequestCacheSet{config: &cfg}
+	runner.RequestCache.config=&cfg
+
+	runner.initCache()
+
+	return &runner, nil
 }
 
 const cacheRedis = "redis"
@@ -45,7 +116,7 @@ var bytesBufferPool = &sync.Pool{
 	},
 }
 
-func (p RequestCache) getRedisClient() *redis.Client {
+func (p *RequestCache) getRedisClient() *redis.Client {
 
 	if client != nil {
 		return client
@@ -59,7 +130,7 @@ func (p RequestCache) getRedisClient() *redis.Client {
 	}
 
 	client = redis.NewClient(&redis.Options{
-		Addr: fmt.Sprintf("%s:%v", p.MustGetString("redis_host"), p.MustGet("redis_port")),
+		Addr: fmt.Sprintf("%s:%v", p.config.RedisHost, p.config.RedisPort),
 		//Password: handler.config.RedisConfig.Password,
 		//DB:       handler.config.RedisConfig.DB,
 		Password: "",
@@ -74,7 +145,7 @@ func (p RequestCache) getRedisClient() *redis.Client {
 	return client
 }
 
-func (p RequestCache) initCache() {
+func (p *RequestCache) initCache() {
 	if inited {
 		return
 	}
@@ -89,7 +160,7 @@ func (p RequestCache) initCache() {
 	var err error
 	cache, err = ristretto.NewCache(&ristretto.Config{
 		NumCounters: 1e7,                                                // Num keys to track frequency of (10M).
-		MaxCost:     p.GetInt64OrDefault("max_cached_size", 1000000000), // Maximum cost of cache (1GB).
+		MaxCost:     p.config.MaxCachedSize, 							 // Maximum cost of cache (1GB).
 		BufferItems: 64,                                                 // Number of keys per Get buffer.
 		Metrics:     false,
 	})
@@ -97,12 +168,11 @@ func (p RequestCache) initCache() {
 		panic(err)
 	}
 
-	ccCache = ccache.Layered(ccache.Configure().MaxSize(p.GetInt64OrDefault("max_cached_item", 1000000)).ItemsToPrune(100))
+	ccCache = ccache.Layered(ccache.Configure().MaxSize(p.config.MaxCachedItem).ItemsToPrune(100))
 	inited = true
 }
 
-func (p RequestCache) GetCache(key string) ([]byte, bool) {
-	p.initCache()
+func (p *RequestCache) GetCache(key string) ([]byte, bool) {
 	item := ccCache.GetOrCreateSecondaryCache("default").Get(key)
 	if item != nil {
 		data := item.Value().([]byte)
@@ -112,7 +182,7 @@ func (p RequestCache) GetCache(key string) ([]byte, bool) {
 		}
 		return data, true
 	}
-	switch p.GetStringOrDefault("cache_type", defaultCacheType) {
+	switch p.config.CacheType {
 		case cacheRedis:
 			b, err := p.getRedisClient().Get(ctx,key).Result()
 			if err == redis.Nil {
@@ -141,25 +211,21 @@ func (p RequestCache) GetCache(key string) ([]byte, bool) {
 	return nil, false
 }
 
-func (p RequestCache) SetCache(key string, data []byte, ttl time.Duration) {
+func (p *RequestCache) SetCache(key string, data []byte, ttl time.Duration) {
 
 	if global.Env().IsDebug {
 		log.Trace("set cache:", key, ", ttl:", ttl)
 	}
 
-	min, _ := p.GetInt("min_response_size", -1)
-	max, _ := p.GetInt("max_response_size", int(^uint(0) >> 1))
 	dataLen := len(data)
-	if dataLen < min || (dataLen > max) && max>0 {
+	if dataLen < p.config.MinResponseSize || (dataLen > p.config.MaxResponseSize) && p.config.MaxResponseSize>0 {
 		if global.Env().IsDebug {
-			log.Tracef("invalid response size, %v not between %v and %v", dataLen, min, max)
+			log.Tracef("invalid response size, %v not between %v and %v", dataLen, p.config.MinResponseSize, p.config.MaxResponseSize)
 		}
 		return
 	}
 
-	p.initCache()
-
-	switch p.GetStringOrDefault("cache_type", defaultCacheType) {
+	switch p.config.CacheType {
 	case cacheRedis:
 		err := p.getRedisClient().Set(ctx,key, data, ttl).Err()
 		if err != nil {
@@ -174,14 +240,7 @@ func (p RequestCache) SetCache(key string, data []byte, ttl time.Duration) {
 	}
 }
 
-
-//var hashBufferPool = &sync.Pool{
-//	New: func() interface{} {
-//		return new(bytes.Buffer)
-//	},
-//}
-
-func (p RequestCache) getHash(ctx *fasthttp.RequestCtx) string {
+func (p *RequestCache) getHash(ctx *fasthttp.RequestCtx) string {
 
 	//TODO configure, remove keys from hash factor
 	ctx.Request.URI().QueryArgs().Del("preference")
@@ -210,13 +269,14 @@ func (p RequestCache) getHash(ctx *fasthttp.RequestCtx) string {
 
 type RequestCacheGet struct {
 	RequestCache
+	config *Config
 }
 
-func (filter RequestCacheGet) Name() string {
+func (filter *RequestCacheGet) Name() string {
 	return "get_cache"
 }
 
-func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
+func (filter *RequestCacheGet) Filter(ctx *fasthttp.RequestCtx) {
 	if bytes.Equal(common.FaviconPath,ctx.Request.URI().Path()){
 		if global.Env().IsDebug{
 			log.Tracef("skip to delegate favicon.io")
@@ -255,13 +315,8 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 		ctx.Request.URI().QueryArgs().Del("no_cache")
 	}
 
-	patterns, ok := filter.GetStringArray("pass_patterns")
-	if !ok{
-		patterns=[]string{"_bulk","_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"}
-	}
-
 	//check bypass patterns
-	if len(patterns)>0&&util.ContainsAnyInArray(url, patterns) {
+	if len(filter.config.PassPatterns)>0&&util.ContainsAnyInArray(url, filter.config.PassPatterns) {
 		if global.Env().IsDebug {
 			log.Trace("url hit bypass pattern, will not be cached, ", url)
 		}
@@ -317,7 +372,7 @@ func (filter RequestCacheGet) Process(ctx *fasthttp.RequestCtx) {
 
 type RequestCacheSet struct {
 	RequestCache
-
+	config *Config
 	Type                   string `config:"type"` //redis,local
 	TTL                    string `config:"ttl"`
 	AsyncSearchTTL         string `config:"async_search_ttl"`
@@ -325,55 +380,18 @@ type RequestCacheSet struct {
 	asyncSearchTTLDuration time.Duration
 }
 
-func (filter RequestCacheSet) GetChaosTTLDuration() time.Duration {
-	baseTTL := filter.GetTTLDuration().Milliseconds()
+func (filter *RequestCacheSet) GetChaosTTLDuration() time.Duration {
+	baseTTL := filter.config.cacheTTL.Milliseconds()
 	randomTTL := rand.Int63n(baseTTL / 5)
 	return (time.Duration(baseTTL + randomTTL)) * time.Millisecond
 }
 
-func (filter RequestCacheSet) GetTTLDuration() time.Duration {
-	if filter.generalTTLDuration > 0 {
-		return filter.generalTTLDuration
-	}
 
-	filter.TTL = filter.GetStringOrDefault("cache_ttl", "10s")
-
-	if filter.TTL != "" {
-		dur, err := time.ParseDuration(filter.TTL)
-		if err != nil {
-			dur, _ = time.ParseDuration("10s")
-		}
-		filter.generalTTLDuration = dur
-	} else {
-		filter.generalTTLDuration = time.Second * 10
-	}
-
-	return filter.generalTTLDuration
-}
-
-func (filter RequestCacheSet) GetAsyncSearchTTLDuration() time.Duration {
-	if filter.asyncSearchTTLDuration > 0 {
-		return filter.asyncSearchTTLDuration
-	}
-	filter.AsyncSearchTTL = filter.GetStringOrDefault("async_search_cache_ttl", "30m")
-
-	if filter.AsyncSearchTTL != "" {
-		dur, err := time.ParseDuration(filter.AsyncSearchTTL)
-		if err != nil {
-			dur, _ = time.ParseDuration("30m")
-		}
-		filter.asyncSearchTTLDuration = dur
-	} else {
-		filter.asyncSearchTTLDuration = time.Minute * 30
-	}
-	return filter.asyncSearchTTLDuration
-}
-
-func (filter RequestCacheSet) Name() string {
+func (filter *RequestCacheSet) Name() string {
 	return "set_cache"
 }
 
-func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
+func (filter *RequestCacheSet) Filter(ctx *fasthttp.RequestCtx) {
 	method :=  string(ctx.Request.Header.Method())
 	url := string(ctx.RequestURI())
 
@@ -391,21 +409,14 @@ func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
 		hash = filter.getHash(ctx)
 	}
 
-	//TODO handle status code none 200, should cache status code as well
-	arr,ok:=filter.GetInt64Array("status")
-	if !ok{
-		arr=[]int64{ http.StatusOK }
-	}
-
-	if util.ContainsInAnyIntArray(int64(ctx.Response.StatusCode()),arr){
+	if util.ContainsInAnyInt32Array(ctx.Response.StatusCode(),filter.config.ValidatedStatus){
 
 		body := ctx.Response.Body()
 
 		//check max_response_size, skip if the response is too big
-		maxSize,ok:=filter.GetInt("max_response_size",-1)
 		if ok{
-			if maxSize>0 && len(body)>maxSize{
-				log.Warnf("response is too big ( %v > %v ), skip to put into cache",len(body),maxSize)
+			if filter.config.MaxResponseSize>0 && len(body)>filter.config.MaxResponseSize{
+				log.Warnf("response is too big ( %v > %v ), skip to put into cache",len(body),filter.config.MaxResponseSize)
 				return
 			}
 		}
@@ -441,7 +452,7 @@ func (filter RequestCacheSet) Process(ctx *fasthttp.RequestCtx) {
 					if global.Env().IsDebug {
 						log.Trace("async hash: set async hash cache", string(id), "=>", string(hash))
 					}
-					filter.SetCache(id, []byte(hash), filter.GetAsyncSearchTTLDuration())
+					filter.SetCache(id, []byte(hash), filter.config.asyncSearchCacheTTL)
 				}
 
 			} else if method == fasthttp.MethodGet {

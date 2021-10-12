@@ -1,9 +1,11 @@
 package logging
 
 import (
+	"fmt"
 	log "github.com/cihub/seelog"
+	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
-	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fastjson_marshal"
 	"infini.sh/gateway/common/model"
@@ -16,14 +18,45 @@ import (
 )
 
 type RequestLogging struct {
-	param.Parameters
+	config *Config
 }
 
-func (this RequestLogging) Name() string {
+type Config struct {
+	MinElaspsedTimeInMs       int `config:"min_elapsed_time_in_ms"`
+	MaxRequestBodySize        int `config:"max_request_body_size"`
+	MaxResponseBodySize       int `config:"max_response_body_size"`
+	SaveBulkDetails     bool `config:"bulk_stats_details"`
+	FormatHeaderKey     bool `config:"format_header_keys"`
+	RemoveAuthHeaderKey bool `config:"remove_authorization"`
+	QueueName string `config:"queue_name"`
+}
+
+func New(c *config.Config) (pipeline.Filter, error) {
+
+	cfg := Config{
+		MinElaspsedTimeInMs: -1,
+		MaxRequestBodySize:  1024,
+		MaxResponseBodySize: 1024,
+		SaveBulkDetails:     true,
+		FormatHeaderKey:     false,
+		RemoveAuthHeaderKey: true,
+		QueueName: "logging",
+	}
+
+	if err := c.Unpack(&cfg); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	runner := RequestLogging{config: &cfg}
+	initPool()
+
+	return &runner, nil
+}
+
+func (this *RequestLogging) Name() string {
 	return "request_logging"
 }
 
-//var lock sync.Mutex
 var writerPool *sync.Pool
 var requstObjPool *sync.Pool
 var reqPool *sync.Pool
@@ -62,13 +95,7 @@ func initPool() {
 	}
 }
 
-func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
-
-	initPool()
-
-	if global.Env().IsDebug {
-		log.Trace("start logging requests")
-	}
+func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 
 	request := requstObjPool.Get().(*model.HttpRequest)
 	request.Request = reqPool.Get().(*model.Request)
@@ -81,9 +108,8 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 	defer reqFlowPool.Put(request.DataFlow)
 
 
-	minTimeElapsed,_:=this.GetInt("min_elapsed_time_in_ms",-1)
-	if minTimeElapsed>0{
-		if minTimeElapsed >= int(request.Response.ElapsedTimeInMs) {
+	if this.config.MinElaspsedTimeInMs>0{
+		if this.config.MinElaspsedTimeInMs >= int(request.Response.ElapsedTimeInMs) {
 			ctx.Finished()
 		}
 	}
@@ -124,10 +150,8 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 
 	reqBody:=string(ctx.Request.GetRawBody())
 
-	maxRequestBodySize,_:=this.GetInt("max_request_body_size",1024)
-
-	if len(reqBody)>maxRequestBodySize{
-		reqBody=reqBody[0:maxRequestBodySize]
+	if len(reqBody)>this.config.MaxRequestBodySize{
+		reqBody=reqBody[0:this.config.MaxRequestBodySize]
 	}
 
 	request.Request.Body = reqBody
@@ -155,7 +179,7 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 			bulk_status["indices"]=len(statsObj)
 			bulk_status["documents"]=docs
 
-			if this.GetBool("bulk_stats_details",true){
+			if this.config.SaveBulkDetails{
 				actionStats:=ctx.Get("bulk_action_stats")
 				stats:=map[string]interface{}{}
 				stats["index"]=indexStats
@@ -203,28 +227,25 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 		log.Debug("response body:",string(respBody))
 	}
 
-	maxResponseBodySize,_:=this.GetInt("max_response_body_size",1024)
-	if len(respBody)>maxResponseBodySize{
-		respBody=respBody[0:maxResponseBodySize]
+	if len(respBody)>this.config.MaxResponseBodySize{
+		respBody=respBody[0:this.config.MaxResponseBodySize]
 	}
 
 	request.Response.Body=respBody
 
 	request.Response.BodyLength = ctx.Response.GetBodyLength()
 
-	formatHeaderKey:=this.GetBool("format_header_keys",false)
-	removeAuthHeaderKey:=this.GetBool("remove_authorization",true)
 
 	m = map[string]string{}
 	ctx.Request.Header.VisitAll(func(key, value []byte) {
 
 		tempKey:=string(key)
-		if removeAuthHeaderKey{
+		if this.config.RemoveAuthHeaderKey {
 			if util.ContainsAnyInArray(tempKey,fasthttp.AuthHeaderKeys){
 				return
 			}
 		}
-		if formatHeaderKey{
+		if this.config.FormatHeaderKey {
 			m[strings.ToLower(tempKey)] = string(value)
 		}else{
 			m[tempKey] = string(value)
@@ -242,7 +263,7 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 
 	m = map[string]string{}
 	ctx.Response.Header.VisitAll(func(key, value []byte) {
-		if formatHeaderKey {
+		if this.config.FormatHeaderKey {
 			m[strings.ToLower(string(key))] = string(value)
 		}else{
 			m[string(key)] = string(value)
@@ -258,7 +279,7 @@ func (this RequestLogging) Process(ctx *fasthttp.RequestCtx) {
 		panic(err)
 	}
 
-	err = queue.Push(this.GetStringOrDefault("queue_name", "request_logging"), bytes)
+	err = queue.Push(this.config.QueueName, bytes)
 	if err != nil {
 		panic(err)
 	}

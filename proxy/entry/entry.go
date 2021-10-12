@@ -13,6 +13,7 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/framework/lib/fasthttp/reuseport"
@@ -97,7 +98,7 @@ func (this *Entrypoint) Start() error {
 				cfg:=common.GetFlowConfig(y)
 
 				if len(cfg.FiltersV2)>0{
-					flow1, err := common.New(cfg.FiltersV2)
+					flow1, err := pipeline.NewFilter(cfg.FiltersV2)
 					if err != nil {
 						panic(err)
 					}

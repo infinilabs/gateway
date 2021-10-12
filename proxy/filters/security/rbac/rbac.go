@@ -4,15 +4,20 @@
 package rbac
 
 import (
-	"infini.sh/framework/core/param"
+	"fmt"
+	"infini.sh/framework/core/config"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/lib/fasthttp"
 )
 
 type RBACFilter struct {
-	param.Parameters
+	Action string `config:"action"`
+	Users []string `config:"users"`
+	Roles []string `config:"roles"`
+	DefaultAction string `config:"default_action"`
 }
 
-func (filter RBACFilter) Name() string {
+func (filter *RBACFilter) Name() string {
 	return "rbac"
 }
 
@@ -20,21 +25,18 @@ const AccessDeniedMessage = "Access denied"
 const NoUserMessage ="No user found"
 const NoRoleMessage ="No roles found"
 
-func (filter RBACFilter) Process(ctx *fasthttp.RequestCtx) {
+func (filter *RBACFilter) Filter(ctx *fasthttp.RequestCtx) {
 
-	action := filter.GetStringOrDefault("action", "allow")
-
-	users,definedUsers := filter.GetStringArray("users")
-	if definedUsers{
+	if len(filter.Users)>0{
 		currentUsername,ok1:=ctx.GetString("user_name")
 		if !ok1{
 			ctx.Error(NoUserMessage,401)
 			ctx.Finished()
 			return
 		}
-		for _, v := range users {
+		for _, v := range filter.Users {
 			if v==currentUsername{
-				if action=="allow"{
+				if filter.Action=="allow"{
 					filter.checkES(ctx)
 					return
 				}else{
@@ -46,18 +48,17 @@ func (filter RBACFilter) Process(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	roles,definedRoles := filter.GetStringArray("roles")
-	if definedRoles{
+	if len(filter.Roles)>0{
 		currentRoles,ok2:=ctx.GetStringArray("user_roles")
 		if !ok2{
 			ctx.Error(NoRoleMessage,401)
 			ctx.Finished()
 			return
 		}
-		for _, v := range roles {
+		for _, v := range filter.Roles {
 			for _,z:=range currentRoles{
 				if v==z{
-					if action=="allow"{
+					if filter.Action=="allow"{
 						filter.checkES(ctx)
 						return
 					}else{
@@ -70,8 +71,7 @@ func (filter RBACFilter) Process(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	defaultAction := filter.GetStringOrDefault("default_action", "deny")
-	if defaultAction=="deny"{
+	if filter.DefaultAction=="deny"{
 		ctx.Error(AccessDeniedMessage,403)
 		ctx.Finished()
 		return
@@ -80,21 +80,35 @@ func (filter RBACFilter) Process(ctx *fasthttp.RequestCtx) {
 	}
 }
 
-func (filter RBACFilter) checkES(ctx *fasthttp.RequestCtx){
+func (filter *RBACFilter) checkES(ctx *fasthttp.RequestCtx){
 	//check clusters
 
 }
 
-func (filter RBACFilter) checkClusters(ctx *fasthttp.RequestCtx){
+func (filter *RBACFilter) checkClusters(ctx *fasthttp.RequestCtx){
 	//check indices
 
 }
 
-func (filter RBACFilter) checkIndices(ctx *fasthttp.RequestCtx){
+func (filter *RBACFilter) checkIndices(ctx *fasthttp.RequestCtx){
 	//check actions
 
 }
 
-func (filter RBACFilter) checkActions(ctx *fasthttp.RequestCtx){
+func (filter *RBACFilter) checkActions(ctx *fasthttp.RequestCtx){
 
 }
+
+func NewRBACFilter(c *config.Config) (pipeline.Filter, error) {
+
+	runner := RBACFilter{
+		Action: "allow",
+	}
+
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	return &runner, nil
+}
+

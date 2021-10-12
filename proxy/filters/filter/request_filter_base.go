@@ -2,8 +2,8 @@ package filter
 
 import (
 	log "github.com/cihub/seelog"
+	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
-	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/radix"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
@@ -11,48 +11,69 @@ import (
 	"regexp"
 )
 
-type RequestFilterBase struct {
-	param.Parameters
+type RequestFilter struct {
+	Action     string `config:"action"`
+	Message     string `config:"message"`
+	Status     int `config:"status"`
+	Flow     string `config:"flow"`
+	Rules config.Rules `config:"rules"`
+	Include []string `config:"include"`
+	Exclude []string `config:"exclude"`
+}
+//
+//func NewRequestFilter(c *config.Config) (pipeline.Filter, error) {
+//
+//	runner := RequestFilter {
+//		Action: "deny",
+//		Status:403,
+//	}
+//
+//	if err := c.Unpack(&runner); err != nil {
+//		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+//	}
+//
+//	return &runner, nil
+//}
+
+func (filter RequestFilter) Name() string {
+	return "request_filter"
 }
 
-func (filter RequestFilterBase) CheckMustNotRules(path string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool) {
+func (filter *RequestFilter) CheckMustNotRules(path string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool) {
 	var hasRules = false
-	arr, ok := filter.GetStringArray("must_not.prefix")
-	if ok {
-		if len(arr) > 0 {
-			hasRules = true
-			for _, v := range arr {
-				if global.Env().IsDebug {
-					log.Tracef("check prefix rule [%v] vs [%v]", path, v)
-				}
-				if util.PrefixStr(path, v) {
-					if global.Env().IsDebug {
-						log.Debugf("hit prefix rule [%v] vs [%v]", path, v)
-					}
-					return false, hasRules
-				}
-			}
-		}
+
+	if filter.Rules.MustNot!=nil{
+		return true,false
 	}
 
-	arr, ok = filter.GetStringArray("must_not.contain")
-	if ok {
-		if len(arr) > 0 {
-			hasRules = true
-			if util.ContainsAnyInArray(path, arr) {
+	if len(filter.Rules.MustNot.Prefix)>0 {
+		hasRules = true
+		for _, v := range filter.Rules.MustNot.Prefix {
+			if global.Env().IsDebug {
+				log.Tracef("check prefix rule [%v] vs [%v]", path, v)
+			}
+			if util.PrefixStr(path, v) {
 				if global.Env().IsDebug {
-					log.Debugf("hit contain rule [%v] vs [%v]", path, arr)
+					log.Debugf("hit prefix rule [%v] vs [%v]", path, v)
 				}
 				return false, hasRules
 			}
 		}
 	}
 
-	arr, ok = filter.GetStringArray("must_not.suffix")
-	if ok {
-		if len(arr) > 0 {
-			hasRules = true
-			for _, v := range arr {
+	if len(filter.Rules.MustNot.Contain)>0 {
+		hasRules = true
+		if util.ContainsAnyInArray(path, filter.Rules.MustNot.Contain) {
+			if global.Env().IsDebug {
+				log.Debugf("hit contain rule [%v] vs [%v]", path, filter.Rules.MustNot.Contain)
+			}
+			return false, hasRules
+		}
+	}
+
+	if len(filter.Rules.MustNot.Suffix)>0 {
+		hasRules = true
+			for _, v := range filter.Rules.MustNot.Suffix {
 				if global.Env().IsDebug {
 					log.Tracef("check suffix rule [%v] vs [%v]", path, v)
 				}
@@ -63,14 +84,11 @@ func (filter RequestFilterBase) CheckMustNotRules(path string, ctx *fasthttp.Req
 					return false, hasRules
 				}
 			}
-		}
 	}
 
-	arr, ok = filter.GetStringArray("must_not.wildcard")
-	if ok {
-		if len(arr) > 0 {
-			hasRules = true
-			patterns := radix.Compile(arr...)
+	if len(filter.Rules.MustNot.Wildcard)>0{
+		hasRules = true
+			patterns := radix.Compile(filter.Rules.MustNot.Wildcard...)
 			ok := patterns.Match(path)
 			if ok {
 				if global.Env().IsDebug {
@@ -78,17 +96,16 @@ func (filter RequestFilterBase) CheckMustNotRules(path string, ctx *fasthttp.Req
 				}
 				return false, hasRules
 			}
-		}
 	}
 
-	arr, ok = filter.GetStringArray("must_not.regex")
-	if ok {
-		if len(arr) > 0 {
+
+	if len(filter.Rules.MustNot.Regex)>0{
 			hasRules = true
-			for _, v := range arr {
+			for _, v := range filter.Rules.MustNot.Regex {
 				if global.Env().IsDebug {
 					log.Tracef("check regex rule [%v] vs [%v]", path, v)
 				}
+				//TODO reuse regexp
 				reg, err := regexp.Compile(v)
 				if err != nil {
 					panic(err)
@@ -100,19 +117,21 @@ func (filter RequestFilterBase) CheckMustNotRules(path string, ctx *fasthttp.Req
 					return false, hasRules
 				}
 			}
-		}
 	}
 
 	return true, hasRules
 }
 
-func (filter RequestFilterBase) CheckMustRules(path string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool) {
+func (filter *RequestFilter) CheckMustRules(path string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool) {
+
+	if filter.Rules.Must!=nil{
+		return true,false
+	}
+
 	var hasRules = false
-	arr, ok := filter.GetStringArray("must.prefix")
-	if ok {
-		if len(arr) > 0 {
+	if len(filter.Rules.Must.Prefix)>0 {
 			hasRules = true
-			for _, v := range arr {
+			for _, v := range filter.Rules.Must.Prefix {
 				if global.Env().IsDebug {
 					log.Tracef("check prefix rule [%v] vs [%v]", path, v)
 				}
@@ -123,14 +142,11 @@ func (filter RequestFilterBase) CheckMustRules(path string, ctx *fasthttp.Reques
 					return false, hasRules
 				}
 			}
-		}
 	}
 
-	arr, ok = filter.GetStringArray("must.contain")
-	if ok {
-		if len(arr) > 0 {
+	if len(filter.Rules.Must.Contain)>0 {
 			hasRules = true
-			for _, v := range arr {
+			for _, v := range filter.Rules.Must.Contain {
 				if global.Env().IsDebug {
 					log.Tracef("check contain rule [%v] vs [%v]", path, v)
 				}
@@ -142,13 +158,10 @@ func (filter RequestFilterBase) CheckMustRules(path string, ctx *fasthttp.Reques
 				}
 			}
 		}
-	}
 
-	arr, ok = filter.GetStringArray("must.suffix")
-	if ok {
-		if len(arr) > 0 {
+	if len(filter.Rules.Must.Suffix)>0 {
 			hasRules = true
-			for _, v := range arr {
+			for _, v := range filter.Rules.Must.Suffix {
 				if global.Env().IsDebug {
 					log.Tracef("check suffix rule [%v] vs [%v]", path, v)
 				}
@@ -160,13 +173,12 @@ func (filter RequestFilterBase) CheckMustRules(path string, ctx *fasthttp.Reques
 				}
 			}
 		}
-	}
 
-	arr, ok = filter.GetStringArray("must.wildcard")
-	if ok {
-		if len(arr) > 0 {
+
+	if len(filter.Rules.Must.Wildcard)>0 {
+
 			hasRules = true
-			patterns := radix.Compile(arr...) //TODO handle mutli wildcard rules
+			patterns := radix.Compile(filter.Rules.Must.Wildcard...) //TODO handle mutli wildcard rules
 			ok := patterns.Match(path)
 			if !ok {
 				if global.Env().IsDebug {
@@ -175,13 +187,10 @@ func (filter RequestFilterBase) CheckMustRules(path string, ctx *fasthttp.Reques
 				return false, hasRules
 			}
 		}
-	}
 
-	arr, ok = filter.GetStringArray("must.regex")
-	if ok {
-		if len(arr) > 0 {
+	if len(filter.Rules.Must.Regex)>0 {
 			hasRules = true
-			for _, v := range arr {
+			for _, v := range filter.Rules.Must.Regex {
 				if global.Env().IsDebug {
 					log.Tracef("check regex rule [%v] vs [%v]", path, v)
 				}
@@ -197,18 +206,20 @@ func (filter RequestFilterBase) CheckMustRules(path string, ctx *fasthttp.Reques
 				}
 			}
 		}
-	}
 
 	return true, hasRules
 }
 
-func (filter RequestFilterBase) CheckShouldRules(path string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool) {
+func (filter *RequestFilter) CheckShouldRules(path string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool) {
+
+	if filter.Rules.Should!=nil{
+		return true,false
+	}
+
 	var hasShouldRules bool
-	arr, ok := filter.GetStringArray("should.prefix")
-	if ok {
-		if len(arr) > 0 {
+	if len(filter.Rules.Should.Prefix)>0 {
 			hasShouldRules = true
-			for _, v := range arr {
+			for _, v := range filter.Rules.Should.Prefix {
 				if global.Env().IsDebug {
 					log.Tracef("check prefix rule [%v] vs [%v]", path, v)
 				}
@@ -220,26 +231,21 @@ func (filter RequestFilterBase) CheckShouldRules(path string, ctx *fasthttp.Requ
 				}
 			}
 		}
-	}
 
-	arr, ok = filter.GetStringArray("should.contain")
-	if ok {
-		if len(arr) > 0 {
+
+	if len(filter.Rules.Should.Contain)>0 {
 			hasShouldRules = true
-			if util.ContainsAnyInArray(path, arr) {
+			if util.ContainsAnyInArray(path, filter.Rules.Should.Contain) {
 				if global.Env().IsDebug {
-					log.Debugf("hit contain rule [%v] vs [%v]", path, arr)
+					log.Debugf("hit contain rule [%v] vs [%v]", path, filter.Rules.Should.Contain)
 				}
 				return true, hasShouldRules
 			}
-		}
 	}
 
-	arr, ok = filter.GetStringArray("should.suffix")
-	if ok {
-		if len(arr) > 0 {
+	if len(filter.Rules.Should.Suffix)>0 {
 			hasShouldRules = true
-			for _, v := range arr {
+			for _, v := range filter.Rules.Should.Suffix {
 				if global.Env().IsDebug {
 					log.Tracef("check suffix rule [%v] vs [%v]", path, v)
 				}
@@ -250,14 +256,11 @@ func (filter RequestFilterBase) CheckShouldRules(path string, ctx *fasthttp.Requ
 					return true, hasShouldRules
 				}
 			}
-		}
 	}
 
-	arr, ok = filter.GetStringArray("should.wildcard")
-	if ok {
-		if len(arr) > 0 {
+	if len(filter.Rules.Should.Wildcard)>0 {
 			hasShouldRules = true
-			patterns := radix.Compile(arr...)
+			patterns := radix.Compile(filter.Rules.Should.Wildcard...)
 			ok := patterns.Match(path)
 			if ok {
 				if global.Env().IsDebug {
@@ -265,14 +268,11 @@ func (filter RequestFilterBase) CheckShouldRules(path string, ctx *fasthttp.Requ
 				}
 				return true, hasShouldRules
 			}
-		}
 	}
 
-	arr, ok = filter.GetStringArray("should.regex")
-	if ok {
-		if len(arr) > 0 {
+	if len(filter.Rules.Should.Regex)>0 {
 			hasShouldRules = true
-			for _, v := range arr {
+			for _, v := range filter.Rules.Should.Regex {
 				if global.Env().IsDebug {
 					log.Tracef("check regex rule [%v] vs [%v]", path, v)
 				}
@@ -288,18 +288,16 @@ func (filter RequestFilterBase) CheckShouldRules(path string, ctx *fasthttp.Requ
 				}
 			}
 		}
-	}
 	return false, hasShouldRules
 }
 
-func (filter RequestFilterBase) CheckExcludeStringRules(val string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool){
-	exclude, ok := filter.GetStringArray("exclude")
+func (filter *RequestFilter) CheckExcludeStringRules(val string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool){
 	if global.Env().IsDebug {
-		log.Debug("exclude:", exclude)
+		log.Debug("exclude:", filter.Exclude)
 	}
-	if ok {
+	if len(filter.Exclude)>0 {
 		hasRule =true
-		for _, x := range exclude {
+		for _, x := range filter.Exclude {
 			match := x == val
 			if global.Env().IsDebug {
 				log.Debugf("check exclude rule: %v vs %v, match: %v", x, val, match)
@@ -316,15 +314,14 @@ func (filter RequestFilterBase) CheckExcludeStringRules(val string, ctx *fasthtt
 	return true,hasRule
 }
 
-func (filter RequestFilterBase) CheckIncludeStringRules(val string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool){
-	include, ok := filter.GetStringArray("include")
+func (filter *RequestFilter) CheckIncludeStringRules(val string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool){
 	if global.Env().IsDebug {
-		log.Debug("include:", include)
+		log.Debug("include:", filter.Include)
 	}
 
-	if ok {
+	if len(filter.Include)>0 {
 		hasRule=true
-		for _, x := range include {
+		for _, x := range filter.Include {
 			match := x == val
 			if global.Env().IsDebug {
 				log.Debugf("check include rule: %v vs %v, match: %v", x, val, match)
@@ -346,51 +343,29 @@ func (filter RequestFilterBase) CheckIncludeStringRules(val string, ctx *fasthtt
 
 }
 
-func (filter RequestFilterBase) Filter(ctx *fasthttp.RequestCtx){
+func (filter *RequestFilter) Filter(ctx *fasthttp.RequestCtx){
 
 	ctx.Response.Header.Set("FILTERED","true")
 
-	if filter.GetStringOrDefault("action","deny") == "deny"{
+	if filter.Action == "deny"{
 		ctx.SetDestination("filtered")
-		msg,ok:=filter.GetString("message")
-		if ok{
-			ctx.Response.SwapBody([]byte(msg))
+		if len(filter.Message)>0{
+			ctx.Response.SwapBody([]byte(filter.Message))
 		}
 
 		ctx.Response.Header.Add("original_status",util.IntToString(ctx.Response.StatusCode()))
-		ctx.Response.SetStatusCode(filter.GetIntOrDefault("status",403))
+		ctx.Response.SetStatusCode(filter.Status)
 		ctx.Finished()
 		return
 	}
 
-	filterFlow,ok:= filter.GetString("flow")
-	if ok{
+	if filter.Flow!=""{
 		ctx.Resume()
-		flow := common.MustGetFlow(filterFlow)
+		flow := common.MustGetFlow(filter.Flow)
 		if global.Env().IsDebug {
-			log.Debugf("request [%v] go on flow: [%s] [%s]", ctx.URI().String(), filterFlow, flow.ToString())
+			log.Debugf("request [%v] go on flow: [%s] [%s]", ctx.URI().String(), filter.Flow, flow.ToString())
 		}
 		flow.Process(ctx)
 		ctx.Finished()
 	}
-}
-
-
-//TODO
-type RequestUrlQueryArgsFilter struct {
-	RequestFilterBase
-}
-
-//TODO
-type RequestBodyFilter struct {
-	RequestFilterBase
-}
-
-//TODO
-type ResponseBodyFilter struct {
-	RequestFilterBase
-}
-
-type ResponseContentTypeFilter struct {
-	RequestFilterBase
 }

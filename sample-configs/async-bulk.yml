@@ -40,7 +40,7 @@ flow:
                 - master
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
-      - name: request_logging
+      - name: logging
         parameters:
           queue_name: request_logging
 

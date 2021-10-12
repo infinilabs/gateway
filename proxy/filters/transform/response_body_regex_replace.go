@@ -1,27 +1,29 @@
 package transform
 
 import (
+	"fmt"
 	log "github.com/cihub/seelog"
+	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
-	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/pipeline"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"regexp"
 )
 
 type ResponseBodyRegexReplace struct {
-	param.Parameters
+	Pattern string `config:"pattern"`
+	To string `config:"to"`
+	p *regexp.Regexp
 }
 
-func (filter ResponseBodyRegexReplace) Name() string {
+func (filter *ResponseBodyRegexReplace) Name() string {
 	return "response_body_regex_replace"
 }
 
-func (filter ResponseBodyRegexReplace) Process(ctx *fasthttp.RequestCtx) {
-	pattern:=filter.MustGetString("pattern")
-	to:=filter.MustGetString("to")
-
+func (filter *ResponseBodyRegexReplace) Filter(ctx *fasthttp.RequestCtx) {
 	if global.Env().IsDebug{
-		log.Trace("pattern:",pattern,", to:",to)
+		log.Trace("pattern:",filter.Pattern,", to:",filter.To)
 	}
 
 	//c,v:=ctx.Response.IsCompressed()
@@ -29,21 +31,27 @@ func (filter ResponseBodyRegexReplace) Process(ctx *fasthttp.RequestCtx) {
 
 	body:=ctx.Response.GetRawBody()
 	if len(body)>0{
-		//log.Error("old body:")
-		//log.Error(string(body))
-		p,err:=regexp.Compile(pattern)
-		if err!=nil{
-			log.Error(err)
-			return
-		}
 
-		newBody:=p.ReplaceAll(body,[]byte(to))
-		//log.Error("new body:")
-		//log.Error(string(newBody))
+		newBody:=filter.p.ReplaceAll(body,util.UnsafeStringToBytes(filter.To))
 
 		//TODO auto handle uncompressed response
 		ctx.Response.Header.Del(fasthttp.HeaderContentEncoding)
 		ctx.Response.Header.Del(fasthttp.HeaderContentEncoding2)
 		ctx.Response.SetBody(newBody)
 	}
+}
+
+
+func NewResponseBodyRegexReplace(c *config.Config) (filter pipeline.Filter, err error) {
+
+	runner := ResponseBodyRegexReplace{
+	}
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+	runner.p,err=regexp.Compile(runner.Pattern)
+	if err!=nil{
+		panic(err)
+	}
+	return &runner, nil
 }

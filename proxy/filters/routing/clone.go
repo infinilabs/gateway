@@ -4,26 +4,27 @@
 package routing
 
 import (
+	"fmt"
 	log "github.com/cihub/seelog"
+	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
-	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
 )
 
 type CloneFlowFilter struct {
-	param.Parameters
+	Flows     []string `config:"flows"`
+	Continue    bool `config:"continue"`
 }
 
-func (filter CloneFlowFilter) Name() string {
+func (filter *CloneFlowFilter) Name() string {
 	return "clone"
 }
 
-func (filter CloneFlowFilter) Process(ctx *fasthttp.RequestCtx) {
-	flows := filter.MustGetStringArray("flows")
-	continueAfterMatch := filter.GetBool("continue", false)
+func (filter *CloneFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 
-	for _, v := range flows {
+	for _, v := range filter.Flows {
 		ctx.Resume()
 		flow := common.MustGetFlow(v)
 		if global.Env().IsDebug {
@@ -35,8 +36,20 @@ func (filter CloneFlowFilter) Process(ctx *fasthttp.RequestCtx) {
 		flow.Process(ctx)
 	}
 
-	if len(flows)>0&&!continueAfterMatch {
+	if len(filter.Flows)>0&&!filter.Continue {
 		ctx.Finished()
 	}
 
+}
+
+
+func NewCloneFlowFilter(c *config.Config) (pipeline.Filter, error) {
+
+	runner := CloneFlowFilter{
+	}
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	return &runner, nil
 }

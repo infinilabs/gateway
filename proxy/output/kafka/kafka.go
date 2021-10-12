@@ -2,63 +2,37 @@ package kafka
 
 import (
 	"context"
-	"infini.sh/framework/core/param"
-	"infini.sh/framework/lib/fasthttp"
+	"fmt"
 	"github.com/segmentio/kafka-go"
+	"infini.sh/framework/core/config"
+	"infini.sh/framework/core/pipeline"
+	"infini.sh/framework/lib/fasthttp"
 	"sync"
 	"time"
 )
 
 type Kafka struct {
-	param.Parameters
+	Topic string `config:"topic"`
+	BatchSize int `config:"batch_size"`
+	BatchTimeoutInMs int `config:"batch_timeout_in_ms"`
+	RequiredAcks int `config:"required_acks"`
+	Brokers []string `config:"brokers"`
+
+	msgPool *sync.Pool
 }
 
-func (filter Kafka) Name() string {
-	return "to_kafka"
+func (filter *Kafka) Name() string {
+	return "kafka"
 }
 
-
-var msgPool *sync.Pool
-
-func initPool() {
-	if msgPool!=nil{
-		return
-	}
-	msgPool = &sync.Pool {
-		New: func()interface{} {
-			return kafka.Message{}
-		},
-	}
-}
-
-var inited bool
 var taskContext = context.Background()
 var w *kafka.Writer
 var messages=[]kafka.Message{}
-var batchSize int
 var lock sync.Mutex
 
-func (filter Kafka) Process(ctx *fasthttp.RequestCtx) {
+func (filter *Kafka) Filter(ctx *fasthttp.RequestCtx) {
 
-	topic:=filter.GetStringOrDefault("topic","infini-gateway")
-	brokers:=filter.MustGetStringArray("brokers")
-	if !inited {
-		initPool()
-		batchSize=filter.GetIntOrDefault("batch_size",1000)
-		batchTimeout:=filter.GetIntOrDefault("batch_timeout_in_ms",500)
-		requiredAcks:=filter.GetIntOrDefault("required_acks",0)
-		w = kafka.NewWriter(kafka.WriterConfig{
-			Brokers: brokers,
-			Topic:   topic,
-			BatchSize: batchSize,
-			BatchTimeout: time.Duration(batchTimeout) * time.Millisecond,
-			RequiredAcks: requiredAcks,
-		})
-		inited = true
-	}
-
-	msg:=msgPool.Get().(kafka.Message)
-
+	msg:=filter.msgPool.Get().(kafka.Message)
 	msg.Key=ctx.Request.RequestURI()
 	msg.Value=ctx.Request.Body()
 
@@ -66,16 +40,47 @@ func (filter Kafka) Process(ctx *fasthttp.RequestCtx) {
 
 	messages=append(messages,msg)
 
+	//TODO flush finally or periodly
 	//check need to flush or not
-	if len(messages)>=batchSize{
+	if len(messages)>=filter.BatchSize{
 		err := w.WriteMessages(taskContext, messages...)
 		if err != nil {
 			panic("could not write message " + err.Error())
 		}
 		for _,v:=range messages{
-			msgPool.Put(v)
+			filter.msgPool.Put(v)
 		}
 		messages=[]kafka.Message{}
 	}
+
 	lock.Unlock()
+}
+
+func NewKafkaFilter(c *config.Config) (pipeline.Filter, error) {
+
+	runner := Kafka{
+		BatchSize: 1000,
+		BatchTimeoutInMs: 500,
+		RequiredAcks: 0,
+	}
+
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+		w = kafka.NewWriter(kafka.WriterConfig{
+			Brokers: runner.Brokers,
+			Topic:   runner.Topic,
+			BatchSize: runner.BatchSize,
+			BatchTimeout: time.Duration(runner.BatchTimeoutInMs) * time.Millisecond,
+			RequiredAcks: runner.RequiredAcks,
+		})
+
+		runner.msgPool = &sync.Pool {
+		New: func()interface{} {
+			return kafka.Message{}
+		},
+	}
+
+	return &runner, nil
 }

@@ -19,12 +19,18 @@ entry:
 #      enabled: true
 
 flow:
-  - name: echo
-    filter_v2:
+  - name: hello_world
+    filter:
       - echo:
-          str: "hello world"
+      - echo:
+  - name: not_found
+    filter:
+      - echo:
+          str: '404 not found\n'
+          repeat: 1
   - name: default_flow
-    filter_v2:
+    filter:
+      - get_cache:
       - bulk_reshuffle:
           when:
             contains:
@@ -41,24 +47,32 @@ flow:
           refresh: # refresh upstream nodes list, need to enable this feature to use elasticsearch nodes auto discovery
             enabled: true
             interval: 60s
-  - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
-    filter_v2:
-      - stats:
-      - request_logging:
-          queue_name: request_logging
-          max_request_body_size: 1024
-          max_response_body_size: 1024
-          when:
-            not:
-              or:
-                - equals:
-                    _ctx.request.path: "/favicon.ico"
-                - equals:
-                    _ctx.response.status: 200
+      - set_cache:
+      - dump:
+          request: true
+  - name: logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
+    filter:
+#      - stats:
+#      - logging:
+#          queue_name: request_logging
+#          max_request_body_size: 1024
+#          max_response_body_size: 1024
+#          when: #1s or none-200 requests will be logged
+#            or:
+#              - not:
+#                  or:
+#                    - equals:
+#                        _ctx.request.path: "/favicon.ico"
+#                    - equals:
+#                        _ctx.response.status: 200
+#                    - in:
+#                        _ctx.request.path: ["/sw.js"]
+#              - range:
+#                  _ctx.elapsed.gte: 10
 router:
   - name: my_router
     default_flow: default_flow
-    tracing_flow: request_logging
+    tracing_flow: logging
 #    rules:
 #      - method:
 #          - GET

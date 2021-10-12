@@ -50,7 +50,6 @@ func TestParseActionMeta1(t *testing.T) {
 
 }
 
-
 func TestParseActionMeta2(t *testing.T) {
 
 	data := []byte("{\"index\":{\"_index\":\"medcl1\",\"_type\":\"_doc\",\"_id\":\"GZq-bnYBC53QmW9Kk2ve\"}}")
@@ -139,7 +138,6 @@ func TestParseActionMeta2(t *testing.T) {
 
 
 }
-
 
 func TestParseActionMeta3(t *testing.T) {
 

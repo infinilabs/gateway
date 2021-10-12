@@ -1,24 +1,27 @@
 package throttle
 
 import (
+	"fmt"
 	log "github.com/cihub/seelog"
-	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/config"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 )
 
 type RetryLimiter struct {
-	param.Parameters
+	MaxRetryTimes int `config:"max_retry_times"`
+	Queue string `config:"queue_name"`
 }
 
-func (filter RetryLimiter) Name() string {
+func (filter *RetryLimiter) Name() string {
 	return "retry_limiter"
 }
 
 const RetryKey = "Retried_times"
 
-func (filter RetryLimiter) Process(ctx *fasthttp.RequestCtx) {
+func (filter *RetryLimiter) Filter(ctx *fasthttp.RequestCtx) {
 
 	timeBytes:=ctx.Request.Header.Peek(RetryKey)
 	times:=0
@@ -29,11 +32,11 @@ func (filter RetryLimiter) Process(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	if times>filter.GetIntOrDefault("max_retry_times",3){
+	if times>filter.MaxRetryTimes{
 		log.Debugf("hit max retry times")
 		ctx.Finished()
 		ctx.Request.Header.Del(RetryKey)
-		queue.Push(filter.MustGetString("queue_name"),ctx.Request.Encode())
+		queue.Push(filter.Queue,ctx.Request.Encode())
 		return
 	}
 
@@ -41,3 +44,15 @@ func (filter RetryLimiter) Process(ctx *fasthttp.RequestCtx) {
 	ctx.Request.Header.Set(RetryKey,util.IntToString(times))
 }
 
+
+func NewRetryLimiter(c *config.Config) (pipeline.Filter, error) {
+
+	runner := RetryLimiter{
+		MaxRetryTimes: 3,
+	}
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	return &runner, nil
+}

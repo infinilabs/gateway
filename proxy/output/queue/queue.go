@@ -1,38 +1,50 @@
 package queue
 
 import (
+	"fmt"
 	log "github.com/cihub/seelog"
+	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
-	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/lib/fasthttp"
 )
 
 type DiskEnqueueFilter struct {
-	param.Parameters
+	DepthThreshold int64 `config:"depth_threshold"`
+	QueueName string `config:"queue_name"`
 }
 
-func (filter DiskEnqueueFilter) Name() string {
+func (filter *DiskEnqueueFilter) Name() string {
 	return "queue"
 }
 
-func (filter DiskEnqueueFilter) Process(ctx *fasthttp.RequestCtx) {
-	threshold := filter.GetInt64OrDefault("depth_threshold",0)
-	queueName := filter.MustGetString("queue_name")
-	depth:=queue.Depth(queueName)
+func (filter *DiskEnqueueFilter) Filter(ctx *fasthttp.RequestCtx) {
+	depth:=queue.Depth(filter.QueueName)
 
 	if global.Env().IsDebug{
-		log.Trace(queueName," depth:",depth," vs threshold:",threshold)
+		log.Trace(filter.QueueName," depth:",depth," vs threshold:",filter.DepthThreshold)
 	}
 
-	if depth>=threshold{
+	if depth>=filter.DepthThreshold{
 		data:=ctx.Request.Encode()
-		err:=queue.Push(queueName,data)
+		err:=queue.Push(filter.QueueName,data)
 		if err!=nil{
 			panic(err)
 		}
 	}else{
-		log.Debug("skip enqueue, ",queueName," depth:",depth," vs threshold:",threshold)
+		log.Debug("skip enqueue, ",filter.QueueName," depth:",depth," vs threshold:",filter.DepthThreshold)
 	}
 }
 
+func NewDiskEnqueueFilter(c *config.Config) (pipeline.Filter, error) {
+
+	runner := DiskEnqueueFilter{
+	}
+
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	return &runner, nil
+}

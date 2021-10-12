@@ -1,27 +1,51 @@
 package throttle
 
 import (
+	"fmt"
 	log "github.com/cihub/seelog"
+	"infini.sh/framework/core/config"
+	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
-	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/rate"
 	"infini.sh/framework/lib/fasthttp"
 	"regexp"
 )
 
 type RequestPathLimitFilter struct {
-	param.Parameters
+	Message string    `config:"message"`
+	Rules []MatchRules    `config:"rules"`
 }
 
-func (filter RequestPathLimitFilter) Name() string {
+func NewRequestPathLimitFilter(c *config.Config) (pipeline.Filter, error) {
+
+	runner := RequestPathLimitFilter {
+		Message: "Reach request limit!",
+	}
+
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	for _,v:=range runner.Rules{
+		if !v.Valid(){
+			panic(errors.Errorf("invalid pattern:%v",v))
+		}
+	}
+
+	return &runner, nil
+}
+
+
+func (filter *RequestPathLimitFilter) Name() string {
 	return "request_path_limiter"
 }
 
 type MatchRules struct {
-	Pattern string //pattern
-	MaxQPS  int64 //max_qps
+	Pattern string  `config:"pattern"` //pattern
+	MaxQPS  int64   `config:"max_qps"`//max_qps
 	reg     *regexp.Regexp
-	ExtractGroup string
+	ExtractGroup string `config:"group"`
 }
 
 func (this *MatchRules)Extract(input string)string  {
@@ -35,9 +59,6 @@ func (this *MatchRules)Extract(input string)string  {
 }
 
 func (this *MatchRules)Match(input string)bool  {
-	if this.reg==nil{
-		this.reg= regexp.MustCompile(this.Pattern)
-	}
 	return this.reg.MatchString(input)
 }
 
@@ -64,36 +85,11 @@ func (this *MatchRules) Valid()bool {
 	return true
 }
 
-func (filter RequestPathLimitFilter) Process(ctx *fasthttp.RequestCtx) {
-	rules,ok:=filter.Get("rules_obj").([]MatchRules)
-	if !ok{
-		results:=[]MatchRules{}
-		rules:=filter.Get("rules")
-		objs:=rules.([]interface{})
-		for _,v:=range objs{
-			x:=v.(map[string]interface{})
-			z:=MatchRules{}
-			z.Pattern=x["pattern"].(string)
-			z.ExtractGroup = x["group"].(string)
-			z.MaxQPS,_= param.GetInt64OrDefault(x["max_qps"],-1024)
-			if !z.Valid(){
-				log.Warnf("invalid throttle rule, pattern:[%v] group:[%v] max_qps:[%v], skipping",z.Pattern,z.ExtractGroup,z.MaxQPS)
-				continue
-			}
-			results=append(results,z)
-		}
-		filter.Set("rules_obj",results)
-		return
-	}
-
+func (filter *RequestPathLimitFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	key:=string(ctx.Path())
 
-	if global.Env().IsDebug{
-		log.Debug(len(rules)," rules,",key)
-	}
-
-	for _,v:=range rules{
+	for _,v:=range filter.Rules{
 		if v.Match(key){
 			item:=v.Extract(key)
 
@@ -109,7 +105,7 @@ func (filter RequestPathLimitFilter) Process(ctx *fasthttp.RequestCtx) {
 					}
 
 					ctx.SetStatusCode(429)
-					ctx.WriteString(filter.GetStringOrDefault("message","Reach request limit!"))
+					ctx.WriteString(filter.Message)
 					ctx.Finished()
 				}
 				break

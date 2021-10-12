@@ -28,7 +28,7 @@ func ProxyHandler(ctx *fasthttp.RequestCtx) {
 
 	//# DAG based Request Processing Flow
 	//if reqFlowID!=""{
-	//	flow.GetFlow(reqFlowID).Process(ctx)
+	//	flow.GetFlow(reqFlowID).Filter(ctx)
 	//}
 	//Phase: Requests Deny
 	//TODO 根据请求IP和头信息,执行请求拒绝, 基于后台设置的黑白名单,执行准入, 只允许特定 IP Agent 访问 Gateway 访问
@@ -38,7 +38,7 @@ func ProxyHandler(ctx *fasthttp.RequestCtx) {
 
 	//Phase: Throttle Requests
 	//Phase: Requests Decision
-	//Phase: DAG based Process
+	//Phase: DAG based Filter
 	//自动学习请求网站来生成 FST 路由信息, 基于 FST 数来快速路由
 
 	//# Delegate Requests to upstream
@@ -54,7 +54,7 @@ func ProxyHandler(ctx *fasthttp.RequestCtx) {
 	//Phase: Handle Write Requests
 	//Phase: Async Persist CUD
 
-	//Phase: Cache Process
+	//Phase: Cache Filter
 	//TODO, no_cache -> skip cache and del query_args
 
 	//Phase: Request Rewrite, reset @timestamp precision for Kibana

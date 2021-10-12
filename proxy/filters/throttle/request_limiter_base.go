@@ -6,54 +6,77 @@ package throttle
 import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
-	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/rate"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"time"
 )
 
-type RequestLimiterBase struct {
-	param.Parameters
+type GenericLimiter struct {
+	uuid string
+	MaxRequests int    `config:"max_requests"`
+	BurstRequests int    `config:"burst_requests"`
+	MaxBytes int    `config:"max_bytes"`
+	BurstBytes int    `config:"burst_bytes"`
+	Interval string    `config:"interval"`
+	Action string    `config:"action"`
+	MaxRetryTimes int    `config:"max_retry_times"`
+	RetryDelayInMs int    `config:"retry_delay_in_ms"`
+	Message string    `config:"message"`
+	RetriedMessage string    `config:"failed_retry_message"`
+
+	interval time.Duration
+	retryDeplyInMs time.Duration
 }
 
-func (filter RequestLimiterBase) internalProcess(tokenType,token string,ctx *fasthttp.RequestCtx){
+var genericLimiter = GenericLimiter{
+	MaxRequests:-1,
+	BurstRequests:-1,
+	MaxBytes:-1,
+	BurstBytes:-1,
+	MaxRetryTimes:1000,
+	RetryDelayInMs:10,
+	Interval:"1s",
+	Action:"retry",
+	Message:"Reach request limit!",
+	RetriedMessage:"Retried but still beyond request limit!",
+}
 
-	maxQps, ok := filter.GetInt64("max_requests", -1)
-	burstQps, _ := filter.GetInt64("burst_requests", -1)
-	maxBps, ok1 := filter.GetInt64("max_bytes", -1)
-	burstBps, _ := filter.GetInt64("burst_bytes", -1)
-	interval := filter.GetDurationOrDefault("interval", "1s")
+func (filter *GenericLimiter) init(){
+	filter.uuid=util.GetUUID()
+	filter.retryDeplyInMs=time.Duration(filter.RetryDelayInMs)*time.Millisecond
+	filter.interval=util.GetDurationOrDefault(filter.Interval,1*time.Second)
+}
+
+func (filter *GenericLimiter) internalProcess(tokenType,token string,ctx *fasthttp.RequestCtx){
 
 	if global.Env().IsDebug{
-		log.Trace(ok,",max_requests:",maxQps,",",ok1,",max_bytes:",maxBps,",burst_requests:",burstQps,",burst_bytes:",burstBps,",interval:",interval)
+		log.Tracef("limit config: %v",filter)
 	}
 
-	if ok  || ok1 {
+	if filter.MaxRequests>0||filter.MaxBytes>0 {
 		retryTimes:=0
-		maxRetryTimes:=filter.GetIntOrDefault("max_retry_times",1000)
-		retryDeplyInMs:=time.Duration(filter.GetIntOrDefault("retry_delay_in_ms",10))*time.Millisecond
-
 	RetryRateLimit:
-		if (ok && !rate.GetRateLimiter(filter.UUID()+"_limit_requests", token, int(maxQps),int(burstQps),interval).Allow()) ||
-			(ok1 && !rate.GetRateLimiter(filter.UUID()+"_limit_bytes", token, int(maxBps),int(burstBps),interval).AllowN(time.Now(),ctx.Request.GetRequestLength())) {
+		if (filter.MaxRequests>0 && !rate.GetRateLimiter(filter.uuid+"_limit_requests", token, int(filter.MaxRequests),int(filter.BurstRequests),filter.interval).Allow()) ||
+			(filter.MaxBytes>0 && !rate.GetRateLimiter(filter.uuid+"_limit_bytes", token, int(filter.MaxBytes),int(filter.BurstBytes),filter.interval).AllowN(time.Now(),ctx.Request.GetRequestLength())) {
 
 			if global.Env().IsDebug {
 				log.Warn(tokenType," ",token, " reached limit")
 			}
 
-			if filter.GetStringOrDefault("action","retry") == "drop"{
+			if filter.Action== "drop"{
 				ctx.SetStatusCode(429)
-				ctx.WriteString(filter.GetStringOrDefault("message", "Reach request limit!"))
+				ctx.WriteString(filter.Message)
 				ctx.Finished()
 				return
 			}else{
-				if retryTimes>maxRetryTimes{
+				if retryTimes>filter.MaxRetryTimes{
 					ctx.SetStatusCode(429)
-					ctx.WriteString(filter.GetStringOrDefault("message", "Retried but still beyond request limit!"))
+					ctx.WriteString(filter.RetriedMessage)
 					ctx.Finished()
 					return
 				}
-				time.Sleep(retryDeplyInMs)
+				time.Sleep(filter.retryDeplyInMs)
 				retryTimes++
 				goto RetryRateLimit
 			}

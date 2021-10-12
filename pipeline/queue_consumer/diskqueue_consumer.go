@@ -248,11 +248,20 @@ func processMessage(metadata *elastic.ElasticsearchMetadata, pop []byte) (bool, 
 		log.Trace(string(req.GetRawBody()))
 	}
 
-	host := metadata.GetActiveHost()
+	// modify schema，align with elasticsearch's schema
+	orignalSchema:=string(req.URI().Scheme())
+	if metadata.GetSchema()!=orignalSchema{
+		req.URI().SetScheme(metadata.GetSchema())
+	}
 
+	host := metadata.GetActiveHost()
 	req.Header.SetHost(host)
 	resp := fasthttp.AcquireResponse()
 	err = fastHttpClient.Do(req, resp)
+
+	// restore schema
+	req.URI().SetScheme(orignalSchema)
+
 	if err != nil {
 		return false, resp.StatusCode(), err
 	}

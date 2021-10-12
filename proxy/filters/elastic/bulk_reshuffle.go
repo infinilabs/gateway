@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
+	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
-	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/rate"
 	"infini.sh/framework/core/rotate"
@@ -17,23 +18,89 @@ import (
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
 	"path"
-	"strconv"
-	"sync"
 	"time"
 )
 
 var JSON_CONTENT_TYPE = "application/json"
 
 type BulkReshuffle struct {
-	param.Parameters
+	config *BulkReshuffleConfig
+	bulkProcessor *BulkProcessor
 }
 
-func (this BulkReshuffle) Name() string {
+func (this *BulkReshuffle) Name() string {
 	return "bulk_reshuffle"
 }
 
+type BulkReshuffleConfig struct {
+	Elasticsearch  string `config:"elasticsearch"`
+	Level  string `config:"level"`
+	Mode  string `config:"mode"`
+	FixNullID  bool `config:"fix_null_id"`
+	IndexStatsAnalysis  bool `config:"index_stats_analysis"`
+	ActionStatsAnalysis  bool `config:"action_stats_analysis"`
 
-func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
+	ValidateRequest  bool `config:"validate_request"`
+	ValidEachLine  bool `config:"validate_each_line"`
+	ValidMetadata  bool `config:"validate_metadata"`
+	ValidPayload  bool `config:"validate_payload"`
+
+	DocBufferSize  int `config:"doc_buffer_size"`
+	Shards  []int `config:"shards"`
+	RotateConfig rotate.RotateConfig `config:"rotate"`
+	BulkProcessorConfig BulkProcessorConfig `config:"bulk_processing"`
+}
+
+func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
+
+	cfg := BulkReshuffleConfig{
+		DocBufferSize:256*1024,
+		IndexStatsAnalysis:true,
+		ActionStatsAnalysis:true,
+		FixNullID:true,
+		Level:"node",
+		Mode:"sync",
+		RotateConfig: rotate.RotateConfig{
+			Compress:     true,
+			MaxFileAge:   0,
+			MaxFileCount: 100,
+			MaxFileSize:  1024,
+		},
+		BulkProcessorConfig: BulkProcessorConfig{
+			Compress:                  false,
+			LogInvalidMessage:         true,
+			LogInvalid200Message:      true,
+			LogInvalid200RetryMessage: true,
+			Log429RetryMessage:        true,
+			RetryDelayInSeconds:       1,
+			RejectDelayInSeconds:      1,
+			MaxRejectRetryTimes:       3,
+			MaxRetryTimes:             3,
+			MaxRequestBodySize:        1024,
+			MaxResponseBodySize:       1024,
+
+			SaveFailure:       			true,
+			//FailureRequestsQueue:       fmt.Sprintf("%v-failure",clusterName),
+			//InvalidRequestsQueue:       fmt.Sprintf("%v-invalid",clusterName),
+			//DeadRequestsQueue:       	fmt.Sprintf("%v-dead_letter",clusterName),
+			DocBufferSize: 256*1024,
+		},
+	}
+
+	if err := c.Unpack(&cfg); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	runner := BulkReshuffle{config: &cfg}
+
+	runner.bulkProcessor=&BulkProcessor{
+		RotateConfig: cfg.RotateConfig,
+		Config: cfg.BulkProcessorConfig,
+	}
+	return &runner, nil
+}
+
+func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 	pathStr := util.UnsafeBytesToString(ctx.URI().Path())
 
@@ -42,22 +109,12 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 		ctx.Set(common.CACHEABLE, false)
 
-		clusterName := this.MustGetString("elasticsearch")
-
-		versionLock.RLock()
-		esMajorVersion, ok := versions[clusterName]
-		versionLock.RUnlock()
-
-		if !ok {
-			versionLock.Lock()
-			esMajorVersion := elastic.GetClient(clusterName).GetMajorVersion()
-			versions[clusterName] = esMajorVersion
-			versionLock.Unlock()
-		}
+		clusterName := this.config.Elasticsearch
 
 		esConfig := elastic.GetConfig(clusterName)
 
 		metadata := elastic.GetOrInitMetadata(esConfig)
+
 		if metadata == nil {
 			if rate.GetRateLimiter("cluster_metadata", clusterName, 1, 1, 5*time.Second).Allow() {
 				log.Warnf("elasticsearch [%v] metadata is nil, skip reshuffle", clusterName)
@@ -75,28 +132,26 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		docBuf := map[string]*bytebufferpool.ByteBuffer{}
 		buffEndpoints := map[string]string{}
 
-		validEachLine := this.GetBool("validate_each_line", false)
-		validMetadata := this.GetBool("validate_metadata", false)
-		validPayload := this.GetBool("validate_payload", false)
-		reshuffleType := this.GetStringOrDefault("level", "node")
-		fixNullID := this.GetBool("fix_null_id", true) //sync and async
-
-		enabledShards, checkShards := this.GetStringArray("shards")
+		validEachLine := this.config.ValidEachLine
+		validMetadata := this.config.ValidMetadata
+		validPayload := this.config.ValidPayload
+		reshuffleType := this.config.Level
+		fixNullID := this.config.FixNullID
 
 		//renameMapping, resolveIndexRename := this.GetStringMap("index_rename")
 
 		var buff *bytebufferpool.ByteBuffer
 
 		var bufferKey string
-		indexAnalysis := this.GetBool("index_stats_analysis", true)   //sync and async
-		actionAnalysis := this.GetBool("action_stats_analysis", true) //sync and async
-		validateRequest := this.GetBool("validate_request", false)
+		indexAnalysis := this.config.IndexStatsAnalysis  //sync and async
+		actionAnalysis := this.config.ActionStatsAnalysis //sync and async
+		validateRequest := this.config.ValidateRequest
 		actionMeta := smallSizedPool.Get()
 		actionMeta.Reset()
 		defer smallSizedPool.Put(actionMeta)
 
 		var docBuffer []byte
-		docBuffer=p.Get(this.GetIntOrDefault("doc_buffer_size",256*1024)) //doc buffer for bytes scanner
+		docBuffer=p.Get(this.config.DocBufferSize) //doc buffer for bytes scanner
 		defer p.Put(docBuffer)
 
 		docCount, err := WalkBulkRequests(body,docBuffer, func(eachLine []byte) (skipNextLine bool) {
@@ -279,15 +334,15 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 
 			if indexSettings.Shards != 1 {
 				//如果 shards=1，则直接找主分片所在节点，否则计算一下。
-				shardID = elastic.GetShardID(esMajorVersion, []byte(id), indexSettings.Shards)
+				shardID = elastic.GetShardID(metadata.GetMajorVersion(), []byte(id), indexSettings.Shards)
 
 				if global.Env().IsDebug {
 					log.Tracef("%s/%s => %v", index, id, shardID)
 				}
 
 				//save endpoint for bufferkey
-				if checkShards && len(enabledShards) > 0 {
-					if !util.ContainsAnyInArray(strconv.Itoa(shardID), enabledShards) {
+				if len(this.config.Shards) > 0 {
+					if !util.ContainsInAnyInt32Array(shardID, this.config.Shards) {
 						log.Debugf("shard %s-%s not enabled, skip processing", index, shardID)
 						//skipNext = true
 						//continue
@@ -343,7 +398,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 		}, func(payloadBytes []byte) {
 
 			if actionMeta.Len() > 0 {
-				buff, ok = docBuf[bufferKey]
+				buff, ok := docBuf[bufferKey]
 				if !ok {
 					buff = bufferPool.Get()
 					buff.Reset()
@@ -384,35 +439,9 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 			return
 		}
 
-		submitMode := this.GetStringOrDefault("mode", "sync") //sync and async
+		submitMode := this.config.Mode //sync and async
 		if submitMode == "sync" {
-			bulkProcessor := BulkProcessor{
-				RotateConfig: rotate.RotateConfig{
-					Compress:     this.GetBool("compress_after_rotate", true),
-					MaxFileAge:   this.GetIntOrDefault("max_file_age", 0),
-					MaxFileCount: this.GetIntOrDefault("max_file_count", 100),
-					MaxFileSize:  this.GetIntOrDefault("max_file_size_in_mb", 1024),
-				},
-				Config: BulkProcessorConfig{
-					Compress:                  this.GetBool("compress", false),
-					LogInvalidMessage:         this.GetBool("log_invalid_message", true),
-					LogInvalid200Message:      this.GetBool("log_invalid_200_message", true),
-					LogInvalid200RetryMessage: this.GetBool("log_200_retry_message", true),
-					Log429RetryMessage:        this.GetBool("log_429_retry_message", true),
-					RetryDelayInSeconds:       this.GetIntOrDefault("retry_delay_in_seconds", 1),
-					RejectDelayInSeconds:      this.GetIntOrDefault("reject_retry_delay_in_seconds", 1),
-					MaxRejectRetryTimes:       this.GetIntOrDefault("max_reject_retry_times", 3),
-					MaxRetryTimes:             this.GetIntOrDefault("max_retry_times", 3),
-					MaxRequestBodySize:        this.GetIntOrDefault("max_logged_request_body_size", 1024),
-					MaxResponseBodySize:       this.GetIntOrDefault("max_logged_response_body_size", 1024),
 
-					SaveFailure:       this.GetBool("save_failure",true),
-					FailureRequestsQueue:       this.GetStringOrDefault("failure_queue",fmt.Sprintf("%v-failure",clusterName)),
-					InvalidRequestsQueue:       this.GetStringOrDefault("invalid_queue",fmt.Sprintf("%v-invalid",clusterName)),
-					//DeadRequestsQueue:       	this.GetStringOrDefault("dead_queue",fmt.Sprintf("%v-dead_letter",clusterName)),
-					DocBufferSize: this.GetIntOrDefault("doc_buffer_size",256*1024),
-				},
-			}
 
 			for x, y := range docBuf {
 				y.Write(NEWLINEBYTES)
@@ -432,7 +461,7 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 				endpoint = path.Join(endpoint, pathStr)
 
 				start:=time.Now()
-				code, status := bulkProcessor.Bulk(metadata, endpoint, data, fastHttpClient)
+				code, status := this.bulkProcessor.Bulk(metadata, endpoint, data, fastHttpClient)
 				stats.Timing("elasticsearch."+esConfig.Name+".bulk","elapsed_ms",time.Since(start).Milliseconds())
 				switch status {
 				case SUCCESS:
@@ -531,7 +560,6 @@ func (this BulkReshuffle) Process(ctx *fasthttp.RequestCtx) {
 	//变成 bulk 格式
 
 }
-
 
 var actionIndex ="index"
 var actionDelete = "delete"
@@ -645,6 +673,3 @@ func safetyParseActionMeta(scannedByte []byte) (action , index, typeName, id str
 
 	return action, index, typeName, id
 }
-
-var versions = map[string]int{}
-var versionLock = sync.RWMutex{}

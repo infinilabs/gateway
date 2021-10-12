@@ -5,6 +5,7 @@ package common
 
 import (
 	"infini.sh/framework/core/config"
+	"infini.sh/framework/core/pipeline"
 )
 
 type EntryConfig struct {
@@ -48,8 +49,6 @@ type RouterConfig struct {
 
 type FlowConfig struct {
 	Name      string         `config:"name"`
-	Filters   []FilterConfig `config:"filter"`
-	FiltersV2 PluginConfig   `config:"filter_v2"`
+	Filters   []FilterConfig `config:"filter_v1"`
+	FiltersV2 pipeline.PluginConfig   `config:"filter"`
 }
-
-type PluginConfig []*config.Config

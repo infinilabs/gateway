@@ -1,16 +1,18 @@
 package proxy
 
 import (
-	"infini.sh/gateway/common"
-	"infini.sh/gateway/proxy/filters/auth"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/gateway/proxy/filters/cache"
-	"infini.sh/gateway/proxy/filters/debug"
+	"infini.sh/gateway/proxy/filters/debug/dump"
+	"infini.sh/gateway/proxy/filters/debug/echo"
 	elastic2 "infini.sh/gateway/proxy/filters/elastic"
+	"infini.sh/gateway/proxy/filters/elastic/date_range_precision_tuning"
 	"infini.sh/gateway/proxy/filters/filter"
-	"infini.sh/gateway/proxy/filters/ldap"
-	"infini.sh/gateway/proxy/filters/rbac"
 	"infini.sh/gateway/proxy/filters/routing"
 	"infini.sh/gateway/proxy/filters/sample"
+	"infini.sh/gateway/proxy/filters/security/auth"
+	"infini.sh/gateway/proxy/filters/security/ldap"
+	"infini.sh/gateway/proxy/filters/security/rbac"
 	"infini.sh/gateway/proxy/filters/throttle"
 	"infini.sh/gateway/proxy/filters/transform"
 	"infini.sh/gateway/proxy/output/elastic"
@@ -23,80 +25,69 @@ import (
 )
 
 func Init() {
-	common.RegisterFilterPlugin(logging.RequestLogging{})
-	common.RegisterFilterPlugin(debug.EchoMessage{})
-	common.RegisterFilterPlugin(debug.DumpHeader{})
-	common.RegisterFilterPlugin(debug.DumpUrl{})
-	common.RegisterFilterPlugin(debug.DumpRequestBody{})
-	common.RegisterFilterPlugin(debug.DumpStatusCode{})
-	common.RegisterFilterPlugin(debug.DumpResponseBody{})
-	common.RegisterFilterPlugin(debug.DumpContext{})
+	pipeline.RegisterFilterPlugin("echo", echo.New)
+	pipeline.RegisterFilterPlugin("logging", logging.New)
+	pipeline.RegisterFilterPlugin("elasticsearch", elastic.New)
+	pipeline.RegisterFilterPlugin("get_cache", cache.NewGet)
+	pipeline.RegisterFilterPlugin("set_cache", cache.NewSet)
+	pipeline.RegisterFilterPlugin("dump", dump.New)
+	pipeline.RegisterFilterPlugin("date_range_precision_tuning", date_range_precision_tuning.New)
+	pipeline.RegisterFilterPlugin("bulk_reshuffle", pipeline.FilterConfigChecked(elastic2.NewBulkReshuffle, pipeline.RequireFields("elasticsearch")))
+	pipeline.RegisterFilterPlugin("bulk_response_validate", elastic2.NewBulkResponseValidate)
+	pipeline.RegisterFilterPlugin("drop", throttle.NewDropFilter)
+	pipeline.RegisterFilterPlugin("elasticsearch_health_check", throttle.NewHealthCheckFilter)
+	pipeline.RegisterFilterPlugin("sleep",throttle.NewSleepFilter)
+	pipeline.RegisterFilterPlugin("retry_limiter",pipeline.FilterConfigChecked(throttle.NewRetryLimiter, pipeline.RequireFields("queue_name")))
+	pipeline.RegisterFilterPlugin("request_user_limiter",throttle.NewRequestUserLimitFilter)
+	pipeline.RegisterFilterPlugin("request_host_limiter",throttle.NewRequestHostLimitFilter)
+	pipeline.RegisterFilterPlugin("request_api_key_limiter",throttle.NewRequestAPIKeyLimitFilter)
+	pipeline.RegisterFilterPlugin("request_client_ip_limiter",throttle.NewRequestClientIPLimitFilter)
+	pipeline.RegisterFilterPlugin("request_path_limiter",throttle.NewRequestPathLimitFilter)
+	pipeline.RegisterFilterPlugin("sample",sample.NewSampleFilter)
+	pipeline.RegisterFilterPlugin("request_body_regex_replace",transform.NewRequestBodyRegexReplace)
+	pipeline.RegisterFilterPlugin("response_body_regex_replace",transform.NewResponseBodyRegexReplace)
+	pipeline.RegisterFilterPlugin("request_body_json_del",transform.NewRequestBodyJsonDel)
+	pipeline.RegisterFilterPlugin("request_body_json_set",transform.NewRequestBodyJsonSet)
+	pipeline.RegisterFilterPlugin("ratio",routing.NewRatioRoutingFlowFilter)
+	pipeline.RegisterFilterPlugin("clone",routing.NewCloneFlowFilter)
+	pipeline.RegisterFilterPlugin("switch",routing.NewSwitchFlowFilter)
+	pipeline.RegisterFilterPlugin("flow",routing.NewFlowFilter)
+
+	pipeline.RegisterFilterPlugin("request_method_filter",filter.NewRequestMethodFilter)
+	pipeline.RegisterFilterPlugin("request_path_filter",filter.NewRequestUrlPathFilter)
+	pipeline.RegisterFilterPlugin("request_header_filter",filter.NewRequestHeaderFilter)
+	pipeline.RegisterFilterPlugin("request_client_ip_filter",filter.NewRequestClientIPFilter)
+	pipeline.RegisterFilterPlugin("request_user_filter",filter.NewRequestUserFilter)
+	pipeline.RegisterFilterPlugin("request_api_key_filter",filter.NewRequestAPIKeyFilter)
+	pipeline.RegisterFilterPlugin("request_host_filter",filter.NewRequestServerHostFilter)
+
+	pipeline.RegisterFilterPlugin("response_header_filter",filter.NewResponseHeaderFilter)
+	pipeline.RegisterFilterPlugin("response_status_filter",filter.NewResponseStatusCodeFilter)
 
 
-	common.RegisterFilterPlugin(elastic.Elasticsearch{})
-	common.RegisterFilterPlugin(elastic2.DatePrecisionTuning{})
-	common.RegisterFilterPlugin(elastic2.BulkReshuffle{})
-	common.RegisterFilterPlugin(elastic2.BulkToQueue{})
-	common.RegisterFilterPlugin(elastic2.BulkResponseValidate{})
 
-	common.RegisterFilterPlugin(cache.RequestCacheGet{})
-	common.RegisterFilterPlugin(cache.RequestCacheSet{})
+	//废弃的过滤器
+	//pipeline.RegisterFilterPlugin(transform.RequestBodyTruncate{})
+	//pipeline.RegisterFilterPlugin(transform.ResponseBodyTruncate{})
 
-	common.RegisterFilterPlugin(throttle.RequestUserLimitFilter{})
-	common.RegisterFilterPlugin(throttle.RequestHostLimitFilter{})
-	common.RegisterFilterPlugin(throttle.RequestAPIKeyLimitFilter{})
-	common.RegisterFilterPlugin(throttle.RequestClientIPLimitFilter{})
-	common.RegisterFilterPlugin(throttle.RequestPathLimitFilter{})
-	common.RegisterFilterPlugin(throttle.SleepFilter{})
+	pipeline.RegisterFilterPlugin("response_header_format",transform.NewResponseHeaderFormatFilter)
 
-	common.RegisterFilterPlugin(filter.RequestHeaderFilter{})
-	common.RegisterFilterPlugin(filter.RequestMethodFilter{})
-	common.RegisterFilterPlugin(sample.SampleFilter{})
-	common.RegisterFilterPlugin(filter.RequestUrlPathFilter{})
-	common.RegisterFilterPlugin(kafka.Kafka{})
+	pipeline.RegisterFilterPlugin("set_hostname",transform.NewSetHostname)
+	pipeline.RegisterFilterPlugin("set_request_header",transform.NewSetRequestHeader)
+	pipeline.RegisterFilterPlugin("set_request_query_args",transform.NewSetRequestQueryArgs)
+	pipeline.RegisterFilterPlugin("set_response_header",transform.NewSetResponseHeader)
+	pipeline.RegisterFilterPlugin("set_response",transform.NewSetResponse)
+	pipeline.RegisterFilterPlugin("set_basic_auth",auth.NewSetBasicAuth)
 
-	common.RegisterFilterPlugin(routing.RatioRoutingFlowFilter{})
-	common.RegisterFilterPlugin(routing.CloneFlowFilter{})
-	common.RegisterFilterPlugin(routing.SwitchFlowFilter{})
-	common.RegisterFilterPlugin(routing.FlowFilter{})
-
-	common.RegisterFilterPlugin(filter.ResponseStatusCodeFilter{})
-	common.RegisterFilterPlugin(filter.ResponseHeaderFilter{})
-	common.RegisterFilterPlugin(filter.RequestClientIPFilter{})
-	common.RegisterFilterPlugin(filter.RequestUserFilter{})
-	common.RegisterFilterPlugin(filter.RequestAPIKeyFilter{})
-	common.RegisterFilterPlugin(filter.RequestServerHostFilter{})
-
-	common.RegisterFilterPlugin(transform.RequestBodyTruncate{})
-	common.RegisterFilterPlugin(transform.ResponseBodyTruncate{})
-	common.RegisterFilterPlugin(transform.ResponseHeaderFormatFilter{})
-	common.RegisterFilterPlugin(transform.RequestBodyRegexReplace{})
-	common.RegisterFilterPlugin(transform.ResponseBodyRegexReplace{})
-
-	common.RegisterFilterPlugin(transform.SetHostname{})
-	common.RegisterFilterPlugin(transform.SetRequestHeader{})
-	common.RegisterFilterPlugin(transform.SetRequestQueryArgs{})
-	common.RegisterFilterPlugin(transform.SetResponseHeader{})
-	common.RegisterFilterPlugin(transform.SetResponse{})
-	common.RegisterFilterPlugin(transform.RequestBodyJsonSet{})
-	common.RegisterFilterPlugin(transform.RequestBodyJsonDel{})
-
-	common.RegisterFilterPlugin(auth.SetBasicAuth{})
-
-	common.RegisterFilterPlugin(queue.DiskEnqueueFilter{})
-	common.RegisterFilterPlugin(translog.TranslogOutput{})
-
-	common.RegisterFilterPlugin(throttle.DropFilter{})
-	common.RegisterFilterPlugin(throttle.ElasticsearchHealthCheckFilter{})
-
-	common.RegisterFilterPlugin(redis_pubsub.RedisPubSub{})
-
-	common.RegisterFilterPlugin(ldap.LDAPFilter{})
-	common.RegisterFilterPlugin(rbac.RBACFilter{})
+	pipeline.RegisterFilterPlugin("queue",queue.NewDiskEnqueueFilter)
+	pipeline.RegisterFilterPlugin("translog",translog.NewTranslogOutput)
+	pipeline.RegisterFilterPlugin("redis_pubsub",pipeline.FilterConfigChecked(redis_pubsub.NewRedisPubSub, pipeline.RequireFields("channel")))
+	pipeline.RegisterFilterPlugin("kafka",kafka.NewKafkaFilter)
 
 
-	common.RegisterFilterPlugin(throttle.RetryLimiter{})
-	common.RegisterFilterPlugin(queue2.StatsFilter{})
+	pipeline.RegisterFilterPlugin("ldap_auth",pipeline.FilterConfigChecked(ldap.NewLDAPFilter, pipeline.RequireFields("host","bind_dn","base_dn")))
+	pipeline.RegisterFilterPlugin("rbac",rbac.NewRBACFilter)
 
+	pipeline.RegisterFilterPlugin("stats",queue2.NewStatsFilter)
 
 }

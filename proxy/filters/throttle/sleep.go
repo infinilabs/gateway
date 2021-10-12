@@ -1,25 +1,35 @@
 package throttle
 
 import (
-	"infini.sh/framework/core/param"
+	"fmt"
+	"infini.sh/framework/core/config"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/lib/fasthttp"
 	"time"
 )
 
 type SleepFilter struct {
-	param.Parameters
+	SleepInMs int `config:"sleep_in_million_seconds"`
 }
 
-func (filter SleepFilter) Name() string {
+func (filter *SleepFilter) Name() string {
 	return "sleep"
 }
 
-func (filter SleepFilter) Process(ctx *fasthttp.RequestCtx) {
-	sleepInMs,ok:=filter.GetInt64("sleep_in_million_seconds",1000)
-	if !ok{
+func (filter *SleepFilter) Filter(ctx *fasthttp.RequestCtx) {
+	if filter.SleepInMs<=0{
 		return
 	}
-	time.Sleep(time.Duration(sleepInMs)*time.Millisecond)
+	time.Sleep(time.Duration(filter.SleepInMs)*time.Millisecond)
 }
 
 
+func NewSleepFilter(c *config.Config) (pipeline.Filter, error) {
+
+	runner := SleepFilter{}
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	return &runner, nil
+}

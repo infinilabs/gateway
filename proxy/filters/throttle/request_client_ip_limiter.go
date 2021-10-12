@@ -1,37 +1,60 @@
 package throttle
 
 import (
+	"fmt"
 	log "github.com/cihub/seelog"
+	config "infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/lib/fasthttp"
 )
 
 type RequestClientIPLimitFilter struct {
-	RequestLimiterBase
+	limiter *GenericLimiter
+	IP []string    `config:"ip"`
 }
 
-func (filter RequestClientIPLimitFilter) Name() string {
+func NewRequestClientIPLimitFilter(c *config.Config) (pipeline.Filter, error) {
+
+	runner := RequestHostLimitFilter{
+	}
+
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	limiter:=genericLimiter
+	runner.limiter=&limiter
+
+	if err := c.Unpack(runner.limiter); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	runner.limiter.init()
+
+	return &runner, nil
+}
+
+func (filter *RequestClientIPLimitFilter) Name() string {
 	return "request_client_ip_limiter"
 }
 
-func (filter RequestClientIPLimitFilter) Process(ctx *fasthttp.RequestCtx) {
-
-	ips, ok := filter.GetStringArray("ip")
+func (filter *RequestClientIPLimitFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	clientIP := ctx.RemoteIP().String()
 
 	if global.Env().IsDebug {
-		log.Trace("ips rules: ", len(ips), ", client_ip: ", clientIP)
+		log.Trace("ips rules: ", len(filter.IP), ", client_ip: ", clientIP)
 	}
 
-	if ok&&len(ips) > 0 {
-		for _, v := range ips {
+	if len(filter.IP) > 0 {
+		for _, v := range filter.IP {
 			//check if ip pre-defined
 			if v == clientIP {
 				if global.Env().IsDebug {
 					log.Debug(clientIP, "met check rules")
 				}
-				filter.internalProcess("clientIP",clientIP,ctx)
+				filter.limiter.internalProcess("clientIP",clientIP,ctx)
 				return
 			}
 		}
@@ -39,5 +62,5 @@ func (filter RequestClientIPLimitFilter) Process(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	filter.internalProcess("clientIP",clientIP,ctx)
+	filter.limiter.internalProcess("clientIP",clientIP,ctx)
 }

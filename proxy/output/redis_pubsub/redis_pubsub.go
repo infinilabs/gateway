@@ -4,70 +4,46 @@ import (
 	"context"
 	"fmt"
 	log "github.com/cihub/seelog"
+	"github.com/go-redis/redis"
+	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
-	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
-	"github.com/go-redis/redis"
-	"sync"
 )
 
-
-var client *redis.Client
-var l sync.RWMutex
-var ctx = context.Background()
-
-func (p RedisPubSub) getRedisClient() *redis.Client {
-
-	if client != nil {
-		return client
-	}
-
-	l.Lock()
-	defer l.Unlock()
-
-	if client != nil {
-		return client
-	}
-
-	client = redis.NewClient(&redis.Options{
-		Addr: fmt.Sprintf("%s:%v", p.GetStringOrDefault("host","localhost"), p.GetIntOrDefault("port",6379)),
-		Password: p.GetStringOrDefault("password",""),
-		DB:       p.GetIntOrDefault("db",0),
-	})
-
-	_, err := client.Ping(ctx).Result()
-	if err != nil {
-		panic(err)
-	}
-
-	return client
-}
-
 type RedisPubSub struct {
-	param.Parameters
+	Request bool `config:"request"`
+	Response bool `config:"response"`
+	Channel string `config:"channel"`
+	Host string `config:"host"`
+	Password string `config:"password"`
+	Port int `config:"port"`
+	Db int `config:"db"`
+
+	client *redis.Client
 }
 
-func (filter RedisPubSub) Name() string {
+func (filter *RedisPubSub) Name() string {
 	return "redis_pubsub"
 }
 
-func (filter RedisPubSub) Process(ctx *fasthttp.RequestCtx) {
+func (filter *RedisPubSub) Filter(ctx *fasthttp.RequestCtx) {
 
 	buffer:=bytebufferpool.Get()
 
-	if filter.GetBool("request",true){
+	if filter.Request{
 		data := ctx.Request.Encode()
 		buffer.Write(data)
 	}
 
-	if filter.GetBool("response",true){
+	if filter.Response{
 		data:=ctx.Response.Encode()
 		buffer.Write(data)
 	}
 
 	if buffer.Len()>0{
-		v,err:=filter.getRedisClient().Publish(ctx,filter.MustGetString("channel"),buffer.Bytes()).Result()
+		v,err:=filter.client.Publish(ctx,filter.Channel,buffer.Bytes()).Result()
 		if global.Env().IsDebug{
 			log.Trace(v,err)
 		}
@@ -79,5 +55,33 @@ func (filter RedisPubSub) Process(ctx *fasthttp.RequestCtx) {
 	buffer.Reset()
 	bytebufferpool.Put(buffer)
 
+}
+
+func NewRedisPubSub(c *config.Config) (pipeline.Filter, error) {
+
+	runner := RedisPubSub{
+		Request: true,
+		Response: true,
+		Host: "localhost",
+		Port: 6379,
+		Db: 0,
+	}
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	runner.client = redis.NewClient(&redis.Options{
+		Addr: fmt.Sprintf("%s:%v", runner.Host,runner.Port),
+		Password: runner.Password,
+		DB:       runner.Db,
+	})
+
+	var ctx = context.Background()
+	_, err := runner.client.Ping(ctx).Result()
+	if err != nil {
+		panic(err)
+	}
+
+	return &runner, nil
 }
 

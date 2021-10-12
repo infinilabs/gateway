@@ -5,37 +5,37 @@ package transform
 
 import (
 	"fmt"
-	"infini.sh/framework/core/param"
-	"infini.sh/framework/lib/fasthttp"
 	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
+	"infini.sh/framework/core/config"
+	"infini.sh/framework/core/pipeline"
+	"infini.sh/framework/lib/fasthttp"
 	"strings"
 )
 
 type RequestBodyJsonSet struct {
-	param.Parameters
+	IgnoreMissing bool `config:"ignore_missing"`
+	Path map[string]string `config:"path"`
 }
 
-func (filter RequestBodyJsonSet) Name() string {
+func (filter *RequestBodyJsonSet) Name() string {
 	return "request_body_json_set"
 }
 
-func (filter RequestBodyJsonSet) Process(ctx *fasthttp.RequestCtx) {
+func (filter *RequestBodyJsonSet) Filter(ctx *fasthttp.RequestCtx) {
 
 	bodyBytes:=ctx.Request.GetRawBody()
 
-	ignoreNotFound:=filter.GetBool("ignore_missing",false)
-	paths, exists := filter.GetStringMap("path")
 	//var err error
-	if exists {
+	if len(filter.Path)>0 {
 		if len(bodyBytes)==0{
 			bodyBytes=[]byte("{}")
 		}
 
-		for path,value:=range paths{
+		for path,value:=range filter.Path{
 			pathArray:=strings.Split(path,".")
 			v,t,offset,err:=jsonparser.Get(bodyBytes,pathArray...)
-			if t==jsonparser.NotExist&&ignoreNotFound{
+			if t==jsonparser.NotExist&&filter.IgnoreMissing{
 				log.Debugf("path:%v, value:%v, %v, %v, %v, %v",path,value,err,v,t,offset)
 				continue
 			}
@@ -49,11 +49,16 @@ func (filter RequestBodyJsonSet) Process(ctx *fasthttp.RequestCtx) {
 		ctx.Request.SetBody(bodyBytes)
 		return
 	}
-
-	obj,existJson:=filter.GetMap("json")
-	if existJson{
-		fmt.Println(obj)
-	}
-
 }
 
+func NewRequestBodyJsonSet(c *config.Config) (pipeline.Filter, error) {
+
+	runner := RequestBodyJsonSet{
+		IgnoreMissing: false,
+	}
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	return &runner, nil
+}
