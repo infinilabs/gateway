@@ -152,9 +152,17 @@ READ_DOCS:
 		}
 
 		pop, _, err := queue.PopTimeout(processor.config.InputQueue, idleDuration)
+		if err!=nil{
+			log.Error(err)
+			panic(err)
+		}
 
 		if len(pop)>0{
 			ok, status, err := processMessage(metadata, pop)
+			if err!=nil{
+				log.Error(err)
+			}
+
 			if !ok {
 				if global.Env().IsDebug {
 					log.Debug(ok, status, err)
@@ -177,10 +185,7 @@ READ_DOCS:
 			}
 		}
 
-		if err!=nil{
-			log.Error(err)
-			panic(err)
-		}
+
 
 	}
 
@@ -208,6 +213,10 @@ HANDLE_PENDING:
 
 		if len(pop)>0{
 			ok, status, err := processMessage(metadata, pop)
+			if err!=nil{
+				log.Error(err)
+			}
+
 			if !ok {
 				if global.Env().IsDebug {
 					log.Debug(ok, status, err)
@@ -250,17 +259,19 @@ func processMessage(metadata *elastic.ElasticsearchMetadata, pop []byte) (bool, 
 
 	// modify schema，align with elasticsearch's schema
 	orignalSchema:=string(req.URI().Scheme())
+	orignalHost:=string(req.URI().Host())
 	if metadata.GetSchema()!=orignalSchema{
 		req.URI().SetScheme(metadata.GetSchema())
 	}
 
 	host := metadata.GetActiveHost()
-	req.Header.SetHost(host)
+	req.SetHost(host)
 	resp := fasthttp.AcquireResponse()
 	err = fastHttpClient.Do(req, resp)
 
 	// restore schema
 	req.URI().SetScheme(orignalSchema)
+	req.SetHost(orignalHost)
 
 	if err != nil {
 		return false, resp.StatusCode(), err

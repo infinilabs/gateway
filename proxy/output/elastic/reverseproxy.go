@@ -423,14 +423,21 @@ START:
 	}
 
 	// modify schema，align with elasticsearch's schema
+	orignalHost:=string(req.URI().Host())
 	orignalSchema:=string(req.URI().Scheme())
 	useClient:=false
 	if metadata.GetSchema()!=orignalSchema{
+		req.Header.Add("X-Forwarded-Proto",orignalSchema)
 		req.URI().SetScheme(metadata.GetSchema())
 		ok, pc, host = p.getClient()
 		res = fasthttp.AcquireResponse()
 		useClient=true
 	}
+
+	req.Header.Add("X-Forwarded-For",myctx.RemoteAddr().String())
+	req.Header.Add("X-Real-IP",myctx.RemoteAddr().String())
+	req.Header.Add("X-Forwarded-Host",orignalHost)
+
 
 	if global.Env().IsDebug {
 		log.Tracef("send request [%v] to upstream [%v]", req.URI().String(), host)
@@ -472,8 +479,7 @@ START:
 		}
 	}
 
-
-	req.URI().SetHost(host)
+	req.SetHost(host)
 
 	err := pc.Do(req, res)
 
@@ -481,6 +487,7 @@ START:
 
 	// restore schema
 	req.URI().SetScheme(orignalSchema)
+	req.SetHost(orignalHost)
 
 	if  err != nil {
 		if util.ContainsAnyInArray(err.Error(), failureMessage) {
@@ -531,7 +538,7 @@ START:
 		fasthttp.ReleaseResponse(res)
 	}
 
-	myctx.Response.Header.Set("CLUSTER", p.proxyConfig.Elasticsearch)
+	myctx.Response.Header.Set("X-Backend-Cluster", p.proxyConfig.Elasticsearch)
 
 	if myctx.Has("elastic_cluster_name") {
 		es1 := myctx.MustGetStringArray("elastic_cluster_name")
@@ -540,7 +547,7 @@ START:
 		myctx.Set("elastic_cluster_name", []string{elasticsearch})
 	}
 
-	myctx.Response.Header.Set("UPSTREAM", host)
+	myctx.Response.Header.Set("X-Backend-Server", host)
 
 	myctx.SetDestination(host)
 

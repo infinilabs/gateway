@@ -324,6 +324,7 @@ func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host s
 
 	// modify schema，align with elasticsearch's schema
 	orignalSchema:=string(req.URI().Scheme())
+	orignalHost:=string(req.URI().Host())
 	if metadata.GetSchema()!=orignalSchema{
 		req.URI().SetScheme(metadata.GetSchema())
 	}
@@ -375,6 +376,7 @@ DO:
 
 	// restore schema
 	req.URI().SetScheme(orignalSchema)
+	req.SetHost(orignalHost)
 
 	if resp == nil {
 		if global.Env().IsDebug {
