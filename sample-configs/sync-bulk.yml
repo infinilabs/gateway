@@ -10,23 +10,14 @@ entry:
       binding: 0.0.0.0:8000
 #    tls:
 #      enabled: true
-  - name: my_es_entry1
-    enabled: true
-    router: my_router
-    max_concurrency: 200000
-    network:
-      binding: 0.0.0.0:8001
-    tls:
-      enabled: true
+
 flow:
   - name: cache_first
     filter: #comment out any filter sections, like you don't need cache or rate-limiter
-      - name: get_cache
-        parameters:
+      - get_cache:
           pass_patterns:
             - _cat
-      - name: elasticsearch
-        parameters:
+      - elasticsearch:
           elasticsearch: dev  #elasticsearch configure reference name
           max_connection_per_host: 1000 #max tcp connection to upstream, default for all nodes
           max_response_size: -1 #default for all nodes
@@ -38,18 +29,15 @@ flow:
             roles:
               exclude:
                 - master
-      - name: set_cache
-        parameters:
+      - set_cache:
           cache_ttl: 10s
   - name: online_indexing_merge
     filter:
-      - name: bulk_reshuffle
-        parameters:
+      - bulk_reshuffle:
           elasticsearch: dev
           level: node
           mode: sync
-      - name: elasticsearch #catchup all left requests
-        parameters:
+      - elasticsearch: #catchup all left requests
           elasticsearch: dev
           max_connection_per_host: 1000
           refresh:
@@ -71,7 +59,7 @@ router:
 elasticsearch:
 - name: dev
   enabled: true
-  endpoint: http://localhost:9200
+  endpoint: http://192.168.3.188:9206
   traffic_control:
     max_bps_per_node: -1
     max_qps_per_node: 300000

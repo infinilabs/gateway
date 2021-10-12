@@ -15,24 +15,26 @@ elasticsearch:
       username: test
       password: testtest
 
-pipelines_v2:
+pipelines:
   - name: index_diff_service
     auto_start: true
     processors:
     - dag:
         parallel:
           - dump_hash: #dump es1's doc
-              indices: "medcl-a"
+              indices: "medcl-dr3"
               scroll_time: "10m"
               elasticsearch: "source"
 #              query: "field1:elastic"
+#              fields: "_id"
 #              fields: "name,age"
               output_queue: "source_docs"
               batch_size: 10000
               slice_size: 5
           - dump_hash: #dump es2's doc
-              indices: "medcl-a"
+              indices: "medcl-dr3"
               scroll_time: "10m"
+#              fields: "_id"
 #              query: "field1:elastic"
               batch_size: 10000
               slice_size: 5
@@ -46,7 +48,7 @@ pipelines_v2:
               source_queue: 'source_docs'
               target_queue: 'target_docs'
 
-#pipelines_v2:
+#pipelines:
 #  - name: diff_result_ingest
 #    processors:
 #      - json_indexing:

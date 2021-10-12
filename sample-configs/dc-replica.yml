@@ -154,7 +154,7 @@ flow:
 router:
   - name: my_router
     default_flow: primary-write-flow
-#    tracing_flow: request_logging
+    tracing_flow: request_logging
     rules:
       - method:
           - "GET"
@@ -182,7 +182,7 @@ router:
 elasticsearch:
   - name: primary
     enabled: true
-    endpoint: http://192.168.3.188:9204
+    endpoint: http://192.168.3.188:9206
     basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
       username: elastic
       password: changeme
@@ -195,7 +195,7 @@ elasticsearch:
         interval: 60s
   - name: backup
     enabled: true
-    endpoint: http://192.168.3.188:9206
+    endpoint: http://192.168.3.188:9204
     basic_auth:
       username: test
       password: testtest
@@ -205,7 +205,7 @@ elasticsearch:
         enabled: true
         interval: 60s
 
-pipelines_v2:
+pipelines:
   - name: request_logging_index
     auto_start: true
     keep_running: true

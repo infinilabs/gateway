@@ -376,6 +376,10 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 				util.FileAppendNewLine(file, bothBuilder.String())
 			}
 
+			if leftBuilder.Len()==0&&rightBuilder.Len()==0&&bothBuilder.Len()==0{
+				fmt.Println("Congratulations, the two clusters are same!\n")
+			}
+
 		}()
 		processor.wg.Wait()
 	}

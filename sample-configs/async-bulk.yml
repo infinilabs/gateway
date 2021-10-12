@@ -1,7 +1,5 @@
 path.data: data
 path.logs: log
-#log.level: trace
-#log.debug: true
 
 entry:
   - name: my_es_entry
@@ -16,17 +14,15 @@ entry:
 flow:
   - name: async_bulk
     filter:
-      - name: bulk_reshuffle
-        when:
-          contains:
-            _ctx.request.path: /_bulk
-        parameters:
+      - bulk_reshuffle:
+          when:
+            contains:
+              _ctx.request.path: /_bulk
           elasticsearch: dev
           level: node
           mode: async
           fix_null_id: true
-      - name: elasticsearch
-        parameters:
+      - elasticsearch:
           elasticsearch: dev  #elasticsearch configure reference name
           max_connection_per_host: 1000 #max tcp connection to upstream, default for all nodes
           max_response_size: -1 #default for all nodes
@@ -38,22 +34,16 @@ flow:
             roles:
               exclude:
                 - master
-  - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
-    filter:
-      - name: logging
-        parameters:
-          queue_name: request_logging
 
 router:
   - name: my_router
     default_flow: async_bulk
-#    tracing_flow: request_logging
 
 
 elasticsearch:
   - name: dev
     enabled: true
-    endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
+    endpoint: http://192.168.3.188:9206 # if your elasticsearch is using https, your gateway should be listen on as https as well
     traffic_control: #global traffic control
       max_bps_per_node: 20971520 #max total bytes send to es per node, 20MB/s
       max_qps_per_node: 50000 #max total requests send to es per node, 20k/s
@@ -66,14 +56,7 @@ elasticsearch:
         enabled: true
         interval: 60s
 
-pipelines_v2:
-  - name: request_logging_index
-    auto_start: true
-    processors:
-      - json_indexing:
-          index_name: "gateway_requests"
-          elasticsearch: "dev"
-          input_queue: "request_logging"
+pipelines:
   - name: bulk_request_ingest
     auto_start: true
     processors:
@@ -83,5 +66,3 @@ pipelines_v2:
           worker_size: 10
           retry_delay_in_seconds: 5
           process_failure_queue: true #process failed bulk messages
-    #      queues: #process other bulk queue
-    #        - dev-node-failure
