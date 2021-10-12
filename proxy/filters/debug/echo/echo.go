@@ -17,8 +17,8 @@ type EchoMessage struct {
 type Config struct {
 	RepeatTimes int    `config:"repeat"`
 	Continue    bool   `config:"continue"`
-	Terminal    bool   `config:"terminal"`
-	Message     string `config:"str"`
+	Terminal    bool   `config:"stdout"`
+	Message     string `config:"message"`
 }
 
 func New(c *config.Config) (pipeline.Filter, error) {
