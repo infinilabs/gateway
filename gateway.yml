@@ -19,15 +19,6 @@ entry:
 #      enabled: true
 
 flow:
-  - name: hello_world
-    filter:
-      - echo:
-      - echo:
-  - name: not_found
-    filter:
-      - echo:
-          str: '404 not found\n'
-          repeat: 1
   - name: default_flow
     filter:
       - get_cache:
@@ -52,34 +43,27 @@ flow:
           request: true
   - name: logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
-#      - stats:
-#      - logging:
-#          queue_name: request_logging
-#          max_request_body_size: 1024
-#          max_response_body_size: 1024
-#          when: #1s or none-200 requests will be logged
-#            or:
-#              - not:
-#                  or:
-#                    - equals:
-#                        _ctx.request.path: "/favicon.ico"
-#                    - equals:
-#                        _ctx.response.status: 200
-#                    - in:
-#                        _ctx.request.path: ["/sw.js"]
-#              - range:
-#                  _ctx.elapsed.gte: 10
+      - stats:
+      - logging:
+          queue_name: request_logging
+          max_request_body_size: 1024
+          max_response_body_size: 1024
+          when: #>1s or none-200 requests will be logged
+            or:
+              - not:
+                  or:
+                    - equals:
+                        _ctx.request.path: "/favicon.ico"
+                    - equals:
+                        _ctx.response.status: 200
+                    - in:
+                        _ctx.request.path: ["/sw.js"]
+              - range:
+                  _ctx.elapsed.gte: 1000
 router:
   - name: my_router
     default_flow: default_flow
     tracing_flow: logging
-#    rules:
-#      - method:
-#          - GET
-#        pattern:
-#          - "/{name:[a-zA-Z]}_abc/_bulk"
-#        flow:
-#          - echo
 
 
 elasticsearch:
@@ -101,29 +85,7 @@ elasticsearch:
       enabled: true
       interval: 60s
 
-#pipelines_v2:
-#  - name: index_diff_service
-#    processors:
-#    - echo: #ready, set, go
-#        message: read,set,go
-#    - dag:
-#        mode: first_win #first_win, wait_all
-#        parallel:
-#          - echo: #player1
-#              message: player1
-#          - echo: #player2
-#              message: player2
-#          - echo: #player3
-#              message: player3
-#        end:
-#          - echo: #checking score
-#              message: checking score
-#          - echo: #announce champion
-#              message: 'announce champion'
-#    - echo: #done
-#        message: racing finished
-
-pipelines_v2:
+pipelines:
 - name: request_logging_index
   auto_start: true
   keep_running: true
