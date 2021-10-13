@@ -15,9 +15,14 @@ entry:
 flow:
   - name: primary-read-flow
     filter:
-      - elasticsearch: #集群可用，直接处理请求
-          elasticsearch: "primary"
-          max_connection_per_host: 1000
+      - if:
+          cluster_available: ["primary"]
+        then:
+          - elasticsearch:
+              elasticsearch: "primary"
+        else:
+          - elasticsearch:
+              elasticsearch: "backup"
   - name: primary-flow-post-processing
     filter:
       - retry_limiter:
