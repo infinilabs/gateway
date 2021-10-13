@@ -1,6 +1,7 @@
 package filter
 
 import (
+	"fmt"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
@@ -350,7 +351,8 @@ func (filter *RequestFilter) Filter(ctx *fasthttp.RequestCtx){
 	if filter.Action == "deny"{
 		ctx.SetDestination("filtered")
 		if len(filter.Message)>0{
-			ctx.Response.SwapBody([]byte(filter.Message))
+			ctx.SetContentType(util.ContentTypeJson)
+			ctx.Response.SwapBody([]byte(fmt.Sprintf("{\"error\":true,\"message\":\"%v\"}",filter.Message)))
 		}
 
 		ctx.Response.Header.Add("original_status",util.IntToString(ctx.Response.StatusCode()))

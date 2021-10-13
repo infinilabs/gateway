@@ -44,18 +44,18 @@ func (filter *Elasticsearch) Filter(ctx *fasthttp.RequestCtx) {
 
 	if metadata !=nil&&!metadata.IsAvailable(){
 		if rate.GetRateLimiter("cluster_check_health", metadata.Config.ID,1,1,time.Second*1).Allow(){
-			log.Error(fmt.Sprintf("cluster [%v] is not available",filter.config.Elasticsearch))
+			log.Debugf("Elasticsearch [%v] not available",filter.config.Elasticsearch)
 			result:=elastic.GetClient(metadata.Config.Name).ClusterHealth()
 			if result.StatusCode==200{
 				metadata.ReportSuccess()
 			}
 		}
 
-		ctx.Response.SwapBody([]byte(fmt.Sprintf("cluster [%v] is not available",filter.config.Elasticsearch)))
-		ctx.SetStatusCode(500)
+		ctx.SetContentType(util.ContentTypeJson)
+		ctx.Response.SwapBody([]byte(fmt.Sprintf("{\"error\":true,\"message\":\"Elasticsearch [%v] Service Unavailable\"}",filter.config.Elasticsearch)))
+		ctx.SetStatusCode(503)
 		ctx.Finished()
-		log.Infof("cluster [%v] not available",filter.config.Elasticsearch)
-		time.Sleep(1*time.Second)
+		time.Sleep(100*time.Millisecond)
 		return
 	}
 

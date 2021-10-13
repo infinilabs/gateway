@@ -254,7 +254,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 	//replace with new hostClients
 	//TODO add locker
 	p.bla = balancer.NewBalancer(ws)
-	log.Infof("elasticsearch [%v] hosts: [%v] => [%v], force: %v", esConfig.Name, util.JoinArray(p.endpoints, ", "), util.JoinArray(hosts, ", "),force)
+	log.Infof("elasticsearch [%v] hosts: [%v] => [%v]", esConfig.Name, util.JoinArray(p.endpoints, ", "), util.JoinArray(hosts, ", "))
 	p.endpoints = hosts
 	log.Trace(esConfig.Name, " elasticsearch client nodes refreshed")
 
@@ -388,10 +388,18 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 
 	stats.Increment("cache", "strike")
 
+
+	//update context
+	if myctx.Has("elastic_cluster_name") {
+		es1 := myctx.MustGetStringArray("elastic_cluster_name")
+		myctx.Set("elastic_cluster_name", append(es1, elasticsearch))
+	} else {
+		myctx.Set("elastic_cluster_name", []string{elasticsearch})
+	}
+
+
 	retry := 0
 START:
-
-
 
 	req := &myctx.Request
 	res := &myctx.Response
@@ -437,7 +445,6 @@ START:
 	req.Header.Add("X-Forwarded-For",myctx.RemoteAddr().String())
 	req.Header.Add("X-Real-IP",myctx.RemoteAddr().String())
 	req.Header.Add("X-Forwarded-Host",orignalHost)
-
 
 	if global.Env().IsDebug {
 		log.Tracef("send request [%v] to upstream [%v]", req.URI().String(), host)
@@ -489,6 +496,12 @@ START:
 	req.URI().SetScheme(orignalSchema)
 	req.SetHost(orignalHost)
 
+
+	//update
+	myctx.Response.Header.Set("X-Backend-Cluster", p.proxyConfig.Elasticsearch)
+	myctx.Response.Header.Set("X-Backend-Server", host)
+	myctx.SetDestination(host)
+
 	if  err != nil {
 		if util.ContainsAnyInArray(err.Error(), failureMessage) {
 			stats.Increment("reverse_proxy","backend_failure")
@@ -518,7 +531,10 @@ START:
 
 		//TODO if backend failure and after reached max retry, should save translog and mark the elasticsearch cluster to downtime, deny any new requests
 		// the translog file should consider to contain dirty writes, could be used to do cross cluster check or manually operations recovery.
-		myctx.Response.SetBody([]byte(err.Error()))
+
+		myctx.SetContentType(util.ContentTypeJson)
+		myctx.Response.SwapBody([]byte(fmt.Sprintf("{\"error\":true,\"message\":\"%v\"}",err.Error())))
+		myctx.SetStatusCode(500)
 	} else {
 		if global.Env().IsDebug {
 			log.Tracef("request [%v] [%v] [%v]", req.URI().String(), res.StatusCode(), util.SubString(string(res.GetRawBody()), 0, 256))
@@ -538,18 +554,7 @@ START:
 		fasthttp.ReleaseResponse(res)
 	}
 
-	myctx.Response.Header.Set("X-Backend-Cluster", p.proxyConfig.Elasticsearch)
 
-	if myctx.Has("elastic_cluster_name") {
-		es1 := myctx.MustGetStringArray("elastic_cluster_name")
-		myctx.Set("elastic_cluster_name", append(es1, elasticsearch))
-	} else {
-		myctx.Set("elastic_cluster_name", []string{elasticsearch})
-	}
-
-	myctx.Response.Header.Set("X-Backend-Server", host)
-
-	myctx.SetDestination(host)
 
 }
 
