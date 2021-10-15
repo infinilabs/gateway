@@ -278,6 +278,6 @@ pipelines:
           dead_letter_queue: "backup-dead_letter"
           waiting_after: [ "backup-failure"]
           worker_size: 1
-          compress: false
+          compress: true
           when:
             cluster_available: [ "backup" ]

@@ -1,6 +1,7 @@
 package queue_consumer
 
 import (
+	"bytes"
 	"compress/gzip"
 	"crypto/tls"
 	"errors"
@@ -190,6 +191,20 @@ READ_DOCS:
 	}
 }
 
+func gzipBest(a *[]byte) []byte {
+	var b bytes.Buffer
+	gz,err := gzip.NewWriterLevel(&b,gzip.BestCompression)
+	if err != nil {
+		panic(err)
+	}
+	if _, err := gz.Write(*a); err != nil {
+		gz.Close()
+		panic(err)
+	}
+	gz.Close()
+	return b.Bytes()
+}
+
 func (processor *DiskQueueConsumer) processMessage(metadata *elastic.ElasticsearchMetadata, pop []byte) (bool, int, error) {
 	req := fasthttp.AcquireRequest()
 	err := req.Decode(pop)
@@ -215,28 +230,21 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 	req.SetHost(host)
 	resp := fasthttp.AcquireResponse()
 
-	req1 := fasthttp.AcquireRequest()
 
 	if !req.IsGzipped() && processor.config.Compress {
-
-		log.Error("gzzping:", req.IsGzipped())
-
-		data := req.GetRawBody()
-		writer, err := gzip.NewWriterLevel(req1.BodyWriter(), gzip.BestCompression)
-		if err != nil {
-			panic(err)
-		}
-
-		defer writer.Close()
-		writer.Write(data)
+		data := req.Body()
+		data1:=gzipBest(&data)
 
 		//TODO handle response, if client not support gzip, return raw body
 		req.Header.Set("Accept-Encoding", "gzip")
 		req.Header.Set("content-encoding", "gzip")
-		req.SwapBody(req1.Body())
-	}
+		req.SwapBody(data1)
 
-	err = fastHttpClient.Do(req, resp)
+		err = fastHttpClient.Do(req, resp)
+
+	}else{
+		err = fastHttpClient.Do(req, resp)
+	}
 
 	// restore schema
 	req.URI().SetScheme(orignalSchema)
