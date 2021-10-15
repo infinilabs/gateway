@@ -3,12 +3,12 @@ package elastic
 import "time"
 
 type ProxyConfig struct {
-	Elasticsearch string `config:"elasticsearch"`
-	Balancer      string `config:"balancer"`
-	MaxConnection       int `config:"max_connection_per_node"`
-	MaxResponseBodySize int `config:"max_response_size"`
-	maxRetryTimes       int `config:"max_retry_times"`
-	retryDelayInMs       int `config:"retry_delay_in_ms"`
+	Elasticsearch       string `config:"elasticsearch"`
+	Balancer            string `config:"balancer"`
+	MaxConnection       int    `config:"max_connection_per_node"`
+	MaxResponseBodySize int    `config:"max_response_size"`
+	maxRetryTimes       int    `config:"max_retry_times"`
+	retryDelayInMs      int    `config:"retry_delay_in_ms"`
 
 	MaxConnWaitTimeout  time.Duration `config:"max_conn_wait_timeout"`
 	MaxIdleConnDuration time.Duration `config:"max_idle_conn_duration"`

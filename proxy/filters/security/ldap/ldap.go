@@ -18,19 +18,18 @@ import (
 )
 
 type LDAPFilter struct {
-	Tls bool `config:"tls"`
-	Host string `config:"host"`
-	Port int `config:"port"`
-	BindDn string `config:"bind_dn"`
-	BindPassword string `config:"bind_password"`
-	BaseDn string `config:"base_dn"`
-	UserFilter string `config:"user_filter"`
-	GroupFilter string `config:"group_filter"`
-	UidAttribute string `config:"uid_attribute"`
-	GroupAttribute string `config:"group_attribute"`
-	Attributes []string `config:"attributes"`
-	RequireGroup bool `config:"require_group"`
-
+	Tls            bool     `config:"tls"`
+	Host           string   `config:"host"`
+	Port           int      `config:"port"`
+	BindDn         string   `config:"bind_dn"`
+	BindPassword   string   `config:"bind_password"`
+	BaseDn         string   `config:"base_dn"`
+	UserFilter     string   `config:"user_filter"`
+	GroupFilter    string   `config:"group_filter"`
+	UidAttribute   string   `config:"uid_attribute"`
+	GroupAttribute string   `config:"group_attribute"`
+	Attributes     []string `config:"attributes"`
+	RequireGroup   bool     `config:"require_group"`
 }
 
 func (filter *LDAPFilter) Name() string {
@@ -40,19 +39,19 @@ func (filter *LDAPFilter) Name() string {
 func (filter *LDAPFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	cfg := ldap.Config{
-		Host:         filter.Host,
-		Port:         filter.Port,
-		BindDN:       filter.BindDn,
-		BindPassword: filter.BindPassword,
-		BaseDN:       filter.BaseDn,
-		UserFilter:       filter.UserFilter,
-		GroupFilter:       filter.GroupFilter,
-		UIDAttribute:       filter.UidAttribute,
-		GroupAttribute:       filter.GroupAttribute,
+		Host:           filter.Host,
+		Port:           filter.Port,
+		BindDN:         filter.BindDn,
+		BindPassword:   filter.BindPassword,
+		BaseDN:         filter.BaseDn,
+		UserFilter:     filter.UserFilter,
+		GroupFilter:    filter.GroupFilter,
+		UIDAttribute:   filter.UidAttribute,
+		GroupAttribute: filter.GroupAttribute,
 	}
 
-	if len(filter.Attributes)>0{
-		cfg.Attributes=filter.Attributes
+	if len(filter.Attributes) > 0 {
+		cfg.Attributes = filter.Attributes
 	}
 
 	if filter.Tls {
@@ -71,7 +70,7 @@ func (filter *LDAPFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 	if global.Env().IsDebug {
-		log.Debug("id:",user.GetID(),", username:",user.GetUserName(),", groups:",util.JoinArray(user.GetGroups()," => "))
+		log.Debug("id:", user.GetID(), ", username:", user.GetUserName(), ", groups:", util.JoinArray(user.GetGroups(), " => "))
 
 		if user != nil {
 			log.Trace(user)
@@ -79,9 +78,9 @@ func (filter *LDAPFilter) Filter(ctx *fasthttp.RequestCtx) {
 		log.Debugf("user %s success authenticated", user.GetUserName())
 	}
 
-	if filter.RequireGroup{
-		if len(user.GetGroups())==0{
-			log.Debug(user.GetUserName()," has no group")
+	if filter.RequireGroup {
+		if len(user.GetGroups()) == 0 {
+			log.Debug(user.GetUserName(), " has no group")
 			code := http.StatusUnauthorized
 			ctx.SetStatusCode(code)
 			ctx.SetBody([]byte("user has no group information"))
@@ -90,21 +89,21 @@ func (filter *LDAPFilter) Filter(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	ctx.Set("user_id",user.GetID())
-	ctx.Set("user_name",user.GetUserName())
-	ctx.Set("user_roles",common.GetLDAPGroupsMappingRoles(user.GetGroups()))
+	ctx.Set("user_id", user.GetID())
+	ctx.Set("user_name", user.GetUserName())
+	ctx.Set("user_roles", common.GetLDAPGroupsMappingRoles(user.GetGroups()))
 
 }
 
 func NewLDAPFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := LDAPFilter{
-		Tls: false,
-		RequireGroup: true,
-		Port: 389,
-		UserFilter: "(uid=%s)",
-		GroupFilter: "(memberUid=%s)",
-		UidAttribute: "uid",
+		Tls:            false,
+		RequireGroup:   true,
+		Port:           389,
+		UserFilter:     "(uid=%s)",
+		GroupFilter:    "(memberUid=%s)",
+		UidAttribute:   "uid",
 		GroupAttribute: "cn",
 	}
 	if err := c.Unpack(&runner); err != nil {

@@ -11,6 +11,8 @@ import (
 
 type RequestAPIKeyFilter struct {
 	genericFilter *RequestFilter
+	Include []string `config:"include"`
+	Exclude []string `config:"exclude"`
 }
 
 func (filter *RequestAPIKeyFilter) Name() string {
@@ -47,7 +49,7 @@ func (filter *RequestAPIKeyFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 	apiIDStr :=string(apiID)
-	valid, hasRule:= filter.genericFilter.CheckExcludeStringRules(apiIDStr, ctx)
+	valid, hasRule:= CheckExcludeStringRules(apiIDStr,filter.Exclude, ctx)
 	if hasRule&&!valid {
 		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {
@@ -56,7 +58,7 @@ func (filter *RequestAPIKeyFilter) Filter(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	valid, hasRule= filter.genericFilter.CheckIncludeStringRules(apiIDStr, ctx)
+	valid, hasRule= CheckIncludeStringRules(apiIDStr,filter.Include, ctx)
 	if hasRule&&!valid {
 		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {

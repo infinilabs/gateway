@@ -11,6 +11,8 @@ import (
 
 type RequestUserFilter struct {
 	genericFilter *RequestFilter
+	Include []string `config:"include"`
+	Exclude []string `config:"exclude"`
 }
 
 func (filter *RequestUserFilter) Name() string {
@@ -47,7 +49,7 @@ func (filter *RequestUserFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 	userStr:=string(user)
-	valid, hasRule:= filter.genericFilter.CheckExcludeStringRules(userStr, ctx)
+	valid, hasRule:= CheckExcludeStringRules(userStr,filter.Exclude, ctx)
 	if hasRule&&!valid {
 		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {
@@ -56,7 +58,7 @@ func (filter *RequestUserFilter) Filter(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	valid, hasRule= filter.genericFilter.CheckIncludeStringRules(userStr, ctx)
+	valid, hasRule= CheckIncludeStringRules(userStr,filter.Include, ctx)
 	if hasRule&&!valid {
 		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {

@@ -12,6 +12,8 @@ import (
 
 type RequestServerHostFilter struct {
 	genericFilter *RequestFilter
+	Include []string `config:"include"`
+	Exclude []string `config:"exclude"`
 }
 
 func (filter *RequestServerHostFilter) Name() string {
@@ -40,7 +42,7 @@ func NewRequestServerHostFilter(c *config.Config) (pipeline.Filter, error) {
 
 func (filter *RequestServerHostFilter) Filter(ctx *fasthttp.RequestCtx) {
 	host:=string(ctx.Request.Host())
-	valid, hasRule:= filter.genericFilter.CheckExcludeStringRules(host, ctx)
+	valid, hasRule:= CheckExcludeStringRules(host,filter.Exclude, ctx)
 	if hasRule&&!valid {
 		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {
@@ -49,7 +51,7 @@ func (filter *RequestServerHostFilter) Filter(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	valid, hasRule= filter.genericFilter.CheckIncludeStringRules(host, ctx)
+	valid, hasRule= CheckIncludeStringRules(host,filter.Include, ctx)
 	if hasRule&&!valid {
 		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {

@@ -16,11 +16,11 @@ import (
 )
 
 type RatioRoutingFlowFilter struct {
-	randPool *sync.Pool
-	Ratio     float32 `config:"ratio"`
-	Flow     string `config:"flow"`
-	ContinueAfterMatch     bool `config:"continue"`
-	flow  common.FilterFlow
+	randPool           *sync.Pool
+	Ratio              float32 `config:"ratio"`
+	Flow               string  `config:"flow"`
+	ContinueAfterMatch bool    `config:"continue"`
+	flow               common.FilterFlow
 }
 
 func (filter *RatioRoutingFlowFilter) Name() string {
@@ -29,21 +29,21 @@ func (filter *RatioRoutingFlowFilter) Name() string {
 
 func (filter *RatioRoutingFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 
-	v:=int(filter.Ratio*100)
+	v := int(filter.Ratio * 100)
 
-	seeds:=filter.randPool.Get().(*rand.Rand)
+	seeds := filter.randPool.Get().(*rand.Rand)
 	defer filter.randPool.Put(seeds)
 
-	r:=seeds.Intn(100)
+	r := seeds.Intn(100)
 
-	if global.Env().IsDebug{
-		log.Debugf("split traffic, check [%v] of [%v]",r,v)
+	if global.Env().IsDebug {
+		log.Debugf("split traffic, check [%v] of [%v]", r, v)
 	}
 
-	if  r <= v{
+	if r <= v {
 		ctx.Resume()
-		if global.Env().IsDebug{
-			log.Debugf("request [%v] go on flow: [%s]",ctx.URI().String(),filter.Flow)
+		if global.Env().IsDebug {
+			log.Debugf("request [%v] go on flow: [%s]", ctx.URI().String(), filter.Flow)
 		}
 		filter.flow.Process(ctx)
 		if !filter.ContinueAfterMatch {
@@ -57,18 +57,17 @@ func NewRatioRoutingFlowFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RatioRoutingFlowFilter{
 		Ratio: 0.1,
-		randPool : &sync.Pool {
-		New: func()interface{} {
-		return rand.New(rand.NewSource(100))
-	},
-	},
+		randPool: &sync.Pool{
+			New: func() interface{} {
+				return rand.New(rand.NewSource(100))
+			},
+		},
 	}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	runner.flow=common.MustGetFlow(runner.Flow)
-
+	runner.flow = common.MustGetFlow(runner.Flow)
 
 	return &runner, nil
 }

@@ -9,13 +9,15 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/pipeline"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"strings"
 )
 
 type RequestBodyJsonSet struct {
 	IgnoreMissing bool `config:"ignore_missing"`
-	Path map[string]string `config:"path"`
+	Path []string `config:"path"`
+	m map[string]string
 }
 
 func (filter *RequestBodyJsonSet) Name() string {
@@ -27,14 +29,15 @@ func (filter *RequestBodyJsonSet) Filter(ctx *fasthttp.RequestCtx) {
 	bodyBytes:=ctx.Request.GetRawBody()
 
 	//var err error
-	if len(filter.Path)>0 {
+	if len(filter.m)>0 {
 		if len(bodyBytes)==0{
 			bodyBytes=[]byte("{}")
 		}
 
-		for path,value:=range filter.Path{
+		for path,value:=range filter.m{
 			pathArray:=strings.Split(path,".")
 			v,t,offset,err:=jsonparser.Get(bodyBytes,pathArray...)
+			fmt.Println(v,t,offset,err)
 			if t==jsonparser.NotExist&&filter.IgnoreMissing{
 				log.Debugf("path:%v, value:%v, %v, %v, %v, %v",path,value,err,v,t,offset)
 				continue
@@ -59,6 +62,17 @@ func NewRequestBodyJsonSet(c *config.Config) (pipeline.Filter, error) {
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
+
+	runner.m= map[string]string{}
+	for _,item:=range runner.Path{
+		k,v,err:=util.ConvertStringToMap(item,"->")
+		if err!=nil{
+			panic(err)
+		}
+		runner.m[k]=v
+	}
+
+	fmt.Println(runner.m)
 
 	return &runner, nil
 }

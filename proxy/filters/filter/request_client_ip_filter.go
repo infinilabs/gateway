@@ -11,6 +11,8 @@ import (
 
 type RequestClientIPFilter struct {
 	genericFilter *RequestFilter
+	Include []string `config:"include"`
+	Exclude []string `config:"exclude"`
 }
 
 func (filter *RequestClientIPFilter) Name() string {
@@ -21,7 +23,7 @@ func (filter *RequestClientIPFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	clientIP:=ctx.RemoteIP().String()
 
-	valid, hasRule:= filter.genericFilter.CheckExcludeStringRules(clientIP, ctx)
+	valid, hasRule:= CheckExcludeStringRules(clientIP,filter.Exclude, ctx)
 	if hasRule&&!valid {
 		if global.Env().IsDebug {
 			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
@@ -30,7 +32,7 @@ func (filter *RequestClientIPFilter) Filter(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	valid, hasRule= filter.genericFilter.CheckIncludeStringRules(clientIP, ctx)
+	valid, hasRule= CheckIncludeStringRules(clientIP,filter.Include, ctx)
 	if hasRule&&!valid {
 		if global.Env().IsDebug {
 			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
@@ -40,8 +42,6 @@ func (filter *RequestClientIPFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 }
-
-
 
 func NewRequestClientIPFilter(c *config.Config) (pipeline.Filter, error) {
 

@@ -24,7 +24,7 @@ import (
 var JSON_CONTENT_TYPE = "application/json"
 
 type BulkReshuffle struct {
-	config *BulkReshuffleConfig
+	config        *BulkReshuffleConfig
 	bulkProcessor *BulkProcessor
 }
 
@@ -33,33 +33,33 @@ func (this *BulkReshuffle) Name() string {
 }
 
 type BulkReshuffleConfig struct {
-	Elasticsearch  string `config:"elasticsearch"`
-	Level  string `config:"level"`
-	Mode  string `config:"mode"`
-	FixNullID  bool `config:"fix_null_id"`
-	IndexStatsAnalysis  bool `config:"index_stats_analysis"`
-	ActionStatsAnalysis  bool `config:"action_stats_analysis"`
+	Elasticsearch       string `config:"elasticsearch"`
+	Level               string `config:"level"`
+	Mode                string `config:"mode"`
+	FixNullID           bool   `config:"fix_null_id"`
+	IndexStatsAnalysis  bool   `config:"index_stats_analysis"`
+	ActionStatsAnalysis bool   `config:"action_stats_analysis"`
 
-	ValidateRequest  bool `config:"validate_request"`
-	ValidEachLine  bool `config:"validate_each_line"`
-	ValidMetadata  bool `config:"validate_metadata"`
-	ValidPayload  bool `config:"validate_payload"`
+	ValidateRequest bool `config:"validate_request"`
+	ValidEachLine   bool `config:"validate_each_line"`
+	ValidMetadata   bool `config:"validate_metadata"`
+	ValidPayload    bool `config:"validate_payload"`
 
-	DocBufferSize  int `config:"doc_buffer_size"`
-	Shards  []int `config:"shards"`
-	RotateConfig rotate.RotateConfig `config:"rotate"`
+	DocBufferSize       int                 `config:"doc_buffer_size"`
+	Shards              []int               `config:"shards"`
+	RotateConfig        rotate.RotateConfig `config:"rotate"`
 	BulkProcessorConfig BulkProcessorConfig `config:"bulk_processing"`
 }
 
 func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 
 	cfg := BulkReshuffleConfig{
-		DocBufferSize:256*1024,
-		IndexStatsAnalysis:true,
-		ActionStatsAnalysis:true,
-		FixNullID:true,
-		Level:"node",
-		Mode:"sync",
+		DocBufferSize:       256 * 1024,
+		IndexStatsAnalysis:  true,
+		ActionStatsAnalysis: true,
+		FixNullID:           true,
+		Level:               "node",
+		Mode:                "sync",
 		RotateConfig: rotate.RotateConfig{
 			Compress:     true,
 			MaxFileAge:   0,
@@ -79,11 +79,11 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 			MaxRequestBodySize:        1024,
 			MaxResponseBodySize:       1024,
 
-			SaveFailure:       			true,
+			SaveFailure: true,
 			//FailureRequestsQueue:       fmt.Sprintf("%v-failure",clusterName),
 			//InvalidRequestsQueue:       fmt.Sprintf("%v-invalid",clusterName),
 			//DeadRequestsQueue:       	fmt.Sprintf("%v-dead_letter",clusterName),
-			DocBufferSize: 256*1024,
+			DocBufferSize: 256 * 1024,
 		},
 	}
 
@@ -93,9 +93,9 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 
 	runner := BulkReshuffle{config: &cfg}
 
-	runner.bulkProcessor=&BulkProcessor{
+	runner.bulkProcessor = &BulkProcessor{
 		RotateConfig: cfg.RotateConfig,
-		Config: cfg.BulkProcessorConfig,
+		Config:       cfg.BulkProcessorConfig,
 	}
 	return &runner, nil
 }
@@ -143,7 +143,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		var buff *bytebufferpool.ByteBuffer
 
 		var bufferKey string
-		indexAnalysis := this.config.IndexStatsAnalysis  //sync and async
+		indexAnalysis := this.config.IndexStatsAnalysis   //sync and async
 		actionAnalysis := this.config.ActionStatsAnalysis //sync and async
 		validateRequest := this.config.ValidateRequest
 		actionMeta := smallSizedPool.Get()
@@ -151,10 +151,10 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		defer smallSizedPool.Put(actionMeta)
 
 		var docBuffer []byte
-		docBuffer=p.Get(this.config.DocBufferSize) //doc buffer for bytes scanner
+		docBuffer = p.Get(this.config.DocBufferSize) //doc buffer for bytes scanner
 		defer p.Put(docBuffer)
 
-		docCount, err := WalkBulkRequests(body,docBuffer, func(eachLine []byte) (skipNextLine bool) {
+		docCount, err := WalkBulkRequests(body, docBuffer, func(eachLine []byte) (skipNextLine bool) {
 			if validEachLine {
 				obj := map[string]interface{}{}
 				err := util.FromJSONBytes(eachLine, &obj)
@@ -433,7 +433,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		})
 
 		if err != nil {
-			if global.Env().IsDebug{
+			if global.Env().IsDebug {
 				log.Error(err)
 			}
 			return
@@ -441,7 +441,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 		submitMode := this.config.Mode //sync and async
 		if submitMode == "sync" {
-
 
 			for x, y := range docBuf {
 				y.Write(NEWLINEBYTES)
@@ -460,9 +459,9 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 				endpoint = path.Join(endpoint, pathStr)
 
-				start:=time.Now()
+				start := time.Now()
 				code, status := this.bulkProcessor.Bulk(metadata, endpoint, data, fastHttpClient)
-				stats.Timing("elasticsearch."+esConfig.Name+".bulk","elapsed_ms",time.Since(start).Milliseconds())
+				stats.Timing("elasticsearch."+esConfig.Name+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
 				switch status {
 				case SUCCESS:
 					break
@@ -561,7 +560,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 }
 
-var actionIndex ="index"
+var actionIndex = "index"
 var actionDelete = "delete"
 var actionCreate = "create"
 var actionUpdate = "update"
@@ -569,82 +568,82 @@ var actionUpdate = "update"
 var actionStart = []byte("\"")
 var actionEnd = []byte("\"")
 
-var actions = []string{"index","delete","create","update"}
+var actions = []string{"index", "delete", "create", "update"}
 
 func parseActionMeta(data []byte) (action, index, typeName, id string) {
 
-	match:=false
-	for _,v:=range actions{
+	match := false
+	for _, v := range actions {
 		jsonparser.ObjectEach(data, func(key []byte, value []byte, dataType jsonparser.ValueType, offset int) error {
 			switch util.UnsafeBytesToString(key) {
 			case "_index":
-				index=string(value)
+				index = string(value)
 				break
 			case "_type":
-				typeName=string(value)
+				typeName = string(value)
 				break
 			case "_id":
-				id=string(value)
+				id = string(value)
 				break
 			}
-			match=true
+			match = true
 			return nil
 		}, v)
-		action=v
-		if match{
+		action = v
+		if match {
 			//fmt.Println(action,",",index,",",typeName,",", id)
-			return action, index,typeName, id
+			return action, index, typeName, id
 		}
 	}
 
-	log.Warn("fallback to unsafe parse:",util.UnsafeBytesToString(data))
+	log.Warn("fallback to unsafe parse:", util.UnsafeBytesToString(data))
 
 	action = string(util.ExtractFieldFromBytes(&data, actionStart, actionEnd, nil))
-	index,_=jsonparser.GetString(data,action,"_index")
-	typeName,_=jsonparser.GetString(data,action,"_type")
-	id,_=jsonparser.GetString(data,action,"_id")
+	index, _ = jsonparser.GetString(data, action, "_index")
+	typeName, _ = jsonparser.GetString(data, action, "_type")
+	id, _ = jsonparser.GetString(data, action, "_id")
 
-	if index!=""{
-		return action, index,typeName, id
+	if index != "" {
+		return action, index, typeName, id
 	}
 
-	log.Warn("fallback to safety parse:",util.UnsafeBytesToString(data))
+	log.Warn("fallback to safety parse:", util.UnsafeBytesToString(data))
 	return safetyParseActionMeta(data)
 }
 
-func updateJsonWithNewIndex(action string,scannedByte []byte, index, typeName, id string) (newBytes []byte,err error) {
+func updateJsonWithNewIndex(action string, scannedByte []byte, index, typeName, id string) (newBytes []byte, err error) {
 
-	if global.Env().IsDebug{
-		log.Trace("update:",action,",",index,",",typeName,",",id)
+	if global.Env().IsDebug {
+		log.Trace("update:", action, ",", index, ",", typeName, ",", id)
 	}
 
-	newBytes= make([]byte,len(scannedByte))
-	copy(newBytes,scannedByte)
+	newBytes = make([]byte, len(scannedByte))
+	copy(newBytes, scannedByte)
 
 	if index != "" {
-		newBytes,err=jsonparser.Set(newBytes, []byte("\""+index+"\""),action,"_index")
-		if err!=nil{
-			return newBytes,err
+		newBytes, err = jsonparser.Set(newBytes, []byte("\""+index+"\""), action, "_index")
+		if err != nil {
+			return newBytes, err
 		}
 	}
 	if typeName != "" {
-		newBytes,err=jsonparser.Set(newBytes, []byte("\""+typeName+"\""),action,"_type")
-		if err!=nil{
-			return newBytes,err
+		newBytes, err = jsonparser.Set(newBytes, []byte("\""+typeName+"\""), action, "_type")
+		if err != nil {
+			return newBytes, err
 		}
 	}
 	if id != "" {
-		newBytes,err=jsonparser.Set(newBytes, []byte("\""+id+"\""),action,"_id")
-		if err!=nil{
-			return newBytes,err
+		newBytes, err = jsonparser.Set(newBytes, []byte("\""+id+"\""), action, "_id")
+		if err != nil {
+			return newBytes, err
 		}
 	}
 
-	return newBytes,err
+	return newBytes, err
 }
 
 //performance is poor
-func safetyParseActionMeta(scannedByte []byte) (action , index, typeName, id string) {
+func safetyParseActionMeta(scannedByte []byte) (action, index, typeName, id string) {
 
 	////{ "index" : { "_index" : "test", "_id" : "1" } }
 	var meta = elastic.BulkActionMetadata{}

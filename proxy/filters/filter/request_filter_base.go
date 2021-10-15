@@ -18,23 +18,7 @@ type RequestFilter struct {
 	Status     int `config:"status"`
 	Flow     string `config:"flow"`
 	Rules config.Rules `config:"rules"`
-	Include []string `config:"include"`
-	Exclude []string `config:"exclude"`
 }
-//
-//func NewRequestFilter(c *config.Config) (pipeline.Filter, error) {
-//
-//	runner := RequestFilter {
-//		Action: "deny",
-//		Status:403,
-//	}
-//
-//	if err := c.Unpack(&runner); err != nil {
-//		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
-//	}
-//
-//	return &runner, nil
-//}
 
 func (filter RequestFilter) Name() string {
 	return "request_filter"
@@ -292,13 +276,13 @@ func (filter *RequestFilter) CheckShouldRules(path string, ctx *fasthttp.Request
 	return false, hasShouldRules
 }
 
-func (filter *RequestFilter) CheckExcludeStringRules(val string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool){
+func CheckExcludeStringRules(val string,array []string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool){
 	if global.Env().IsDebug {
-		log.Debug("exclude:", filter.Exclude)
+		log.Debug("exclude:", array)
 	}
-	if len(filter.Exclude)>0 {
+	if len(array)>0 {
 		hasRule =true
-		for _, x := range filter.Exclude {
+		for _, x := range array {
 			match := x == val
 			if global.Env().IsDebug {
 				log.Debugf("check exclude rule: %v vs %v, match: %v", x, val, match)
@@ -315,14 +299,14 @@ func (filter *RequestFilter) CheckExcludeStringRules(val string, ctx *fasthttp.R
 	return true,hasRule
 }
 
-func (filter *RequestFilter) CheckIncludeStringRules(val string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool){
+func CheckIncludeStringRules(val string,array []string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool){
 	if global.Env().IsDebug {
-		log.Debug("include:", filter.Include)
+		log.Debug("include:", array)
 	}
 
-	if len(filter.Include)>0 {
+	if len(array)>0 {
 		hasRule=true
-		for _, x := range filter.Include {
+		for _, x := range array {
 			match := x == val
 			if global.Env().IsDebug {
 				log.Debugf("check include rule: %v vs %v, match: %v", x, val, match)

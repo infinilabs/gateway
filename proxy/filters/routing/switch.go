@@ -15,9 +15,9 @@ import (
 )
 
 type SwitchFlowFilter struct {
-	PathRules     []SwitchRule `config:"path_rules"`
-	RemovePrefix     bool `config:"remove_prefix"`
-	ContinueAfterMatch     bool `config:"continue"`
+	PathRules          []SwitchRule `config:"path_rules"`
+	RemovePrefix       bool         `config:"remove_prefix"`
+	ContinueAfterMatch bool         `config:"continue"`
 }
 
 func (filter *SwitchFlowFilter) Name() string {
@@ -25,28 +25,28 @@ func (filter *SwitchFlowFilter) Name() string {
 }
 
 type SwitchRule struct {
-	Prefix     string `config:"prefix"`
-	Flow     string `config:"flow"`
+	Prefix string `config:"prefix"`
+	Flow   string `config:"flow"`
 }
 
 func (filter *SwitchFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
-	if len(filter.PathRules)==0{
+	if len(filter.PathRules) == 0 {
 		return
 	}
 
-	path:=string(ctx.RequestURI())
-	paths:=strings.Split(path,"/")
-	indexPart:= paths[1]
+	path := string(ctx.RequestURI())
+	paths := strings.Split(path, "/")
+	indexPart := paths[1]
 
-	for _,item:=range filter.PathRules{
-		if strings.HasPrefix(indexPart,item.Prefix){
-			if filter.RemovePrefix{
-				nexIndex:=strings.TrimLeft(indexPart,item.Prefix)
-				paths[1]=nexIndex
-				ctx.Request.SetRequestURI(strings.Join(paths,"/"))
-				flow:=common.MustGetFlow(item.Flow)
-				if global.Env().IsDebug{
-					log.Debugf("request [%v] go on flow: [%s]",ctx.URI().String(),flow.ToString())
+	for _, item := range filter.PathRules {
+		if strings.HasPrefix(indexPart, item.Prefix) {
+			if filter.RemovePrefix {
+				nexIndex := strings.TrimLeft(indexPart, item.Prefix)
+				paths[1] = nexIndex
+				ctx.Request.SetRequestURI(strings.Join(paths, "/"))
+				flow := common.MustGetFlow(item.Flow)
+				if global.Env().IsDebug {
+					log.Debugf("request [%v] go on flow: [%s]", ctx.URI().String(), flow.ToString())
 				}
 				flow.Process(ctx)
 				if !filter.ContinueAfterMatch {

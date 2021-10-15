@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/pipeline"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 )
 
@@ -19,6 +20,7 @@ type Config struct {
 
 	URI            bool `config:"uri"`
 	Request        bool `config:"request"`
+	Response        bool `config:"response"`
 	QueryArgs      bool `config:"query_args"`
 	User           bool `config:"user"`
 	APIKey         bool `config:"api_key"`
@@ -34,47 +36,52 @@ func (filter *DumpFilter) Name() string {
 func (filter *DumpFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	if filter.config.Request {
-		fmt.Println("request:\n ", ctx.Request.String())
+		fmt.Println("REQUEST:\n", util.TrimSpaces(ctx.Request.String()))
 	}
 
 	if filter.config.URI {
-		fmt.Println("uri: ", ctx.Request.URI().String())
+		fmt.Println("URI: ", ctx.Request.URI().String())
 	}
 
 	if filter.config.QueryArgs {
-		fmt.Println("query_args: ", ctx.Request.URI().QueryArgs().String())
-		fmt.Println("query_string: ", string(ctx.Request.URI().QueryString()))
+		fmt.Println("QUERY_ARGS: ", ctx.Request.URI().QueryArgs().String())
+		fmt.Println("QUERY_STRING: ", string(ctx.Request.URI().QueryString()))
 	}
 
 	if filter.config.RequestHeader {
-		fmt.Println("request header:")
+		fmt.Println("REQUEST_HEADER:")
 		fmt.Println(ctx.Request.Header.String())
 	}
 
+
+	if filter.config.Response {
+		fmt.Println("RESPONSE:\n", ctx.Response.String())
+	}
+
 	if filter.config.StatusCode {
-		fmt.Println("response status code:")
+		fmt.Println("STATUS_CODE:")
 		fmt.Println(ctx.Response.StatusCode())
 	}
 
 	if filter.config.ResponseHeader {
-		fmt.Println("response header:")
+		fmt.Println("RESPONSE_HEADER:")
 		fmt.Println(ctx.Response.Header.String())
 	}
 
 	if filter.config.User {
 		_, user, pass := ctx.Request.ParseBasicAuth()
-		fmt.Println("username: ", string(user))
-		fmt.Println("password: ", string(pass))
+		fmt.Println("USERNAME: ", string(user))
+		fmt.Println("PASSWORD: ", string(pass))
 	}
 
 	if filter.config.APIKey {
 		_, apiID, apiKey := ctx.ParseAPIKey()
-		fmt.Println("api_id: ", string(apiID))
-		fmt.Println("api_key: ", string(apiKey))
+		fmt.Println("API_ID: ", string(apiID))
+		fmt.Println("API_KEY: ", string(apiKey))
 	}
 
 	if len(filter.config.Context) > 0 {
-		fmt.Println("---- dumping context ---- ")
+		fmt.Println("---- DUMPING CONTEXT ---- ")
 		for _, k := range filter.config.Context {
 			v, err := ctx.GetValue(k)
 			if err != nil {

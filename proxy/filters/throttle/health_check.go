@@ -14,6 +14,7 @@ import (
 
 type ElasticsearchHealthCheckFilter struct {
 	Elasticsearch string `config:"elasticsearch"`
+	Interval int `config:"interval"`
 }
 
 func (filter *ElasticsearchHealthCheckFilter) Name() string {
@@ -21,7 +22,7 @@ func (filter *ElasticsearchHealthCheckFilter) Name() string {
 }
 
 func (filter *ElasticsearchHealthCheckFilter) Filter(ctx *fasthttp.RequestCtx) {
-	if rate.GetRateLimiter("cluster_check_health", filter.Elasticsearch, 1, 1, time.Second*1).Allow() {
+	if rate.GetRateLimiter("cluster_check_health", filter.Elasticsearch, 1, 1, time.Second*time.Duration(filter.Interval)).Allow() {
 		result := elastic.GetClient(filter.Elasticsearch).ClusterHealth()
 		if global.Env().IsDebug {
 			seelog.Trace(filter.Elasticsearch, result)
@@ -37,7 +38,9 @@ func (filter *ElasticsearchHealthCheckFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 func NewHealthCheckFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := ElasticsearchHealthCheckFilter{}
+	runner := ElasticsearchHealthCheckFilter{
+		Interval: 1,
+	}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
