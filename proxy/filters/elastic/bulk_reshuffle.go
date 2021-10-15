@@ -60,31 +60,8 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 		FixNullID:           true,
 		Level:               "node",
 		Mode:                "sync",
-		RotateConfig: rotate.RotateConfig{
-			Compress:     true,
-			MaxFileAge:   0,
-			MaxFileCount: 100,
-			MaxFileSize:  1024,
-		},
-		BulkProcessorConfig: BulkProcessorConfig{
-			Compress:                  false,
-			LogInvalidMessage:         true,
-			LogInvalid200Message:      true,
-			LogInvalid200RetryMessage: true,
-			Log429RetryMessage:        true,
-			RetryDelayInSeconds:       1,
-			RejectDelayInSeconds:      1,
-			MaxRejectRetryTimes:       3,
-			MaxRetryTimes:             3,
-			MaxRequestBodySize:        1024,
-			MaxResponseBodySize:       1024,
-
-			SaveFailure: true,
-			//FailureRequestsQueue:       fmt.Sprintf("%v-failure",clusterName),
-			//InvalidRequestsQueue:       fmt.Sprintf("%v-invalid",clusterName),
-			//DeadRequestsQueue:       	fmt.Sprintf("%v-dead_letter",clusterName),
-			DocBufferSize: 256 * 1024,
-		},
+		RotateConfig: rotate.DefaultConfig,
+		BulkProcessorConfig: DefaultBulkProcessorConfig,
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -175,28 +152,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			var urlLevelType string
 
 			urlLevelIndex, urlLevelType = getUrlLevelBulkMeta(pathStr)
-
-			//index_rename
-			//if resolveIndexRename {
-			//	for k, v := range renameMapping {
-			//		if strings.Contains(k, "*") {
-			//			patterns := radix.Compile(k) //TODO performance
-			//			ok := patterns.Match(index)
-			//			if ok {
-			//				if global.Env().IsDebug {
-			//					log.Debug("wildcard matched: ", pathStr)
-			//				}
-			//				index = v
-			//				scannedByte = updateJsonWithNewIndex(scannedByte, index)
-			//				break
-			//			}
-			//		} else if k == index {
-			//			index = v
-			//			scannedByte = updateJsonWithNewIndex(scannedByte, index)
-			//			break
-			//		}
-			//	}
-			//}
 
 			var indexNew, typeNew, idNew string
 			if index == "" && urlLevelIndex != "" {

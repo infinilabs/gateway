@@ -33,6 +33,8 @@ type Config struct {
 	NumOfWorkers        int      `config:"worker_size"`
 	IdleTimeoutInSecond int      `config:"idle_timeout_in_seconds"`
 	InputQueue          string   `config:"input_queue"`
+	FailureQueue        string   `config:"failure_queue"`
+	InvalidQueue        string   `config:"invalid_queue"`
 	Elasticsearch       string   `config:"elasticsearch"`
 	WaitingAfter        []string `config:"waiting_after"`
 }
@@ -82,7 +84,7 @@ func (processor *DiskQueueConsumer) Process(ctx *pipeline.Context) error {
 	totalSize := 0
 	for i := 0; i < processor.config.NumOfWorkers; i++ {
 		wg.Add(1)
-		go processor.NewBulkWorker(ctx,&totalSize, &wg)
+		go processor.NewBulkWorker(ctx, &totalSize, &wg)
 	}
 
 	wg.Wait()
@@ -90,7 +92,7 @@ func (processor *DiskQueueConsumer) Process(ctx *pipeline.Context) error {
 	return nil
 }
 
-func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context,count *int, wg *sync.WaitGroup) {
+func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context, count *int, wg *sync.WaitGroup) {
 
 	defer func() {
 		if !global.Env().IsDebug {
@@ -118,19 +120,23 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context,count *i
 	metadata := elastic.GetMetadata(esInstanceVal)
 
 	idleDuration := time.Duration(timeOut) * time.Second
-	pendingQueue := processor.config.InputQueue + "_pending"
-	deadLetterQueue := processor.config.InputQueue + "_dead_letter"
+	if processor.config.FailureQueue == "" {
+		processor.config.FailureQueue = processor.config.InputQueue + "-failure"
+	}
+	if processor.config.InvalidQueue == "" {
+		processor.config.InvalidQueue = processor.config.InputQueue + "-invalid"
+	}
 
 READ_DOCS:
 	for {
 
-		if ctx.IsCanceled(){
+		if ctx.IsCanceled() {
 			//log.Error("received cancel signal:")
 			return
 		}
 
-		if !metadata.IsAvailable(){
-			log.Debugf("cluster [%v] is not available, task stop",metadata.Config.Name)
+		if !metadata.IsAvailable() {
+			log.Debugf("cluster [%v] is not available, task stop", metadata.Config.Name)
 			return
 		}
 
@@ -146,20 +152,20 @@ READ_DOCS:
 		}
 
 		//handle message on error queue
-		if queue.Depth(pendingQueue) > 0 {
-			log.Debug(pendingQueue, " has pending message, clear it first")
+		if queue.Depth(processor.config.FailureQueue) > 0 {
+			log.Debug(processor.config.FailureQueue, " has pending message, clear it first")
 			goto HANDLE_PENDING
 		}
 
 		pop, _, err := queue.PopTimeout(processor.config.InputQueue, idleDuration)
-		if err!=nil{
+		if err != nil {
 			log.Error(err)
 			panic(err)
 		}
 
-		if len(pop)>0{
+		if len(pop) > 0 {
 			ok, status, err := processMessage(metadata, pop)
-			if err!=nil{
+			if err != nil {
 				log.Error(err)
 			}
 
@@ -170,14 +176,14 @@ READ_DOCS:
 
 				//TODO handle 429
 
-				if status >= 400 && status < 500 {
-					log.Error("push to dead letter queue:", deadLetterQueue, ",", err)
-					err := queue.Push(deadLetterQueue, pop)
+				if status != 429 && status >= 400 && status < 500 {
+					log.Error("push to dead letter queue:", processor.config.InvalidQueue, ",", err)
+					err := queue.Push(processor.config.InvalidQueue, pop)
 					if err != nil {
 						panic(err)
 					}
 				} else {
-					err := queue.Push(pendingQueue, pop)
+					err := queue.Push(processor.config.FailureQueue, pop)
 					if err != nil {
 						panic(err)
 					}
@@ -185,35 +191,33 @@ READ_DOCS:
 			}
 		}
 
-
-
 	}
 
 HANDLE_PENDING:
 
-	log.Trace("handle pending messages ", pendingQueue)
+	log.Trace("handle pending messages ", processor.config.FailureQueue)
 	for {
 
-		if ctx.IsCanceled(){
+		if ctx.IsCanceled() {
 			//log.Error("received cancel signal:")
 			return
 		}
 
-		if !metadata.IsAvailable(){
-			log.Errorf("cluster [%v] is not available, task stop",metadata.Config.Name)
+		if !metadata.IsAvailable() {
+			log.Errorf("cluster [%v] is not available, task stop", metadata.Config.Name)
 			return
 		}
 
-		pop, timeout, err := queue.PopTimeout(pendingQueue, idleDuration)
+		pop, timeout, err := queue.PopTimeout(processor.config.FailureQueue, idleDuration)
 
 		//if no pending message left, goto the main progress
-		if timeout{
+		if timeout {
 			goto READ_DOCS
 		}
 
-		if len(pop)>0{
+		if len(pop) > 0 {
 			ok, status, err := processMessage(metadata, pop)
-			if err!=nil{
+			if err != nil {
 				log.Error(err)
 			}
 
@@ -223,20 +227,20 @@ HANDLE_PENDING:
 				}
 
 				if status > 401 && status < 500 {
-					log.Error("push to dead letter queue:", deadLetterQueue, ",", err)
-					err := queue.Push(deadLetterQueue, pop)
+					log.Error("push to dead letter queue:", processor.config.InvalidQueue, ",", err)
+					err := queue.Push(processor.config.InvalidQueue, pop)
 					if err != nil {
 						panic(err)
 					}
 				} else {
-					err := queue.Push(pendingQueue, pop)
+					err := queue.Push(processor.config.FailureQueue, pop)
 					if err != nil {
 						panic(err)
 					}
 				}
 			}
 		}
-		if err!=nil{
+		if err != nil {
 			log.Error(err)
 			panic(err)
 		}
@@ -258,9 +262,9 @@ func processMessage(metadata *elastic.ElasticsearchMetadata, pop []byte) (bool, 
 	}
 
 	// modify schema，align with elasticsearch's schema
-	orignalSchema:=string(req.URI().Scheme())
-	orignalHost:=string(req.URI().Host())
-	if metadata.GetSchema()!=orignalSchema{
+	orignalSchema := string(req.URI().Scheme())
+	orignalHost := string(req.URI().Host())
+	if metadata.GetSchema() != orignalSchema {
 		req.URI().SetScheme(metadata.GetSchema())
 	}
 
@@ -279,17 +283,17 @@ func processMessage(metadata *elastic.ElasticsearchMetadata, pop []byte) (bool, 
 
 	if metadata.Config.TrafficControl != nil {
 
-		if metadata.Config.TrafficControl.MaxWaitTimeInMs<=0{
-			metadata.Config.TrafficControl.MaxWaitTimeInMs=10*1000
+		if metadata.Config.TrafficControl.MaxWaitTimeInMs <= 0 {
+			metadata.Config.TrafficControl.MaxWaitTimeInMs = 10 * 1000
 		}
-		maxTime:=time.Duration(metadata.Config.TrafficControl.MaxWaitTimeInMs)*time.Millisecond
-		startTime:=time.Now()
+		maxTime := time.Duration(metadata.Config.TrafficControl.MaxWaitTimeInMs) * time.Millisecond
+		startTime := time.Now()
 	RetryRateLimit:
 
-		if time.Now().Sub(startTime)<maxTime{
+		if time.Now().Sub(startTime) < maxTime {
 			if metadata.Config.TrafficControl.MaxQpsPerNode > 0 {
 				if !rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"max_qps", int(metadata.Config.TrafficControl.MaxQpsPerNode)).Allow() {
-					stats.Increment(metadata.Config.ID,host+"-max_qps_throttled")
+					stats.Increment(metadata.Config.ID, host+"-max_qps_throttled")
 					if global.Env().IsDebug {
 						log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), host)
 					}
@@ -300,7 +304,7 @@ func processMessage(metadata *elastic.ElasticsearchMetadata, pop []byte) (bool, 
 
 			if metadata.Config.TrafficControl.MaxBytesPerNode > 0 {
 				if !rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"max_bps", int(metadata.Config.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(), req.GetRequestLength()) {
-					stats.Increment(metadata.Config.ID,host+"-max_bps_throttled")
+					stats.Increment(metadata.Config.ID, host+"-max_bps_throttled")
 					if global.Env().IsDebug {
 						log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), host)
 					}
@@ -308,7 +312,7 @@ func processMessage(metadata *elastic.ElasticsearchMetadata, pop []byte) (bool, 
 					goto RetryRateLimit
 				}
 			}
-		}else{
+		} else {
 			log.Warn("reached max traffic control time, throttle quitting")
 		}
 	}
@@ -319,16 +323,16 @@ func processMessage(metadata *elastic.ElasticsearchMetadata, pop []byte) (bool, 
 		log.Trace(string(resp.GetRawBody()))
 	}
 
-	stats.Increment("diskqueue_consumer",util.IntToString(resp.StatusCode()))
+	stats.Increment("diskqueue_consumer", util.IntToString(resp.StatusCode()))
 
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated || resp.StatusCode() == http.StatusNotFound {
 		if util.ContainStr(string(req.RequestURI()), "_bulk") {
 			//handle bulk response partial failure
-			va,err:=jsonparser.GetBoolean(resp.GetRawBody(),"errors")
-			if va{
-				stats.Increment("diskqueue_consumer","bulk_requests_errors")
-				log.Error("error in bulk requests,",util.SubString(string(resp.GetRawBody()), 0, 256))
-				time.Sleep(1*time.Second)
+			va, err := jsonparser.GetBoolean(resp.GetRawBody(), "errors")
+			if va {
+				stats.Increment("diskqueue_consumer", "bulk_requests_errors")
+				log.Error("error in bulk requests,", util.SubString(string(resp.GetRawBody()), 0, 256))
+				time.Sleep(1 * time.Second)
 				return false, resp.StatusCode(), errors.New(fmt.Sprintf("%v", err))
 			}
 		}

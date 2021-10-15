@@ -74,6 +74,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		ProcessFailureQueue:  false,
 		ValidateRequest:      false,
 		RotateConfig:         rotate.DefaultConfig,
+		BulkConfig:         elastic2.DefaultBulkProcessorConfig,
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -261,14 +262,13 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context,bulk
 	if bulkProcessor.Config.FailureRequestsQueue == "" {
 		bulkProcessor.Config.FailureRequestsQueue = fmt.Sprintf("%v-failure", processor.config.Elasticsearch)
 	}
+	if bulkProcessor.Config.DeadletterRequestsQueue == "" {
+		bulkProcessor.Config.DeadletterRequestsQueue = fmt.Sprintf("%v-deadl_letter", processor.config.Elasticsearch)
+	}
 
 	if bulkProcessor.Config.InvalidRequestsQueue == "" {
 		bulkProcessor.Config.InvalidRequestsQueue = fmt.Sprintf("%v-invalid", processor.config.Elasticsearch)
 	}
-
-	//if bulkProcessor.Config.DeadRequestsQueue == "" {
-	//	bulkProcessor.Config.DeadRequestsQueue = fmt.Sprintf("%v-dead_letter", processor.config.Elasticsearch)
-	//}
 
 	httpClient := fasthttp.Client{
 		MaxConnsPerHost:     processor.config.MaxConnectionPerHost,

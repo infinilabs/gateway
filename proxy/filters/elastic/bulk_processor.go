@@ -18,7 +18,6 @@ import (
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
 	"net/http"
-	"path"
 	"strings"
 	"time"
 )
@@ -204,40 +203,28 @@ var fastHttpClient = &fasthttp.Client{
 
 type BulkProcessorConfig struct {
 	Compress                  bool `config:"compress"`
-	LogInvalidMessage         bool `config:"log_invalid_message"`
-	LogInvalid200Message      bool `config:"log_invalid_200_message"`
-	LogInvalid200RetryMessage bool `config:"log_200_retry_message"`
-	Log429RetryMessage        bool `config:"log_429_retry_message"`
 	RetryDelayInSeconds       int  `config:"retry_delay_in_seconds"`
 	RejectDelayInSeconds      int  `config:"reject_retry_delay_in_seconds"`
 	MaxRejectRetryTimes       int  `config:"max_reject_retry_times"`
 	MaxRetryTimes             int  `config:"max_retry_times"`
-	MaxRequestBodySize        int  `config:"max_logged_request_body_size"`
-	MaxResponseBodySize       int  `config:"max_logged_response_body_size"`
-
 	SaveFailure          bool   `config:"save_failure"`
-
+	DeadletterRequestsQueue string `config:"dead_letter_queue"`
 	FailureRequestsQueue string `config:"failure_queue"`
 	InvalidRequestsQueue string `config:"invalid_queue"`
-	//DeadRequestsQueue    string `config:"dead_queue"`
 	DocBufferSize        int    `config:"doc_buffer_size"`
 }
 
-//var defaultConfig = BulkProcessorConfig{
-//		Compress:                  false,
-//		LogInvalidMessage:         true,
-//		LogInvalid200Message:      true,
-//		LogInvalid200RetryMessage: true,
-//		Log429RetryMessage:        true,
-//		RetryDelayInSeconds:  1,
-//		RejectDelayInSeconds: 1,
-//		MaxRejectRetryTimes:  3,
-//		MaxRetryTimes:       3,
-//		MaxRequestBodySize:  1024,
-//		MaxResponseBodySize: 1024,
-//		SaveFailure:          true,
-//		DocBufferSize:       256*1024,
-//}
+var DefaultBulkProcessorConfig = BulkProcessorConfig{
+		Compress:                  false,
+		RetryDelayInSeconds:  1,
+		RejectDelayInSeconds: 1,
+		MaxRejectRetryTimes:  3,
+		MaxRetryTimes:       3,
+		SaveFailure:          true,
+		DocBufferSize:       256*1024,
+}
+
+
 
 type BulkProcessor struct {
 	RotateConfig rotate.RotateConfig
@@ -258,7 +245,7 @@ func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host s
 		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "5xx_requests")
 
 		if joint.Config.SaveFailure {
-			queue.Push(joint.Config.FailureRequestsQueue, data)
+			queue.Push(joint.Config.InvalidRequestsQueue, data)
 		}
 
 		return 0, FAILURE
@@ -419,24 +406,6 @@ DO:
 
 			if onError&&err==nil {
 
-				if joint.Config.LogInvalid200Message {
-					if rate.GetRateLimiter("log_invalid_200_message", host, 1, 1, 5*time.Second).Allow() {
-						log.Warn("status:", resp.StatusCode(), ",", host, ",", util.SubString(string(util.EscapeNewLine(resbody)), 0, 256))
-					}
-
-					logPath := path.Join(global.Env().GetLogDir(), metadata.Config.Name, "invalid_200", "requests.log")
-					logHandler := rotate.GetFileHandler(logPath, joint.RotateConfig)
-
-					logHandler.WriteBytesArray(
-						[]byte("\nURL:"),
-						[]byte(url),
-						[]byte("\nRequest:\n"),
-						[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.Config.MaxRequestBodySize)),
-						[]byte("\nResponse:\n"),
-						[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.Config.MaxResponseBodySize)),
-					)
-				}
-
 				//decode response
 				response := elastic.BulkResponse{}
 				err := response.UnmarshalJSON(resbody)
@@ -495,8 +464,6 @@ DO:
 					}, func(metaBytes []byte, actionStr, index, typeName, id string) (err error) {
 						response, match = invalidOffset[offset]
 						if match {
-							//find invalid request
-							//fmt.Println(offset,"invalid request:",string(metaBytes),"invalid response:",response.GetItem().Result,response.GetItem().Index,response.GetItem().Type,response.GetItem().Index,response.GetItem().ID,response.GetItem().Error)
 							if response.GetItem().Status >= 400 && response.GetItem().Status < 500 && response.GetItem().Status != 429 {
 								retryable = false
 								contains400Error = true
@@ -567,7 +534,7 @@ DO:
 				if retryTimes >= joint.Config.MaxRetryTimes {
 					log.Errorf("invalid 200, retried %v times, quit retry", retryTimes)
 					if joint.Config.SaveFailure {
-						queue.Push(joint.Config.FailureRequestsQueue, data)
+						queue.Push(joint.Config.DeadletterRequestsQueue, data)
 					}
 					return resp.StatusCode(), FAILURE
 				}
@@ -593,7 +560,7 @@ DO:
 		if retryTimes >= joint.Config.MaxRejectRetryTimes {
 			log.Errorf("rejected 429, retried %v times, quit retry", retryTimes)
 			if joint.Config.SaveFailure {
-				queue.Push(joint.Config.FailureRequestsQueue, data)
+				queue.Push(joint.Config.DeadletterRequestsQueue, data)
 			}
 			return resp.StatusCode(), FAILURE
 		}
@@ -608,46 +575,10 @@ DO:
 
 		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "400_requests")
 
-		if joint.Config.LogInvalidMessage {
-			if rate.GetRateLimiter("log_invalid_messages", host, 1, 1, 5*time.Second).Allow() {
-				log.Warn("status:", resp.StatusCode(), ",", host, ",", util.SubString(util.UnsafeBytesToString(resbody), 0, 256))
-			}
-
-			logPath := path.Join(global.Env().GetLogDir(), metadata.Config.Name, "invalid", "requests.log")
-			logHandler := rotate.GetFileHandler(logPath, joint.RotateConfig)
-
-			logHandler.WriteBytesArray(
-				[]byte("\nURL:"),
-				[]byte(url),
-				[]byte("\nRequest:\n"),
-				[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.Config.MaxRequestBodySize)),
-				[]byte("\nResponse:\n"),
-				[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.Config.MaxResponseBodySize)),
-			)
-		}
-
 		return resp.StatusCode(), INVALID
 	} else {
 
 		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "5xx_requests")
-
-		if joint.Config.LogInvalidMessage {
-			if rate.GetRateLimiter("log_invalid_messages", host, 1, 1, 5*time.Second).Allow() {
-				log.Warn("status:", resp.StatusCode(), ",", host, ",", util.SubString(util.UnsafeBytesToString(resbody), 0, 256))
-			}
-
-			logPath := path.Join(global.Env().GetLogDir(), metadata.Config.Name, "invalid", "requests.log")
-			logHandler := rotate.GetFileHandler(logPath, joint.RotateConfig)
-
-			logHandler.WriteBytesArray(
-				[]byte("\nURL:"),
-				[]byte(url),
-				[]byte("\nRequest:\n"),
-				[]byte(util.SubString(string(util.EscapeNewLine(data)), 0, joint.Config.MaxRequestBodySize)),
-				[]byte("\nResponse:\n"),
-				[]byte(util.SubString(string(util.EscapeNewLine(resbody)), 0, joint.Config.MaxResponseBodySize)),
-			)
-		}
 
 		if joint.Config.SaveFailure {
 			queue.Push(joint.Config.FailureRequestsQueue, data)
