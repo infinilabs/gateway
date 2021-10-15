@@ -279,12 +279,6 @@ func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host s
 	req.Header.SetMethod(http.MethodPost)
 	req.Header.SetUserAgent("_bulk")
 
-	//TODO handle response, if client not support gzip, return raw body
-	if joint.Config.Compress {
-		req.Header.Set("Accept-Encoding", "gzip")
-		req.Header.Set("content-encoding", "gzip")
-	}
-
 	req.Header.SetContentType("application/x-ndjson")
 
 	if metadata.Config.BasicAuth != nil {
@@ -294,10 +288,15 @@ func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host s
 
 	if len(data) > 0 {
 		if joint.Config.Compress {
+
 			_, err := fasthttp.WriteGzipLevel(req.BodyWriter(), data, fasthttp.CompressBestSpeed)
 			if err != nil {
 				panic(err)
 			}
+
+			//TODO handle response, if client not support gzip, return raw body
+			req.Header.Set("Accept-Encoding", "gzip")
+			req.Header.Set("content-encoding", "gzip")
 		} else {
 			req.SetBody(data)
 		}

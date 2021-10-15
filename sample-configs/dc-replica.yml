@@ -35,7 +35,7 @@ flow:
           cluster_available: ["primary"]
         then:
           - retry_limiter:
-              queue_name: "primary_deadletter_requests"
+              queue_name: "primary-deadletter_requests"
               max_retry_times: 5
           - elasticsearch:
               elasticsearch: "primary"
@@ -43,14 +43,14 @@ flow:
           - bulk_response_validate:
               invalid_status: 400
               failure_status: 507
-              invalid_queue: "primary_invalid_bulk_requests"
-              failure_queue: "primary_failure_bulk_requests"
+              invalid_queue: "primary-invalid_bulk_requests"
+              failure_queue: "primary-failure_bulk_requests"
           - if: #429 重试
               in:
                 _ctx.response.status: [ 429 ]
             then:
               - queue:
-                  queue_name: "primary_failure_requests"
+                  queue_name: "primary-failure"
               - drop:
           - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
               range:
@@ -69,10 +69,10 @@ flow:
                   queue_name: "backup"
             else:
               - queue:
-                  queue_name: "primary_failure_requests"
+                  queue_name: "primary-failure"
         else:
           - queue:
-              queue_name: "primary_failure_requests"
+              queue_name: "primary-failure"
           - elasticsearch_health_check:
               elasticsearch: "primary"
       - flow:
@@ -88,7 +88,7 @@ flow:
 #          password: changeme
       - if:
           and:
-            - queue_has_lag: [ "primary>100", "primary_failure_requests>100", "primary_failure_bulk_requests>100" ]
+            - queue_has_lag: [ "primary>100", "primary-failure>100", "primary-failure_bulk_requests>100" ]
             - cluster_available: ["primary"]
         then: #集群可用但是集群有堆积的情况，不处理客户端请求，待服务恢复之后再提供服务
           - set_response:
@@ -114,8 +114,8 @@ flow:
           - bulk_response_validate: #如果是 bulk 请求，还需要进一步验证是否存在部分请求失败的错误异常
               invalid_status: 400
               failure_status: 507
-              invalid_queue: "primary_invalid_bulk_requests"
-              failure_queue: "primary_failure_bulk_requests"
+              invalid_queue: "primary-invalid_bulk_requests"
+              failure_queue: "primary-failure_bulk_requests"
               when:
                 contains:
                   _ctx.request.path: /_bulk
@@ -124,7 +124,7 @@ flow:
                 _ctx.response.status: [ 429 ]
             then:
               - queue:
-                  queue_name: "primary_failure_requests"
+                  queue_name: "primary-failure"
               - drop:
           - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
               range:
@@ -143,7 +143,7 @@ flow:
                   queue_name: "backup"
             else: #集群可用的情况下但是失败了，可能存在脏写，将请求放入写入失败队列，后续可以选择两边集群都重做一次，最终确保一致性，写 translog，后续提供 UI 可以进行三方检查：主、备集群和本地日志
               - queue:
-                  queue_name: "primary_failure_requests"
+                  queue_name: "primary-failure"
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
       - stats:
@@ -234,7 +234,7 @@ pipelines:
     keep_running: true
     processors:
       - flow_runner:
-          input_queue: "primary_failure_requests"
+          input_queue: "primary-failure"
           flow: primary-flow-post-processing
           when:
             cluster_available: [ "primary" ]
@@ -243,18 +243,41 @@ pipelines:
     keep_running: true
     processors:
       - flow_runner:
-          input_queue: "primary_failure_bulk_requests"
+          input_queue: "primary-failure_bulk_requests"
           flow: primary-flow-post-processing
           when:
             cluster_available: [ "primary" ]
-  - name: queue_backup-replicator
+  - name: queue_primary-invalid_bulk_requests-consumer
+    processors:
+      - flow_runner:
+          input_queue: "primary-invalid_bulk_requests"
+          flow: primary-flow-post-processing
+          when:
+            cluster_available: [ "primary" ]
+  - name: queue_backup-failure-consumer
+    auto_start: true
+    keep_running: true
+    processors:
+      - queue_consumer:
+          input_queue: "backup-failure"
+          elasticsearch: "backup"
+          failure_queue: "backup-failure"
+          worker_size: 1
+          compress: true
+          when:
+            cluster_available: [ "backup" ]
+  - name: queue_backup-consumer
     auto_start: true
     keep_running: true
     processors:
       - queue_consumer:
           input_queue: "backup"
           elasticsearch: "backup"
-          waiting_after: [ "backup_failure_requests"]
-          worker_size: 20
+          failure_queue: "backup-failure"
+          invalid_queue: "backup-invalid"
+          dead_letter_queue: "backup-dead_letter"
+          waiting_after: [ "backup-failure"]
+          worker_size: 1
+          compress: false
           when:
             cluster_available: [ "backup" ]

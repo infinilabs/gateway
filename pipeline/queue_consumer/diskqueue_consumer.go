@@ -1,6 +1,7 @@
 package queue_consumer
 
 import (
+	"compress/gzip"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -37,6 +38,7 @@ type Config struct {
 	InvalidQueue        string   `config:"invalid_queue"`
 	Elasticsearch       string   `config:"elasticsearch"`
 	WaitingAfter        []string `config:"waiting_after"`
+	Compress            bool     `config:"compress"`
 }
 
 func New(c *config.Config) (pipeline.Processor, error) {
@@ -151,12 +153,6 @@ READ_DOCS:
 			}
 		}
 
-		//handle message on error queue
-		if queue.Depth(processor.config.FailureQueue) > 0 {
-			log.Debug(processor.config.FailureQueue, " has pending message, clear it first")
-			goto HANDLE_PENDING
-		}
-
 		pop, _, err := queue.PopTimeout(processor.config.InputQueue, idleDuration)
 		if err != nil {
 			log.Error(err)
@@ -164,9 +160,9 @@ READ_DOCS:
 		}
 
 		if len(pop) > 0 {
-			ok, status, err := processMessage(metadata, pop)
+			ok, status, err := processor.processMessage(metadata, pop)
 			if err != nil {
-				log.Error(err)
+				log.Error(ok, status, err)
 			}
 
 			if !ok {
@@ -192,62 +188,9 @@ READ_DOCS:
 		}
 
 	}
-
-HANDLE_PENDING:
-
-	log.Trace("handle pending messages ", processor.config.FailureQueue)
-	for {
-
-		if ctx.IsCanceled() {
-			//log.Error("received cancel signal:")
-			return
-		}
-
-		if !metadata.IsAvailable() {
-			log.Errorf("cluster [%v] is not available, task stop", metadata.Config.Name)
-			return
-		}
-
-		pop, timeout, err := queue.PopTimeout(processor.config.FailureQueue, idleDuration)
-
-		//if no pending message left, goto the main progress
-		if timeout {
-			goto READ_DOCS
-		}
-
-		if len(pop) > 0 {
-			ok, status, err := processMessage(metadata, pop)
-			if err != nil {
-				log.Error(err)
-			}
-
-			if !ok {
-				if global.Env().IsDebug {
-					log.Debug(ok, status, err)
-				}
-
-				if status > 401 && status < 500 {
-					log.Error("push to dead letter queue:", processor.config.InvalidQueue, ",", err)
-					err := queue.Push(processor.config.InvalidQueue, pop)
-					if err != nil {
-						panic(err)
-					}
-				} else {
-					err := queue.Push(processor.config.FailureQueue, pop)
-					if err != nil {
-						panic(err)
-					}
-				}
-			}
-		}
-		if err != nil {
-			log.Error(err)
-			panic(err)
-		}
-	}
 }
 
-func processMessage(metadata *elastic.ElasticsearchMetadata, pop []byte) (bool, int, error) {
+func (processor *DiskQueueConsumer) processMessage(metadata *elastic.ElasticsearchMetadata, pop []byte) (bool, int, error) {
 	req := fasthttp.AcquireRequest()
 	err := req.Decode(pop)
 	if err != nil {
@@ -271,6 +214,28 @@ func processMessage(metadata *elastic.ElasticsearchMetadata, pop []byte) (bool, 
 	host := metadata.GetActiveHost()
 	req.SetHost(host)
 	resp := fasthttp.AcquireResponse()
+
+	req1 := fasthttp.AcquireRequest()
+
+	if !req.IsGzipped() && processor.config.Compress {
+
+		log.Error("gzzping:", req.IsGzipped())
+
+		data := req.GetRawBody()
+		writer, err := gzip.NewWriterLevel(req1.BodyWriter(), gzip.BestCompression)
+		if err != nil {
+			panic(err)
+		}
+
+		defer writer.Close()
+		writer.Write(data)
+
+		//TODO handle response, if client not support gzip, return raw body
+		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set("content-encoding", "gzip")
+		req.SwapBody(req1.Body())
+	}
+
 	err = fastHttpClient.Do(req, resp)
 
 	// restore schema
@@ -323,25 +288,26 @@ func processMessage(metadata *elastic.ElasticsearchMetadata, pop []byte) (bool, 
 		log.Trace(string(resp.GetRawBody()))
 	}
 
+	respBody := resp.GetRawBody()
 	stats.Increment("diskqueue_consumer", util.IntToString(resp.StatusCode()))
 
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated || resp.StatusCode() == http.StatusNotFound {
 		if util.ContainStr(string(req.RequestURI()), "_bulk") {
 			//handle bulk response partial failure
-			va, err := jsonparser.GetBoolean(resp.GetRawBody(), "errors")
+			va, _ := jsonparser.GetBoolean(respBody, "errors")
 			if va {
 				stats.Increment("diskqueue_consumer", "bulk_requests_errors")
-				log.Error("error in bulk requests,", util.SubString(string(resp.GetRawBody()), 0, 256))
+				log.Error("error in bulk requests,", util.SubString(string(respBody), 0, 256))
 				time.Sleep(1 * time.Second)
-				return false, resp.StatusCode(), errors.New(fmt.Sprintf("%v", err))
+				return false, resp.StatusCode(), errors.New(fmt.Sprintf("%v", util.SubString(util.UnsafeBytesToString(respBody), 0, 512)))
 			}
 		}
 		return true, resp.StatusCode(), nil
 	} else {
 		if global.Env().IsDebug {
-			log.Warn(err, resp.StatusCode(), util.SubString(string(req.GetRawBody()), 0, 512), util.SubString(string(resp.GetRawBody()), 0, 256))
+			log.Warn(err, resp.StatusCode(), util.SubString(string(req.GetRawBody()), 0, 512), util.SubString(string(respBody), 0, 256))
 		}
-		return false, resp.StatusCode(), errors.New(fmt.Sprintf("invalid status code, %v %v %v", resp.StatusCode(), err, util.SubString(string(resp.GetRawBody()), 0, 256)))
+		return false, resp.StatusCode(), errors.New(fmt.Sprintf("invalid status code, %v %v %v", resp.StatusCode(), err, util.SubString(string(respBody), 0, 256)))
 	}
 
 }

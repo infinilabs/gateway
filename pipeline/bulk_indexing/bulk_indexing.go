@@ -195,9 +195,6 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 		v := meta.GetActiveNodeInfo()
 		if v != nil {
 			wg.Add(1)
-			if processor.config.FailureQueueName == "" {
-				processor.config.FailureQueueName = fmt.Sprintf("%v-failure", processor.config.Elasticsearch)
-			}
 			log.Debug("process bulk failure queue:", processor.config.FailureQueueName)
 			go processor.NewBulkWorker(c,bulkSizeInByte, &wg, processor.config.FailureQueueName, v.Http.PublishAddress)
 		} else {
@@ -263,7 +260,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context,bulk
 		bulkProcessor.Config.FailureRequestsQueue = fmt.Sprintf("%v-failure", processor.config.Elasticsearch)
 	}
 	if bulkProcessor.Config.DeadletterRequestsQueue == "" {
-		bulkProcessor.Config.DeadletterRequestsQueue = fmt.Sprintf("%v-deadl_letter", processor.config.Elasticsearch)
+		bulkProcessor.Config.DeadletterRequestsQueue = fmt.Sprintf("%v-dead_letter", processor.config.Elasticsearch)
 	}
 
 	if bulkProcessor.Config.InvalidRequestsQueue == "" {
