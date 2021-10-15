@@ -53,6 +53,7 @@ type Config struct {
 	BulkSizeInKb         int      `config:"bulk_size_in_kb,omitempty"`
 	BulkSizeInMb         int      `config:"bulk_size_in_mb,omitempty"`
 	Elasticsearch        string   `config:"elasticsearch,omitempty"`
+
 	FailureQueueName     string   `config:"failure_queue,omitempty"`
 	Indices              []string `config:"index,omitempty"`
 	EnabledShards        []string `config:"shards,omitempty"`

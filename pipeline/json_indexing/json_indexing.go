@@ -52,7 +52,6 @@ type Config struct {
 	TypeName             string `config:"type_name"`
 	Elasticsearch        string `config:"elasticsearch"`
 	InputQueue           string `config:"input_queue"`
-	OutputQueue          string `config:"output_queue"`
 }
 
 func New(c *config.Config) (pipeline.Processor, error) {

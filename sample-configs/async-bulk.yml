@@ -64,5 +64,4 @@ pipelines:
           elasticsearch: "dev"
           compress: true
           worker_size: 10
-          retry_delay_in_seconds: 5
           process_failure_queue: true #process failed bulk messages
