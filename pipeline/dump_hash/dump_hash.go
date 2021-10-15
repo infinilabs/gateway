@@ -43,9 +43,9 @@ type Config struct {
 	//字段名称必须是大写
 	BatchSize       int    `config:"batch_size"`
 	SliceSize       int    `config:"slice_size"`
-	Elasticsearch   string `config:"elasticsearch"`
-	OutputQueueName string `config:"output_queue"`
-	SortType        string `config:"sort_type"`
+	Elasticsearch string `config:"elasticsearch"`
+	Output        string `config:"output_queue"`
+	SortType      string `config:"sort_type"`
 	SortField       string `config:"sort_field"`
 	Indices         string `config:"indices"`
 	Query           string `config:"query"`
@@ -103,7 +103,7 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 	var statsLock sync.RWMutex
 	var totalSize int
 
-	file := path.Join(global.Env().GetDataDir(), "diff", processor.config.OutputQueueName)
+	file := path.Join(global.Env().GetDataDir(), "diff", processor.config.Output)
 	if util.FileExists(file) {
 		log.Warn("target file exists:", file, ",you may need to remove it first")
 	}
@@ -125,10 +125,10 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 		statsLock.Unlock()
 
 		if docSize > 0 {
-			processingDocs(docs, processor.config.OutputQueueName)
+			processingDocs(docs, processor.config.Output)
 		}
 
-		log.Debugf("slice %v docs: %v", tempSlice, scrollResponse1.GetHitsTotal())
+		log.Debugf("slice [%v] docs: %v", tempSlice, scrollResponse1.GetHitsTotal())
 
 		if scrollResponse1.GetHitsTotal() == 0 {
 			log.Tracef("slice %v is empty", tempSlice)
@@ -184,7 +184,7 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 
 				statsLock.Lock()
 				totalSize += docSize
-				stats.Gauge(fmt.Sprintf("scroll_total_received-%v", tempSlice), processor.config.OutputQueueName, int64(totalSize))
+				stats.Gauge(fmt.Sprintf("scroll_total_received-%v", tempSlice), processor.config.Output, int64(totalSize))
 				statsLock.Unlock()
 
 				if docSize == 0 {
@@ -192,7 +192,7 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 					break
 				}
 
-				processingDocs(docs, processor.config.OutputQueueName)
+				processingDocs(docs, processor.config.Output)
 
 				if version >= 7 {
 					scrollResponseV7Pool.Put(scrollResponse)

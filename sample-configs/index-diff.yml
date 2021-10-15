@@ -26,15 +26,14 @@ pipelines:
               scroll_time: "10m"
               elasticsearch: "source"
 #              query: "field1:elastic"
-#              fields: "_id"
-#              fields: "name,age"
+#              fields: "doc_hash"
               output_queue: "source_docs"
               batch_size: 10000
               slice_size: 5
           - dump_hash: #dump es2's doc
               indices: "medcl-dr3"
               scroll_time: "10m"
-#              fields: "_id"
+#              fields: "doc_hash"
 #              query: "field1:elastic"
               batch_size: 10000
               slice_size: 5

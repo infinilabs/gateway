@@ -123,7 +123,6 @@ type IndexDiffProcessor struct {
 
 func New(c *config.Config) (pipeline.Processor, error) {
 	diffConfig := Config{
-		Enabled:           true,
 		TextReportEnabled: true,
 		BufferSize:        1,
 		SourceInputQueue:  "source",
@@ -160,7 +159,6 @@ func (processor *IndexDiffProcessor) Name() string {
 }
 
 type Config struct {
-	Enabled            bool   `config:"enabled"`
 	TextReportEnabled  bool   `config:"text_report"`
 	KeepSourceInResult bool   `config:"keep_source"`
 	BufferSize         int    `config:"buffer_size"`
