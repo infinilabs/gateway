@@ -230,7 +230,6 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 	req.SetHost(host)
 	resp := fasthttp.AcquireResponse()
 
-
 	if !req.IsGzipped() && processor.config.Compress {
 		data := req.Body()
 		data1:=gzipBest(&data)
@@ -239,19 +238,6 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 		req.Header.Set("Accept-Encoding", "gzip")
 		req.Header.Set("content-encoding", "gzip")
 		req.SwapBody(data1)
-
-		err = fastHttpClient.Do(req, resp)
-
-	}else{
-		err = fastHttpClient.Do(req, resp)
-	}
-
-	// restore schema
-	req.URI().SetScheme(orignalSchema)
-	req.SetHost(orignalHost)
-
-	if err != nil {
-		return false, resp.StatusCode(), err
 	}
 
 	if metadata.Config.TrafficControl != nil {
@@ -288,6 +274,17 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 		} else {
 			log.Warn("reached max traffic control time, throttle quitting")
 		}
+	}
+
+	//execute
+	err = fastHttpClient.Do(req, resp)
+
+	// restore schema
+	req.URI().SetScheme(orignalSchema)
+	req.SetHost(orignalHost)
+
+	if err != nil {
+		return false, resp.StatusCode(), err
 	}
 
 	if global.Env().IsDebug {

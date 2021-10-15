@@ -358,6 +358,7 @@ DO:
 		}
 	}
 
+	//execute
 	err := httpClient.Do(req, resp)
 
 	// restore schema
