@@ -207,6 +207,7 @@ func gzipBest(a *[]byte) []byte {
 
 func (processor *DiskQueueConsumer) processMessage(metadata *elastic.ElasticsearchMetadata, pop []byte) (bool, int, error) {
 	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
 	err := req.Decode(pop)
 	if err != nil {
 		log.Error("failed to decode request, ", metadata.Config.Name)
@@ -229,15 +230,19 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 	host := metadata.GetActiveHost()
 	req.SetHost(host)
 	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
 
+	acceptGzipped:=req.AcceptGzippedResponse()
+	compressed:=false
 	if !req.IsGzipped() && processor.config.Compress {
 		data := req.Body()
 		data1:=gzipBest(&data)
 
 		//TODO handle response, if client not support gzip, return raw body
-		req.Header.Set("Accept-Encoding", "gzip")
 		req.Header.Set("content-encoding", "gzip")
+		req.Header.Set("Accept-Encoding", "gzip")
 		req.SwapBody(data1)
+		compressed=true
 	}
 
 	if metadata.Config.TrafficControl != nil {
@@ -278,6 +283,13 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 
 	//execute
 	err = fastHttpClient.Do(req, resp)
+
+	if !acceptGzipped&&compressed{
+		body:=resp.GetRawBody()
+		resp.SwapBody(body)
+		resp.Header.Del("Content-Encoding")
+		resp.Header.Del("content-encoding")
+	}
 
 	// restore schema
 	req.URI().SetScheme(orignalSchema)

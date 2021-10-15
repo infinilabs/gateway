@@ -286,26 +286,27 @@ func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host s
 		req.URI().SetPassword(metadata.Config.BasicAuth.Password)
 	}
 
-	if len(data) > 0 {
-		if joint.Config.Compress {
+	acceptGzipped:=req.AcceptGzippedResponse()
+	compressed:=false
 
-			_, err := fasthttp.WriteGzipLevel(req.BodyWriter(), data, fasthttp.CompressBestSpeed)
-			if err != nil {
-				panic(err)
-			}
+	if !req.IsGzipped() && joint.Config.Compress {
 
-			//TODO handle response, if client not support gzip, return raw body
-			req.Header.Set("Accept-Encoding", "gzip")
-			req.Header.Set("content-encoding", "gzip")
-		} else {
-			req.SetBody(data)
+		_, err := fasthttp.WriteGzipLevel(req.BodyWriter(), data, fasthttp.CompressBestSpeed)
+		if err != nil {
+			panic(err)
 		}
 
-		if req.GetBodyLength() <= 0 {
-			log.Error("INIT: after set, but body is zero,", len(data), ",is compress:", joint.Config.Compress)
-		}
+		//TODO handle response, if client not support gzip, return raw body
+		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set("content-encoding", "gzip")
+		compressed=true
+
 	} else {
-		log.Error("INIT: data length is zero,", string(data), ",is compress:", joint.Config.Compress)
+		req.SetBody(data)
+	}
+
+	if req.GetBodyLength() <= 0 {
+		log.Error("INIT: after set, but body is zero,", len(data), ",is compress:", joint.Config.Compress)
 	}
 
 	// modify schema，align with elasticsearch's schema
@@ -360,6 +361,14 @@ DO:
 
 	//execute
 	err := httpClient.Do(req, resp)
+
+	//restore body and header
+	if !acceptGzipped&&compressed{
+		body:=resp.GetRawBody()
+		resp.SwapBody(body)
+		resp.Header.Del("Content-Encoding")
+		resp.Header.Del("content-encoding")
+	}
 
 	// restore schema
 	req.URI().SetScheme(orignalSchema)
