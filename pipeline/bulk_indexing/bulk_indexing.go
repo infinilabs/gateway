@@ -54,11 +54,9 @@ type Config struct {
 	BulkSizeInMb         int      `config:"bulk_size_in_mb,omitempty"`
 	Elasticsearch        string   `config:"elasticsearch,omitempty"`
 
-	FailureQueueName     string   `config:"failure_queue,omitempty"`
 	Indices              []string `config:"index,omitempty"`
 	EnabledShards        []string `config:"shards,omitempty"`
 	Queues               []string `config:"queues,omitempty"`
-	ProcessFailureQueue  bool     `config:"process_failure_queue"`
 	ValidateRequest      bool     `config:"valid_request"`
 
 	RotateConfig rotate.RotateConfig          `config:"rotate"`
@@ -71,7 +69,6 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		MaxConnectionPerHost: 1,
 		IdleTimeoutInSecond:  5,
 		BulkSizeInMb:         10,
-		ProcessFailureQueue:  false,
 		ValidateRequest:      false,
 		RotateConfig:         rotate.DefaultConfig,
 		BulkConfig:         elastic2.DefaultBulkProcessorConfig,
@@ -186,19 +183,6 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 				wg.Add(1)
 				go processor.NewBulkWorker(c,bulkSizeInByte, &wg, queueName, v.Http.PublishAddress)
 			}
-		}
-	}
-
-	////TODO, auto get new nodes and failure queues
-	////start deadline ingest
-	if processor.config.ProcessFailureQueue {
-		v := meta.GetActiveNodeInfo()
-		if v != nil {
-			wg.Add(1)
-			log.Debug("process bulk failure queue:", processor.config.FailureQueueName)
-			go processor.NewBulkWorker(c,bulkSizeInByte, &wg, processor.config.FailureQueueName, v.Http.PublishAddress)
-		} else {
-			log.Error("no valid node, skip process_failure_queue")
 		}
 	}
 
