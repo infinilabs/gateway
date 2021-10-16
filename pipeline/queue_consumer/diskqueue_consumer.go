@@ -239,8 +239,8 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 		data1:=gzipBest(&data)
 
 		//TODO handle response, if client not support gzip, return raw body
-		req.Header.Set("content-encoding", "gzip")
-		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set(fasthttp.HeaderContentEncoding, "gzip")
+		req.Header.Set(fasthttp.HeaderAcceptEncoding, "gzip")
 		req.SwapBody(data1)
 		compressed=true
 	}
@@ -287,8 +287,8 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 	if !acceptGzipped&&compressed{
 		body:=resp.GetRawBody()
 		resp.SwapBody(body)
-		resp.Header.Del("Content-Encoding")
-		resp.Header.Del("content-encoding")
+		resp.Header.Del(fasthttp.HeaderContentEncoding)
+		resp.Header.Del(fasthttp.HeaderContentEncoding2)
 	}
 
 	// restore schema
@@ -322,7 +322,7 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 		return true, resp.StatusCode(), nil
 	} else {
 		if global.Env().IsDebug {
-			log.Warn(err, resp.StatusCode(), util.SubString(string(req.GetRawBody()), 0, 512), util.SubString(string(respBody), 0, 256))
+			log.Warn(err, resp.StatusCode(),req.Header.String(), util.SubString(string(req.GetRawBody()), 0, 512), util.SubString(string(respBody), 0, 256))
 		}
 		return false, resp.StatusCode(), errors.New(fmt.Sprintf("invalid status code, %v %v %v", resp.StatusCode(), err, util.SubString(string(respBody), 0, 256)))
 	}

@@ -137,7 +137,7 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 
 				if nonRetryableItems.Len() > 0 {
 					nonRetryableItems.WriteByte('\n')
-					bytes := ctx.Request.OverrideBodyEncode(nonRetryableItems.Bytes())
+					bytes := ctx.Request.OverrideBodyEncode(nonRetryableItems.Bytes(),true)
 					queue.Push(this.config.InvalidQueue, bytes)
 					//send to redis channel
 					nonRetryableItems.Reset()
@@ -146,7 +146,7 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 
 				if retryableItems.Len() > 0 {
 					retryableItems.WriteByte('\n')
-					bytes := ctx.Request.OverrideBodyEncode(retryableItems.Bytes())
+					bytes := ctx.Request.OverrideBodyEncode(retryableItems.Bytes(),true)
 					queue.Push(this.config.FailureQueue, bytes)
 					retryableItems.Reset()
 					bytebufferpool.Put(retryableItems)

@@ -301,8 +301,8 @@ func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host s
 		}
 
 		//TODO handle response, if client not support gzip, return raw body
-		req.Header.Set("Accept-Encoding", "gzip")
-		req.Header.Set("content-encoding", "gzip")
+		req.Header.Set(fasthttp.HeaderAcceptEncoding, "gzip")
+		req.Header.Set(fasthttp.HeaderContentEncoding, "gzip")
 		compressed=true
 
 	} else {
@@ -370,8 +370,8 @@ DO:
 	if !acceptGzipped&&compressed{
 		body:=resp.GetRawBody()
 		resp.SwapBody(body)
-		resp.Header.Del("Content-Encoding")
-		resp.Header.Del("content-encoding")
+		resp.Header.Del(fasthttp.HeaderContentEncoding)
+		resp.Header.Del(fasthttp.HeaderContentEncoding2)
 	}
 
 	// restore schema
