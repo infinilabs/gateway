@@ -210,11 +210,11 @@ elasticsearch:
         enabled: true
         interval: 60s
 
-pipelines:
+pipeline:
   - name: request_logging_index
     auto_start: true
     keep_running: true
-    processors:
+    processor:
       - json_indexing:
           index_name: "gateway_requests"
           elasticsearch: "backup"
@@ -223,7 +223,7 @@ pipelines:
             cluster_available: [ "backup" ]
   - name: queue_primary-dead_retry-consumer
     auto_start: false
-    processors:
+    processor:
       - flow_runner:
           input_queue: "primary_deadletter_requests"
           flow: primary-flow-post-processing
@@ -232,7 +232,7 @@ pipelines:
   - name: queue_primary-failure-consumer
     auto_start: true
     keep_running: true
-    processors:
+    processor:
       - flow_runner:
           input_queue: "primary-failure"
           flow: primary-flow-post-processing
@@ -241,14 +241,14 @@ pipelines:
   - name: queue_primary-bulk-failure-consumer
     auto_start: true
     keep_running: true
-    processors:
+    processor:
       - flow_runner:
           input_queue: "primary-failure_bulk_requests"
           flow: primary-flow-post-processing
           when:
             cluster_available: [ "primary" ]
   - name: queue_primary-invalid_bulk_requests-consumer
-    processors:
+    processor:
       - flow_runner:
           input_queue: "primary-invalid_bulk_requests"
           flow: primary-flow-post-processing
@@ -257,7 +257,7 @@ pipelines:
   - name: queue_backup-failure-consumer
     auto_start: true
     keep_running: true
-    processors:
+    processor:
       - queue_consumer:
           input_queue: "backup-failure"
           elasticsearch: "backup"
@@ -269,7 +269,7 @@ pipelines:
   - name: queue_backup-consumer
     auto_start: true
     keep_running: true
-    processors:
+    processor:
       - queue_consumer:
           input_queue: "backup"
           elasticsearch: "backup"

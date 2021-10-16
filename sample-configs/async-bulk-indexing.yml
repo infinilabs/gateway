@@ -56,11 +56,11 @@ elasticsearch:
         enabled: true
         interval: 60s
 
-pipelines:
+pipeline:
   - name: bulk_request_ingest
     auto_start: true
     keep_running: true
-    processors:
+    processor:
       - bulk_indexing:
           when:
             cluster_available: [ "dev" ]

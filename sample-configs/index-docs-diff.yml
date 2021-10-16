@@ -15,10 +15,10 @@ elasticsearch:
       username: test
       password: testtest
 
-pipelines:
+pipeline:
   - name: index_diff_service
     auto_start: true
-    processors:
+    processor:
     - dag:
         parallel:
           - dump_hash: #dump es1's doc
@@ -47,9 +47,9 @@ pipelines:
               source_queue: 'source_docs'
               target_queue: 'target_docs'
 
-#pipelines:
+#pipeline:
 #  - name: diff_result_ingest
-#    processors:
+#    processor:
 #      - json_indexing:
 #          index_name: "diff_result"
 #          elasticsearch: "source"

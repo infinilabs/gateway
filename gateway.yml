@@ -85,11 +85,11 @@ elasticsearch:
       enabled: true
       interval: 60s
 
-pipelines:
+pipeline:
 - name: request_logging_index
   auto_start: true
   keep_running: true
-  processors:
+  processor:
     - json_indexing:
         index_name: "gateway_requests"
         elasticsearch: "dev"
@@ -100,7 +100,7 @@ pipelines:
 - name: bulk_request_ingest
   auto_start: true
   keep_running: true
-  processors:
+  processor:
     - bulk_indexing:
         elasticsearch: "dev"
         compress: true
