@@ -507,7 +507,7 @@ START:
 			stats.Increment("reverse_proxy","backend_failure")
 			//record translog, update failure ticket
 			if global.Env().IsDebug {
-				if !rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"on_error", 1).Allow() {
+				if rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"backend_failure_on_error", 1).Allow() {
 					log.Errorf("elasticsearch [%v][%v] is on fire now, %v", p.proxyConfig.Elasticsearch, host,err)
 					time.Sleep(1 * time.Second)
 				}

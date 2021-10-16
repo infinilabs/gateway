@@ -400,7 +400,10 @@ DO:
 	if err != nil {
 		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "5xx_requests")
 
-		log.Error("status:", resp.StatusCode(), ",", host, ",", err, " ", util.SubString(string(util.EscapeNewLine(resbody)), 0, 256))
+		if rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"5xx_on_error", 1).Allow() {
+			log.Error("status:", resp.StatusCode(), ",", host, ",", err, " ", util.SubString(string(util.EscapeNewLine(resbody)), 0, 256))
+			time.Sleep(1 * time.Second)
+		}
 
 		if joint.Config.SaveFailure {
 			queue.Push(joint.Config.FailureRequestsQueue, data)
