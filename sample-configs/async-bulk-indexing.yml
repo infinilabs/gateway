@@ -19,7 +19,7 @@ flow:
             contains:
               _ctx.request.path: /_bulk
           elasticsearch: dev
-          level: node
+          level: node #shard
           mode: async
           fix_null_id: true
       - elasticsearch:
@@ -59,9 +59,21 @@ elasticsearch:
 pipelines:
   - name: bulk_request_ingest
     auto_start: true
+    keep_running: true
     processors:
       - bulk_indexing:
+          when:
+            cluster_available: [ "dev" ]
           elasticsearch: "dev"
           compress: true
+          bulk_size_in_mb: 10
           worker_size: 10
-          process_failure_queue: true #process failed bulk messages
+          queues:
+            - dev-failure
+#            - dev-index-medcl-a-0
+#            - dev-index-medcl-a-1
+#            - dev-index-medcl-a-2
+#          index:
+#            - medcl-a
+#          shards:
+#            - 0
