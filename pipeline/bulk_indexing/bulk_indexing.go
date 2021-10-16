@@ -196,7 +196,7 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 				go processor.NewBulkWorker(c,bulkSizeInByte, &wg, v, node.Http.PublishAddress)
 			}
 		} else {
-			log.Error("no valid node, skip process_queue")
+			log.Error("no available nodes found, skip processing")
 		}
 	}
 

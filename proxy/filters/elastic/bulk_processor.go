@@ -255,9 +255,13 @@ func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host s
 	available:=elastic.IsHostAvailable(host)
 
 	if !available{
-		newEndpoint:= metadata.GetActiveHost()
-		log.Warnf("[%v] is not available, try: [%v]", host,newEndpoint)
-		host =newEndpoint
+		if metadata.IsAvailable(){
+			newEndpoint:= metadata.GetActiveHost()
+			log.Warnf("[%v] is not available, try: [%v]", host,newEndpoint)
+			host =newEndpoint
+		}else{
+			time.Sleep(1*time.Second)
+		}
 	}
 
 	if metadata.IsTLS() {
