@@ -66,18 +66,18 @@ func main() {
 	app.Start(func() {
 
 		//load core modules first
-		module.RegisterSystemModule(&api.APIModule{})
 
 		module.RegisterSystemModule(&stats2.SimpleStatsModule{})
 		module.RegisterUserPlugin(&stats.StatsDModule{})
 
-		module.RegisterSystemModule(elastic.ElasticModule{})
 		module.RegisterUserPlugin(translog.TranslogModule{})
 		//module.RegisterSystemModule(filter.FilterModule{})
 
-		module.RegisterSystemModule(queue.DiskQueue{})
+		module.RegisterSystemModule(&queue.DiskQueue{})
 		module.RegisterSystemModule(&queue.RedisModule{})
 		module.RegisterSystemModule(&queue.QueueModule{})
+
+		module.RegisterSystemModule(elastic.ElasticModule{})
 
 		module.RegisterSystemModule(&task.TaskModule{})
 		module.RegisterUserPlugin(&gateway.GatewayModule{})
@@ -92,6 +92,8 @@ func main() {
 		pipe.RegisterProcessorPlugin("queue_consumer", queue_consumer.New)
 		pipe.RegisterProcessorPlugin("bulk_indexing", bulk_indexing.New)
 		pipe.RegisterProcessorPlugin("json_indexing", json_indexing.New)
+
+		module.RegisterSystemModule(&api.APIModule{})
 
 		//start each module, with enabled provider
 		module.Start()
