@@ -15,6 +15,9 @@ type EntryConfig struct {
 	Name              string               `config:"name"`
 	ReadTimeout       int                  `config:"read_timeout"`
 	WriteTimeout      int                  `config:"write_timeout"`
+	TCPKeepalive      bool                  `config:"tcp_keepalive"`
+	TCPKeepaliveSeconds      int             `config:"tcp_keepalive_in_seconds"`
+	IdleTimeout      int                     `config:"idle_timeout"`
 
 	ReadBufferSize int   `config:"read_buffer_size"`
 	WriteBufferSize int  `config:"write_buffer_size"`
