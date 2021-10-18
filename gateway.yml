@@ -12,7 +12,12 @@ entry:
   - name: my_es_entry
     enabled: true
     router: my_router
-    max_concurrency: 1000
+    max_concurrency: 10000
+    tcp_keepalive: true
+    tcp_keepalive_in_seconds: 1200
+    read_timeout: 1
+    write_timeout: 1
+    idle_timeout: 1
     network:
       binding: 0.0.0.0:8000
 #    tls:
