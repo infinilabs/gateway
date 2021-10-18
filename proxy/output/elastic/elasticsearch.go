@@ -76,11 +76,11 @@ func New(c *config.Config) (pipeline.Filter, error) {
 		TLSInsecureSkipVerify: true,
 		ReadBufferSize: 4096*4,
 		WriteBufferSize: 4096*4,
-		MaxConnWaitTimeout: util.GetDurationOrDefault("10s",10*time.Second),
-		MaxConnDuration: util.GetDurationOrDefault("0s",10*time.Second),
-		ReadTimeout: util.GetDurationOrDefault("0s",10*time.Second),
-		WriteTimeout: util.GetDurationOrDefault("0s",10*time.Second),
-
+		MaxConnWaitTimeout: util.GetDurationOrDefault("0s",0*time.Second),
+		MaxConnDuration: util.GetDurationOrDefault("0s",0*time.Second),
+		ReadTimeout: util.GetDurationOrDefault("0s",0*time.Second),
+		WriteTimeout: util.GetDurationOrDefault("0s",0*time.Second),
+		MaxIdleConnDuration: util.GetDurationOrDefault("0s",0*time.Second),
 	}
 
 	if err := c.Unpack(&cfg); err != nil {

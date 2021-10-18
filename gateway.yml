@@ -13,11 +13,6 @@ entry:
     enabled: true
     router: my_router
     max_concurrency: 10000
-    tcp_keepalive: true
-    tcp_keepalive_in_seconds: 1200
-    read_timeout: 1
-    write_timeout: 1
-    idle_timeout: 1
     network:
       binding: 0.0.0.0:8000
 #    tls:
@@ -37,7 +32,7 @@ flow:
           fix_null_id: true
       - elasticsearch:
           elasticsearch: dev  #elasticsearch configure reference name
-          max_connection_per_host: 100 #max tcp connection to upstream, default for all nodes
+          max_connection_per_node: 100 #max tcp connection to upstream, default for all nodes
           max_response_size: -1 #default for all nodes
           balancer: weight
           refresh: # refresh upstream nodes list, need to enable this feature to use elasticsearch nodes auto discovery

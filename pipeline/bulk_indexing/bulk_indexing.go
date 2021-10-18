@@ -49,7 +49,7 @@ type BulkIndexingProcessor struct {
 type Config struct {
 	NumOfWorkers         int      `config:"worker_size"`
 	IdleTimeoutInSecond  int      `config:"idle_timeout_in_seconds"`
-	MaxConnectionPerHost int      `config:"max_connection_per_host"`
+	MaxConnectionPerHost int      `config:"max_connection_per_node"`
 	BulkSizeInKb         int      `config:"bulk_size_in_kb,omitempty"`
 	BulkSizeInMb         int      `config:"bulk_size_in_mb,omitempty"`
 	Elasticsearch        string   `config:"elasticsearch,omitempty"`

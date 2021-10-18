@@ -194,7 +194,6 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 				DisablePathNormalizing:        true,
 				MaxConns:                      cfg.MaxConnection,
 				MaxResponseBodySize:           cfg.MaxResponseBodySize,
-
 				MaxConnWaitTimeout:  cfg.MaxConnWaitTimeout,
 				MaxConnDuration:     cfg.MaxConnDuration,
 				MaxIdleConnDuration: cfg.MaxIdleConnDuration,
