@@ -3,7 +3,6 @@ package elastic
 import (
 	"bufio"
 	"bytes"
-	"crypto/tls"
 	"fmt"
 	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
@@ -193,14 +192,6 @@ var startPart = []byte("{\"took\":0,\"errors\":false,\"items\":[")
 var itemPart = []byte("{\"index\":{\"_index\":\"fake-index\",\"_type\":\"doc\",\"_id\":\"1\",\"_version\":1,\"result\":\"created\",\"_shards\":{\"total\":1,\"successful\":1,\"failed\":0},\"_seq_no\":1,\"_primary_term\":1,\"status\":200}}")
 var endPart = []byte("]}")
 
-var fastHttpClient = &fasthttp.Client{
-	MaxConnDuration:     0,
-	MaxIdleConnDuration: 0,
-	ReadTimeout:         time.Second * 60,
-	WriteTimeout:        time.Second * 60,
-	TLSConfig:           &tls.Config{InsecureSkipVerify: true},
-}
-
 type BulkProcessorConfig struct {
 	Compress                  bool `config:"compress"`
 	RetryDelayInSeconds       int  `config:"retry_delay_in_seconds"`
@@ -219,7 +210,7 @@ var DefaultBulkProcessorConfig = BulkProcessorConfig{
 		RetryDelayInSeconds:  1,
 		RejectDelayInSeconds: 1,
 		MaxRejectRetryTimes:  3,
-		MaxRetryTimes:       3,
+		MaxRetryTimes:        3,
 		SaveFailure:          true,
 		DocBufferSize:       256*1024,
 }
@@ -238,7 +229,9 @@ const INVALID API_STATUS = "invalid"
 const PARTIAL API_STATUS = "partial"
 const FAILURE API_STATUS = "failure"
 
-func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host string, data []byte, httpClient *fasthttp.Client) (status_code int, status API_STATUS) {
+
+
+func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host string, data []byte) (status_code int, status API_STATUS) {
 
 	if data == nil || len(data) == 0 {
 		log.Error("bulk data is empty,", host)
@@ -251,18 +244,7 @@ func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host s
 		return 0, FAILURE
 	}
 
-	//get available host
-	available:=elastic.IsHostAvailable(host)
-
-	if !available{
-		if metadata.IsAvailable(){
-			newEndpoint:= metadata.GetActiveHost()
-			log.Warnf("[%v] is not available, try: [%v]", host,newEndpoint)
-			host =newEndpoint
-		}else{
-			time.Sleep(1*time.Second)
-		}
-	}
+	httpClient:=metadata.GetActivePreferredHost(host)
 
 	if metadata.IsTLS() {
 		host = "https://" + host

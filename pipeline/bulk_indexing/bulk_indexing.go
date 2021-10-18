@@ -1,7 +1,6 @@
 package bulk_indexing
 
 import (
-	"crypto/tls"
 	"fmt"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/rotate"
@@ -19,7 +18,6 @@ import (
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
-	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
 )
 
@@ -251,15 +249,6 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context,bulk
 		bulkProcessor.Config.InvalidRequestsQueue = fmt.Sprintf("%v-invalid", processor.config.Elasticsearch)
 	}
 
-	httpClient := fasthttp.Client{
-		MaxConnsPerHost:     processor.config.MaxConnectionPerHost,
-		MaxConnDuration:     0,
-		MaxIdleConnDuration: 0,
-		ReadTimeout:         time.Second * 60,
-		WriteTimeout:        time.Second * 60,
-		TLSConfig:           &tls.Config{InsecureSkipVerify: true},
-	}
-
 	var lastCommit time.Time=time.Now()
 
 READ_DOCS:
@@ -308,7 +297,7 @@ CLEAN_BUFFER:
 		start := time.Now()
 		data := mainBuf.Bytes()
 		log.Trace(meta.Config.Name, ", starting submit bulk request")
-		status, success := bulkProcessor.Bulk(meta, endpoint, data, &httpClient)
+		status, success := bulkProcessor.Bulk(meta, endpoint, data)
 		stats.Timing("elasticsearch."+meta.Config.Name+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
 		log.Debug(meta.Config.Name,", ",endpoint, ", result:", success, ", status:", status, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elapsed:", time.Since(start))
 

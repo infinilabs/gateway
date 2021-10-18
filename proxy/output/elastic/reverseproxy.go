@@ -25,11 +25,12 @@ type ReverseProxy struct {
 	proxyConfig              *ProxyConfig
 	endpoints                []string
 	lastNodesTopologyVersion int
+
+	 hostClients  map[string]*fasthttp.HostClient
+	 clients  map[string]*fasthttp.Client
+	 locker  sync.RWMutex
 }
 
-var hostClients = map[string]*fasthttp.HostClient{}
-var clients = map[string]*fasthttp.Client{}
-var locker = sync.RWMutex{}
 func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 
 	log.Tracef("valid endpoint %v", node.Http.PublishAddress)
@@ -116,8 +117,8 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 
 func (p *ReverseProxy) refreshNodes(force bool) {
 
-	locker.Lock()
-	defer locker.Unlock()
+	p.locker.Lock()
+	defer p.locker.Unlock()
 
 	if global.Env().IsDebug {
 		log.Trace("elasticsearch client nodes refreshing")
@@ -185,9 +186,9 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 	}
 
 	for _, endpoint := range hosts {
-		_, ok := hostClients[endpoint]
+		_, ok := p.hostClients[endpoint]
 		if !ok {
-			hostClients[endpoint] = &fasthttp.HostClient{
+			p.hostClients[endpoint] = &fasthttp.HostClient{
 				Name:                          "reverse_proxy",
 				Addr:                          endpoint,
 				DisableHeaderNamesNormalizing: true,
@@ -211,9 +212,9 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 			}
 		}
 
-		_, ok = clients[endpoint]
+		_, ok = p.clients[endpoint]
 		if !ok {
-			clients[endpoint] = &fasthttp.Client{
+			p.clients[endpoint] = &fasthttp.Client{
 				Name:                          "reverse_proxy",
 				DisableHeaderNamesNormalizing: true,
 				DisablePathNormalizing:        true,
@@ -240,7 +241,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		ws = append(ws, w)
 	}
 
-	if len(hostClients) == 0 {
+	if len(p.hostClients) == 0 {
 		log.Error("proxy upstream is empty")
 		return
 	}
@@ -264,6 +265,9 @@ func NewReverseProxy(cfg *ProxyConfig) *ReverseProxy {
 	p := ReverseProxy{
 		oldAddr:     "",
 		proxyConfig: cfg,
+		 hostClients : map[string]*fasthttp.HostClient{},
+		 clients : map[string]*fasthttp.Client{},
+		 locker : sync.RWMutex{},
 	}
 
 	p.refreshNodes(true)
@@ -285,11 +289,11 @@ func NewReverseProxy(cfg *ProxyConfig) *ReverseProxy {
 }
 
 func (p *ReverseProxy) getHostClient() (clientAvailable bool, client *fasthttp.HostClient, endpoint string) {
-	if hostClients == nil {
+	if p.hostClients == nil {
 		panic("ReverseProxy has been closed")
 	}
 
-	if len(hostClients) == 0 ||len(p.endpoints)==0{
+	if len(p.hostClients) == 0 ||len(p.endpoints)==0{
 		log.Error("no upstream found")
 		return false, nil, ""
 	}
@@ -298,7 +302,7 @@ func (p *ReverseProxy) getHostClient() (clientAvailable bool, client *fasthttp.H
 		// bla has been opened
 		idx := p.bla.Distribute()
 		if idx >= len(p.endpoints) {
-			log.Warn("invalid offset, ", idx, " vs ", len(hostClients), p.endpoints, ", random pick now")
+			log.Warn("invalid offset, ", idx, " vs ", len(p.hostClients), p.endpoints, ", random pick now")
 			idx = 0
 			goto RANDOM
 		}
@@ -309,7 +313,7 @@ func (p *ReverseProxy) getHostClient() (clientAvailable bool, client *fasthttp.H
 		// }
 
 		e := p.endpoints[idx]
-		c, ok := hostClients[e] //TODO, check client by endpoint
+		c, ok := p.hostClients[e] //TODO, check client by endpoint
 		if !ok {
 			log.Error("client not found for: ", e)
 		}
@@ -319,27 +323,27 @@ func (p *ReverseProxy) getHostClient() (clientAvailable bool, client *fasthttp.H
 
 RANDOM:
 	//or go random way
-	max := len(hostClients)
+	max := len(p.hostClients)
 	seed := rand.Intn(max)
-	if seed >= len(hostClients)||seed >= len(p.endpoints) {
+	if seed >= len(p.hostClients)||seed >= len(p.endpoints) {
 		log.Warn("invalid upstream offset, reset to 0")
 		seed = 0
 	}
 	e := p.endpoints[seed]
-	c := hostClients[e]
+	c := p.hostClients[e]
 	return true, c, e
 }
 
 func (p *ReverseProxy) getClient() (clientAvailable bool, client *fasthttp.Client, endpoint string) {
 
-	locker.RLock()
-	defer locker.RUnlock()
+	p.locker.RLock()
+	defer p.locker.RUnlock()
 
-	if clients == nil {
+	if p.clients == nil {
 		panic("ReverseProxy has been closed")
 	}
 
-	if len(clients) == 0 ||len(p.endpoints)==0{
+	if len(p.clients) == 0 ||len(p.endpoints)==0{
 		log.Error("no upstream found")
 		return false, nil, ""
 	}
@@ -348,13 +352,13 @@ func (p *ReverseProxy) getClient() (clientAvailable bool, client *fasthttp.Clien
 		// bla has been opened
 		idx := p.bla.Distribute()
 		if idx >= len(p.endpoints) {
-			log.Warn("invalid offset, ", idx, " vs ", len(clients), p.endpoints, ", random pick now")
+			log.Warn("invalid offset, ", idx, " vs ", len(p.clients), p.endpoints, ", random pick now")
 			idx = 0
 			goto RANDOM
 		}
 
 		e := p.endpoints[idx]
-		c, ok := clients[e] //TODO, check client by endpoint
+		c, ok := p.clients[e] //TODO, check client by endpoint
 		if !ok {
 			log.Error("client not found for: ", e)
 		}
@@ -364,22 +368,18 @@ func (p *ReverseProxy) getClient() (clientAvailable bool, client *fasthttp.Clien
 
 RANDOM:
 	//or go random way
-	max := len(clients)
+	max := len(p.clients)
 	seed := rand.Intn(max)
-	if seed >= len(clients)||seed >= len(p.endpoints) {
+	if seed >= len(p.clients)||seed >= len(p.endpoints) {
 		log.Warn("invalid upstream offset, reset to 0")
 		seed = 0
 	}
 	e := p.endpoints[seed]
-	c := clients[e]
+	c := p.clients[e]
 	return true, c, e
 }
 
-func cleanHopHeaders(req *fasthttp.Request) {
-	for _, h := range hopHeaders {
-		req.Header.Del(h)
-	}
-}
+
 
 var failureMessage = []string{"connection refused", "connection reset", "no such host", "timed out", "Connection: close"}
 
@@ -575,4 +575,10 @@ var hopHeaders = []string{
 
 	//"Accept-Encoding",             // Disable Gzip
 	//"Content-Encoding",             // Disable Gzip
+}
+
+func cleanHopHeaders(req *fasthttp.Request) {
+	for _, h := range hopHeaders {
+		req.Header.Del(h)
+	}
 }

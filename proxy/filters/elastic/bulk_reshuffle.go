@@ -415,7 +415,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				endpoint = path.Join(endpoint, pathStr)
 
 				start := time.Now()
-				code, status := this.bulkProcessor.Bulk(metadata, endpoint, data, fastHttpClient)
+				code, status := this.bulkProcessor.Bulk(metadata, endpoint, data)
 				stats.Timing("elasticsearch."+esConfig.Name+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
 				switch status {
 				case SUCCESS:
