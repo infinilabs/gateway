@@ -19,7 +19,7 @@ flow:
             contains:
               _ctx.request.path: /_bulk
           elasticsearch: dev
-          level: node #shard
+          level: cluster
           mode: async
           fix_null_id: true
       - elasticsearch:
@@ -50,11 +50,11 @@ elasticsearch:
     basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
       username: test
       password: testtest
-    discovery: # auto discovery elasticsearch cluster nodes
-      enabled: true
-      refresh:
-        enabled: true
-        interval: 60s
+#    discovery: # auto discovery elasticsearch cluster nodes
+#      enabled: true
+#      refresh:
+#        enabled: true
+#        interval: 60s
 
 pipeline:
   - name: bulk_request_ingest
@@ -68,11 +68,10 @@ pipeline:
           compress: true
           bulk_size_in_mb: 10
           worker_size: 10
+          level: cluster
           queues:
             - dev-failure
-#            - dev-index-medcl-a-0
-#            - dev-index-medcl-a-1
-#            - dev-index-medcl-a-2
+            - dev-dead_letter
 #          index:
 #            - medcl-a
 #          shards:

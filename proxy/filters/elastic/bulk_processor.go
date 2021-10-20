@@ -209,7 +209,7 @@ var DefaultBulkProcessorConfig = BulkProcessorConfig{
 		Compress:                  false,
 		RetryDelayInSeconds:  1,
 		RejectDelayInSeconds: 1,
-		MaxRejectRetryTimes:  3,
+		MaxRejectRetryTimes:  60,
 		MaxRetryTimes:        3,
 		SaveFailure:          true,
 		DocBufferSize:       256*1024,
@@ -400,9 +400,11 @@ DO:
 
 		if resp.StatusCode() == http.StatusOK {
 
-			onError,err:=jsonparser.GetBoolean(data,"errors")
+			containError,err:=jsonparser.GetBoolean(data,"errors")
 
-			if onError&&err==nil {
+			if containError && err == nil {
+
+				log.Debug("error in bulk requests,", util.SubString(string(resbody), 0, 256))
 
 				//decode response
 				response := elastic.BulkResponse{}
@@ -558,7 +560,7 @@ DO:
 		if retryTimes >= joint.Config.MaxRejectRetryTimes {
 			log.Errorf("rejected 429, retried %v times, quit retry", retryTimes)
 			if joint.Config.SaveFailure {
-				queue.Push(joint.Config.DeadletterRequestsQueue, data)
+				queue.Push(joint.Config.FailureRequestsQueue, data)
 			}
 			return resp.StatusCode(), FAILURE
 		}

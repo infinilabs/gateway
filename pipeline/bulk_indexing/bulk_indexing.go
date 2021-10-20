@@ -214,7 +214,7 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 	return nil
 }
 
-func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context,bulkSizeInByte int, wg *sync.WaitGroup, queueName string, endpoint string) {
+func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context,bulkSizeInByte int, wg *sync.WaitGroup, queueName string, host string) {
 
 	defer func() {
 		if !global.Env().IsDebug {
@@ -235,7 +235,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context,bulk
 		wg.Done()
 	}()
 
-	log.Debug("start worker:", queueName, ", endpoint:", endpoint)
+	log.Debug("start worker:", queueName, ", host:", host)
 
 	mainBuf := processor.bufferPool.Get()
 	mainBuf.Reset()
@@ -308,9 +308,9 @@ CLEAN_BUFFER:
 		start := time.Now()
 		data := mainBuf.Bytes()
 		log.Trace(meta.Config.Name, ", starting submit bulk request")
-		status, success := bulkProcessor.Bulk(meta, endpoint, data)
+		status, success := bulkProcessor.Bulk(meta, host, data)
 		stats.Timing("elasticsearch."+meta.Config.Name+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
-		log.Debug(meta.Config.Name,", ",endpoint, ", result:", success, ", status:", status, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elapsed:", time.Since(start))
+		log.Debug(meta.Config.Name,", ", host, ", result:", success, ", status:", status, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elapsed:", time.Since(start))
 
 		switch success {
 		case elastic2.SUCCESS:

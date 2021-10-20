@@ -273,7 +273,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 					}
 				}
 
-				if rate.GetRateLimiter("index_setting_not_found", index, 1, 5, time.Minute*1).Allow() {
+				if rate.GetRateLimiter("index_setting_not_found", index, 1, 2, time.Minute*1).Allow() {
 					log.Warn("index setting not found,", index, ",", string(metaBytes))
 				}
 
