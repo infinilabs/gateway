@@ -1,0 +1,25 @@
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 10000
+    network:
+      binding: 0.0.0.0:8000
+
+flow:
+  - name: es-flow
+    filter:
+      - elasticsearch:
+          elasticsearch: es-server
+
+router:
+  - name: my_router
+    default_flow: es-flow
+
+elasticsearch:
+  - name: es-server
+    enabled: true
+    endpoint: http://192.168.3.188:9206

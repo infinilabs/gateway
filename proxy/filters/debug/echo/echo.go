@@ -52,6 +52,7 @@ func (filter *EchoMessage) Filter(ctx *fasthttp.RequestCtx) {
 		}
 	}
 	if !filter.config.Continue {
+		ctx.Response.SetStatusCode(200)
 		ctx.Finished()
 	}
 }

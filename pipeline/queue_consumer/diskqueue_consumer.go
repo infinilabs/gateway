@@ -60,6 +60,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 }
 
 var fastHttpClient = &fasthttp.Client{
+	MaxConnsPerHost: 1000,
 	Name:                          "queue_consumer",
 	DisableHeaderNamesNormalizing: false,
 	TLSConfig:                     &tls.Config{InsecureSkipVerify: true},

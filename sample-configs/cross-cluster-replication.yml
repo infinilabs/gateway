@@ -39,7 +39,7 @@ flow:
               max_retry_times: 5
           - elasticsearch:
               elasticsearch: "primary"
-              max_connection_per_host: 1000
+              max_connection_per_node: 1000
           - bulk_response_validate:
               invalid_status: 400
               failure_status: 507
@@ -110,7 +110,7 @@ flow:
               - drop:
           - elasticsearch: #集群可用，直接处理请求
               elasticsearch: "primary"
-              max_connection_per_host: 1000
+              max_connection_per_node: 1000
           - bulk_response_validate: #如果是 bulk 请求，还需要进一步验证是否存在部分请求失败的错误异常
               invalid_status: 400
               failure_status: 507

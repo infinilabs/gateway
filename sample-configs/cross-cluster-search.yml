@@ -8,8 +8,8 @@ entry:
     max_concurrency: 10000
     network:
       binding: 0.0.0.0:8000
-    tls:
-      enabled: true
+#    tls:
+#      enabled: true
 
 flow:
   - name: v2-flow
