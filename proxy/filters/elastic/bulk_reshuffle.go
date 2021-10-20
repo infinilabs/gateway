@@ -107,7 +107,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 		//index-shardID -> buffer
 		docBuf := map[string]*bytebufferpool.ByteBuffer{}
-		buffEndpoints := map[string]string{}
+		buffHosts := map[string]string{}
 
 		validEachLine := this.config.ValidEachLine
 		validMetadata := this.config.ValidMetadata
@@ -331,9 +331,9 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			buff, ok = docBuf[bufferKey]
 			if !ok {
 
-				var endpoint string
+				var host string
 				if reshuffleType=="cluster"{
-					endpoint=esConfig.ID
+					host =esConfig.ID
 				}else{
 					nodeInfo := metadata.GetNodeInfo(shardInfo.NodeID)
 					if nodeInfo == nil {
@@ -342,7 +342,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 						}
 						return errors.Errorf("nodeInfo not found, %v %v", bufferKey, shardInfo.NodeID)
 					}
-					endpoint=nodeInfo.Http.PublishAddress
+					host =nodeInfo.Http.PublishAddress
 				}
 
 
@@ -350,9 +350,9 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				buff.Reset()
 				docBuf[bufferKey] = buff
 
-				buffEndpoints[bufferKey] = endpoint
+				buffHosts[bufferKey] = host
 				if global.Env().IsDebug {
-					log.Debug(shardInfo.Index, ",", shardInfo.ShardID, ",", endpoint)
+					log.Debug(shardInfo.Index, ",", shardInfo.ShardID, ",", host)
 				}
 			}
 
@@ -415,7 +415,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 					common.ValidateBulkRequest("sync-bulk", string(data))
 				}
 
-				endpoint, ok := buffEndpoints[x]
+				endpoint, ok := buffHosts[x]
 				if !ok {
 					log.Error("shard endpoint was not found,", x)
 					//TODO
