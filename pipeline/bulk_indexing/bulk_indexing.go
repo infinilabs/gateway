@@ -53,6 +53,7 @@ type Config struct {
 	BulkSizeInKb         int      `config:"bulk_size_in_kb,omitempty"`
 	BulkSizeInMb         int      `config:"bulk_size_in_mb,omitempty"`
 	Elasticsearch        string   `config:"elasticsearch,omitempty"`
+	Level        string   `config:"level,omitempty"`
 
 	Indices              []string `config:"index,omitempty"`
 	EnabledShards        []string `config:"shards,omitempty"`
@@ -130,74 +131,84 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 		return errors.New("metadata is nil")
 	}
 
-	//index,shard,level
-	if len(processor.config.Indices) > 0 {
-		for _, v := range processor.config.Indices {
-			indexSettings := meta.Indices[v]
-			for i := 0; i < indexSettings.Shards; i++ {
-				queueName := common.GetShardLevelShuffleKey(processor.config.Elasticsearch, v, i)
-				shardInfo := meta.GetPrimaryShardInfo(v, i)
 
-				if len(processor.config.EnabledShards) > 0 {
-					if !util.ContainsAnyInArray(shardInfo.ShardID, processor.config.EnabledShards) {
-						log.Debugf("%s-%s not enabled, skip processing", shardInfo.Index, shardInfo.ShardID)
-						continue
+	if processor.config.Level=="cluster"{
+		queueName := common.GetClusterLevelShuffleKey(processor.config.Elasticsearch)
+
+		if global.Env().IsDebug {
+			log.Trace("queueName:", queueName)
+		}
+
+		for i := 0; i < processor.config.NumOfWorkers; i++ {
+			wg.Add(1)
+			go processor.NewBulkWorker(c,bulkSizeInByte, &wg, queueName, meta.GetActiveHost())
+		}
+	}else{
+		//index,shard,level
+		if len(processor.config.Indices) > 0 {
+			for _, v := range processor.config.Indices {
+				indexSettings := meta.Indices[v]
+				for i := 0; i < indexSettings.Shards; i++ {
+					queueName := common.GetShardLevelShuffleKey(processor.config.Elasticsearch, v, i)
+					shardInfo := meta.GetPrimaryShardInfo(v, i)
+
+					if len(processor.config.EnabledShards) > 0 {
+						if !util.ContainsAnyInArray(shardInfo.ShardID, processor.config.EnabledShards) {
+							log.Debugf("%s-%s not enabled, skip processing", shardInfo.Index, shardInfo.ShardID)
+							continue
+						}
+					}
+
+					nodeInfo := meta.GetNodeInfo(shardInfo.NodeID)
+
+					if global.Env().IsDebug {
+						log.Debug(shardInfo.Index, ",", shardInfo.ShardID, ",", nodeInfo.Http.PublishAddress)
+					}
+
+					for i := 0; i < processor.config.NumOfWorkers; i++ {
+						wg.Add(1)
+						go processor.NewBulkWorker(c,bulkSizeInByte, &wg, queueName, nodeInfo.Http.PublishAddress)
 					}
 				}
+			}
+		} else { //node level
 
-				nodeInfo := meta.GetNodeInfo(shardInfo.NodeID)
+
+			if meta.Nodes == nil {
+				nodesFailureCount++
+				if nodesFailureCount>10{
+					log.Debug("enough wait for none nil nodes")
+					return errors.New("nodes is nil")
+				}
+				time.Sleep(10*time.Second)
+				goto NODESINFO
+			}
+
+			//TODO only get data nodes or filtered nodes
+			for k, v := range meta.Nodes {
+				queueName := common.GetNodeLevelShuffleKey(processor.config.Elasticsearch, k)
 
 				if global.Env().IsDebug {
-					log.Debug(shardInfo.Index, ",", shardInfo.ShardID, ",", nodeInfo.Http.PublishAddress)
+					log.Trace("queueName:", queueName, ",", v)
+					log.Debug("nodeInfo:", k, ",", v.Http.PublishAddress)
 				}
 
 				for i := 0; i < processor.config.NumOfWorkers; i++ {
 					wg.Add(1)
-					go processor.NewBulkWorker(c,bulkSizeInByte, &wg, queueName, nodeInfo.Http.PublishAddress)
+					go processor.NewBulkWorker(c,bulkSizeInByte, &wg, queueName, v.Http.PublishAddress)
 				}
-			}
-		}
-	} else { //node level
-
-
-		if meta.Nodes == nil {
-			nodesFailureCount++
-			if nodesFailureCount>10{
-				log.Debug("enough wait for none nil nodes")
-				return errors.New("nodes is nil")
-			}
-			time.Sleep(10*time.Second)
-			goto NODESINFO
-		}
-
-		//TODO only get data nodes or filtered nodes
-		for k, v := range meta.Nodes {
-			queueName := common.GetNodeLevelShuffleKey(processor.config.Elasticsearch, k)
-
-			if global.Env().IsDebug {
-				log.Trace("queueName:", queueName, ",", v)
-				log.Debug("nodeInfo:", k, ",", v.Http.PublishAddress)
-			}
-
-			for i := 0; i < processor.config.NumOfWorkers; i++ {
-				wg.Add(1)
-				go processor.NewBulkWorker(c,bulkSizeInByte, &wg, queueName, v.Http.PublishAddress)
 			}
 		}
 	}
 
 	if len(processor.config.Queues) > 0 {
-		node := meta.GetActiveNodeInfo()
-		if node != nil {
+		host := meta.GetActiveHost()
 			for _, v := range processor.config.Queues {
 				log.Debug("process bulk queue:", v)
 				wg.Add(1)
 				//TODO node.Http.PublishAddress 拿错地址，不可用怎么处理
-				go processor.NewBulkWorker(c,bulkSizeInByte, &wg, v, node.Http.PublishAddress)
+				go processor.NewBulkWorker(c,bulkSizeInByte, &wg, v, host)
 			}
-		} else {
-			log.Error("no available nodes found, skip processing")
-		}
 	}
 
 	wg.Wait()

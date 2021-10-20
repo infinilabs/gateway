@@ -7,6 +7,10 @@ import (
 //var cacheMap = map[string]map[string]string{}
 //var lock sync.RWMutex
 
+func GetClusterLevelShuffleKey(cluster string) string {
+	return fmt.Sprintf("cluster-%v", cluster)
+}
+
 func GetNodeLevelShuffleKey(cluster, nodeID string) string {
 	return fmt.Sprintf("%v-node-%v", cluster, nodeID)
 

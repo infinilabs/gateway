@@ -254,6 +254,7 @@ func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host s
 	//get available host
 	available:=elastic.IsHostAvailable(host)
 
+
 	if !available{
 		if metadata.IsAvailable(){
 			newEndpoint:= metadata.GetActiveHost()

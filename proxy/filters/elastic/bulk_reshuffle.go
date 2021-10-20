@@ -317,7 +317,9 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 			//write meta
 			bufferKey = common.GetNodeLevelShuffleKey(clusterName, shardInfo.NodeID)
-			if reshuffleType == "shard" {
+			if reshuffleType == "cluster"{
+				bufferKey = common.GetClusterLevelShuffleKey(clusterName)
+			} else if reshuffleType == "shard" {
 				bufferKey = common.GetShardLevelShuffleKey(clusterName, index, shardID)
 			}
 
@@ -328,21 +330,29 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			////update actionItem
 			buff, ok = docBuf[bufferKey]
 			if !ok {
-				nodeInfo := metadata.GetNodeInfo(shardInfo.NodeID)
-				if nodeInfo == nil {
-					if rate.GetRateLimiter("node_info_not_found_%v", shardInfo.NodeID, 1, 5, time.Minute*1).Allow() {
-						log.Warnf("nodeInfo not found, %v %v", bufferKey, shardInfo.NodeID)
+
+				var endpoint string
+				if reshuffleType=="cluster"{
+					endpoint=esConfig.ID
+				}else{
+					nodeInfo := metadata.GetNodeInfo(shardInfo.NodeID)
+					if nodeInfo == nil {
+						if rate.GetRateLimiter("node_info_not_found_%v", shardInfo.NodeID, 1, 5, time.Minute*1).Allow() {
+							log.Warnf("nodeInfo not found, %v %v", bufferKey, shardInfo.NodeID)
+						}
+						return errors.Errorf("nodeInfo not found, %v %v", bufferKey, shardInfo.NodeID)
 					}
-					return errors.Errorf("nodeInfo not found, %v %v", bufferKey, shardInfo.NodeID)
+					endpoint=nodeInfo.Http.PublishAddress
 				}
+
 
 				buff = bufferPool.Get()
 				buff.Reset()
 				docBuf[bufferKey] = buff
 
-				buffEndpoints[bufferKey] = nodeInfo.Http.PublishAddress
+				buffEndpoints[bufferKey] = endpoint
 				if global.Env().IsDebug {
-					log.Debug(shardInfo.Index, ",", shardInfo.ShardID, ",", nodeInfo.Http.PublishAddress)
+					log.Debug(shardInfo.Index, ",", shardInfo.ShardID, ",", endpoint)
 				}
 			}
 
