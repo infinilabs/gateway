@@ -5,7 +5,6 @@ package elastic
 
 import (
 	"fmt"
-	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
@@ -35,8 +34,8 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 
 	if ctx.Response.StatusCode() == http.StatusOK || ctx.Response.StatusCode() == http.StatusCreated {
 		var resbody = ctx.Response.GetRawBody()
-		containError, err := jsonparser.GetBoolean(resbody, "errors")
-		if containError && err == nil {
+		containError := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
+		if containError {
 			if global.Env().IsDebug {
 				log.Error("error in bulk requests,", util.SubString(string(resbody), 0, 256))
 			}

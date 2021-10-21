@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
@@ -312,10 +311,12 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated || resp.StatusCode() == http.StatusNotFound {
 		if util.ContainStr(string(req.RequestURI()), "_bulk") {
 			//handle bulk response partial failure
-			va, _ := jsonparser.GetBoolean(respBody, "errors")
+			va := util.LimitedBytesSearch(respBody, []byte("\"errors\":true"), 64)
 			if va {
 				stats.Increment("diskqueue_consumer", "bulk_requests_errors")
-				log.Error("error in bulk requests,", util.SubString(string(respBody), 0, 256))
+				if rate.GetRateLimiter(metadata.Config.ID, host+"partial_bulk_error", 1,3,10*time.Second).Allow() {
+					log.Warn("partial error in bulk requests,", util.SubString(string(respBody), 0, 256))
+				}
 				time.Sleep(1 * time.Second)
 				return false, resp.StatusCode(), errors.New(fmt.Sprintf("%v", util.SubString(util.UnsafeBytesToString(respBody), 0, 512)))
 			}

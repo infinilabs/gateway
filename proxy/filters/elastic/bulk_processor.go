@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
 	pool "github.com/libp2p/go-buffer-pool"
 	"infini.sh/framework/core/elastic"
@@ -397,14 +396,15 @@ DO:
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated {
 
 		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "200_requests")
+		containError := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
 
-		if resp.StatusCode() == http.StatusOK {
-
-			containError,err:=jsonparser.GetBoolean(data,"errors")
-
-			if containError && err == nil {
-
-				log.Debug("error in bulk requests,", util.SubString(string(resbody), 0, 256))
+		if global.Env().IsDebug{
+			log.Error(containError,err,util.SubString(string(resbody), 0, 256))
+		}
+		if containError {
+				if rate.GetRateLimiter(metadata.Config.ID, host+"partial_bulk_error", 1,3,10*time.Second).Allow() {
+					log.Warn("partial error in bulk requests,", util.SubString(string(resbody), 0, 256))
+				}
 
 				//decode response
 				response := elastic.BulkResponse{}
@@ -544,7 +544,6 @@ DO:
 				retryTimes++
 				goto DO
 			}
-		}
 		return resp.StatusCode(), SUCCESS
 	} else if resp.StatusCode() == 429 {
 		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "429_requests")
