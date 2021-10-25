@@ -50,11 +50,7 @@ func main() {
 	terminalHeader += ("/ /_\\\\/  _  \\/ / //__   \\  /\\  /  _  \\/ \\ \n")
 	terminalHeader += ("\\____/\\_/ \\_/\\/  \\__/    \\/  \\/\\_/ \\_/\\_/ \n\n")
 
-	terminalFooter := ("   __ _  __ ____ __ _  __ __    __ _____ __                         \n")
-	terminalFooter += ("  / // |/ // __// // |/ // /   / //_  _//  \\                        \n")
-	terminalFooter += (" / // || // _/ / // || // /   / /_ / / / o |                        \n")
-	terminalFooter += ("/_//_/|_//_/  /_//_/|_//_/() /___//_/ /__,'    \n\n")
-	terminalFooter += ("©INFINI.LTD, All Rights Reserved.\n")
+	terminalFooter := ""
 
 	app := framework.NewApp("gateway", "A light-weight, powerful and high-performance elasticsearch gateway.",
 		util.TrimSpaces(config.Version), util.TrimSpaces(config.LastCommitLog), util.TrimSpaces(config.BuildDate), util.TrimSpaces(config.EOLDate), terminalHeader, terminalFooter)
@@ -97,6 +93,7 @@ func main() {
 
 		//start each module, with enabled provider
 		module.Start()
+
 
 	}, func() {
 	})
