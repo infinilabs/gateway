@@ -39,8 +39,6 @@ flow:
             enabled: true
             interval: 60s
       - set_cache:
-      - dump:
-          request: true
   - name: logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
       - stats:
@@ -71,8 +69,7 @@ elasticsearch:
   enabled: true
   schema: http
   hosts:
-    - 192.168.3.188:9206
-    - 192.168.3.188:9216
+    - localhost:9200
   traffic_control: #global traffic control
     max_bps_per_node: 209715200 #max total bytes send to es per node, 200MB/s
     max_qps_per_node: 20000 #max total requests send to es per node, 20k/s
@@ -135,5 +132,8 @@ floating_ip:
 #  - name: dev-node-yNgVusnXSgqvP2fZeGFSLw
 #    type: redis
 
-#disk_queue:
-#  max_bytes_per_file: 1073741824
+disk_queue:
+#  max_used_bytes: 102400
+#  warning_free_bytes: 322122547200
+#  reserved_free_bytes: 322122547200
+#  max_bytes_per_file: 1048576
