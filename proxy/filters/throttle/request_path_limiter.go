@@ -14,7 +14,7 @@ import (
 
 type RequestPathLimitFilter struct {
 	Message string    `config:"message"`
-	Rules []MatchRules    `config:"rules"`
+	Rules []*MatchRules    `config:"rules"`
 }
 
 func NewRequestPathLimitFilter(c *config.Config) (pipeline.Filter, error) {
@@ -26,6 +26,7 @@ func NewRequestPathLimitFilter(c *config.Config) (pipeline.Filter, error) {
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
+
 
 	for _,v:=range runner.Rules{
 		if !v.Valid(){
