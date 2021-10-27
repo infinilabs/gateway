@@ -1,0 +1,78 @@
+path.data: data
+path.logs: log
+
+entry:
+  - name: test_entry
+    enabled: true
+    router: default
+    max_concurrency: 20000
+    network:
+      binding: 0.0.0.0:8000
+
+router:
+  - name: default
+    tracing_flow: request_logging
+    default_flow: rate_limit_flow
+
+flow:
+  - name: request_logging
+    filter:
+      - request_path_filter:
+          must_not: # any match will be filtered
+            prefix:
+              - /favicon.ico
+      - request_header_filter:
+          exclude:
+            - app: kibana
+      - logging:
+          queue_name: request_logging
+  - name: cache_first
+    filter:
+      - get_cache:
+      - elasticsearch:
+          elasticsearch: test_cluster
+      - set_cache:
+  - name: rate_limit_flow
+    filter:
+      - request_host_limiter:
+          action: drop
+          max_requests: 1
+          host:
+            - api.elasticsearch.cn:8000
+            - logging.elasticsearch.cn
+      - request_api_key_filter:
+          message: "API KEY filtered!"
+          exclude:
+            - VuaCfGcBCdbkQm-e5aOx
+      - request_path_limiter:
+          message: "Hey, You just reached our request limit!"
+          rules:
+            - pattern: "/(?P<index_name>medcl)/_search"
+              max_qps: 1
+              group: index_name
+            - pattern: "/(?P<index_name>.*?)/_search"
+              max_qps: 100
+              group: index_name
+      - elasticsearch:
+          elasticsearch: test_cluster
+
+pipeline:
+  - name: request_logging_index
+    processor:
+      - json_indexing:
+          index_name: "gateway_requests"
+          elasticsearch: "test_cluster"
+          input_queue: "request_logging"
+          idle_timeout_in_seconds: 1
+          worker_size: 1
+          bulk_size_in_mb: 10 #in MB
+
+elasticsearch:
+  - name: test_cluster
+    enabled: true
+    endpoints:
+    - http://localhost:9200
+    discovery:
+      enabled: true
+      refresh:
+        enabled: true
