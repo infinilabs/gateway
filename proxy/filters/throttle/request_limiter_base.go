@@ -53,7 +53,7 @@ func (filter *GenericLimiter) init() {
 func (filter *GenericLimiter) internalProcess(tokenType, token string, ctx *fasthttp.RequestCtx) {
 
 	if global.Env().IsDebug {
-		log.Tracef("limit config: %v", filter)
+		log.Tracef("limit config: %v, type:%v, token:%v", filter,tokenType,token)
 	}
 
 	if filter.MaxRequests > 0 || filter.MaxBytes > 0 {
