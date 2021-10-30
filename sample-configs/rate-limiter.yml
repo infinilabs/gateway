@@ -65,6 +65,8 @@ flow:
 
 pipeline:
   - name: request_logging_index
+    auto_start: true
+    keep_running: true
     processor:
       - json_indexing:
           index_name: "gateway_requests"

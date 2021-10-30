@@ -55,6 +55,7 @@ func Init() {
 	pipeline.RegisterFilterPlugin("switch",routing.NewSwitchFlowFilter)
 	pipeline.RegisterFilterPlugin("flow",routing.NewFlowFilter)
 
+	pipeline.RegisterFilterPlugin("context_filter",filter.NewContextFilter)
 	pipeline.RegisterFilterPlugin("request_method_filter",filter.NewRequestMethodFilter)
 	pipeline.RegisterFilterPlugin("request_path_filter",filter.NewRequestUrlPathFilter)
 	pipeline.RegisterFilterPlugin("request_header_filter",filter.NewRequestHeaderFilter)
