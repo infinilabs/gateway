@@ -17,7 +17,7 @@ type RequestFilter struct {
 	Message     string `config:"message"`
 	Status     int `config:"status"`
 	Flow     string `config:"flow"`
-	Rules config.Rules `config:"rules"`
+	Rules   config.Rules `config:"rules"`
 }
 
 func (filter RequestFilter) Name() string {
@@ -27,7 +27,7 @@ func (filter RequestFilter) Name() string {
 func (filter *RequestFilter) CheckMustNotRules(path string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool) {
 	var hasRules = false
 
-	if filter.Rules.MustNot!=nil{
+	if filter.Rules.MustNot==nil{
 		return true,false
 	}
 
@@ -83,7 +83,6 @@ func (filter *RequestFilter) CheckMustNotRules(path string, ctx *fasthttp.Reques
 			}
 	}
 
-
 	if len(filter.Rules.MustNot.Regex)>0{
 			hasRules = true
 			for _, v := range filter.Rules.MustNot.Regex {
@@ -109,7 +108,7 @@ func (filter *RequestFilter) CheckMustNotRules(path string, ctx *fasthttp.Reques
 
 func (filter *RequestFilter) CheckMustRules(path string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool) {
 
-	if filter.Rules.Must!=nil{
+	if filter.Rules.Must==nil{
 		return true,false
 	}
 
@@ -159,7 +158,6 @@ func (filter *RequestFilter) CheckMustRules(path string, ctx *fasthttp.RequestCt
 			}
 		}
 
-
 	if len(filter.Rules.Must.Wildcard)>0 {
 
 			hasRules = true
@@ -197,7 +195,7 @@ func (filter *RequestFilter) CheckMustRules(path string, ctx *fasthttp.RequestCt
 
 func (filter *RequestFilter) CheckShouldRules(path string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool) {
 
-	if filter.Rules.Should!=nil{
+	if filter.Rules.Should==nil{
 		return true,false
 	}
 
