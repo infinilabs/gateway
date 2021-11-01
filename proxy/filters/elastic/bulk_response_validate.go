@@ -32,12 +32,14 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
+	stats.Increment("bulk_validate.status", fmt.Sprintf("%v", ctx.Response.StatusCode()))
+
 	if ctx.Response.StatusCode() == http.StatusOK || ctx.Response.StatusCode() == http.StatusCreated {
 		var resbody = ctx.Response.GetRawBody()
 		containError := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
 		if containError {
 			if global.Env().IsDebug {
-				log.Error("error in bulk requests,", util.SubString(string(resbody), 0, 256))
+				log.Error("error in bulk requests,", ctx.Response.StatusCode(), util.SubString(string(resbody), 0, 256))
 			}
 
 			//decode response
@@ -47,10 +49,8 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 				panic(err)
 			}
 			var contains400Error = false
-			//busyRejectOffset := map[int]elastic.BulkActionMetadata{}
 			invalidOffset := map[int]elastic.BulkActionMetadata{}
-			//failureOffset := map[int]elastic.BulkActionMetadata{}
-			var invalidCount = 0
+			var validCount = 0
 			var statsCodeStats = map[int]int{}
 			for i, v := range response.Items {
 				item := v.GetItem()
@@ -63,27 +63,29 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 				statsCodeStats[item.Status] = x
 
 				if item.Error != nil {
-					invalidCount++
 					invalidOffset[i] = v
+				}else{
+					validCount++
 				}
 			}
+
+			log.Debug("bulk status:",statsCodeStats)
 
 			for x, y := range statsCodeStats {
 				stats.IncrementBy("bulk_items", fmt.Sprintf("%v", x), int64(y))
 			}
 
-			if invalidCount > 0 {
+			//if validCount > 0 {
 
 				requestBytes := ctx.Request.GetRawBody()
 				nonRetryableItems := bytebufferpool.Get()
 				retryableItems := bytebufferpool.Get()
+				successItems := bytebufferpool.Get()
 
 				var offset = 0
 				var match = false
 				var retryable = false
-				var response elastic.BulkActionMetadata
-				invalidCount = 0
-				var failureCount = 0
+				var actionMetadata elastic.BulkActionMetadata
 				//walk bulk message, with invalid id, save to another list
 
 				var docBuffer []byte
@@ -93,26 +95,29 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 				WalkBulkRequests(requestBytes, docBuffer, func(eachLine []byte) (skipNextLine bool) {
 					return false
 				}, func(metaBytes []byte, actionStr, index, typeName, id string) (err error) {
-					response, match = invalidOffset[offset]
+					actionMetadata, match = invalidOffset[offset]
 					if match {
 
 						//find invalid request
-						if response.GetItem().Status >= 400 && response.GetItem().Status < 500 && response.GetItem().Status != 429 {
+						if actionMetadata.GetItem().Status >= 400 && actionMetadata.GetItem().Status < 500 && actionMetadata.GetItem().Status != 429 {
 							retryable = false
 							contains400Error = true
 							if nonRetryableItems.Len() > 0 {
 								nonRetryableItems.WriteByte('\n')
 							}
 							nonRetryableItems.Write(metaBytes)
-							invalidCount++
 						} else {
 							retryable = true
 							if retryableItems.Len() > 0 {
 								retryableItems.WriteByte('\n')
 							}
 							retryableItems.Write(metaBytes)
-							failureCount++
 						}
+					}else{
+						if successItems.Len() > 0 {
+							successItems.WriteByte('\n')
+						}
+						successItems.Write(metaBytes)
 					}
 					offset++
 					return nil
@@ -131,12 +136,17 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 								nonRetryableItems.Write(payloadBytes)
 							}
 						}
+					}else {
+						if successItems.Len() > 0 {
+							successItems.WriteByte('\n')
+						}
+						successItems.Write(payloadBytes)
 					}
 				})
 
 				if nonRetryableItems.Len() > 0 {
 					nonRetryableItems.WriteByte('\n')
-					bytes := ctx.Request.OverrideBodyEncode(nonRetryableItems.Bytes(),true)
+					bytes := ctx.Request.OverrideBodyEncode(nonRetryableItems.Bytes(), true)
 					queue.Push(this.config.InvalidQueue, bytes)
 					//send to redis channel
 					nonRetryableItems.Reset()
@@ -145,12 +155,21 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 
 				if retryableItems.Len() > 0 {
 					retryableItems.WriteByte('\n')
-					bytes := ctx.Request.OverrideBodyEncode(retryableItems.Bytes(),true)
+					bytes := ctx.Request.OverrideBodyEncode(retryableItems.Bytes(), true)
 					queue.Push(this.config.FailureQueue, bytes)
 					retryableItems.Reset()
 					bytebufferpool.Put(retryableItems)
 				}
-			}
+
+				if successItems.Len()>0{
+					successItems.WriteByte('\n')
+
+					bytes := ctx.Request.OverrideBodyEncode(successItems.Bytes(), true)
+					queue.Push(this.config.PartialSuccessQueue, bytes)
+					successItems.Reset()
+					bytebufferpool.Put(successItems)
+				}
+			//}
 
 			if contains400Error {
 				ctx.Response.SetStatusCode(this.config.InvalidStatus)
@@ -167,22 +186,32 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 type Config struct {
-	DocBufferSize   int    `config:"doc_buffer_size"`
+	DocBufferSize int `config:"doc_buffer_size"`
+
+	SaveSuccessDocsToQueue bool   `config:"save_partial_success_requests"`
+
+	PartialSuccessQueue           string `config:"partial_success_queue"`
+
 	InvalidQueue    string `config:"invalid_queue"`
+
 	FailureQueue    string `config:"failure_queue"`
+
 	InvalidStatus   int    `config:"invalid_status"`
+
 	FailureStatus   int    `config:"failure_status"`
+
 	ContinueOnError bool   `config:"continue_on_error"`
 }
 
 func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 	cfg := Config{
+		InvalidStatus: 400,
+		FailureStatus: 507,
 		DocBufferSize: 256 * 1024,
 	}
 	if err := c.Unpack(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
-
 	runner := BulkResponseValidate{config: &cfg}
 
 	return &runner, nil
