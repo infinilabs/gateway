@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
 )
 
 var bufferPool = bytebufferpool.NewPool(65536, 655360)
@@ -198,9 +199,16 @@ type BulkProcessorConfig struct {
 	MaxRejectRetryTimes       int  `config:"max_reject_retry_times"`
 	MaxRetryTimes             int  `config:"max_retry_times"`
 	SaveFailure          bool   `config:"save_failure"`
+
 	DeadletterRequestsQueue string `config:"dead_letter_queue"`
 	FailureRequestsQueue string `config:"failure_queue"`
+
+
+	SaveSuccessDocsToQueue bool   `config:"save_partial_success_requests"`
+	PartialSuccessQueue           string `config:"partial_success_queue"`
+
 	InvalidRequestsQueue string `config:"invalid_queue"`
+
 	DocBufferSize        int    `config:"doc_buffer_size"`
 }
 
@@ -396,154 +404,198 @@ DO:
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated {
 
 		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "200_requests")
-		containError := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
 
-		if global.Env().IsDebug{
-			log.Error(containError,err,util.SubString(string(resbody), 0, 256))
-		}
-		if containError {
-				if rate.GetRateLimiter(metadata.Config.ID, host+"partial_bulk_error", 1,3,10*time.Second).Allow() {
-					log.Warn("partial error in bulk requests,", util.SubString(string(resbody), 0, 256))
-				}
+		if util.ContainStr(string(req.RequestURI()), "_bulk") {
+			nonRetryableItems := bytebufferpool.Get()
+			retryableItems := bytebufferpool.Get()
+			successItems := bytebufferpool.Get()
 
-				//decode response
-				response := elastic.BulkResponse{}
-				err := response.UnmarshalJSON(resbody)
-				if err != nil {
-					panic(err)
-				}
-
-				var contains400Error bool
-				var invalidCount = 0
-				invalidOffset := map[int]elastic.BulkActionMetadata{}
-				for i, v := range response.Items {
-					item := v.GetItem()
-					if item.Error != nil {
-						if item.Status == 400 {
-							contains400Error = true
-							invalidCount++
-						}
-						//fmt.Println(i,",",item.Status,",",item.Error.Type)
-						//TODO log invalid requests
-						//send 400 requests to dedicated queue, the rest go to failure queue
-						invalidOffset[i] = v
-					}
-				}
-
-				if invalidCount > 0 && invalidCount == len(response.Items) {
-					//all 400 error
-					if joint.Config.SaveFailure {
-						queue.Push(joint.Config.InvalidRequestsQueue, data)
-					}
-					return 400, INVALID
-				}
-
+			containError:=HandleBulkResponse(data,resbody,joint.Config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
+			if containError {
 				if global.Env().IsDebug {
-					log.Trace("invalid requests:", invalidOffset, len(invalidOffset), len(response.Items))
+					log.Error("error in bulk requests,", resp.StatusCode(), util.SubString(string(resbody), 0, 256))
 				}
 
-				if len(invalidOffset) > 0 && len(invalidOffset) < len(response.Items) {
-					requestBytes := req.GetRawBody()
-					errorItems := bytebufferpool.Get()
-					retryableItems := bytebufferpool.Get()
-
-					var offset = 0
-					var match = false
-					var retryable = false
-					var response elastic.BulkActionMetadata
-					invalidCount = 0
-					var failureCount = 0
-					//walk bulk message, with invalid id, save to another list
-
-					var docBuffer []byte
-					docBuffer = p.Get(joint.Config.DocBufferSize)
-					defer p.Put(docBuffer)
-
-					WalkBulkRequests(requestBytes, docBuffer, func(eachLine []byte) (skipNextLine bool) {
-						return false
-					}, func(metaBytes []byte, actionStr, index, typeName, id string) (err error) {
-						response, match = invalidOffset[offset]
-						if match {
-							if response.GetItem().Status >= 400 && response.GetItem().Status < 500 && response.GetItem().Status != 429 {
-								retryable = false
-								contains400Error = true
-								errorItems.Write(metaBytes)
-								invalidCount++
-							} else {
-								retryable = true
-								retryableItems.Write(metaBytes)
-								failureCount++
-							}
-						}
-						offset++
-						return nil
-					}, func(payloadBytes []byte) {
-						if match {
-							if payloadBytes != nil && len(payloadBytes) > 0 {
-								if retryable {
-									retryableItems.Write(payloadBytes)
-								} else {
-									errorItems.Write(payloadBytes)
-								}
-							}
-						}
-					})
-
-					if invalidCount > 0 {
-						stats.IncrementBy("elasticsearch."+metadata.Config.Name+".bulk", "200_invalid_docs", int64(invalidCount))
-					}
-
-					if failureCount > 0 {
-						stats.IncrementBy("elasticsearch."+metadata.Config.Name+".bulk", "200_failure_docs", int64(failureCount))
-					}
-
-					if len(invalidOffset) > 0 {
-						stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "200_partial_requests")
-					}
-
-					if errorItems.Len() > 0 {
-						if joint.Config.SaveFailure {
-							queue.Push(joint.Config.InvalidRequestsQueue, errorItems.Bytes())
-							//send to redis channel
-							errorItems.Reset()
-							bytebufferpool.Put(errorItems)
-						}
-					}
-
-					if retryableItems.Len() > 0 {
-						if joint.Config.SaveFailure {
-							queue.Push(joint.Config.FailureRequestsQueue, retryableItems.Bytes())
-							retryableItems.Reset()
-							bytebufferpool.Put(retryableItems)
-						}
-					}
-
-					if contains400Error {
-						return 400, PARTIAL
-					}
+				if nonRetryableItems.Len() > 0 {
+					nonRetryableItems.WriteByte('\n')
+					//bytes := req.OverrideBodyEncode(nonRetryableItems.Bytes(), true)
+					bytes := nonRetryableItems.Bytes()
+					queue.Push(joint.Config.InvalidRequestsQueue, bytes)
+					nonRetryableItems.Reset()
+					bytebufferpool.Put(nonRetryableItems)
 				}
 
-				delayTime := joint.Config.RetryDelayInSeconds
-				if delayTime <= 0 {
-					delayTime = 10
-				}
-				if joint.Config.MaxRetryTimes <= 0 {
-					joint.Config.MaxRetryTimes = 3
-				}
-
-				if retryTimes >= joint.Config.MaxRetryTimes {
-					log.Errorf("invalid 200, retried %v times, quit retry", retryTimes)
-					if joint.Config.SaveFailure {
-						queue.Push(joint.Config.DeadletterRequestsQueue, data)
-					}
-					return resp.StatusCode(), FAILURE
+				if retryableItems.Len() > 0 {
+					retryableItems.WriteByte('\n')
+					//bytes := req.OverrideBodyEncode(retryableItems.Bytes(), true)
+					bytes := retryableItems.Bytes()
+					queue.Push(joint.Config.FailureRequestsQueue, bytes)
+					retryableItems.Reset()
+					bytebufferpool.Put(retryableItems)
 				}
 
-				time.Sleep(time.Duration(delayTime) * time.Second)
-				log.Debugf("invalid 200, retried %v times, will try again", retryTimes)
-				retryTimes++
-				goto DO
+				if successItems.Len()>0 && joint.Config.SaveSuccessDocsToQueue{
+					successItems.WriteByte('\n')
+					//bytes := req.OverrideBodyEncode(successItems.Bytes(), true)
+					bytes := successItems.Bytes()
+					queue.Push(joint.Config.PartialSuccessQueue, bytes)
+					successItems.Reset()
+					bytebufferpool.Put(successItems)
+				}
+				return 400, PARTIAL
 			}
+		}
+
+		//containError := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
+		//
+		//if global.Env().IsDebug{
+		//	log.Error(containError,err,util.SubString(string(resbody), 0, 256))
+		//}
+		//
+		//if containError {
+		//		if rate.GetRateLimiter(metadata.Config.ID, host+"partial_bulk_error", 1,3,10*time.Second).Allow() {
+		//			log.Warn("partial error in bulk requests,", util.SubString(string(resbody), 0, 256))
+		//		}
+		//
+		//		//decode response
+		//		response := elastic.BulkResponse{}
+		//		err := response.UnmarshalJSON(resbody)
+		//		if err != nil {
+		//			panic(err)
+		//		}
+		//
+		//		var contains400Error bool
+		//		var invalidCount = 0
+		//		invalidOffset := map[int]elastic.BulkActionMetadata{}
+		//		for i, v := range response.Items {
+		//			item := v.GetItem()
+		//			if item.Error != nil {
+		//				if item.Status == 400 {
+		//					contains400Error = true
+		//					invalidCount++
+		//				}
+		//				//fmt.Println(i,",",item.Status,",",item.Error.Type)
+		//				//TODO log invalid requests
+		//				//send 400 requests to dedicated queue, the rest go to failure queue
+		//				invalidOffset[i] = v
+		//			}
+		//		}
+		//
+		//		if invalidCount > 0 && invalidCount == len(response.Items) {
+		//			//all 400 error
+		//			if joint.Config.SaveFailure {
+		//				queue.Push(joint.Config.InvalidRequestsQueue, data)
+		//			}
+		//			return 400, INVALID
+		//		}
+		//
+		//		if global.Env().IsDebug {
+		//			log.Trace("invalid requests:", invalidOffset, len(invalidOffset), len(response.Items))
+		//		}
+		//
+		//		if len(invalidOffset) > 0 && len(invalidOffset) < len(response.Items) {
+		//			requestBytes := req.GetRawBody()
+		//			errorItems := bytebufferpool.Get()
+		//			retryableItems := bytebufferpool.Get()
+		//
+		//			var offset = 0
+		//			var match = false
+		//			var retryable = false
+		//			var response elastic.BulkActionMetadata
+		//			invalidCount = 0
+		//			var failureCount = 0
+		//			//walk bulk message, with invalid id, save to another list
+		//
+		//			var docBuffer []byte
+		//			docBuffer = p.Get(joint.Config.DocBufferSize)
+		//			defer p.Put(docBuffer)
+		//
+		//			WalkBulkRequests(requestBytes, docBuffer, func(eachLine []byte) (skipNextLine bool) {
+		//				return false
+		//			}, func(metaBytes []byte, actionStr, index, typeName, id string) (err error) {
+		//				response, match = invalidOffset[offset]
+		//				if match {
+		//					if response.GetItem().Status >= 400 && response.GetItem().Status < 500 && response.GetItem().Status != 429 {
+		//						retryable = false
+		//						contains400Error = true
+		//						errorItems.Write(metaBytes)
+		//						invalidCount++
+		//					} else {
+		//						retryable = true
+		//						retryableItems.Write(metaBytes)
+		//						failureCount++
+		//					}
+		//				}
+		//				offset++
+		//				return nil
+		//			}, func(payloadBytes []byte) {
+		//				if match {
+		//					if payloadBytes != nil && len(payloadBytes) > 0 {
+		//						if retryable {
+		//							retryableItems.Write(payloadBytes)
+		//						} else {
+		//							errorItems.Write(payloadBytes)
+		//						}
+		//					}
+		//				}
+		//			})
+		//
+		//			if invalidCount > 0 {
+		//				stats.IncrementBy("elasticsearch."+metadata.Config.Name+".bulk", "200_invalid_docs", int64(invalidCount))
+		//			}
+		//
+		//			if failureCount > 0 {
+		//				stats.IncrementBy("elasticsearch."+metadata.Config.Name+".bulk", "200_failure_docs", int64(failureCount))
+		//			}
+		//
+		//			if len(invalidOffset) > 0 {
+		//				stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "200_partial_requests")
+		//			}
+		//
+		//			if errorItems.Len() > 0 {
+		//				if joint.Config.SaveFailure {
+		//					queue.Push(joint.Config.InvalidRequestsQueue, errorItems.Bytes())
+		//					//send to redis channel
+		//					errorItems.Reset()
+		//					bytebufferpool.Put(errorItems)
+		//				}
+		//			}
+		//
+		//			if retryableItems.Len() > 0 {
+		//				if joint.Config.SaveFailure {
+		//					queue.Push(joint.Config.FailureRequestsQueue, retryableItems.Bytes())
+		//					retryableItems.Reset()
+		//					bytebufferpool.Put(retryableItems)
+		//				}
+		//			}
+		//
+		//			if contains400Error {
+		//				return 400, PARTIAL
+		//			}
+		//		}
+		//
+		//		delayTime := joint.Config.RetryDelayInSeconds
+		//		if delayTime <= 0 {
+		//			delayTime = 10
+		//		}
+		//		if joint.Config.MaxRetryTimes <= 0 {
+		//			joint.Config.MaxRetryTimes = 3
+		//		}
+		//
+		//		if retryTimes >= joint.Config.MaxRetryTimes {
+		//			log.Errorf("invalid 200, retried %v times, quit retry", retryTimes)
+		//			if joint.Config.SaveFailure {
+		//				queue.Push(joint.Config.DeadletterRequestsQueue, data)
+		//			}
+		//			return resp.StatusCode(), FAILURE
+		//		}
+		//
+		//		time.Sleep(time.Duration(delayTime) * time.Second)
+		//		log.Debugf("invalid 200, retried %v times, will try again", retryTimes)
+		//		retryTimes++
+		//		goto DO
+		//	}
+
 		return resp.StatusCode(), SUCCESS
 	} else if resp.StatusCode() == 429 {
 		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "429_requests")

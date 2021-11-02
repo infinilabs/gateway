@@ -71,7 +71,7 @@ pipeline:
           level: cluster
           queues:
             - dev-failure
-            - dev-dead_letter
+#            - dev-dead_letter
 #          index:
 #            - medcl-a
 #          shards:

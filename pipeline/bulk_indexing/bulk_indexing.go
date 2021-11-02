@@ -203,7 +203,6 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 			for _, v := range processor.config.Queues {
 				log.Debug("process bulk queue:", v)
 				wg.Add(1)
-				//TODO node.Http.PublishAddress 拿错地址，不可用怎么处理
 				go processor.NewBulkWorker(c,bulkSizeInByte, &wg, v, host)
 			}
 	}
@@ -249,14 +248,17 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context,bulk
 	}
 
 	if bulkProcessor.Config.FailureRequestsQueue == "" {
-		bulkProcessor.Config.FailureRequestsQueue = fmt.Sprintf("%v-failure", processor.config.Elasticsearch)
+		bulkProcessor.Config.FailureRequestsQueue = fmt.Sprintf("%v-bulk-failure-items", processor.config.Elasticsearch)
 	}
 	if bulkProcessor.Config.DeadletterRequestsQueue == "" {
-		bulkProcessor.Config.DeadletterRequestsQueue = fmt.Sprintf("%v-dead_letter", processor.config.Elasticsearch)
+		bulkProcessor.Config.DeadletterRequestsQueue = fmt.Sprintf("%v-bulk-dead_letter-items", processor.config.Elasticsearch)
 	}
 
 	if bulkProcessor.Config.InvalidRequestsQueue == "" {
-		bulkProcessor.Config.InvalidRequestsQueue = fmt.Sprintf("%v-invalid", processor.config.Elasticsearch)
+		bulkProcessor.Config.InvalidRequestsQueue = fmt.Sprintf("%v-bulk-invalid-items", processor.config.Elasticsearch)
+	}
+	if bulkProcessor.Config.PartialSuccessQueue == "" {
+		bulkProcessor.Config.PartialSuccessQueue = fmt.Sprintf("%v-bulk-partial-success-items", processor.config.Elasticsearch)
 	}
 
 	var lastCommit time.Time=time.Now()
