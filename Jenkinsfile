@@ -33,22 +33,8 @@ pipeline {
                     archiveArtifacts artifacts: 'gateway-$VERSION-$BUILD_NUMBER-*.tar.gz', fingerprint: true, followSymlinks: true, onlyIfSuccessful: false
                 }
             }
+         }
         }
-
-        stage('Build Docker Images') {
-
-                    agent {
-                        label 'linux'
-                    }
-
-                    steps {
-                        catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE'){
-                            sh label: 'docker-build', script: 'cd /home/jenkins/go/src/infini.sh/ && docker build -t infini-gateway  -f gateway/docker/Dockerfile .'
-                            sh label: 'docker-tagging', script: 'docker tag infini-gateway infinilabs/gateway:latest && docker tag infini-gateway infinilabs/gateway:$VERSION-$BUILD_NUMBER'
-                            sh label: 'docker-push', script: 'docker push infinilabs/gateway:$VERSION-$BUILD_NUMBER && docker push infinilabs/gateway:latest'
-                        }
-                    }
-                }
-    } }
+      }
     }
 }
