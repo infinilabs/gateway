@@ -33,7 +33,11 @@ func Init() {
 	pipeline.RegisterFilterPlugin("dump", dump.New)
 	pipeline.RegisterFilterPlugin("date_range_precision_tuning", date_range_precision_tuning.New)
 	pipeline.RegisterFilterPlugin("bulk_reshuffle", pipeline.FilterConfigChecked(elastic2.NewBulkReshuffle, pipeline.RequireFields("elasticsearch")))
-	pipeline.RegisterFilterPlugin("bulk_response_validate", elastic2.NewBulkResponseValidate)
+	pipeline.RegisterFilterPlugin("bulk_response_validate", pipeline.FilterConfigChecked(elastic2.NewBulkResponseValidate,
+		pipeline.RequireFields("partial_success_queue"),
+		pipeline.RequireFields("invalid_queue"),
+		pipeline.RequireFields("failure_queue"),
+		))
 	pipeline.RegisterFilterPlugin("drop", throttle.NewDropFilter)
 	pipeline.RegisterFilterPlugin("elasticsearch_health_check", throttle.NewHealthCheckFilter)
 	pipeline.RegisterFilterPlugin("sleep",throttle.NewSleepFilter)
