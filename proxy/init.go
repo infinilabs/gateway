@@ -34,7 +34,6 @@ func Init() {
 	pipeline.RegisterFilterPlugin("date_range_precision_tuning", date_range_precision_tuning.New)
 	pipeline.RegisterFilterPlugin("bulk_reshuffle", pipeline.FilterConfigChecked(elastic2.NewBulkReshuffle, pipeline.RequireFields("elasticsearch")))
 	pipeline.RegisterFilterPlugin("bulk_response_validate", pipeline.FilterConfigChecked(elastic2.NewBulkResponseValidate,
-		pipeline.RequireFields("partial_success_queue"),
 		pipeline.RequireFields("invalid_queue"),
 		pipeline.RequireFields("failure_queue"),
 		))

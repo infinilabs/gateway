@@ -64,7 +64,7 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 				bytebufferpool.Put(retryableItems)
 			}
 
-			if successItems.Len()>0{
+			if successItems.Len()>0&& this.config.SaveSuccessDocsToQueue{
 				successItems.WriteByte('\n')
 				bytes := ctx.Request.OverrideBodyEncode(successItems.Bytes(), true)
 				queue.Push(this.config.PartialSuccessQueue, bytes)

@@ -15,7 +15,9 @@ import (
 	"infini.sh/framework/core/rate"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
+	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
+	es "infini.sh/gateway/proxy/filters/elastic"
 	"net/http"
 	"runtime"
 	"sync"
@@ -34,17 +36,24 @@ type Config struct {
 	NumOfWorkers        int      `config:"worker_size"`
 	IdleTimeoutInSecond int      `config:"idle_timeout_in_seconds"`
 	InputQueue          string   `config:"input_queue"`
+
 	FailureQueue        string   `config:"failure_queue"`
 	InvalidQueue        string   `config:"invalid_queue"`
+
+	SaveSuccessDocsToQueue bool   `config:"save_partial_success_requests"`
+	PartialSuccessQueue           string `config:"partial_success_queue"`
+
 	Elasticsearch       string   `config:"elasticsearch"`
 	WaitingAfter        []string `config:"waiting_after"`
 	Compress            bool     `config:"compress"`
+	DocBufferSize int `config:"doc_buffer_size"`
 }
 
 func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
 		NumOfWorkers:        1,
 		IdleTimeoutInSecond: 5,
+		DocBufferSize: 256*1024,
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -78,7 +87,7 @@ func (processor *DiskQueueConsumer) Process(ctx *pipeline.Context) error {
 				case string:
 					v = r.(string)
 				}
-				log.Error("error in json indexing,", v)
+				log.Error("error in queue_consumer,", v)
 			}
 		}
 	}()
@@ -91,7 +100,6 @@ func (processor *DiskQueueConsumer) Process(ctx *pipeline.Context) error {
 	}
 
 	wg.Wait()
-	//log.Error("DiskQueueConsumer finished.")
 	return nil
 }
 
@@ -114,7 +122,6 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context, count *
 			}
 		}
 		wg.Done()
-		//log.Error("DiskQueueConsumer inner finished.")
 	}()
 
 	timeOut := processor.config.IdleTimeoutInSecond
@@ -128,6 +135,10 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context, count *
 	}
 	if processor.config.InvalidQueue == "" {
 		processor.config.InvalidQueue = processor.config.InputQueue + "-invalid"
+	}
+
+	if processor.config.PartialSuccessQueue == "" {
+		processor.config.PartialSuccessQueue = processor.config.InputQueue + "-partial-success"
 	}
 
 READ_DOCS:
@@ -170,8 +181,6 @@ READ_DOCS:
 				if global.Env().IsDebug {
 					log.Debug(ok, status, err)
 				}
-
-				//TODO handle 429
 
 				if status != 429 && status >= 400 && status < 500 {
 					log.Error("push to dead letter queue:", processor.config.InvalidQueue, ",", err)
@@ -306,19 +315,46 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 	}
 
 	respBody := resp.GetRawBody()
-	stats.Increment("diskqueue_consumer", util.IntToString(resp.StatusCode()))
 
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated || resp.StatusCode() == http.StatusNotFound {
 		if util.ContainStr(string(req.RequestURI()), "_bulk") {
-			//handle bulk response partial failure
-			va := util.LimitedBytesSearch(respBody, []byte("\"errors\":true"), 64)
-			if va {
-				stats.Increment("diskqueue_consumer", "bulk_requests_errors")
-				if rate.GetRateLimiter(metadata.Config.ID, host+"partial_bulk_error", 1,3,10*time.Second).Allow() {
-					log.Warn("partial error in bulk requests,", util.SubString(string(respBody), 0, 256))
+
+			var resbody = resp.GetRawBody()
+			requestBytes := req.GetRawBody()
+
+			nonRetryableItems := bytebufferpool.Get()
+			retryableItems := bytebufferpool.Get()
+			successItems := bytebufferpool.Get()
+
+			containError:=es.HandleBulkResponse(requestBytes,resbody,processor.config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
+			if containError {
+				if global.Env().IsDebug {
+					log.Error("error in bulk requests,", resp.StatusCode(), util.SubString(string(resbody), 0, 256))
 				}
-				time.Sleep(1 * time.Second)
-				return false, resp.StatusCode(), errors.New(fmt.Sprintf("%v", util.SubString(util.UnsafeBytesToString(respBody), 0, 512)))
+
+				if nonRetryableItems.Len() > 0 {
+					nonRetryableItems.WriteByte('\n')
+					bytes := req.OverrideBodyEncode(nonRetryableItems.Bytes(), true)
+					queue.Push(processor.config.InvalidQueue, bytes)
+					nonRetryableItems.Reset()
+					bytebufferpool.Put(nonRetryableItems)
+				}
+
+				if retryableItems.Len() > 0 {
+					retryableItems.WriteByte('\n')
+					bytes := req.OverrideBodyEncode(retryableItems.Bytes(), true)
+					queue.Push(processor.config.FailureQueue, bytes)
+					retryableItems.Reset()
+					bytebufferpool.Put(retryableItems)
+				}
+
+				if successItems.Len()>0 && processor.config.SaveSuccessDocsToQueue{
+					successItems.WriteByte('\n')
+					bytes := req.OverrideBodyEncode(successItems.Bytes(), true)
+					queue.Push(processor.config.PartialSuccessQueue, bytes)
+					successItems.Reset()
+					bytebufferpool.Put(successItems)
+				}
 			}
 		}
 		return true, resp.StatusCode(), nil
