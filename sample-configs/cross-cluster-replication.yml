@@ -412,96 +412,96 @@ pipeline:
 #          when:
 #            cluster_available: [ "backup" ]
 
-# option B - pipelines for backup cluster
-  - name: queue_backup-failure-consumer
-    auto_start: true
-    keep_running: true
-    processor:
-      - queue_consumer:
-          input_queue: "backup-failure"
-          elasticsearch: "backup"
-          failure_queue: "backup-failure"
-          worker_size: 1
-#          compress: true
-          when:
-            cluster_available: [ "backup" ]
-  - name: queue_backup-consumer
-    auto_start: true
-    keep_running: true
-    processor:
-      - queue_consumer:
-          input_queue: "backup"
-          elasticsearch: "backup"
-          failure_queue: "backup-failure"
-          invalid_queue: "backup-invalid"
-          dead_letter_queue: "backup-dead_letter"
-          waiting_after: [ "primary-partial-success_bulk_requests","backup-failure"]
-          worker_size: 10
-#          compress: true
-          when:
-            cluster_available: [ "backup" ]
-  - name: queue_backup-partial-consumer
-    auto_start: true
-    keep_running: true
-    processor:
-      - queue_consumer:
-          input_queue: "primary-partial-success_bulk_requests"
-          elasticsearch: "backup"
-          failure_queue: "backup-failure"
-          invalid_queue: "backup-invalid"
-          dead_letter_queue: "backup-dead_letter"
-          worker_size: 10
-#          compress: true
-          when:
-            cluster_available: [ "backup" ]
-
-
-## option C - pipelines for backup cluster
+## option B - pipelines for backup cluster
 #  - name: queue_backup-failure-consumer
 #    auto_start: true
 #    keep_running: true
 #    processor:
-#      - flow_runner:
+#      - queue_consumer:
 #          input_queue: "backup-failure"
-#          flow: backup-flow-reshuffle-replicate-processing
+#          elasticsearch: "backup"
+#          failure_queue: "backup-failure"
+#          worker_size: 1
+##          compress: true
 #          when:
 #            cluster_available: [ "backup" ]
-#
 #  - name: queue_backup-consumer
 #    auto_start: true
 #    keep_running: true
 #    processor:
-#      - flow_runner:
+#      - queue_consumer:
 #          input_queue: "backup"
-#          flow: backup-flow-reshuffle-replicate-processing
-#          when:
-#            and:
-#              - not:
-#                  or:
-#                    - queue_has_lag: [ "backup-failure", "primary-partial-success_bulk_requests"]
-#              - cluster_available: ["backup"]
-#
-#  - name: queue_backup-bulk-partial-consumer
-#    auto_start: true
-#    keep_running: true
-#    processor:
-#      - flow_runner:
-#          input_queue: "primary-partial-success_bulk_requests"
-#          flow: backup-flow-reshuffle-replicate-processing
-#          when:
-#            cluster_available: [ "backup" ]
-#
-#  - name: queue_backup-bulk_request_ingest
-#    auto_start: true
-#    keep_running: true
-#    processor:
-#      - bulk_indexing:
-#          when:
-#            cluster_available: [ "backup" ]
 #          elasticsearch: "backup"
-##          compress: true
-#          bulk_size_in_mb: 10
+#          failure_queue: "backup-failure"
+#          invalid_queue: "backup-invalid"
+#          dead_letter_queue: "backup-dead_letter"
+#          waiting_after: [ "primary-partial-success_bulk_requests","backup-failure"]
 #          worker_size: 10
-#          level: node
-#          queues:
-#            - backup-bulk-failure-items
+##          compress: true
+#          when:
+#            cluster_available: [ "backup" ]
+#  - name: queue_backup-partial-consumer
+#    auto_start: true
+#    keep_running: true
+#    processor:
+#      - queue_consumer:
+#          input_queue: "primary-partial-success_bulk_requests"
+#          elasticsearch: "backup"
+#          failure_queue: "backup-failure"
+#          invalid_queue: "backup-invalid"
+#          dead_letter_queue: "backup-dead_letter"
+#          worker_size: 10
+##          compress: true
+#          when:
+#            cluster_available: [ "backup" ]
+
+
+# option C - pipelines for backup cluster
+  - name: queue_backup-failure-consumer
+    auto_start: true
+    keep_running: true
+    processor:
+      - flow_runner:
+          input_queue: "backup-failure"
+          flow: backup-flow-reshuffle-replicate-processing
+          when:
+            cluster_available: [ "backup" ]
+
+  - name: queue_backup-consumer
+    auto_start: true
+    keep_running: true
+    processor:
+      - flow_runner:
+          input_queue: "backup"
+          flow: backup-flow-reshuffle-replicate-processing
+          when:
+            and:
+              - not:
+                  or:
+                    - queue_has_lag: [ "backup-failure", "primary-partial-success_bulk_requests"]
+              - cluster_available: ["backup"]
+
+  - name: queue_backup-bulk-partial-consumer
+    auto_start: true
+    keep_running: true
+    processor:
+      - flow_runner:
+          input_queue: "primary-partial-success_bulk_requests"
+          flow: backup-flow-reshuffle-replicate-processing
+          when:
+            cluster_available: [ "backup" ]
+
+  - name: queue_backup-bulk_request_ingest
+    auto_start: true
+    keep_running: true
+    processor:
+      - bulk_indexing:
+          when:
+            cluster_available: [ "backup" ]
+          elasticsearch: "backup"
+#          compress: true
+          bulk_size_in_mb: 10
+          worker_size: 10
+          level: node
+          queues:
+            - backup-bulk-failure-items
