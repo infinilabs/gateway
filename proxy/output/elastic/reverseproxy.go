@@ -140,14 +140,10 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		return
 	}
 
-	//metadata not changed
-	if metadata != nil && (metadata.NodesTopologyVersion==p.lastNodesTopologyVersion&&metadata.NodesTopologyVersion>0){
-		return
-	}
 
 	hosts := []string{}
 	checkMetadata := false
-	if metadata != nil && len(metadata.Nodes) > 0 {
+	if metadata != nil &&metadata.Nodes!=nil && len(*metadata.Nodes) > 0 {
 
 		oldV := p.lastNodesTopologyVersion
 		p.lastNodesTopologyVersion = metadata.NodesTopologyVersion
@@ -160,7 +156,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		}
 
 		checkMetadata = true
-		for _, y := range metadata.Nodes {
+		for _, y := range *metadata.Nodes {
 			if !isEndpointValid(y, cfg) {
 				continue
 			}

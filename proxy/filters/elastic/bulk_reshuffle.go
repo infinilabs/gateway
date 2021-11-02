@@ -118,7 +118,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		//renameMapping, resolveIndexRename := this.GetStringMap("index_rename")
 
 		var buff *bytebufferpool.ByteBuffer
-
+		var ok bool
 		var bufferKey string
 		indexAnalysis := this.config.IndexStatsAnalysis   //sync and async
 		actionAnalysis := this.config.ActionStatsAnalysis //sync and async
@@ -168,7 +168,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				id = util.GetUUID()
 				idNew = id
 				if global.Env().IsDebug {
-					log.Trace("generated ID,", id, ",", string(metaBytes))
+					log.Trace("generated ID,", id, ",", metaStr)
 				}
 			}
 
@@ -179,7 +179,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 					panic(err)
 				}
 				if global.Env().IsDebug {
-					log.Trace("updated meta,", id, ",", string(metaBytes))
+					log.Trace("updated meta,", id, ",", metaStr)
 				}
 			}
 
@@ -227,60 +227,19 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			}
 
 			if actionStr == "" || index == "" || id == "" {
-				log.Warn("invalid bulk action:", actionStr, ",index:", string(index), ",id:", string(id), ",", string(metaBytes))
-				return errors.Error("invalid bulk action:", actionStr, ",index:", string(index), ",id:", string(id), ",", string(metaBytes))
+				log.Warn("invalid bulk action:", actionStr, ",index:", string(index), ",id:", string(id), ",", metaStr)
+				return errors.Error("invalid bulk action:", actionStr, ",index:", string(index), ",id:", string(id), ",", metaStr)
 			}
 
-			indexSettings, ok := metadata.Indices[index]
+			var indexSettings *elastic.IndexInfo
+			index,indexSettings,err=metadata.GetIndexSetting(index)
 
-			if !ok {
-				metadata = elastic.GetOrInitMetadata(esConfig)
-				if global.Env().IsDebug {
-					log.Trace("index was not found in index settings,", index, ",", string(metaBytes))
-				}
-				alias, ok := metadata.Aliases[index]
-				if ok {
-					if global.Env().IsDebug {
-						log.Trace("found index in alias settings,", index, ",", string(metaBytes))
-					}
-					newIndex := alias.WriteIndex
-					if alias.WriteIndex == "" {
-						if len(alias.Index) == 1 {
-							newIndex = alias.Index[0]
-							if global.Env().IsDebug {
-								log.Trace("found index in alias settings, no write_index, but only have one index, will use it,", index, ",", string(metaBytes))
-							}
-						} else {
-							log.Warn("writer_index was not found in alias settings,", index, ",", alias)
-							return errors.Error("writer_index was not found in alias settings,", index, ",", alias)
-						}
-					}
-					indexSettings, ok = metadata.Indices[newIndex]
-					if ok {
-						if global.Env().IsDebug {
-							log.Trace("index was found in index settings,", index, "=>", newIndex, ",", metaStr, ",", indexSettings)
-						}
-						index = newIndex
-						goto CONTINUE_RESHUFFLE
-					} else {
-						if global.Env().IsDebug {
-							log.Trace("writer_index was not found in index settings,", index, ",", string(metaBytes))
-						}
-					}
-				} else {
-					if global.Env().IsDebug {
-						log.Trace("index was not found in alias settings,", index, ",", string(metaBytes))
-					}
-				}
-
+			if err!=nil{
 				if rate.GetRateLimiter("index_setting_not_found", index, 1, 2, time.Minute*1).Allow() {
-					log.Warn("index setting not found,", index, ",", string(metaBytes))
+					log.Warn("index setting not found,", index, ",", metaStr,",",err)
 				}
-
-				return errors.Error("index setting not found,", index, ",", string(metaBytes))
+				return err
 			}
-
-		CONTINUE_RESHUFFLE:
 
 			if indexSettings.Shards <= 0 || indexSettings.Status == "close" {
 				log.Debugf("index %v closed,", indexSettings.Index)
@@ -299,12 +258,9 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				if len(this.config.Shards) > 0 {
 					if !util.ContainsInAnyInt32Array(shardID, this.config.Shards) {
 						log.Debugf("shard %s-%s not enabled, skip processing", index, shardID)
-						//skipNext = true
-						//continue
 						return errors.Errorf("shard %s-%v not enabled, skip processing", index, shardID)
 					}
 				}
-
 			}
 
 			shardInfo := metadata.GetPrimaryShardInfo(index, shardID)
