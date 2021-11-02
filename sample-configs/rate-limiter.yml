@@ -34,6 +34,13 @@ flow:
       - set_cache:
   - name: rate_limit_flow
     filter:
+      - context_limiter:
+          max_requests: 1
+          action: drop
+          context:
+            - _ctx.request.path
+            - _ctx.request.header.Host
+            - _ctx.request.header.Env
       - request_host_limiter:
           action: drop
           max_requests: 1
@@ -58,6 +65,8 @@ flow:
 
 pipeline:
   - name: request_logging_index
+    auto_start: true
+    keep_running: true
     processor:
       - json_indexing:
           index_name: "gateway_requests"

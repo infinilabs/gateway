@@ -47,6 +47,8 @@ func Init() {
 	pipeline.RegisterFilterPlugin("request_api_key_limiter",throttle.NewRequestAPIKeyLimitFilter)
 	pipeline.RegisterFilterPlugin("request_client_ip_limiter",throttle.NewRequestClientIPLimitFilter)
 	pipeline.RegisterFilterPlugin("request_path_limiter",throttle.NewRequestPathLimitFilter)
+	pipeline.RegisterFilterPlugin("context_limiter",throttle.NewContextLimitFilter)
+
 	pipeline.RegisterFilterPlugin("sample",sample.NewSampleFilter)
 	pipeline.RegisterFilterPlugin("request_body_regex_replace",transform.NewRequestBodyRegexReplace)
 	pipeline.RegisterFilterPlugin("response_body_regex_replace",transform.NewResponseBodyRegexReplace)
@@ -57,6 +59,7 @@ func Init() {
 	pipeline.RegisterFilterPlugin("switch",routing.NewSwitchFlowFilter)
 	pipeline.RegisterFilterPlugin("flow",routing.NewFlowFilter)
 
+	pipeline.RegisterFilterPlugin("context_filter",filter.NewContextFilter)
 	pipeline.RegisterFilterPlugin("request_method_filter",filter.NewRequestMethodFilter)
 	pipeline.RegisterFilterPlugin("request_path_filter",filter.NewRequestUrlPathFilter)
 	pipeline.RegisterFilterPlugin("request_header_filter",filter.NewRequestHeaderFilter)

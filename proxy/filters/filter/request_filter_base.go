@@ -17,7 +17,9 @@ type RequestFilter struct {
 	Message     string `config:"message"`
 	Status     int `config:"status"`
 	Flow     string `config:"flow"`
-	Rules   config.Rules `config:"rules"`
+	Should  *config.Rule `config:"should"`
+	Must    *config.Rule `config:"must"`
+	MustNot *config.Rule `config:"must_not"`
 }
 
 func (filter RequestFilter) Name() string {
@@ -27,13 +29,13 @@ func (filter RequestFilter) Name() string {
 func (filter *RequestFilter) CheckMustNotRules(path string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool) {
 	var hasRules = false
 
-	if filter.Rules.MustNot==nil{
+	if filter.MustNot==nil{
 		return true,false
 	}
 
-	if len(filter.Rules.MustNot.Prefix)>0 {
+	if len(filter.MustNot.Prefix)>0 {
 		hasRules = true
-		for _, v := range filter.Rules.MustNot.Prefix {
+		for _, v := range filter.MustNot.Prefix {
 			if global.Env().IsDebug {
 				log.Tracef("check prefix rule [%v] vs [%v]", path, v)
 			}
@@ -46,19 +48,19 @@ func (filter *RequestFilter) CheckMustNotRules(path string, ctx *fasthttp.Reques
 		}
 	}
 
-	if len(filter.Rules.MustNot.Contain)>0 {
+	if len(filter.MustNot.Contain)>0 {
 		hasRules = true
-		if util.ContainsAnyInArray(path, filter.Rules.MustNot.Contain) {
+		if util.ContainsAnyInArray(path, filter.MustNot.Contain) {
 			if global.Env().IsDebug {
-				log.Debugf("hit contain rule [%v] vs [%v]", path, filter.Rules.MustNot.Contain)
+				log.Debugf("hit contain rule [%v] vs [%v]", path, filter.MustNot.Contain)
 			}
 			return false, hasRules
 		}
 	}
 
-	if len(filter.Rules.MustNot.Suffix)>0 {
+	if len(filter.MustNot.Suffix)>0 {
 		hasRules = true
-			for _, v := range filter.Rules.MustNot.Suffix {
+			for _, v := range filter.MustNot.Suffix {
 				if global.Env().IsDebug {
 					log.Tracef("check suffix rule [%v] vs [%v]", path, v)
 				}
@@ -71,9 +73,9 @@ func (filter *RequestFilter) CheckMustNotRules(path string, ctx *fasthttp.Reques
 			}
 	}
 
-	if len(filter.Rules.MustNot.Wildcard)>0{
+	if len(filter.MustNot.Wildcard)>0{
 		hasRules = true
-			patterns := radix.Compile(filter.Rules.MustNot.Wildcard...)
+			patterns := radix.Compile(filter.MustNot.Wildcard...)
 			ok := patterns.Match(path)
 			if ok {
 				if global.Env().IsDebug {
@@ -83,9 +85,9 @@ func (filter *RequestFilter) CheckMustNotRules(path string, ctx *fasthttp.Reques
 			}
 	}
 
-	if len(filter.Rules.MustNot.Regex)>0{
+	if len(filter.MustNot.Regex)>0{
 			hasRules = true
-			for _, v := range filter.Rules.MustNot.Regex {
+			for _, v := range filter.MustNot.Regex {
 				if global.Env().IsDebug {
 					log.Tracef("check regex rule [%v] vs [%v]", path, v)
 				}
@@ -108,14 +110,14 @@ func (filter *RequestFilter) CheckMustNotRules(path string, ctx *fasthttp.Reques
 
 func (filter *RequestFilter) CheckMustRules(path string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool) {
 
-	if filter.Rules.Must==nil{
+	if filter.Must==nil{
 		return true,false
 	}
 
 	var hasRules = false
-	if len(filter.Rules.Must.Prefix)>0 {
+	if len(filter.Must.Prefix)>0 {
 			hasRules = true
-			for _, v := range filter.Rules.Must.Prefix {
+			for _, v := range filter.Must.Prefix {
 				if global.Env().IsDebug {
 					log.Tracef("check prefix rule [%v] vs [%v]", path, v)
 				}
@@ -128,9 +130,9 @@ func (filter *RequestFilter) CheckMustRules(path string, ctx *fasthttp.RequestCt
 			}
 	}
 
-	if len(filter.Rules.Must.Contain)>0 {
+	if len(filter.Must.Contain)>0 {
 			hasRules = true
-			for _, v := range filter.Rules.Must.Contain {
+			for _, v := range filter.Must.Contain {
 				if global.Env().IsDebug {
 					log.Tracef("check contain rule [%v] vs [%v]", path, v)
 				}
@@ -143,9 +145,9 @@ func (filter *RequestFilter) CheckMustRules(path string, ctx *fasthttp.RequestCt
 			}
 		}
 
-	if len(filter.Rules.Must.Suffix)>0 {
+	if len(filter.Must.Suffix)>0 {
 			hasRules = true
-			for _, v := range filter.Rules.Must.Suffix {
+			for _, v := range filter.Must.Suffix {
 				if global.Env().IsDebug {
 					log.Tracef("check suffix rule [%v] vs [%v]", path, v)
 				}
@@ -158,10 +160,10 @@ func (filter *RequestFilter) CheckMustRules(path string, ctx *fasthttp.RequestCt
 			}
 		}
 
-	if len(filter.Rules.Must.Wildcard)>0 {
+	if len(filter.Must.Wildcard)>0 {
 
 			hasRules = true
-			patterns := radix.Compile(filter.Rules.Must.Wildcard...) //TODO handle mutli wildcard rules
+			patterns := radix.Compile(filter.Must.Wildcard...) //TODO handle mutli wildcard rules
 			ok := patterns.Match(path)
 			if !ok {
 				if global.Env().IsDebug {
@@ -171,9 +173,9 @@ func (filter *RequestFilter) CheckMustRules(path string, ctx *fasthttp.RequestCt
 			}
 		}
 
-	if len(filter.Rules.Must.Regex)>0 {
+	if len(filter.Must.Regex)>0 {
 			hasRules = true
-			for _, v := range filter.Rules.Must.Regex {
+			for _, v := range filter.Must.Regex {
 				if global.Env().IsDebug {
 					log.Tracef("check regex rule [%v] vs [%v]", path, v)
 				}
@@ -195,14 +197,14 @@ func (filter *RequestFilter) CheckMustRules(path string, ctx *fasthttp.RequestCt
 
 func (filter *RequestFilter) CheckShouldRules(path string, ctx *fasthttp.RequestCtx) (valid bool, hasRule bool) {
 
-	if filter.Rules.Should==nil{
+	if filter.Should==nil{
 		return true,false
 	}
 
 	var hasShouldRules bool
-	if len(filter.Rules.Should.Prefix)>0 {
+	if len(filter.Should.Prefix)>0 {
 			hasShouldRules = true
-			for _, v := range filter.Rules.Should.Prefix {
+			for _, v := range filter.Should.Prefix {
 				if global.Env().IsDebug {
 					log.Tracef("check prefix rule [%v] vs [%v]", path, v)
 				}
@@ -216,19 +218,19 @@ func (filter *RequestFilter) CheckShouldRules(path string, ctx *fasthttp.Request
 		}
 
 
-	if len(filter.Rules.Should.Contain)>0 {
+	if len(filter.Should.Contain)>0 {
 			hasShouldRules = true
-			if util.ContainsAnyInArray(path, filter.Rules.Should.Contain) {
+			if util.ContainsAnyInArray(path, filter.Should.Contain) {
 				if global.Env().IsDebug {
-					log.Debugf("hit contain rule [%v] vs [%v]", path, filter.Rules.Should.Contain)
+					log.Debugf("hit contain rule [%v] vs [%v]", path, filter.Should.Contain)
 				}
 				return true, hasShouldRules
 			}
 	}
 
-	if len(filter.Rules.Should.Suffix)>0 {
+	if len(filter.Should.Suffix)>0 {
 			hasShouldRules = true
-			for _, v := range filter.Rules.Should.Suffix {
+			for _, v := range filter.Should.Suffix {
 				if global.Env().IsDebug {
 					log.Tracef("check suffix rule [%v] vs [%v]", path, v)
 				}
@@ -241,9 +243,9 @@ func (filter *RequestFilter) CheckShouldRules(path string, ctx *fasthttp.Request
 			}
 	}
 
-	if len(filter.Rules.Should.Wildcard)>0 {
+	if len(filter.Should.Wildcard)>0 {
 			hasShouldRules = true
-			patterns := radix.Compile(filter.Rules.Should.Wildcard...)
+			patterns := radix.Compile(filter.Should.Wildcard...)
 			ok := patterns.Match(path)
 			if ok {
 				if global.Env().IsDebug {
@@ -253,9 +255,9 @@ func (filter *RequestFilter) CheckShouldRules(path string, ctx *fasthttp.Request
 			}
 	}
 
-	if len(filter.Rules.Should.Regex)>0 {
+	if len(filter.Should.Regex)>0 {
 			hasShouldRules = true
-			for _, v := range filter.Rules.Should.Regex {
+			for _, v := range filter.Should.Regex {
 				if global.Env().IsDebug {
 					log.Tracef("check regex rule [%v] vs [%v]", path, v)
 				}

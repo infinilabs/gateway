@@ -8,10 +8,12 @@ import (
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
+	"time"
 )
 
 type RetryLimiter struct {
 	MaxRetryTimes int `config:"max_retry_times"`
+	SleepInterval int `config:"retry_interval_in_ms"`
 	Queue string `config:"queue_name"`
 }
 
@@ -37,6 +39,7 @@ func (filter *RetryLimiter) Filter(ctx *fasthttp.RequestCtx) {
 		ctx.Finished()
 		ctx.Request.Header.Del(RetryKey)
 		queue.Push(filter.Queue,ctx.Request.Encode())
+		time.Sleep(time.Duration(filter.SleepInterval)*time.Millisecond)
 		return
 	}
 
@@ -49,6 +52,7 @@ func NewRetryLimiter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RetryLimiter{
 		MaxRetryTimes: 3,
+		SleepInterval: 1000,
 	}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
