@@ -32,157 +32,157 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	stats.Increment("bulk_validate.status", fmt.Sprintf("%v", ctx.Response.StatusCode()))
+	//stats.Increment("bulk_validate.status", fmt.Sprintf("%v", ctx.Response.StatusCode()))
 
 	if ctx.Response.StatusCode() == http.StatusOK || ctx.Response.StatusCode() == http.StatusCreated {
 		var resbody = ctx.Response.GetRawBody()
-		containError := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
+		requestBytes := ctx.Request.GetRawBody()
+
+		nonRetryableItems := bytebufferpool.Get()
+		retryableItems := bytebufferpool.Get()
+		successItems := bytebufferpool.Get()
+
+		containError:=HandleBulkResponse(requestBytes,resbody,this.config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
 		if containError {
 			if global.Env().IsDebug {
 				log.Error("error in bulk requests,", ctx.Response.StatusCode(), util.SubString(string(resbody), 0, 256))
 			}
 
-			//decode response
-			response := elastic.BulkResponse{}
-			err := response.UnmarshalJSON(resbody)
-			if err != nil {
-				panic(err)
-			}
-			var contains400Error = false
-			invalidOffset := map[int]elastic.BulkActionMetadata{}
-			var validCount = 0
-			var statsCodeStats = map[int]int{}
-			for i, v := range response.Items {
-				item := v.GetItem()
-
-				x, ok := statsCodeStats[item.Status]
-				if !ok {
-					x = 0
-				}
-				x++
-				statsCodeStats[item.Status] = x
-
-				if item.Error != nil {
-					invalidOffset[i] = v
-				}else{
-					validCount++
-				}
+			if nonRetryableItems.Len() > 0 {
+				nonRetryableItems.WriteByte('\n')
+				bytes := ctx.Request.OverrideBodyEncode(nonRetryableItems.Bytes(), true)
+				queue.Push(this.config.InvalidQueue, bytes)
+				nonRetryableItems.Reset()
+				bytebufferpool.Put(nonRetryableItems)
 			}
 
-			log.Debug("bulk status:",statsCodeStats)
-
-			for x, y := range statsCodeStats {
-				stats.IncrementBy("bulk_items", fmt.Sprintf("%v", x), int64(y))
+			if retryableItems.Len() > 0 {
+				retryableItems.WriteByte('\n')
+				bytes := ctx.Request.OverrideBodyEncode(retryableItems.Bytes(), true)
+				queue.Push(this.config.FailureQueue, bytes)
+				retryableItems.Reset()
+				bytebufferpool.Put(retryableItems)
 			}
 
-			//if validCount > 0 {
+			if successItems.Len()>0{
+				successItems.WriteByte('\n')
+				bytes := ctx.Request.OverrideBodyEncode(successItems.Bytes(), true)
+				queue.Push(this.config.PartialSuccessQueue, bytes)
+				successItems.Reset()
+				bytebufferpool.Put(successItems)
+			}
 
-				requestBytes := ctx.Request.GetRawBody()
-				nonRetryableItems := bytebufferpool.Get()
-				retryableItems := bytebufferpool.Get()
-				successItems := bytebufferpool.Get()
-
-				var offset = 0
-				var match = false
-				var retryable = false
-				var actionMetadata elastic.BulkActionMetadata
-				//walk bulk message, with invalid id, save to another list
-
-				var docBuffer []byte
-				docBuffer = p.Get(this.config.DocBufferSize)
-				defer p.Put(docBuffer)
-
-				WalkBulkRequests(requestBytes, docBuffer, func(eachLine []byte) (skipNextLine bool) {
-					return false
-				}, func(metaBytes []byte, actionStr, index, typeName, id string) (err error) {
-					actionMetadata, match = invalidOffset[offset]
-					if match {
-
-						//find invalid request
-						if actionMetadata.GetItem().Status >= 400 && actionMetadata.GetItem().Status < 500 && actionMetadata.GetItem().Status != 429 {
-							retryable = false
-							contains400Error = true
-							if nonRetryableItems.Len() > 0 {
-								nonRetryableItems.WriteByte('\n')
-							}
-							nonRetryableItems.Write(metaBytes)
-						} else {
-							retryable = true
-							if retryableItems.Len() > 0 {
-								retryableItems.WriteByte('\n')
-							}
-							retryableItems.Write(metaBytes)
-						}
-					}else{
-						if successItems.Len() > 0 {
-							successItems.WriteByte('\n')
-						}
-						successItems.Write(metaBytes)
-					}
-					offset++
-					return nil
-				}, func(payloadBytes []byte) {
-					if match {
-						if payloadBytes != nil && len(payloadBytes) > 0 {
-							if retryable {
-								if retryableItems.Len() > 0 {
-									retryableItems.WriteByte('\n')
-								}
-								retryableItems.Write(payloadBytes)
-							} else {
-								if nonRetryableItems.Len() > 0 {
-									nonRetryableItems.WriteByte('\n')
-								}
-								nonRetryableItems.Write(payloadBytes)
-							}
-						}
-					}else {
-						if successItems.Len() > 0 {
-							successItems.WriteByte('\n')
-						}
-						successItems.Write(payloadBytes)
-					}
-				})
-
-				if nonRetryableItems.Len() > 0 {
-					nonRetryableItems.WriteByte('\n')
-					bytes := ctx.Request.OverrideBodyEncode(nonRetryableItems.Bytes(), true)
-					queue.Push(this.config.InvalidQueue, bytes)
-					//send to redis channel
-					nonRetryableItems.Reset()
-					bytebufferpool.Put(nonRetryableItems)
-				}
-
-				if retryableItems.Len() > 0 {
-					retryableItems.WriteByte('\n')
-					bytes := ctx.Request.OverrideBodyEncode(retryableItems.Bytes(), true)
-					queue.Push(this.config.FailureQueue, bytes)
-					retryableItems.Reset()
-					bytebufferpool.Put(retryableItems)
-				}
-
-				if successItems.Len()>0{
-					successItems.WriteByte('\n')
-
-					bytes := ctx.Request.OverrideBodyEncode(successItems.Bytes(), true)
-					queue.Push(this.config.PartialSuccessQueue, bytes)
-					successItems.Reset()
-					bytebufferpool.Put(successItems)
-				}
-			//}
-
-			if contains400Error {
+			if nonRetryableItems.Len()>0 {
 				ctx.Response.SetStatusCode(this.config.InvalidStatus)
 			} else {
 				ctx.Response.SetStatusCode(this.config.FailureStatus)
 			}
 
-			if this.config.ContinueOnError {
+			if !this.config.ContinueOnError {
 				ctx.Finished()
 			}
-
 		}
 	}
+}
+
+func HandleBulkResponse(requestBytes,resbody []byte,docBuffSize int,nonRetryableItems,retryableItems,successItems *bytebufferpool.ByteBuffer)(bool) {
+	containError := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
+	if containError {
+		//decode response
+		response := elastic.BulkResponse{}
+		err := response.UnmarshalJSON(resbody)
+		if err != nil {
+			panic(err)
+		}
+		var contains400Error = false
+		invalidOffset := map[int]elastic.BulkActionMetadata{}
+		var validCount = 0
+		var statsCodeStats = map[int]int{}
+		for i, v := range response.Items {
+			item := v.GetItem()
+
+			x, ok := statsCodeStats[item.Status]
+			if !ok {
+				x = 0
+			}
+			x++
+			statsCodeStats[item.Status] = x
+
+			if item.Error != nil {
+				invalidOffset[i] = v
+			}else{
+				validCount++
+			}
+		}
+
+		log.Debug("bulk status:",statsCodeStats)
+
+		for x, y := range statsCodeStats {
+			stats.IncrementBy("bulk_items", fmt.Sprintf("%v", x), int64(y))
+		}
+
+		var offset = 0
+		var match = false
+		var retryable = false
+		var actionMetadata elastic.BulkActionMetadata
+		var docBuffer []byte
+		docBuffer = p.Get(docBuffSize)
+		defer p.Put(docBuffer)
+
+		WalkBulkRequests(requestBytes, docBuffer, func(eachLine []byte) (skipNextLine bool) {
+			return false
+		}, func(metaBytes []byte, actionStr, index, typeName, id string) (err error) {
+			actionMetadata, match = invalidOffset[offset]
+			if match {
+
+				//find invalid request
+				if actionMetadata.GetItem().Status >= 400 && actionMetadata.GetItem().Status < 500 && actionMetadata.GetItem().Status != 429 {
+					retryable = false
+					contains400Error = true
+					if nonRetryableItems.Len() > 0 {
+						nonRetryableItems.WriteByte('\n')
+					}
+					nonRetryableItems.Write(metaBytes)
+				} else {
+					retryable = true
+					if retryableItems.Len() > 0 {
+						retryableItems.WriteByte('\n')
+					}
+					retryableItems.Write(metaBytes)
+				}
+			}else{
+				if successItems.Len() > 0 {
+					successItems.WriteByte('\n')
+				}
+				successItems.Write(metaBytes)
+			}
+			offset++
+			return nil
+		}, func(payloadBytes []byte) {
+			if match {
+				if payloadBytes != nil && len(payloadBytes) > 0 {
+					if retryable {
+						if retryableItems.Len() > 0 {
+							retryableItems.WriteByte('\n')
+						}
+						retryableItems.Write(payloadBytes)
+					} else {
+						if nonRetryableItems.Len() > 0 {
+							nonRetryableItems.WriteByte('\n')
+						}
+						nonRetryableItems.Write(payloadBytes)
+					}
+				}
+			}else {
+				if successItems.Len() > 0 {
+					successItems.WriteByte('\n')
+				}
+				successItems.Write(payloadBytes)
+			}
+		})
+
+	}
+	return containError
 }
 
 type Config struct {
