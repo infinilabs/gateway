@@ -143,9 +143,9 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 		}
 	}else{
 		//index,shard,level
-		if len(processor.config.Indices) > 0 {
+		if processor.config.Indices!=nil && len(processor.config.Indices) > 0 {
 			for _, v := range processor.config.Indices {
-				indexSettings := meta.Indices[v]
+				indexSettings := (*meta.Indices)[v]
 				for i := 0; i < indexSettings.Shards; i++ {
 					queueName := common.GetShardLevelShuffleKey(processor.config.Elasticsearch, v, i)
 					shardInfo := meta.GetPrimaryShardInfo(v, i)
@@ -170,20 +170,19 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 				}
 			}
 		} else { //node level
-
-
 			if meta.Nodes == nil {
 				nodesFailureCount++
-				if nodesFailureCount>10{
+				if nodesFailureCount>5{
 					log.Debug("enough wait for none nil nodes")
 					return errors.New("nodes is nil")
 				}
-				time.Sleep(10*time.Second)
+				time.Sleep(1*time.Second)
+				log.Tracef("%v is not available, recheck now",meta.Config.Name)
 				goto NODESINFO
 			}
 
 			//TODO only get data nodes or filtered nodes
-			for k, v := range meta.Nodes {
+			for k, v := range *meta.Nodes {
 				queueName := common.GetNodeLevelShuffleKey(processor.config.Elasticsearch, k)
 
 				if global.Env().IsDebug {

@@ -160,10 +160,11 @@ func (processor *IndexingMergeProcessor) NewBulkWorker(ctx *pipeline.Context,cou
 
 	if !metadata.IsAvailable(){
 		checkCount++
-		if checkCount>10{
+		if checkCount>5{
 			panic(errors.Errorf("cluster [%v] is not available",processor.config.Elasticsearch))
 		}
-		time.Sleep(10*time.Second)
+		time.Sleep(1*time.Second)
+		log.Tracef("%v is not available, recheck now",metadata.Config.Name)
 		goto CHECK_AVAIABLE
 	}
 
