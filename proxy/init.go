@@ -96,4 +96,6 @@ func Init() {
 
 	pipeline.RegisterFilterPlugin("stats",queue2.NewStatsFilter)
 
+	pipeline.RegisterFilterPlugin("bulk_request_mutate",elastic2.NewElasticsearchBulkRequestMutateFilter)
+
 }
