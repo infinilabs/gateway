@@ -49,7 +49,7 @@ func (filter *RequestBodyJsonSet) Filter(ctx *fasthttp.RequestCtx) {
 				return
 			}
 		}
-		ctx.Request.SetBody(bodyBytes)
+		ctx.Request.SetRawBody(bodyBytes)
 		return
 	}
 }

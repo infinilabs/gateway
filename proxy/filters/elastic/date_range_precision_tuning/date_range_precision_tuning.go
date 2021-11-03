@@ -50,8 +50,6 @@ var builtinKeywords = []string{"_search", "_async_search"}
 func (this *DatePrecisionTuning) Filter(ctx *fasthttp.RequestCtx) {
 
 	if ctx.Request.GetBodyLength() <= 0 {
-		fmt.Println("return")
-
 		return
 	}
 
@@ -137,10 +135,8 @@ func (this *DatePrecisionTuning) Filter(ctx *fasthttp.RequestCtx) {
 			}
 		})
 
-		fmt.Println(ok)
-
 		if ok {
-			ctx.Request.SetBody(body)
+			ctx.Request.SetRawBody(body)
 		}
 		//{"size":0,"query":{"bool":{"must":[{"range":{"@timestamp":{"gte":"2019-09-26T15:16:59.127Z","lte":"2020-09-26T15:16:59.127Z","format":"strict_date_optional_time"}}}],"filter":[{"match_all":{}}],"should":[],"must_not":[]}},"aggs":{"61ca57f1-469d-11e7-af02-69e470af7417":{"terms":{"field":"log.file.path","order":{"_count":"desc"}},"aggs":{"timeseries":{"date_histogram":{"field":"@timestamp","min_doc_count":0,"time_zone":"Asia/Shanghai","extended_bounds":{"min":1569511019127,"max":1601133419127},"fixed_interval":"86400s"},"aggs":{"61ca57f2-469d-11e7-af02-69e470af7417":{"bucket_script":{"buckets_path":{"count":"_count"},"script":{"source":"count * 1","lang":"expression"},"gap_policy":"skip"}}}}},"meta":{"timeField":"@timestamp","intervalString":"86400s","bucketSize":86400,"seriesId":"61ca57f1-469d-11e7-af02-69e470af7417"}}},"timeout":"30000ms"}
 	}

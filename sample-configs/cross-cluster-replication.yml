@@ -109,6 +109,12 @@ flow:
               - elasticsearch_health_check: #由请求触发的限速模式下的主动检查后端监控情况
                   elasticsearch: "primary"
               - drop:
+          - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
+              fix_null_id: true
+              generate_enhanced_id: true
+              when:
+                contains:
+                  _ctx.request.path: /_bulk
           - elasticsearch: #集群可用，直接处理请求
               elasticsearch: "primary"
               max_connection_per_node: 1000

@@ -30,11 +30,7 @@ func (filter *RequestBodyRegexReplace) Filter(ctx *fasthttp.RequestCtx) {
 	body:=ctx.Request.GetRawBody()
 	if len(body)>0{
 		newBody:=filter.p.ReplaceAll(body,util.UnsafeStringToBytes(filter.To))
-
-		//TODO auto handle uncompressed response, gzip after all
-		ctx.Request.Header.Del(fasthttp.HeaderContentEncoding)
-		ctx.Request.Header.Del(fasthttp.HeaderContentEncoding2)
-		ctx.Request.SetBody(newBody)
+		ctx.Request.SetRawBody(newBody)
 	}
 }
 

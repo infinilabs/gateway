@@ -75,14 +75,14 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 				}
 				id = idNew
 				if global.Env().IsDebug {
-					log.Tracef("generated new id: ", id, " for: ", metaStr)
+					log.Trace("generated new id: ", id, " for: ", metaStr)
 				}
 			}
 
 			if typeNew == "" && this.FixNilType && this.DefaultType != "" {
 				typeNew = this.DefaultType
 				if global.Env().IsDebug {
-					log.Tracef("use default type: ", this.DefaultType, " for: ", metaStr)
+					log.Trace("use default type: ", this.DefaultType, " for: ", metaStr)
 				}
 			}
 
@@ -122,7 +122,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 					panic(err)
 				}
 				if global.Env().IsDebug {
-					log.Tracef("updated action meta,", id, ",", metaStr, "->", string(metaBytes))
+					log.Trace("updated action meta,", id, ",", metaStr, "->", string(metaBytes))
 				}
 			}
 
@@ -165,6 +165,12 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 
 		if err != nil {
 			log.Errorf("processing: %v docs, err: %v", docCount, err)
+			return
+		}
+
+		if bulkBuff.Len()>0{
+			bulkBuff.Write(NEWLINEBYTES)
+			ctx.Request.SetRawBody(bulkBuff.Bytes())
 		}
 	}
 
