@@ -89,7 +89,7 @@ flow:
 #          password: changeme
       - if:
           and:
-            - queue_has_lag: [ "primary>100", "primary-failure>100", "primary-failure_bulk_requests>100"]
+            - queue_has_lag: [ "primary", "primary-failure", "primary-failure_bulk_requests"]
             - cluster_available: ["primary"]
         then: #集群可用但是集群有堆积的情况，不处理客户端请求，待服务恢复之后再提供服务
           - set_response:
