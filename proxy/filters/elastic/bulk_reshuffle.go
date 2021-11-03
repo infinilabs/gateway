@@ -164,7 +164,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				typeNew = urlLevelType
 			}
 
-			if (actionStr == actionIndex || actionStr == actionDelete) && len(id) == 0 && fixNullID {
+			if (actionStr == actionIndex || actionStr == actionCreate) && len(id) == 0 && fixNullID {
 				id = util.GetUUID()
 				idNew = id
 				if global.Env().IsDebug {
@@ -512,7 +512,6 @@ func parseActionMeta(data []byte) (action, index, typeName, id string) {
 		}, v)
 		action = v
 		if match {
-			//fmt.Println(action,",",index,",",typeName,",", id)
 			return action, index, typeName, id
 		}
 	}
