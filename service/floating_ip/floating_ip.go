@@ -69,7 +69,7 @@ func (module FloatingIPPlugin) Setup(cfg *config.Config) {
 
 	if floatingIPConfig.Interface == "" || floatingIPConfig.IP == "" {
 		//let's do some magic
-		dev, ip, mask, err := util.GetPublishNetworkDeviceInfo()
+		dev, ip, mask, err := util.GetPublishNetworkDeviceInfo("")
 		if err != nil {
 			panic(err)
 		}
