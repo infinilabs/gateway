@@ -236,7 +236,6 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context,bulk
 	log.Debug("start worker:", queueName, ", host:", host)
 
 	mainBuf := processor.bufferPool.Get()
-	mainBuf.Reset()
 	defer processor.bufferPool.Put(mainBuf)
 
 	idleDuration := time.Duration(processor.config.IdleTimeoutInSecond) * time.Second

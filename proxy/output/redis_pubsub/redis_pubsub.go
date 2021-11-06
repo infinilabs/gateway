@@ -52,7 +52,6 @@ func (filter *RedisPubSub) Filter(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	buffer.Reset()
 	bytebufferpool.Put(buffer)
 
 }

@@ -46,6 +46,8 @@ type Config struct {
 	Elasticsearch       string   `config:"elasticsearch"`
 	WaitingAfter        []string `config:"waiting_after"`
 	Compress            bool     `config:"compress"`
+
+	SafetyParse bool `config:"safety_parse"`
 	DocBufferSize int `config:"doc_buffer_size"`
 }
 
@@ -54,6 +56,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		NumOfWorkers:        1,
 		IdleTimeoutInSecond: 5,
 		DocBufferSize: 256*1024,
+		SafetyParse: true,
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -326,7 +329,7 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 			retryableItems := bytebufferpool.Get()
 			successItems := bytebufferpool.Get()
 
-			containError:=es.HandleBulkResponse(requestBytes,resbody,processor.config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
+			containError:=es.HandleBulkResponse(processor.config.SafetyParse,requestBytes,resbody,processor.config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
 			if containError {
 				if global.Env().IsDebug {
 					log.Error("error in bulk requests,", resp.StatusCode(), util.SubString(string(resbody), 0, 256))
@@ -336,7 +339,6 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 					nonRetryableItems.WriteByte('\n')
 					bytes := req.OverrideBodyEncode(nonRetryableItems.Bytes(), true)
 					queue.Push(processor.config.InvalidQueue, bytes)
-					nonRetryableItems.Reset()
 					bytebufferpool.Put(nonRetryableItems)
 				}
 
@@ -344,7 +346,6 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 					retryableItems.WriteByte('\n')
 					bytes := req.OverrideBodyEncode(retryableItems.Bytes(), true)
 					queue.Push(processor.config.FailureQueue, bytes)
-					retryableItems.Reset()
 					bytebufferpool.Put(retryableItems)
 				}
 
@@ -352,7 +353,6 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 					successItems.WriteByte('\n')
 					bytes := req.OverrideBodyEncode(successItems.Bytes(), true)
 					queue.Push(processor.config.PartialSuccessQueue, bytes)
-					successItems.Reset()
 					bytebufferpool.Put(successItems)
 				}
 			}

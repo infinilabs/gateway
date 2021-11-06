@@ -19,6 +19,7 @@ type ElasticsearchBulkRequestMutate struct {
 	FixNilType       bool              `config:"fix_null_type"`
 	FixNilID         bool              `config:"fix_null_id"`
 	AddTimestampToID bool              `config:"generate_enhanced_id"`
+	SafetyParse    bool                `config:"safety_parse"`
 	DocBufferSize    int               `config:"doc_buffer_size"`
 	IndexNameRename  map[string]string `config:"index_rename"`
 	TypeNameRename   map[string]string `config:"type_rename"`
@@ -36,14 +37,13 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 		body := ctx.Request.GetRawBody()
 		var bulkBuff *bytebufferpool.ByteBuffer = bufferPool.Get()
 		actionMeta := smallSizedPool.Get()
-		actionMeta.Reset()
 		defer smallSizedPool.Put(actionMeta)
 
 		var docBuffer []byte
 		docBuffer = p.Get(this.DocBufferSize) //doc buffer for bytes scanner
 		defer p.Put(docBuffer)
 
-		docCount, err := WalkBulkRequests(body, docBuffer, func(eachLine []byte) (skipNextLine bool) {
+		docCount, err := WalkBulkRequests(this.SafetyParse,body, docBuffer, func(eachLine []byte) (skipNextLine bool) {
 			return false
 		}, func(metaBytes []byte, actionStr, index, typeName, id string) (err error) {
 
@@ -69,7 +69,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 			if (actionStr == actionIndex || actionStr == actionCreate) && len(id) == 0 && this.FixNilID {
 				randID := util.GetUUID()
 				if this.AddTimestampToID {
-					idNew = fmt.Sprintf("%v-%v-%v", randID, time.Now().UnixMicro(), util.PickRandomNumber(10))
+					idNew = fmt.Sprintf("%v-%v-%v", randID, time.Now().UnixNano(), util.PickRandomNumber(10))
 				} else {
 					idNew = randID
 				}
@@ -181,6 +181,7 @@ func NewElasticsearchBulkRequestMutateFilter(c *config.Config) (pipeline.Filter,
 	runner := ElasticsearchBulkRequestMutate{
 		FixNilID:      true,
 		DocBufferSize: 256 * 1024,
+		SafetyParse:true,
 	}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)

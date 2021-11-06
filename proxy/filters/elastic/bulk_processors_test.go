@@ -14,7 +14,7 @@ func TestBulkWalkLines(t *testing.T) {
 		"{ \"update\" : {\"_id\" : \"1\", \"_index\" : \"test\"} }\n{ \"doc\" : {\"field2\" : \"value2\"} }\n"
 
 
-	WalkBulkRequests([]byte(bulkRequests),nil, func(eachLine []byte) (skipNextLine bool) {
+	WalkBulkRequests(false,[]byte(bulkRequests),nil, func(eachLine []byte) (skipNextLine bool) {
 		//fmt.Println(string(eachLine))
 		return false
 	}, func(metaBytes []byte,actionStr,index,typeName,id string) (err error) {

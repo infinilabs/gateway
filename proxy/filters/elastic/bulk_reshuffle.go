@@ -41,6 +41,9 @@ type BulkReshuffleConfig struct {
 	ActionStatsAnalysis bool   `config:"action_stats_analysis"`
 
 	ValidateRequest bool `config:"validate_request"`
+
+	//split all lines into memory rather than scan
+	SafetyParse bool `config:"safety_parse"`
 	ValidEachLine   bool `config:"validate_each_line"`
 	ValidMetadata   bool `config:"validate_metadata"`
 	ValidPayload    bool `config:"validate_payload"`
@@ -56,6 +59,7 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 	cfg := BulkReshuffleConfig{
 		DocBufferSize:       256 * 1024,
 		IndexStatsAnalysis:  true,
+		SafetyParse:  true,
 		ActionStatsAnalysis: true,
 		FixNullID:           true,
 		Level:               "node",
@@ -124,14 +128,13 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		actionAnalysis := this.config.ActionStatsAnalysis //sync and async
 		validateRequest := this.config.ValidateRequest
 		actionMeta := smallSizedPool.Get()
-		actionMeta.Reset()
 		defer smallSizedPool.Put(actionMeta)
 
 		var docBuffer []byte
 		docBuffer = p.Get(this.config.DocBufferSize) //doc buffer for bytes scanner
 		defer p.Put(docBuffer)
 
-		docCount, err := WalkBulkRequests(body, docBuffer, func(eachLine []byte) (skipNextLine bool) {
+		docCount, err := WalkBulkRequests(this.config.SafetyParse,body, docBuffer, func(eachLine []byte) (skipNextLine bool) {
 			if validEachLine {
 				obj := map[string]interface{}{}
 				err := util.FromJSONBytes(eachLine, &obj)
@@ -303,7 +306,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 
 				buff = bufferPool.Get()
-				buff.Reset()
 				docBuf[bufferKey] = buff
 
 				buffHosts[bufferKey] = host
@@ -322,7 +324,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				buff, ok := docBuf[bufferKey]
 				if !ok {
 					buff = bufferPool.Get()
-					buff.Reset()
 					docBuf[bufferKey] = buff
 				}
 				if global.Env().IsDebug {

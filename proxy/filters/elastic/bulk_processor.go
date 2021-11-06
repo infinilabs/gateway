@@ -7,6 +7,7 @@ import (
 	log "github.com/cihub/seelog"
 	pool "github.com/libp2p/go-buffer-pool"
 	"infini.sh/framework/core/elastic"
+	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/rate"
@@ -27,89 +28,22 @@ var smallSizedPool = bytebufferpool.NewPool(512, 655360)
 var NEWLINEBYTES = []byte("\n")
 var p pool.BufferPool
 
-func WalkBulkRequests(data []byte, docBuff []byte, eachLineFunc func(eachLine []byte) (skipNextLine bool), metaFunc func(metaBytes []byte, actionStr, index, typeName, id string) (err error), payloadFunc func(payloadBytes []byte)) (int, error) {
+func WalkBulkRequests(safetyParse bool,data []byte, docBuff []byte, eachLineFunc func(eachLine []byte) (skipNextLine bool), metaFunc func(metaBytes []byte, actionStr, index, typeName, id string) (err error), payloadFunc func(payloadBytes []byte)) (int, error) {
 
 	nextIsMeta := true
 	skipNextLineProcessing := false
 	var docCount = 0
 
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scanner.Split(util.GetSplitFunc(NEWLINEBYTES))
+	START:
 
-	sizeOfDocBuffer := len(docBuff)
-	if sizeOfDocBuffer > 0 {
-		if sizeOfDocBuffer < 1024 {
-			log.Debug("doc buffer size maybe too small,", sizeOfDocBuffer)
-		}
-		scanner.Buffer(docBuff, sizeOfDocBuffer)
-	}
-
-	processedBytesCount := 0
-	for scanner.Scan() {
-		scannedByte := scanner.Bytes()
-		bytesCount := len(scannedByte)
-		processedBytesCount += bytesCount
-		if scannedByte == nil || bytesCount <= 0 {
-			log.Debug("invalid scanned byte, continue")
-			continue
-		}
-
-		if eachLineFunc != nil {
-			skipNextLineProcessing = eachLineFunc(scannedByte)
-		}
-
-		if skipNextLineProcessing {
-			skipNextLineProcessing = false
-			nextIsMeta = true
-			log.Debug("skip body processing")
-			continue
-		}
-
-		if nextIsMeta {
-
-			nextIsMeta = false
-
-			//TODO improve poor performance
-			var actionStr string
-			var index string
-			var typeName string
-			var id string
-			actionStr, index, typeName, id = parseActionMeta(scannedByte)
-
-			err := metaFunc(scannedByte, actionStr, index, typeName, id)
-			if err != nil {
-				if global.Env().IsDebug{
-					log.Error(err)
-				}
-				return docCount, err
-			}
-
-			docCount++
-
-			if actionStr == actionDelete {
-				nextIsMeta = true
-				payloadFunc(nil)
-			}
-		} else {
-			nextIsMeta = true
-			payloadFunc(scannedByte)
-		}
-	}
-
-	if processedBytesCount+sizeOfDocBuffer <= len(data) {
-		log.Warn("bulk requests was not fully processed,", processedBytesCount, "/", len(data), ", you may need to increase `doc_buffer_size`, re-processing with memory inefficient way now")
-
+	if safetyParse {
 		lines := bytes.Split(data, NEWLINEBYTES)
-
 		//reset
 		nextIsMeta = true
 		skipNextLineProcessing = false
 		docCount = 0
-		processedBytesCount = 0
-
 		for _, line := range lines {
 			bytesCount := len(line)
-			processedBytesCount += bytesCount
 			if line == nil || bytesCount <= 0 {
 				log.Debug("invalid line, continue")
 				continue
@@ -151,7 +85,78 @@ func WalkBulkRequests(data []byte, docBuff []byte, eachLineFunc func(eachLine []
 				payloadFunc(line)
 			}
 		}
+	}
 
+	if !safetyParse{
+		scanner := bufio.NewScanner(bytes.NewReader(data))
+		scanner.Split(util.GetSplitFunc(NEWLINEBYTES))
+
+		sizeOfDocBuffer := len(docBuff)
+		if sizeOfDocBuffer > 0 {
+			if sizeOfDocBuffer < 1024 {
+				log.Debug("doc buffer size maybe too small,", sizeOfDocBuffer)
+			}
+			scanner.Buffer(docBuff, sizeOfDocBuffer)
+		}
+
+		processedBytesCount := 0
+		for scanner.Scan() {
+			scannedByte := scanner.Bytes()
+			bytesCount := len(scannedByte)
+			processedBytesCount += bytesCount
+			if scannedByte == nil || bytesCount <= 0 {
+				log.Debug("invalid scanned byte, continue")
+				continue
+			}
+
+			if eachLineFunc != nil {
+				skipNextLineProcessing = eachLineFunc(scannedByte)
+			}
+
+			if skipNextLineProcessing {
+				skipNextLineProcessing = false
+				nextIsMeta = true
+				log.Debug("skip body processing")
+				continue
+			}
+
+			if nextIsMeta {
+
+				nextIsMeta = false
+
+				//TODO improve poor performance
+				var actionStr string
+				var index string
+				var typeName string
+				var id string
+				actionStr, index, typeName, id = parseActionMeta(scannedByte)
+
+				err := metaFunc(scannedByte, actionStr, index, typeName, id)
+				if err != nil {
+					if global.Env().IsDebug{
+						log.Error(err)
+					}
+					return docCount, err
+				}
+
+				docCount++
+
+				if actionStr == actionDelete {
+					nextIsMeta = true
+					payloadFunc(nil)
+				}
+			} else {
+				nextIsMeta = true
+				payloadFunc(scannedByte)
+			}
+		}
+
+		if processedBytesCount+sizeOfDocBuffer <= len(data) {
+			log.Warn("bulk requests was not fully processed,", processedBytesCount, "/", len(data), ", you may need to increase `doc_buffer_size`, re-processing with memory inefficient way now")
+			return 0,errors.New("documents too big, skip processing")
+			safetyParse=true
+			goto START
+		}
 	}
 
 	if global.Env().IsDebug{
@@ -209,6 +214,7 @@ type BulkProcessorConfig struct {
 
 	InvalidRequestsQueue string `config:"invalid_queue"`
 
+	SafetyParse bool `config:"safety_parse"`
 	DocBufferSize        int    `config:"doc_buffer_size"`
 }
 
@@ -219,6 +225,7 @@ var DefaultBulkProcessorConfig = BulkProcessorConfig{
 		MaxRejectRetryTimes:  60,
 		MaxRetryTimes:        3,
 		SaveFailure:          true,
+		SafetyParse:          true,
 		DocBufferSize:       256*1024,
 }
 
@@ -262,9 +269,7 @@ func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host s
 	url := fmt.Sprintf("%s/_bulk", host)
 
 	req := fasthttp.AcquireRequest()
-	req.Reset()
 	resp := fasthttp.AcquireResponse()
-	resp.Reset()
 	defer fasthttp.ReleaseRequest(req)   // <- do not forget to release
 	defer fasthttp.ReleaseResponse(resp) // <- do not forget to release
 
@@ -410,7 +415,7 @@ DO:
 			retryableItems := bytebufferpool.Get()
 			successItems := bytebufferpool.Get()
 
-			containError:=HandleBulkResponse(data,resbody,joint.Config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
+			containError:=HandleBulkResponse(joint.Config.SafetyParse,data,resbody,joint.Config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
 			if containError {
 				if global.Env().IsDebug {
 					log.Error("error in bulk requests,", resp.StatusCode(), util.SubString(string(resbody), 0, 256))
@@ -421,7 +426,6 @@ DO:
 					//bytes := req.OverrideBodyEncode(nonRetryableItems.Bytes(), true)
 					bytes := nonRetryableItems.Bytes()
 					queue.Push(joint.Config.InvalidRequestsQueue, bytes)
-					nonRetryableItems.Reset()
 					bytebufferpool.Put(nonRetryableItems)
 				}
 
@@ -430,7 +434,6 @@ DO:
 					//bytes := req.OverrideBodyEncode(retryableItems.Bytes(), true)
 					bytes := retryableItems.Bytes()
 					queue.Push(joint.Config.FailureRequestsQueue, bytes)
-					retryableItems.Reset()
 					bytebufferpool.Put(retryableItems)
 				}
 
@@ -439,7 +442,6 @@ DO:
 					//bytes := req.OverrideBodyEncode(successItems.Bytes(), true)
 					bytes := successItems.Bytes()
 					queue.Push(joint.Config.PartialSuccessQueue, bytes)
-					successItems.Reset()
 					bytebufferpool.Put(successItems)
 				}
 				return 400, PARTIAL
