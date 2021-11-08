@@ -133,6 +133,7 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 		go func(slice int) {
 			defer wg.Done()
 			var processedSize = 0
+			var p fastjson.Parser
 			for {
 				data, err := processor.client.NextScroll(processor.config.ScrollTime, initScrollID)
 
@@ -143,7 +144,11 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 
 				if data!=nil&&len(data)>0{
 
-					fastV:= fastjson.MustParseBytes(data)
+					fastV,err:= p.ParseBytes(data)
+					if err != nil {
+						log.Errorf("cannot parse json: %v, %v",string(data), err)
+						return
+					}
 					scrollID:=fastV.GetStringBytes("_scroll_id")
 					hits:=fastV.GetArray("hits","hits")
 
