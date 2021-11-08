@@ -19,7 +19,7 @@ package scroll
 import (
 	"fmt"
 	log "github.com/cihub/seelog"
-	"github.com/segmentio/fasthash/fnv1a"
+	"github.com/valyala/fastjson"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/global"
@@ -30,6 +30,7 @@ import (
 	"infini.sh/framework/lib/bytebufferpool"
 	"math"
 	"path"
+	"github.com/segmentio/fasthash/fnv1a"
 	"sync"
 	"time"
 )
@@ -82,20 +83,6 @@ func (processor *DumpHashProcessor) Name() string {
 	return "dump_hash"
 }
 
-var scrollResponsePool = &sync.Pool{
-	New: func() interface{} {
-		c := elastic.ScrollResponse{}
-		return &c
-	},
-}
-
-var scrollResponseV7Pool = &sync.Pool{
-	New: func() interface{} {
-		c := elastic.ScrollResponseV7{}
-		return &c
-	},
-}
-
 func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 
 	start := time.Now()
@@ -105,7 +92,8 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 
 	file := path.Join(global.Env().GetDataDir(), "diff", processor.config.Output)
 	if util.FileExists(file) {
-		log.Warn("target file exists:", file, ",you may need to remove it first")
+		util.FileDelete(file)
+		log.Warn("target file exists:", file, ",remove it now")
 	}
 
 	for slice := 0; slice < processor.config.SliceSize; slice++ {
@@ -117,7 +105,13 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 			continue
 		}
 
-		docs := scrollResponse1.GetDocs()
+		fastV:= fastjson.MustParseBytes(scrollResponse1)
+		initScrollID:=util.UnsafeBytesToString(fastV.GetStringBytes("_scroll_id"))
+		docs:=fastV.GetArray("hits","hits")
+
+		version := processor.client.GetMajorVersion()
+		totalHits:=getScrollHitsTotal(version,fastV)
+
 		docSize := len(docs)
 
 		statsLock.Lock()
@@ -125,85 +119,63 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 		statsLock.Unlock()
 
 		if docSize > 0 {
-			processingDocs(docs, processor.config.Output)
+			processor.processingDocs(docs, processor.config.Output)
 		}
 
-		log.Debugf("slice [%v] docs: %v", tempSlice, scrollResponse1.GetHitsTotal())
+		log.Debugf("slice [%v] docs: %v / %v", tempSlice, totalSize,totalHits)
 
-		if scrollResponse1.GetHitsTotal() == 0 {
+		if totalHits == 0 {
 			log.Tracef("slice %v is empty", tempSlice)
 			continue
 		}
 		wg.Add(1)
 
-		go func() {
+		go func(slice int) {
 			defer wg.Done()
-			var scrollResponse interface{}
-			initScrollID := scrollResponse1.GetScrollId()
-
-			version := processor.client.GetMajorVersion()
-
+			var processedSize = 0
 			for {
 				data, err := processor.client.NextScroll(processor.config.ScrollTime, initScrollID)
 
-				if err != nil {
+				if err != nil ||len(data)==0 {
 					log.Error("failed to scroll,", processor.config.Elasticsearch, processor.config.Indices, string(data), err)
 					return
 				}
 
-				if version >= 7 {
-					scrollResponse = scrollResponseV7Pool.Get().(*elastic.ScrollResponseV7)
+				if data!=nil&&len(data)>0{
 
-					err = scrollResponse.(*elastic.ScrollResponseV7).UnmarshalJSON(data)
+					fastV:= fastjson.MustParseBytes(data)
+					scrollID:=fastV.GetStringBytes("_scroll_id")
+					hits:=fastV.GetArray("hits","hits")
 
-					if err != nil {
-						log.Error("failed to scroll,", processor.config.Elasticsearch, processor.config.Indices, string(data), err)
-						return
+					var totalHits int
+					totalHits=getScrollHitsTotal(version,fastV)
+					if version >= 7 {
+						totalHits= fastV.GetInt("hits","total","value")
+					} else {
+						totalHits= fastV.GetInt("hits","total")
 					}
-				} else {
-					scrollResponse = scrollResponsePool.Get().(*elastic.ScrollResponse)
-					err = scrollResponse.(*elastic.ScrollResponse).UnmarshalJSON(data)
 
-					if err != nil {
-						panic(err)
+					processedSize+=len(hits)
+					log.Debugf("[%v] slice[%v]:%v,%v-%v",processor.config.Elasticsearch,slice,len(hits),processedSize,totalHits)
+
+					initScrollID = util.UnsafeBytesToString(scrollID)
+					docSize := len(hits)
+					statsLock.Lock()
+					totalSize += docSize
+					stats.Gauge(fmt.Sprintf("scroll_total_received-%v", tempSlice), processor.config.Output, int64(totalSize))
+					statsLock.Unlock()
+
+					if docSize == 0 {
+						break
 					}
-				}
 
-				obj, ok := scrollResponse.(elastic.ScrollResponseAPI)
-				if !ok {
-					if err != nil {
-						panic(err)
-					}
-					break
-				}
+					processor.processingDocs(hits, processor.config.Output)
 
-				initScrollID = obj.GetScrollId()
-
-				docs := obj.GetDocs()
-				docSize := len(docs)
-
-				statsLock.Lock()
-				totalSize += docSize
-				stats.Gauge(fmt.Sprintf("scroll_total_received-%v", tempSlice), processor.config.Output, int64(totalSize))
-				statsLock.Unlock()
-
-				if docSize == 0 {
-					log.Trace(scrollResponse)
-					break
-				}
-
-				processingDocs(docs, processor.config.Output)
-
-				if version >= 7 {
-					scrollResponseV7Pool.Put(scrollResponse)
-				} else {
-					scrollResponsePool.Put(scrollResponse)
 				}
 
 			}
 			log.Debugf("%v - %v, slice %v is done", processor.config.Elasticsearch, processor.config.Indices, tempSlice)
-
-		}()
+		}(tempSlice)
 
 	}
 
@@ -216,17 +188,25 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 	return nil
 }
 
-func processingDocs(docs []elastic.IndexDocument, outputQueueName string) {
+func getScrollHitsTotal(version int,fastV *fastjson.Value)int {
+	if version >= 7 {
+		return fastV.GetInt("hits","total","value")
+	} else {
+		return fastV.GetInt("hits","total")
+	}
+}
+
+func (processor *DumpHashProcessor) processingDocs(docs []*fastjson.Value, outputQueueName string) {
 
 	buffer := bytebufferpool.Get()
 
 	stats.IncrementBy("scrolling_processing."+outputQueueName, "docs", int64(len(docs)))
 
 	for _, v := range docs {
-
-		h1 := fnv1a.HashBytes32(util.MustToJSONBytes(v.Source))
-
-		_, err := buffer.WriteBytesArray([]byte((v.ID.(string))), []byte(","), []byte(util.Int64ToString(int64(h1))), []byte("\n"))
+		id:=v.GetStringBytes("_id")
+		source:=v.GetObject("_source").String()
+		h1 := fnv1a.HashBytes32(util.UnsafeStringToBytes(source))
+		_, err := buffer.WriteBytesArray(id, []byte(","), []byte(util.Int64ToString(int64(h1))), []byte("\n"))
 		if err != nil {
 			panic(err)
 		}
