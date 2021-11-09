@@ -18,7 +18,10 @@ package scroll
 
 import (
 	"fmt"
+	xxhash1 "github.com/cespare/xxhash"
 	log "github.com/cihub/seelog"
+	xxhash2 "github.com/pierrec/xxHash/xxHash32"
+	"github.com/segmentio/fasthash/fnv1a"
 	"github.com/valyala/fastjson"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
@@ -30,7 +33,7 @@ import (
 	"infini.sh/framework/lib/bytebufferpool"
 	"math"
 	"path"
-	"github.com/segmentio/fasthash/fnv1a"
+	"src/github.com/OneOfOne/xxhash"
 	"sync"
 	"time"
 )
@@ -50,6 +53,7 @@ type Config struct {
 	SortField       string `config:"sort_field"`
 	Indices         string `config:"indices"`
 	Query           string `config:"query"`
+	HashFunc           string `config:"hash_func"`
 	ScrollTime      string `config:"scroll_time"`
 	Fields          string `config:"fields"`
 }
@@ -60,6 +64,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		BatchSize:  1000,
 		ScrollTime: "5m",
 		SortType:   "asc",
+		HashFunc:   "xxhash32",
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -101,7 +106,7 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 		tempSlice := slice
 		scrollResponse1, err := processor.client.NewScroll(processor.config.Indices, processor.config.ScrollTime, processor.config.BatchSize, processor.config.Query, tempSlice, processor.config.SliceSize, processor.config.Fields, processor.config.SortField, processor.config.SortType)
 		if err != nil {
-			log.Error(err)
+			log.Errorf("%v-%v",processor.config.Output,err)
 			continue
 		}
 
@@ -207,18 +212,83 @@ func (processor *DumpHashProcessor) processingDocs(docs []*fastjson.Value, outpu
 
 	stats.IncrementBy("scrolling_processing."+outputQueueName, "docs", int64(len(docs)))
 
+	hashBuffer := bytebufferpool.Get()
+	defer bytebufferpool.Put(hashBuffer)
+
 	for _, v := range docs {
 		id:=v.GetStringBytes("_id")
+
 		source:=v.GetObject("_source").String()
-		h1 := fnv1a.HashBytes32(util.UnsafeStringToBytes(source))
-		_, err := buffer.WriteBytesArray(id, []byte(","), []byte(util.Int64ToString(int64(h1))), []byte("\n"))
+
+
+		hash:=processor.Hash(processor.config.HashFunc,hashBuffer,util.UnsafeStringToBytes(source))
+
+		_, err := buffer.WriteBytesArray(id, []byte(","), hash, []byte("\n"))
 		if err != nil {
 			panic(err)
 		}
 	}
-	handler := rotate.GetFileHandler(path.Join(global.Env().GetDataDir(), "diff", outputQueueName), rotate.DefaultConfig)
 
+	handler := rotate.GetFileHandler(path.Join(global.Env().GetDataDir(), "diff", outputQueueName), rotate.DefaultConfig)
 	handler.Write(buffer.Bytes())
+
 	bytebufferpool.Put(buffer)
 
+}
+
+func (processor *DumpHashProcessor)Hash(hashFunc string,buf *bytebufferpool.ByteBuffer,data []byte)[]byte{
+	switch hashFunc {
+	case "frequency_sort":
+		hash:= frequencySort(buf,util.UnsafeBytesToString(data))
+		return util.UnsafeStringToBytes(hash)
+	case "xxhash64":
+		hash:=xxhash1.Sum64(data)
+		return []byte(util.Int64ToString(int64(hash)))
+	case "xxhash32-1":
+		hash:=xxhash.New32()
+		hash.Write(data)
+		return []byte(util.Int64ToString(int64(hash.Sum32())))
+	case "xxhash64-1":
+		hash:=xxhash.New64()
+		hash.Write(data)
+		return []byte(util.Int64ToString(int64(hash.Sum64())))
+	case "xxhash32":
+		h := xxhash2.New(0xCAFE)
+		h.Write(data)
+		r := h.Sum32()
+		return []byte(util.Int64ToString(int64(r)))
+	default:
+
+	}
+
+	h1 := fnv1a.HashBytes32(data)
+	return []byte(util.Int64ToString(int64(h1)))
+}
+
+func frequencySort(buf *bytebufferpool.ByteBuffer, s string) string {
+	buf.Reset()
+	hash := make([]int, 128)
+	for _, char := range s {
+		hash[int(char)]++
+	}
+	for buf.Len() != len(s) {
+		idx := getMaxFreqIdx(hash)
+		for j:=0;j<hash[idx];j++{
+			buf.WriteByte(byte(idx))
+		}
+		hash[idx] = 0
+	}
+	return buf.String()
+}
+
+func getMaxFreqIdx(hash []int) int{
+	max := 0
+	maxIdx := -1
+	for i:=0;i<len(hash);i++{
+		if hash[i] > max {
+			max = hash[i]
+			maxIdx = i
+		}
+	}
+	return maxIdx
 }
