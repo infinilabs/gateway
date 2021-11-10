@@ -27,35 +27,36 @@ import (
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
+	"infini.sh/framework/core/progress"
 	"infini.sh/framework/core/rotate"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/bytebufferpool"
-	"math"
 	"path"
 	"src/github.com/OneOfOne/xxhash"
 	"sync"
-	"time"
 )
 
 type DumpHashProcessor struct {
 	config Config
 	client elastic.API
+
+
 }
 
 type Config struct {
 	//字段名称必须是大写
-	BatchSize       int    `config:"batch_size"`
-	SliceSize       int    `config:"slice_size"`
+	BatchSize     int    `config:"batch_size"`
+	SliceSize     int    `config:"slice_size"`
 	Elasticsearch string `config:"elasticsearch"`
 	Output        string `config:"output_queue"`
 	SortType      string `config:"sort_type"`
-	SortField       string `config:"sort_field"`
-	Indices         string `config:"indices"`
-	Query           string `config:"query"`
-	HashFunc           string `config:"hash_func"`
-	ScrollTime      string `config:"scroll_time"`
-	Fields          string `config:"fields"`
+	SortField     string `config:"sort_field"`
+	Indices       string `config:"indices"`
+	Query         string `config:"query"`
+	HashFunc      string `config:"hash_func"`
+	ScrollTime    string `config:"scroll_time"`
+	Fields        string `config:"fields"`
 }
 
 func New(c *config.Config) (pipeline.Processor, error) {
@@ -90,92 +91,111 @@ func (processor *DumpHashProcessor) Name() string {
 
 func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 
-	start := time.Now()
+	//start := time.Now()
 	wg := sync.WaitGroup{}
-	var statsLock sync.RWMutex
-	var totalSize int
 
 	file := path.Join(global.Env().GetDataDir(), "diff", processor.config.Output)
 	if util.FileExists(file) {
 		util.FileDelete(file)
 		log.Warn("target file exists:", file, ",remove it now")
 	}
+	var pool = fastjson.ParserPool{}
 
+	var totalDocsNeedToScroll = 0
 	for slice := 0; slice < processor.config.SliceSize; slice++ {
 
 		tempSlice := slice
 		scrollResponse1, err := processor.client.NewScroll(processor.config.Indices, processor.config.ScrollTime, processor.config.BatchSize, processor.config.Query, tempSlice, processor.config.SliceSize, processor.config.Fields, processor.config.SortField, processor.config.SortType)
 		if err != nil {
-			log.Errorf("%v-%v",processor.config.Output,err)
-			continue
+			log.Errorf("%v-%v", processor.config.Output, err)
+			panic(err)
 		}
+		var p = pool.Get()
+		defer pool.Put(p)
 
-		fastV:= fastjson.MustParseBytes(scrollResponse1)
-		initScrollID:=util.UnsafeBytesToString(fastV.GetStringBytes("_scroll_id"))
-		docs:=fastV.GetArray("hits","hits")
+		fastV,err := p.ParseBytes(scrollResponse1)
+		if err != nil {
+			log.Errorf("cannot parse json: %v, %v", string(scrollResponse1), err)
+			panic(err)
+		}
+		initScrollID := util.UnsafeBytesToString(fastV.GetStringBytes("_scroll_id"))
+		docs := fastV.GetArray("hits", "hits")
 
 		version := processor.client.GetMajorVersion()
-		totalHits:=getScrollHitsTotal(version,fastV)
+		totalHits := getScrollHitsTotal(version, fastV)
+
+		totalDocsNeedToScroll+=totalHits
 
 		docSize := len(docs)
 
-		statsLock.Lock()
-		totalSize += docSize
-		statsLock.Unlock()
+		progress.IncreaseWithTotal(processor.config.Output,"dump-hash-"+util.ToString(tempSlice), docSize, totalHits)
 
 		if docSize > 0 {
 			processor.processingDocs(docs, processor.config.Output)
 		}
 
-		log.Debugf("slice [%v] docs: %v / %v", tempSlice, totalSize,totalHits)
+		log.Debugf("slice [%v] docs: %v / %v", tempSlice, docs,totalHits)
 
 		if totalHits == 0 {
 			log.Tracef("slice %v is empty", tempSlice)
 			continue
 		}
-		wg.Add(1)
 
-		go func(slice int) {
+		ctx:=pipeline.AcquireContext()
+		wg.Add(1)
+		go func(slice int,ctx *pipeline.Context) {
 			defer wg.Done()
 			var processedSize = 0
-			var p fastjson.Parser
+			var p = pool.Get()
+			defer pool.Put(p)
 			for {
+
+				if ctx.IsCanceled(){
+					return
+				}
+
+				if initScrollID == "" {
+					log.Errorf("[%v] scroll_id: [%v]", slice, initScrollID)
+				}
+
 				data, err := processor.client.NextScroll(processor.config.ScrollTime, initScrollID)
 
-				if err != nil ||len(data)==0 {
+				if err != nil || len(data) == 0 {
 					log.Error("failed to scroll,", processor.config.Elasticsearch, processor.config.Indices, string(data), err)
 					return
 				}
 
-				if data!=nil&&len(data)>0{
-
-					fastV,err:= p.ParseBytes(data)
+				if data != nil && len(data) > 0 {
+					fastV, err := p.ParseBytes(data)
 					if err != nil {
-						log.Errorf("cannot parse json: %v, %v",string(data), err)
+						log.Errorf("cannot parse json: %v, %v", string(data), err)
+						obj := map[string]interface{}{}
+						util.FromJSONBytes(data, &obj)
+						log.Error(obj["_scroll_id"])
+						panic(err)
 						return
 					}
-					scrollID:=fastV.GetStringBytes("_scroll_id")
-					hits:=fastV.GetArray("hits","hits")
+					scrollID := fastV.GetStringBytes("_scroll_id")
+					hits := fastV.GetArray("hits", "hits")
 
 					var totalHits int
-					totalHits=getScrollHitsTotal(version,fastV)
+					totalHits = getScrollHitsTotal(version, fastV)
 					if version >= 7 {
-						totalHits= fastV.GetInt("hits","total","value")
+						totalHits = fastV.GetInt("hits", "total", "value")
 					} else {
-						totalHits= fastV.GetInt("hits","total")
+						totalHits = fastV.GetInt("hits", "total")
 					}
 
-					processedSize+=len(hits)
-					log.Debugf("[%v] slice[%v]:%v,%v-%v",processor.config.Elasticsearch,slice,len(hits),processedSize,totalHits)
+					processedSize += len(hits)
+					log.Debugf("[%v] slice[%v]:%v,%v-%v", processor.config.Elasticsearch, slice, len(hits), processedSize, totalHits)
 
 					initScrollID = util.UnsafeBytesToString(scrollID)
 					docSize := len(hits)
-					statsLock.Lock()
-					totalSize += docSize
-					stats.Gauge(fmt.Sprintf("scroll_total_received-%v", tempSlice), processor.config.Output, int64(totalSize))
-					statsLock.Unlock()
+
+					progress.IncreaseWithTotal(processor.config.Output,"dump-hash-"+util.ToString(tempSlice), docSize, totalHits)
 
 					if docSize == 0 {
+						log.Debugf("[%v] empty doc returned, break",slice)
 						break
 					}
 
@@ -185,24 +205,25 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 
 			}
 			log.Debugf("%v - %v, slice %v is done", processor.config.Elasticsearch, processor.config.Indices, tempSlice)
-		}(tempSlice)
-
+		}(tempSlice,ctx)
 	}
 
+	progress.Start()
 	wg.Wait()
+	progress.Stop()
 
-	duration := time.Now().Sub(start).Seconds()
+	//duration := time.Now().Sub(start).Seconds()
 
-	log.Infof("dump finished, es: %v, index: %v, docs: %v, duration: %vs, qps: %v ", processor.config.Elasticsearch, processor.config.Indices, totalSize, duration, math.Ceil(float64(totalSize)/math.Ceil((duration))))
+	//log.Infof("dump finished, es: %v, index: %v, docs: %v, duration: %vs, qps: %v ", processor.config.Elasticsearch, processor.config.Indices, stats, duration, math.Ceil(float64(stats)/math.Ceil((duration))))
 
 	return nil
 }
 
-func getScrollHitsTotal(version int,fastV *fastjson.Value)int {
+func getScrollHitsTotal(version int, fastV *fastjson.Value) int {
 	if version >= 7 {
-		return fastV.GetInt("hits","total","value")
+		return fastV.GetInt("hits", "total", "value")
 	} else {
-		return fastV.GetInt("hits","total")
+		return fastV.GetInt("hits", "total")
 	}
 }
 
@@ -216,12 +237,12 @@ func (processor *DumpHashProcessor) processingDocs(docs []*fastjson.Value, outpu
 	defer bytebufferpool.Put(hashBuffer)
 
 	for _, v := range docs {
-		id:=v.GetStringBytes("_id")
+		id := v.GetStringBytes("_id")
 
-		source:=v.GetObject("_source").String()
+		source := v.GetObject("_source").String()
 
-
-		hash:=processor.Hash(processor.config.HashFunc,hashBuffer,util.UnsafeStringToBytes(source))
+		hash := processor.Hash(processor.config.HashFunc, hashBuffer, util.UnsafeStringToBytes(source))
+		//fmt.Println("hash:",string(hash),string(id))
 
 		_, err := buffer.WriteBytesArray(id, []byte(","), hash, []byte("\n"))
 		if err != nil {
@@ -236,20 +257,17 @@ func (processor *DumpHashProcessor) processingDocs(docs []*fastjson.Value, outpu
 
 }
 
-func (processor *DumpHashProcessor)Hash(hashFunc string,buf *bytebufferpool.ByteBuffer,data []byte)[]byte{
+func (processor *DumpHashProcessor) Hash(hashFunc string, buf *bytebufferpool.ByteBuffer, data []byte) []byte {
 	switch hashFunc {
-	case "frequency_sort":
-		hash:= frequencySort(buf,util.UnsafeBytesToString(data))
-		return util.UnsafeStringToBytes(hash)
 	case "xxhash64":
-		hash:=xxhash1.Sum64(data)
+		hash := xxhash1.Sum64(data)
 		return []byte(util.Int64ToString(int64(hash)))
 	case "xxhash32-1":
-		hash:=xxhash.New32()
+		hash := xxhash.New32()
 		hash.Write(data)
 		return []byte(util.Int64ToString(int64(hash.Sum32())))
 	case "xxhash64-1":
-		hash:=xxhash.New64()
+		hash := xxhash.New64()
 		hash.Write(data)
 		return []byte(util.Int64ToString(int64(hash.Sum64())))
 	case "xxhash32":
@@ -263,32 +281,4 @@ func (processor *DumpHashProcessor)Hash(hashFunc string,buf *bytebufferpool.Byte
 
 	h1 := fnv1a.HashBytes32(data)
 	return []byte(util.Int64ToString(int64(h1)))
-}
-
-func frequencySort(buf *bytebufferpool.ByteBuffer, s string) string {
-	buf.Reset()
-	hash := make([]int, 128)
-	for _, char := range s {
-		hash[int(char)]++
-	}
-	for buf.Len() != len(s) {
-		idx := getMaxFreqIdx(hash)
-		for j:=0;j<hash[idx];j++{
-			buf.WriteByte(byte(idx))
-		}
-		hash[idx] = 0
-	}
-	return buf.String()
-}
-
-func getMaxFreqIdx(hash []int) int{
-	max := 0
-	maxIdx := -1
-	for i:=0;i<len(hash);i++{
-		if hash[i] > max {
-			max = hash[i]
-			maxIdx = i
-		}
-	}
-	return maxIdx
 }

@@ -212,14 +212,16 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 					_ = sorter.Append(bytes)
 				})
 				if err != nil {
-					panic(err)
+					log.Error(err)
+					return
 				}
 
 				defer sorter.Close()
 				// Sort and iterate.
 				iter, err := sorter.Sort()
 				if err != nil {
-					panic(err)
+					log.Error(err)
+					return
 				}
 				defer iter.Close()
 
@@ -236,7 +238,8 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 				util.FileAppendContentWithByte(sortedFile, buffer.Bytes())
 				bytebufferpool.Put(buffer)
 				if err := iter.Err(); err != nil {
-					panic(err)
+					log.Error(err)
+					return
 				}
 			} else {
 				log.Warn("target file exists:", sortedFile, ",you may need to remove it first")
@@ -248,7 +251,7 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 					return r == ','
 				})
 				if len(arr) != 2 {
-					log.Error("invalid line:", util.UnsafeBytesToString)
+					log.Error("invalid line:", util.UnsafeBytesToString(bytes))
 					return
 				}
 				id := arr[0]
@@ -261,7 +264,8 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 				processor.testChan.msgChans[q+"_sorted"] <- item
 			})
 			if err != nil {
-				panic(err)
+				log.Error(err)
+				return
 			}
 
 		}(q)
