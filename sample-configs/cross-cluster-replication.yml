@@ -51,14 +51,14 @@ flow:
             then:
               - queue:
                   queue_name: "primary-failure"
-              - stats:
+#              - stats:
               - drop:
           - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
               range:
                 _ctx.response.status.gte: 400
                 _ctx.response.status.lt: 500
             then:
-              - stats:
+#              - stats:
               - drop:
           - if:
               in:
@@ -179,14 +179,14 @@ flow:
             then:
               - queue:
                   queue_name: "backup-failure"
-              - stats:
+#              - stats:
               - drop:
           - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
               range:
                 _ctx.response.status.gte: 400
                 _ctx.response.status.lt: 500
             then:
-              - stats:
+#              - stats:
               - queue:
                   queue_name: "backup-invalid"
               - drop:
@@ -241,14 +241,14 @@ flow:
             then:
               - queue:
                   queue_name: "backup-failure"
-              - stats:
+#              - stats:
               - drop:
           - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
               range:
                 _ctx.response.status.gte: 400
                 _ctx.response.status.lt: 500
             then:
-              - stats:
+#              - stats:
               - queue:
                   queue_name: "backup-invalid"
 #              - drop:
@@ -271,7 +271,11 @@ flow:
             - request_logging
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
-      - stats:
+#      - stats:
+      - context_filter:
+          context: _ctx.request.path
+          exclude:
+            - /favicon.ico
       - logging:
           queue_name: request_logging
           max_request_body_size: 1024
