@@ -140,7 +140,7 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 				processor.processingDocs(docs, processor.config.Output)
 			}
 
-			log.Debugf("slice [%v] docs: %v / %v", tempSlice, docs,totalHits)
+			log.Debugf("slice [%v] docs: %v / %v", tempSlice, docSize,totalHits)
 
 			if totalHits == 0 {
 				log.Tracef("slice %v is empty", tempSlice)

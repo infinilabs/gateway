@@ -321,44 +321,12 @@ DO:
 		log.Error("DO: data length is zero,", string(data), ",is compress:", joint.Config.Compress)
 	}
 
-	if metadata.Config.TrafficControl != nil {
-
-		if metadata.Config.TrafficControl.MaxWaitTimeInMs<=0{
-			metadata.Config.TrafficControl.MaxWaitTimeInMs=10*1000
-		}
-		maxTime:=time.Duration(metadata.Config.TrafficControl.MaxWaitTimeInMs)*time.Millisecond
-		startTime:=time.Now()
-	RetryRateLimit:
-
-		if time.Now().Sub(startTime)<maxTime{
-			if metadata.Config.TrafficControl.MaxQpsPerNode > 0 {
-				if !rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"max_qps", int(metadata.Config.TrafficControl.MaxQpsPerNode)).Allow() {
-					stats.Increment(metadata.Config.ID,host+"-max_qps_throttled")
-					if global.Env().IsDebug {
-						log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), host)
-					}
-					time.Sleep(10 * time.Millisecond)
-					goto RetryRateLimit
-				}
-			}
-
-			if metadata.Config.TrafficControl.MaxBytesPerNode > 0 {
-				if !rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"max_bps", int(metadata.Config.TrafficControl.MaxBytesPerNode)).AllowN(time.Now(), req.GetRequestLength()) {
-					stats.Increment(metadata.Config.ID,host+"-max_bps_throttled")
-					if global.Env().IsDebug {
-						log.Tracef("throttle request [%v] to upstream [%v]", req.URI().String(), host)
-					}
-					time.Sleep(10 * time.Millisecond)
-					goto RetryRateLimit
-				}
-			}
-		}else{
-			log.Warn("reached max traffic control time, throttle quitting")
-		}
-	}
+	metadata.CheckNodeTrafficThrottle(util.UnsafeBytesToString(req.Header.Host()),1,req.GetRequestLength(),0)
 
 	//execute
 	err := httpClient.Do(req, resp)
+
+	metadata.CheckNodeTrafficThrottle(util.UnsafeBytesToString(req.Header.Host()),0,resp.GetResponseLength(),0)
 
 	//restore body and header
 	if !acceptGzipped&&compressed{
