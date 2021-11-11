@@ -207,9 +207,11 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 		host := meta.GetActiveHost()
 			for _, v := range processor.config.Queues {
 				log.Debug("process bulk queue:", v)
-				wg.Add(1)
-				go processor.NewBulkWorker(c,bulkSizeInByte, &wg, v, host)
-			}
+				for i := 0; i < processor.config.NumOfWorkers; i++ {
+					wg.Add(1)
+					go processor.NewBulkWorker(c,bulkSizeInByte, &wg, v, host)
+				}
+		}
 	}
 
 	wg.Wait()
