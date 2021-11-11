@@ -144,6 +144,11 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 	}else{
 		//index,shard,level
 		if processor.config.Indices!=nil && len(processor.config.Indices) > 0 {
+			if meta.Indices==nil{
+				time.Sleep(1*time.Second)
+				log.Tracef("%v index info is not available, recheck now",meta.Config.Name)
+				goto NODESINFO
+			}
 			for _, v := range processor.config.Indices {
 				indexSettings := (*meta.Indices)[v]
 				for i := 0; i < indexSettings.Shards; i++ {
