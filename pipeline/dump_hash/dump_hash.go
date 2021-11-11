@@ -105,49 +105,49 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 	for slice := 0; slice < processor.config.SliceSize; slice++ {
 
 		tempSlice := slice
-		scrollResponse1, err := processor.client.NewScroll(processor.config.Indices, processor.config.ScrollTime, processor.config.BatchSize, processor.config.Query, tempSlice, processor.config.SliceSize, processor.config.Fields, processor.config.SortField, processor.config.SortType)
-		if err != nil {
-			log.Errorf("%v-%v", processor.config.Output, err)
-			panic(err)
-		}
-		var p = pool.Get()
-		defer pool.Put(p)
-
-		fastV,err := p.ParseBytes(scrollResponse1)
-		if err != nil {
-			log.Errorf("cannot parse json: %v, %v", string(scrollResponse1), err)
-			panic(err)
-		}
-		initScrollID := util.UnsafeBytesToString(fastV.GetStringBytes("_scroll_id"))
-		docs := fastV.GetArray("hits", "hits")
-
-		version := processor.client.GetMajorVersion()
-		totalHits := getScrollHitsTotal(version, fastV)
-
-		totalDocsNeedToScroll+=totalHits
-
-		docSize := len(docs)
-
-		progress.IncreaseWithTotal(processor.config.Output,"dump-hash-"+util.ToString(tempSlice), docSize, totalHits)
-
-		if docSize > 0 {
-			processor.processingDocs(docs, processor.config.Output)
-		}
-
-		log.Debugf("slice [%v] docs: %v / %v", tempSlice, docs,totalHits)
-
-		if totalHits == 0 {
-			log.Tracef("slice %v is empty", tempSlice)
-			continue
-		}
 
 		ctx:=pipeline.AcquireContext()
 		wg.Add(1)
 		go func(slice int,ctx *pipeline.Context) {
 			defer wg.Done()
-			var processedSize = 0
+
+			scrollResponse1, err := processor.client.NewScroll(processor.config.Indices, processor.config.ScrollTime, processor.config.BatchSize, processor.config.Query, tempSlice, processor.config.SliceSize, processor.config.Fields, processor.config.SortField, processor.config.SortType)
+			if err != nil {
+				log.Errorf("%v-%v", processor.config.Output, err)
+				return
+			}
 			var p = pool.Get()
 			defer pool.Put(p)
+
+			fastV,err := p.ParseBytes(scrollResponse1)
+			if err != nil {
+				log.Errorf("cannot parse json: %v, %v", string(scrollResponse1), err)
+				return
+			}
+			initScrollID := util.UnsafeBytesToString(fastV.GetStringBytes("_scroll_id"))
+			docs := fastV.GetArray("hits", "hits")
+
+			version := processor.client.GetMajorVersion()
+			totalHits := getScrollHitsTotal(version, fastV)
+
+			totalDocsNeedToScroll+=totalHits
+
+			docSize := len(docs)
+
+			progress.IncreaseWithTotal(processor.config.Output,"dump-hash-"+util.ToString(tempSlice), docSize, totalHits)
+
+			if docSize > 0 {
+				processor.processingDocs(docs, processor.config.Output)
+			}
+
+			log.Debugf("slice [%v] docs: %v / %v", tempSlice, docs,totalHits)
+
+			if totalHits == 0 {
+				log.Tracef("slice %v is empty", tempSlice)
+				return
+			}
+
+			var processedSize = 0
 			for {
 
 				if ctx.IsCanceled(){
