@@ -32,6 +32,7 @@ import (
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/bytebufferpool"
+	fasthttp2 "infini.sh/framework/lib/fasthttp"
 	"path"
 	"src/github.com/OneOfOne/xxhash"
 	"sync"
@@ -147,6 +148,10 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 				return
 			}
 
+			var req=fasthttp2.AcquireRequest()
+			var res=fasthttp2.AcquireResponse()
+			defer fasthttp2.ReleaseRequest(req)
+			defer fasthttp2.ReleaseResponse(res)
 			var processedSize = 0
 			for {
 
@@ -158,7 +163,10 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 					log.Errorf("[%v] scroll_id: [%v]", slice, initScrollID)
 				}
 
-				data, err := processor.client.NextScroll(processor.config.ScrollTime, initScrollID)
+				req.Reset()
+				res.Reset()
+
+				data, err := processor.client.NextScroll(req,res,processor.config.ScrollTime, initScrollID)
 
 				if err != nil || len(data) == 0 {
 					log.Error("failed to scroll,", processor.config.Elasticsearch, processor.config.Indices, string(data), err)

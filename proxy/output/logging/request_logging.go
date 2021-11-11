@@ -147,7 +147,7 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 	request.Request.RemoteAddr = ctx.RemoteAddr().String()
 	request.Request.LocalAddr = ctx.LocalAddr().String()
 
-	reqBody := string(ctx.Request.GetRawBody())
+	reqBody := util.UnsafeBytesToString(ctx.Request.GetRawBody())
 
 	if len(reqBody) > this.config.MaxRequestBodySize {
 		reqBody = reqBody[0:this.config.MaxRequestBodySize]
