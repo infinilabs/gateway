@@ -283,8 +283,9 @@ func (processor *DumpHashProcessor) Hash(hashFunc string, buf *bytebufferpool.By
 		h.Write(data)
 		r := h.Sum32()
 		return []byte(util.Int64ToString(int64(r)))
-	default:
-
+	case "fnv1a":
+		h1 := fnv1a.HashBytes32(data)
+		return []byte(util.Int64ToString(int64(h1)))
 	}
 
 	h1 := fnv1a.HashBytes32(data)
