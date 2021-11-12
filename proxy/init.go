@@ -85,6 +85,8 @@ func Init() {
 	pipeline.RegisterFilterPlugin("set_response",transform.NewSetResponse)
 	pipeline.RegisterFilterPlugin("set_basic_auth",auth.NewSetBasicAuth)
 
+	pipeline.RegisterFilterPlugin("basic_auth",auth.NewBasicAuthFilter)
+
 	pipeline.RegisterFilterPlugin("queue",queue.NewDiskEnqueueFilter)
 	pipeline.RegisterFilterPlugin("translog",translog.NewTranslogOutput)
 	pipeline.RegisterFilterPlugin("redis_pubsub",pipeline.FilterConfigChecked(redis_pubsub.NewRedisPubSub, pipeline.RequireFields("channel")))

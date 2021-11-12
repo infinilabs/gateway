@@ -2,6 +2,10 @@ package auth
 
 import (
 	"encoding/base64"
+	"fmt"
+	"infini.sh/framework/core/config"
+	"infini.sh/framework/core/pipeline"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"strings"
 )
@@ -37,7 +41,7 @@ func parseBasicAuth(auth string) (username, password string, ok bool) {
 }
 
 // BasicAuth is the basic auth handler
-func BasicAuth(h fasthttp.RequestHandler, requiredUser, requiredPassword string) fasthttp.RequestHandler {
+func BasicAuth1(h fasthttp.RequestHandler, requiredUser, requiredPassword string) fasthttp.RequestHandler {
 	return fasthttp.RequestHandler(func(ctx *fasthttp.RequestCtx) {
 		// Get the Basic Authentication credentials
 		user, password, hasAuth := basicAuth(ctx)
@@ -53,3 +57,50 @@ func BasicAuth(h fasthttp.RequestHandler, requiredUser, requiredPassword string)
 	})
 }
 
+
+
+
+
+type BasicAuth struct {
+	ValidUsers map[string]string `config:"valid_users"`
+}
+
+func (filter *BasicAuth) Name() string {
+	return "basic_auth"
+}
+
+func (filter *BasicAuth) Filter(ctx *fasthttp.RequestCtx) {
+
+	exists,user,pass:=ctx.Request.ParseBasicAuth()
+
+	if !exists{
+		ctx.Error("Basic Authentication Required",403)
+		ctx.Finished()
+		return
+	}
+
+	if len(filter.ValidUsers)>0{
+		p,ok:=filter.ValidUsers[util.UnsafeBytesToString(user)]
+		if ok{
+			if util.UnsafeBytesToString(pass)==p{
+				return
+			}
+		}
+	}
+
+	ctx.Error("Basic Authentication Required",403)
+	ctx.Finished()
+
+}
+
+func NewBasicAuthFilter(c *config.Config) (pipeline.Filter, error) {
+
+	runner := BasicAuth{
+	}
+
+	if err := c.Unpack(&runner); err != nil {
+		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
+	}
+
+	return &runner, nil
+}
