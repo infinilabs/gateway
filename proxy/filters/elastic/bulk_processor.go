@@ -70,7 +70,7 @@ func WalkBulkRequests(safetyParse bool,data []byte, docBuff []byte, eachLineFunc
 
 				err := metaFunc(line, actionStr, index, typeName, id)
 				if err != nil {
-					log.Error(err)
+					log.Debug(err)
 					return docCount, err
 				}
 
@@ -385,9 +385,8 @@ DO:
 
 			containError:=HandleBulkResponse(joint.Config.SafetyParse,data,resbody,joint.Config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
 			if containError {
-				if global.Env().IsDebug {
-					log.Error("error in bulk requests,", resp.StatusCode(), util.SubString(string(resbody), 0, 256))
-				}
+
+				log.Error("error in bulk requests,", resp.StatusCode(), util.SubString(string(resbody), 0, 256))
 
 				if nonRetryableItems.Len() > 0 {
 					nonRetryableItems.WriteByte('\n')

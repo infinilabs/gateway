@@ -297,9 +297,8 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 
 			containError:=es.HandleBulkResponse(processor.config.SafetyParse,requestBytes,resbody,processor.config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
 			if containError {
-				if global.Env().IsDebug {
-					log.Error("error in bulk requests,", resp.StatusCode(), util.SubString(string(resbody), 0, 256))
-				}
+
+				log.Error("error in bulk requests,", resp.StatusCode(), util.SubString(string(resbody), 0, 256))
 
 				if nonRetryableItems.Len() > 0 {
 					nonRetryableItems.WriteByte('\n')
