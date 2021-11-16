@@ -83,6 +83,7 @@ func Init() {
 	pipeline.RegisterFilterPlugin("set_request_query_args",transform.NewSetRequestQueryArgs)
 	pipeline.RegisterFilterPlugin("set_response_header",transform.NewSetResponseHeader)
 	pipeline.RegisterFilterPlugin("set_response",transform.NewSetResponse)
+	pipeline.RegisterFilterPlugin("set_context",transform.NewSetContext)
 	pipeline.RegisterFilterPlugin("set_basic_auth",auth.NewSetBasicAuth)
 
 	pipeline.RegisterFilterPlugin("basic_auth",auth.NewBasicAuthFilter)
