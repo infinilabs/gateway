@@ -51,6 +51,9 @@ func Init() {
 	pipeline.RegisterFilterPlugin("sample",sample.NewSampleFilter)
 	pipeline.RegisterFilterPlugin("request_body_regex_replace",transform.NewRequestBodyRegexReplace)
 	pipeline.RegisterFilterPlugin("response_body_regex_replace",transform.NewResponseBodyRegexReplace)
+
+	pipeline.RegisterFilterPlugin("context_regex_replace",transform.NewContextRegexReplace)
+
 	pipeline.RegisterFilterPlugin("request_body_json_del",transform.NewRequestBodyJsonDel)
 	pipeline.RegisterFilterPlugin("request_body_json_set",transform.NewRequestBodyJsonSet)
 	pipeline.RegisterFilterPlugin("ratio",routing.NewRatioRoutingFlowFilter)
