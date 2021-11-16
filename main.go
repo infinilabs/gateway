@@ -59,7 +59,7 @@ func main() {
 
 	defer app.Shutdown()
 
-	app.Setup(func() {
+	if app.Setup(func() {
 
 		//load core modules first
 
@@ -95,8 +95,9 @@ func main() {
 		module.Start()
 
 
-	}, nil,nil)
+	}, nil,nil){
+		app.Run()
+	}
 
-	app.Run()
 
 }
