@@ -24,7 +24,6 @@ func (filter *SetContext) Filter(ctx *fasthttp.RequestCtx) {
 	if len(filter.Context)>0{
 		keys:=util.Flatten(filter.Context,false)
 		for k,v:=range keys{
-			fmt.Println("upate:",k,":",v)
 			err:=ctx.SetValue(k,util.ToString(v))
 			if err!=nil{
 				log.Error(err)
