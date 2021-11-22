@@ -124,7 +124,6 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 
 	meta := elastic.GetMetadata(processor.config.Elasticsearch)
 	wg := sync.WaitGroup{}
-
 	if meta == nil {
 		return errors.New("metadata is nil")
 	}
@@ -247,6 +246,10 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context,bulk
 
 	idleDuration := time.Duration(processor.config.IdleTimeoutInSecond) * time.Second
 	meta := elastic.GetMetadata(processor.config.Elasticsearch)
+
+	if meta==nil{
+		panic(errors.Errorf("cluster metadata [%v] not ready", processor.config.Elasticsearch))
+	}
 
 	bulkProcessor := elastic2.BulkProcessor{
 		RotateConfig: processor.config.RotateConfig,

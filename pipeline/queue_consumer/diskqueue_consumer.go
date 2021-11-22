@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/tls"
-	"errors"
+	"infini.sh/framework/core/errors"
 	"fmt"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
@@ -129,6 +129,10 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context, count *
 	esInstanceVal := processor.config.Elasticsearch
 	waitingAfter := processor.config.WaitingAfter
 	metadata := elastic.GetMetadata(esInstanceVal)
+	if metadata==nil{
+		panic(errors.Errorf("cluster metadata [%v] not ready", processor.config.Elasticsearch))
+	}
+
 
 	idleDuration := time.Duration(timeOut) * time.Second
 	if processor.config.FailureQueue == "" {
