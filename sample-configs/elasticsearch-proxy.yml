@@ -22,4 +22,7 @@ router:
 elasticsearch:
   - name: es-server
     enabled: true
-    endpoint: http://192.168.3.188:9206
+    endpoints:
+     - http://192.168.3.188:9206
+     - http://192.168.3.188:9226
+     - http://192.168.3.188:9246
