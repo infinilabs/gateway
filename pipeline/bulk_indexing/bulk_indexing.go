@@ -143,28 +143,37 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 	}else{
 		//index,shard,level
 		if processor.config.Indices!=nil && len(processor.config.Indices) > 0 {
-			if meta.Indices==nil{
+			if meta.ClusterState==nil{
 				time.Sleep(1*time.Second)
-				log.Tracef("%v index info is not available, recheck now",meta.Config.Name)
+				log.Tracef("%v cluster state is not available, recheck now",meta.Config.Name)
 				goto NODESINFO
 			}
+
 			for _, v := range processor.config.Indices {
-				indexSettings := (*meta.Indices)[v]
-				for i := 0; i < indexSettings.Shards; i++ {
+				routingTable,err:=meta.GetIndexRoutingTable(v)
+				if err!=nil{
+					return err
+				}
+
+				//indexSettings := (*meta.Indices)[v]
+				for i := 0; i < len(routingTable); i++ {
 					queueName := common.GetShardLevelShuffleKey(processor.config.Elasticsearch, v, i)
-					shardInfo := meta.GetPrimaryShardInfo(v, i)
+					shardInfo,err := meta.GetPrimaryShardInfo(v, i)
+					if err!=nil{
+						return err
+					}
 
 					if len(processor.config.EnabledShards) > 0 {
-						if !util.ContainsAnyInArray(shardInfo.ShardID, processor.config.EnabledShards) {
-							log.Debugf("%s-%s not enabled, skip processing", shardInfo.Index, shardInfo.ShardID)
+						if !util.ContainsAnyInArray(util.ToString(shardInfo.Shard), processor.config.EnabledShards) {
+							log.Debugf("%v-%v not enabled, skip processing", shardInfo.Index, shardInfo.Shard)
 							continue
 						}
 					}
 
-					nodeInfo := meta.GetNodeInfo(shardInfo.NodeID)
+					nodeInfo := meta.GetNodeInfo(shardInfo.Node)
 
 					if global.Env().IsDebug {
-						log.Debug(shardInfo.Index, ",", shardInfo.ShardID, ",", nodeInfo.Http.PublishAddress)
+						log.Debug(shardInfo.Index, ",", shardInfo.Shard, ",", nodeInfo.Http.PublishAddress)
 					}
 
 					for i := 0; i < processor.config.NumOfWorkers; i++ {
@@ -276,6 +285,13 @@ READ_DOCS:
 	for {
 		if ctx.IsCanceled(){
 			goto CLEAN_BUFFER
+		}
+
+		//TODO add config to enable check or not
+		if !elastic.IsHostAvailable(host){
+			time.Sleep(time.Second*1)
+			log.Debugf("host [%v] is not available",host)
+			goto READ_DOCS
 		}
 
 		//each message is complete bulk message, must be end with \n

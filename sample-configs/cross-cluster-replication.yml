@@ -218,6 +218,8 @@ flow:
           - retry_limiter:
               queue_name: "backup-deadletter_requests"
               max_retry_times: 60
+          - dump:
+              request: true
           - bulk_reshuffle:
               when:
                 contains:
@@ -226,6 +228,8 @@ flow:
               level: node
               mode: async
               fix_null_id: true
+          - echo:
+              message: "skip bulk reshuffle\n"
           - elasticsearch:
               elasticsearch: "backup"
               max_connection_per_node: 1000
@@ -467,15 +471,15 @@ pipeline:
 
 
 # option C - pipelines for backup cluster
-  - name: queue_backup-failure-consumer
-    auto_start: true
-    keep_running: true
-    processor:
-      - flow_runner:
-          input_queue: "backup-failure"
-          flow: backup-flow-reshuffle-replicate-processing
-          when:
-            cluster_available: [ "backup" ]
+#  - name: queue_backup-failure-consumer
+#    auto_start: true
+#    keep_running: true
+#    processor:
+#      - flow_runner:
+#          input_queue: "backup-failure"
+#          flow: backup-flow-reshuffle-replicate-processing
+#          when:
+#            cluster_available: [ "backup" ]
 
   - name: queue_backup-consumer
     auto_start: true
@@ -488,30 +492,30 @@ pipeline:
             and:
               - not:
                   or:
-                    - queue_has_lag: [ "backup-failure", "primary-partial-success_bulk_requests"]
+                    - queue_has_lag: [ "primary-partial-success_bulk_requests"]
               - cluster_available: ["backup"]
 
-  - name: queue_backup-bulk-partial-consumer
-    auto_start: true
-    keep_running: true
-    processor:
-      - flow_runner:
-          input_queue: "primary-partial-success_bulk_requests"
-          flow: backup-flow-reshuffle-replicate-processing
-          when:
-            cluster_available: [ "backup" ]
+#  - name: queue_backup-bulk-partial-consumer
+#    auto_start: true
+#    keep_running: true
+#    processor:
+#      - flow_runner:
+#          input_queue: "primary-partial-success_bulk_requests"
+#          flow: backup-flow-reshuffle-replicate-processing
+#          when:
+#            cluster_available: [ "backup" ]
 
-  - name: queue_backup-bulk_request_ingest
-    auto_start: true
-    keep_running: true
-    processor:
-      - bulk_indexing:
-          when:
-            cluster_available: [ "backup" ]
-          elasticsearch: "backup"
-#          compress: true
-          bulk_size_in_mb: 10
-          worker_size: 10
-          level: node
-          queues:
-            - backup-bulk-failure-items
+#  - name: queue_backup-bulk_request_ingest
+#    auto_start: true
+#    keep_running: true
+#    processor:
+#      - bulk_indexing:
+#          when:
+#            cluster_available: [ "backup" ]
+#          elasticsearch: "backup"
+##          compress: true
+#          bulk_size_in_mb: 10
+#          worker_size: 1
+#          level: node
+#          queues:
+#            - backup-bulk-failure-items

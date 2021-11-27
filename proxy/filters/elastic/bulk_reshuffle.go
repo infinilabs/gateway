@@ -234,30 +234,46 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				return errors.Error("invalid bulk action:", actionStr, ",index:", string(index), ",id:", string(id), ",", metaStr)
 			}
 
-			var indexSettings *elastic.IndexInfo
-			index,indexSettings,err=metadata.GetIndexSetting(index)
 
+			//check alias, if alias exists, update index to real index, for getting settings only, metadata still go alias
+			//TODO
+
+
+			//get routing table of index
+			table,err:=metadata.GetIndexRoutingTable(index)
 			if err!=nil{
-				if rate.GetRateLimiter("index_setting_not_found", index, 1, 2, time.Minute*1).Allow() {
-					log.Warn("index setting not found,", index, ",", metaStr,",",err)
+				if rate.GetRateLimiter("index_routing_table_not_found", index, 1, 2, time.Minute*1).Allow() {
+					log.Warn("index routing table not found,", index, ",", metaStr,",",err)
 				}
 				return err
 			}
 
-			if indexSettings.Shards <= 0 || indexSettings.Status == "close" {
-				log.Debugf("index %v closed,", indexSettings.Index)
-				return errors.Errorf("index %v closed,", indexSettings.Index)
-			}
+			//var indexSettings *elastic.IndexInfo
+			//index,indexSettings,err=metadata.GetIndexSetting(index)
+			//
+			//if err!=nil{
+			//	if rate.GetRateLimiter("index_setting_not_found", index, 1, 2, time.Minute*1).Allow() {
+			//		log.Warn("index setting not found,", index, ",", metaStr,",",err)
+			//	}
+			//	return err
+			//}
 
-			if indexSettings.Shards != 1 {
+			//if indexSettings.Shards <= 0 || indexSettings.Status == "close" {
+			//	log.Debugf("index %v closed,", indexSettings.Index)
+			//	return errors.Errorf("index %v closed,", indexSettings.Index)
+			//}
+
+			//not only one shard
+			totalShards:=len(table)
+			if totalShards >1 {
 				//如果 shards=1，则直接找主分片所在节点，否则计算一下。
-				shardID = elastic.GetShardID(metadata.GetMajorVersion(), []byte(id), indexSettings.Shards)
+				shardID = elastic.GetShardID(metadata.GetMajorVersion(), []byte(id), totalShards)
 
 				if global.Env().IsDebug {
 					log.Tracef("%s/%s => %v", index, id, shardID)
 				}
 
-				//save endpoint for bufferkey
+				//skip configured shards
 				if len(this.config.Shards) > 0 {
 					if !util.ContainsInAnyInt32Array(shardID, this.config.Shards) {
 						log.Debugf("shard %s-%s not enabled, skip processing", index, shardID)
@@ -266,7 +282,11 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
-			shardInfo := metadata.GetPrimaryShardInfo(index, shardID)
+			shardInfo,err := metadata.GetPrimaryShardInfo(index, shardID)
+			if err!=nil{
+				return errors.Error("shardInfo was not found,", index, ",", shardID,",",err)
+			}
+
 			if shardInfo == nil {
 				if rate.GetRateLimiter(fmt.Sprintf("shard_info_not_found_%v", index), util.IntToString(shardID), 1, 5, time.Minute*1).Allow() {
 					log.Warn("shardInfo was not found,", index, ",", shardID)
@@ -275,7 +295,8 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			}
 
 			//write meta
-			bufferKey = common.GetNodeLevelShuffleKey(clusterName, shardInfo.NodeID)
+			bufferKey = common.GetNodeLevelShuffleKey(clusterName, shardInfo.Node)
+
 			if reshuffleType == "cluster"{
 				bufferKey = common.GetClusterLevelShuffleKey(clusterName)
 			} else if reshuffleType == "shard" {
@@ -294,12 +315,15 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				if reshuffleType=="cluster"{
 					host =esConfig.ID
 				}else{
-					nodeInfo := metadata.GetNodeInfo(shardInfo.NodeID)
+					nodeInfo := metadata.GetNodeInfo(shardInfo.Node)
+					if global.Env().IsDebug{
+						log.Debugf("get node info by id:[%v], [%v]",shardInfo.Node,nodeInfo)
+					}
 					if nodeInfo == nil {
-						if rate.GetRateLimiter("node_info_not_found_%v", shardInfo.NodeID, 1, 5, time.Minute*1).Allow() {
-							log.Warnf("nodeInfo not found, %v %v", bufferKey, shardInfo.NodeID)
+						if rate.GetRateLimiter("node_info_not_found_%v", shardInfo.Node, 1, 5, time.Minute*1).Allow() {
+							log.Warnf("nodeInfo not found, %v %v", bufferKey, shardInfo.Node)
 						}
-						return errors.Errorf("nodeInfo not found, %v %v", bufferKey, shardInfo.NodeID)
+						return errors.Errorf("nodeInfo not found, %v %v", bufferKey, shardInfo.Node)
 					}
 					host =nodeInfo.Http.PublishAddress
 				}
@@ -310,7 +334,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 				buffHosts[bufferKey] = host
 				if global.Env().IsDebug {
-					log.Debug(shardInfo.Index, ",", shardInfo.ShardID, ",", host)
+					log.Debug(shardInfo.Index, ",", shardInfo.Shard, ",", host)
 				}
 			}
 
@@ -466,6 +490,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		bytebufferpool.Put(buffer)
 
 		ctx.Response.SetStatusCode(200)
+		fmt.Println("bulk reshuffle finished.")
 		ctx.Finished()
 	}
 

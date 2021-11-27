@@ -386,7 +386,7 @@ DO:
 			containError:=HandleBulkResponse(joint.Config.SafetyParse,data,resbody,joint.Config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
 			if containError {
 
-				log.Error("error in bulk requests,", resp.StatusCode(), util.SubString(string(resbody), 0, 256))
+				log.Error("error in bulk requests,",host,",", resp.StatusCode(), util.SubString(string(resbody), 0, 256))
 
 				if nonRetryableItems.Len() > 0 {
 					nonRetryableItems.WriteByte('\n')
