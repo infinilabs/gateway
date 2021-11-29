@@ -32,9 +32,16 @@ func (this *BulkReshuffle) Name() string {
 	return "bulk_reshuffle"
 }
 
+type Level string
+
+const ClusterLevel = "cluster"
+const NodeLevel = "node"
+const IndexLevel = "index"
+const ShardLevel = "shard"
+
 type BulkReshuffleConfig struct {
 	Elasticsearch       string `config:"elasticsearch"`
-	Level               string `config:"level"`
+	Level               Level `config:"level"` //cluster/node(will,change)/index/shard/partition
 	Mode                string `config:"mode"`
 	FixNullID           bool   `config:"fix_null_id"`
 	IndexStatsAnalysis  bool   `config:"index_stats_analysis"`
@@ -44,10 +51,10 @@ type BulkReshuffleConfig struct {
 
 	//split all lines into memory rather than scan
 	SafetyParse bool `config:"safety_parse"`
-	ValidEachLine   bool `config:"validate_each_line"`
-	ValidMetadata   bool `config:"validate_metadata"`
-	ValidPayload    bool `config:"validate_payload"`
-
+	ValidEachLine   bool  `config:"validate_each_line"`
+	ValidMetadata   bool  `config:"validate_metadata"`
+	ValidPayload    bool  `config:"validate_payload"`
+	StickToNode     bool  `config:"stick_to_node"`
 	DocBufferSize       int                 `config:"doc_buffer_size"`
 	Shards              []int               `config:"shards"`
 	RotateConfig        rotate.RotateConfig `config:"rotate"`
@@ -100,7 +107,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			if rate.GetRateLimiter("cluster_metadata", clusterName, 1, 1, 5*time.Second).Allow() {
 				log.Warnf("elasticsearch [%v] metadata is nil, skip reshuffle", clusterName)
 			}
-			time.Sleep(10 * time.Second)
+			time.Sleep(1 * time.Second)
 			return
 		}
 
@@ -118,8 +125,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		validPayload := this.config.ValidPayload
 		reshuffleType := this.config.Level
 		fixNullID := this.config.FixNullID
-
-		//renameMapping, resolveIndexRename := this.GetStringMap("index_rename")
 
 		var buff *bytebufferpool.ByteBuffer
 		var ok bool
@@ -234,11 +239,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				return errors.Error("invalid bulk action:", actionStr, ",index:", string(index), ",id:", string(id), ",", metaStr)
 			}
 
-
-			//check alias, if alias exists, update index to real index, for getting settings only, metadata still go alias
-			//TODO
-
-
 			//get routing table of index
 			table,err:=metadata.GetIndexRoutingTable(index)
 			if err!=nil{
@@ -310,11 +310,12 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			////update actionItem
 			buff, ok = docBuf[bufferKey]
 			if !ok {
-
 				var host string
-				if reshuffleType=="cluster"{
+				switch reshuffleType {
+				case ClusterLevel:
 					host =esConfig.ID
-				}else{
+					break
+				case NodeLevel:
 					nodeInfo := metadata.GetNodeInfo(shardInfo.Node)
 					if global.Env().IsDebug{
 						log.Debugf("get node info by id:[%v], [%v]",shardInfo.Node,nodeInfo)
@@ -326,12 +327,17 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 						return errors.Errorf("nodeInfo not found, %v %v", bufferKey, shardInfo.Node)
 					}
 					host =nodeInfo.Http.PublishAddress
+					break
+				case IndexLevel:
+					break
+				case ShardLevel:
+					break
 				}
-
 
 				buff = bufferPool.Get()
 				docBuf[bufferKey] = buff
 
+				//TODO for sync usage, split sync and async
 				buffHosts[bufferKey] = host
 				if global.Env().IsDebug {
 					log.Debug(shardInfo.Index, ",", shardInfo.Shard, ",", host)
@@ -490,7 +496,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		bytebufferpool.Put(buffer)
 
 		ctx.Response.SetStatusCode(200)
-		fmt.Println("bulk reshuffle finished.")
 		ctx.Finished()
 	}
 
