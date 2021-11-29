@@ -45,18 +45,18 @@ type BulkIndexingProcessor struct {
 }
 
 type Config struct {
-	NumOfWorkers         int      `config:"worker_size"`
-	IdleTimeoutInSecond  int      `config:"idle_timeout_in_seconds"`
-	MaxConnectionPerHost int      `config:"max_connection_per_node"`
-	BulkSizeInKb         int      `config:"bulk_size_in_kb,omitempty"`
-	BulkSizeInMb         int      `config:"bulk_size_in_mb,omitempty"`
-	Elasticsearch        string   `config:"elasticsearch,omitempty"`
-	Level        string   `config:"level,omitempty"`
+	NumOfWorkers         int    `config:"worker_size"`
+	IdleTimeoutInSecond  int    `config:"idle_timeout_in_seconds"`
+	MaxConnectionPerHost int    `config:"max_connection_per_node"`
+	BulkSizeInKb         int    `config:"bulk_size_in_kb,omitempty"`
+	BulkSizeInMb         int    `config:"bulk_size_in_mb,omitempty"`
+	Elasticsearch        string `config:"elasticsearch,omitempty"`
+	Level                string `config:"level,omitempty"`
 
-	Indices              []string `config:"index,omitempty"`
-	EnabledShards        []string `config:"shards,omitempty"`
-	Queues               []string `config:"queues,omitempty"`
-	ValidateRequest      bool     `config:"valid_request"`
+	Indices         []string `config:"index,omitempty"`
+	EnabledShards   []string `config:"shards,omitempty"`
+	Queues          []string `config:"queues,omitempty"`
+	ValidateRequest bool     `config:"valid_request"`
 
 	RotateConfig rotate.RotateConfig          `config:"rotate"`
 	BulkConfig   elastic2.BulkProcessorConfig `config:"bulk"`
@@ -70,7 +70,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		BulkSizeInMb:         10,
 		ValidateRequest:      false,
 		RotateConfig:         rotate.DefaultConfig,
-		BulkConfig:         elastic2.DefaultBulkProcessorConfig,
+		BulkConfig:           elastic2.DefaultBulkProcessorConfig,
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -118,9 +118,9 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 		processor.initLocker.Unlock()
 	}
 
-	//wait for nodes info
-	var nodesFailureCount =0
-	NODESINFO:
+//	//wait for nodes info
+//	var nodesFailureCount = 0
+//NODESINFO:
 
 	meta := elastic.GetMetadata(processor.config.Elasticsearch)
 	wg := sync.WaitGroup{}
@@ -128,97 +128,96 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 		return errors.New("metadata is nil")
 	}
 
-
-	if processor.config.Level=="cluster"{
-		queueName := common.GetClusterLevelShuffleKey(processor.config.Elasticsearch)
-
-		if global.Env().IsDebug {
-			log.Trace("queueName:", queueName)
-		}
-
-		for i := 0; i < processor.config.NumOfWorkers; i++ {
-			wg.Add(1)
-			go processor.NewBulkWorker(c,bulkSizeInByte, &wg, queueName, meta.GetActiveHost())
-		}
-	}else{
-		//index,shard,level
-		if processor.config.Indices!=nil && len(processor.config.Indices) > 0 {
-			if meta.ClusterState==nil{
-				time.Sleep(1*time.Second)
-				log.Tracef("%v cluster state is not available, recheck now",meta.Config.Name)
-				goto NODESINFO
-			}
-
-			for _, v := range processor.config.Indices {
-				routingTable,err:=meta.GetIndexRoutingTable(v)
-				if err!=nil{
-					return err
-				}
-
-				//indexSettings := (*meta.Indices)[v]
-				for i := 0; i < len(routingTable); i++ {
-					queueName := common.GetShardLevelShuffleKey(processor.config.Elasticsearch, v, i)
-					shardInfo,err := meta.GetPrimaryShardInfo(v, i)
-					if err!=nil{
-						return err
-					}
-
-					if len(processor.config.EnabledShards) > 0 {
-						if !util.ContainsAnyInArray(util.ToString(shardInfo.Shard), processor.config.EnabledShards) {
-							log.Debugf("%v-%v not enabled, skip processing", shardInfo.Index, shardInfo.Shard)
-							continue
-						}
-					}
-
-					nodeInfo := meta.GetNodeInfo(shardInfo.Node)
-
-					if global.Env().IsDebug {
-						log.Debug(shardInfo.Index, ",", shardInfo.Shard, ",", nodeInfo.Http.PublishAddress)
-					}
-
-					for i := 0; i < processor.config.NumOfWorkers; i++ {
-						wg.Add(1)
-						go processor.NewBulkWorker(c,bulkSizeInByte, &wg, queueName, nodeInfo.Http.PublishAddress)
-					}
-				}
-			}
-		} else { //node level
-			if meta.Nodes == nil {
-				nodesFailureCount++
-				if nodesFailureCount>5{
-					log.Debug("enough wait for none nil nodes")
-					return errors.New("nodes is nil")
-				}
-				time.Sleep(1*time.Second)
-				log.Tracef("%v is not available, recheck now",meta.Config.Name)
-				goto NODESINFO
-			}
-
-			//TODO only get data nodes or filtered nodes
-			for k, v := range *meta.Nodes {
-				queueName := common.GetNodeLevelShuffleKey(processor.config.Elasticsearch, k)
-
-				if global.Env().IsDebug {
-					log.Trace("queueName:", queueName, ",", v)
-					log.Debug("nodeInfo:", k, ",", v.Http.PublishAddress)
-				}
-
-				for i := 0; i < processor.config.NumOfWorkers; i++ {
-					wg.Add(1)
-					go processor.NewBulkWorker(c,bulkSizeInByte, &wg, queueName, v.Http.PublishAddress)
-				}
-			}
-		}
-	}
+	//if processor.config.Level == "cluster" {
+	//	queueName := common.GetClusterLevelShuffleKey(processor.config.Elasticsearch)
+	//
+	//	if global.Env().IsDebug {
+	//		log.Trace("queueName:", queueName)
+	//	}
+	//
+	//	for i := 0; i < processor.config.NumOfWorkers; i++ {
+	//		wg.Add(1)
+	//		go processor.NewBulkWorker(c, bulkSizeInByte, &wg, queueName, meta.GetActiveHost())
+	//	}
+	//} else {
+	//	//index,shard,level
+	//	if processor.config.Indices != nil && len(processor.config.Indices) > 0 {
+	//		if meta.ClusterState == nil {
+	//			time.Sleep(1 * time.Second)
+	//			log.Tracef("%v cluster state is not available, recheck now", meta.Config.Name)
+	//			goto NODESINFO
+	//		}
+	//
+	//		for _, v := range processor.config.Indices {
+	//			routingTable, err := meta.GetIndexRoutingTable(v)
+	//			if err != nil {
+	//				return err
+	//			}
+	//
+	//			//indexSettings := (*meta.Indices)[v]
+	//			for i := 0; i < len(routingTable); i++ {
+	//				queueName := common.GetShardLevelShuffleKey(processor.config.Elasticsearch, v, i)
+	//				shardInfo, err := meta.GetPrimaryShardInfo(v, i)
+	//				if err != nil {
+	//					return err
+	//				}
+	//
+	//				if len(processor.config.EnabledShards) > 0 {
+	//					if !util.ContainsAnyInArray(util.ToString(shardInfo.Shard), processor.config.EnabledShards) {
+	//						log.Debugf("%v-%v not enabled, skip processing", shardInfo.Index, shardInfo.Shard)
+	//						continue
+	//					}
+	//				}
+	//
+	//				nodeInfo := meta.GetNodeInfo(shardInfo.Node)
+	//
+	//				if global.Env().IsDebug {
+	//					log.Debug(shardInfo.Index, ",", shardInfo.Shard, ",", nodeInfo.Http.PublishAddress)
+	//				}
+	//
+	//				for i := 0; i < processor.config.NumOfWorkers; i++ {
+	//					wg.Add(1)
+	//					go processor.NewBulkWorker(c, bulkSizeInByte, &wg, queueName, nodeInfo.Http.PublishAddress)
+	//				}
+	//			}
+	//		}
+	//	} else { //node level
+	//		if meta.Nodes == nil {
+	//			nodesFailureCount++
+	//			if nodesFailureCount > 5 {
+	//				log.Debug("enough wait for none nil nodes")
+	//				return errors.New("nodes is nil")
+	//			}
+	//			time.Sleep(1 * time.Second)
+	//			log.Tracef("%v is not available, recheck now", meta.Config.Name)
+	//			goto NODESINFO
+	//		}
+	//
+	//		//TODO only get data nodes or filtered nodes
+	//		for k, v := range *meta.Nodes {
+	//			queueName := common.GetNodeLevelShuffleKey(processor.config.Elasticsearch, k)
+	//
+	//			if global.Env().IsDebug {
+	//				log.Trace("queueName:", queueName, ",", v)
+	//				log.Debug("nodeInfo:", k, ",", v.Http.PublishAddress)
+	//			}
+	//
+	//			for i := 0; i < processor.config.NumOfWorkers; i++ {
+	//				wg.Add(1)
+	//				go processor.NewBulkWorker(c, bulkSizeInByte, &wg, queueName, v.Http.PublishAddress)
+	//			}
+	//		}
+	//	}
+	//}
 
 	if len(processor.config.Queues) > 0 {
 		host := meta.GetActiveHost()
-			for _, v := range processor.config.Queues {
-				log.Debug("process bulk queue:", v)
-				for i := 0; i < processor.config.NumOfWorkers; i++ {
-					wg.Add(1)
-					go processor.NewBulkWorker(c,bulkSizeInByte, &wg, v, host)
-				}
+		for _, v := range processor.config.Queues {
+			log.Debug("process bulk queue:", v)
+			for i := 0; i < processor.config.NumOfWorkers; i++ {
+				wg.Add(1)
+				go processor.NewBulkWorker(c, bulkSizeInByte, &wg, v, host)
+			}
 		}
 	}
 
@@ -227,7 +226,7 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 	return nil
 }
 
-func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context,bulkSizeInByte int, wg *sync.WaitGroup, queueName string, host string) {
+func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context, bulkSizeInByte int, wg *sync.WaitGroup, queueName string, host string) {
 
 	defer func() {
 		if !global.Env().IsDebug {
@@ -256,7 +255,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context,bulk
 	idleDuration := time.Duration(processor.config.IdleTimeoutInSecond) * time.Second
 	meta := elastic.GetMetadata(processor.config.Elasticsearch)
 
-	if meta==nil{
+	if meta == nil {
 		panic(errors.Errorf("cluster metadata [%v] not ready", processor.config.Elasticsearch))
 	}
 
@@ -279,18 +278,18 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context,bulk
 		bulkProcessor.Config.PartialSuccessQueue = fmt.Sprintf("%v-bulk-partial-success-items", processor.config.Elasticsearch)
 	}
 
-	var lastCommit time.Time=time.Now()
+	var lastCommit time.Time = time.Now()
 
 READ_DOCS:
 	for {
-		if ctx.IsCanceled(){
+		if ctx.IsCanceled() {
 			goto CLEAN_BUFFER
 		}
 
 		//TODO add config to enable check or not
-		if !elastic.IsHostAvailable(host){
-			time.Sleep(time.Second*1)
-			log.Debugf("host [%v] is not available",host)
+		if !elastic.IsHostAvailable(host) {
+			time.Sleep(time.Second * 1)
+			log.Debugf("host [%v] is not available", host)
 			goto READ_DOCS
 		}
 
@@ -309,7 +308,7 @@ READ_DOCS:
 			mainBuf.Write(pop)
 		}
 
-		if time.Since(lastCommit)>idleDuration && mainBuf.Len()>0{
+		if time.Since(lastCommit) > idleDuration && mainBuf.Len() > 0 {
 			if global.Env().IsDebug {
 				log.Trace("hit idle timeout, ", idleDuration.String())
 			}
@@ -327,7 +326,7 @@ READ_DOCS:
 
 CLEAN_BUFFER:
 
-	lastCommit=time.Now()
+	lastCommit = time.Now()
 
 	if mainBuf.Len() > 0 {
 
@@ -336,7 +335,7 @@ CLEAN_BUFFER:
 		log.Trace(meta.Config.Name, ", starting submit bulk request")
 		status, success := bulkProcessor.Bulk(meta, host, data)
 		stats.Timing("elasticsearch."+meta.Config.Name+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
-		log.Debug(meta.Config.Name,", ", host, ", result:", success, ", status:", status, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elapsed:", time.Since(start))
+		log.Debug(meta.Config.Name, ", ", host, ", result:", success, ", status:", status, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elapsed:", time.Since(start))
 
 		switch success {
 		case elastic2.SUCCESS:
@@ -356,7 +355,7 @@ CLEAN_BUFFER:
 		mainBuf.Reset()
 	}
 
-	if ctx.IsCanceled(){
+	if ctx.IsCanceled() {
 		return
 	}
 

@@ -11,25 +11,23 @@ import (
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/rate"
-	"infini.sh/framework/core/rotate"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
-	"path"
 	"time"
 )
 
 var JSON_CONTENT_TYPE = "application/json"
 
 type BulkReshuffle struct {
-	config        *BulkReshuffleConfig
-	bulkProcessor *BulkProcessor
+	config *BulkReshuffleConfig
+	//bulkProcessor *BulkProcessor
 }
 
 func (this *BulkReshuffle) Name() string {
-	return "bulk_reshuffle"
+	return "bulk_shuffle"
 }
 
 type Level string
@@ -38,11 +36,11 @@ const ClusterLevel = "cluster"
 const NodeLevel = "node"
 const IndexLevel = "index"
 const ShardLevel = "shard"
+const PartitionLevel = "partition"
 
 type BulkReshuffleConfig struct {
 	Elasticsearch       string `config:"elasticsearch"`
-	Level               Level `config:"level"` //cluster/node(will,change)/index/shard/partition
-	Mode                string `config:"mode"`
+	Level               string `config:"level"` //cluster/node(will,change)/index/shard/partition
 	FixNullID           bool   `config:"fix_null_id"`
 	IndexStatsAnalysis  bool   `config:"index_stats_analysis"`
 	ActionStatsAnalysis bool   `config:"action_stats_analysis"`
@@ -50,15 +48,13 @@ type BulkReshuffleConfig struct {
 	ValidateRequest bool `config:"validate_request"`
 
 	//split all lines into memory rather than scan
-	SafetyParse bool `config:"safety_parse"`
-	ValidEachLine   bool  `config:"validate_each_line"`
-	ValidMetadata   bool  `config:"validate_metadata"`
-	ValidPayload    bool  `config:"validate_payload"`
-	StickToNode     bool  `config:"stick_to_node"`
-	DocBufferSize       int                 `config:"doc_buffer_size"`
-	Shards              []int               `config:"shards"`
-	RotateConfig        rotate.RotateConfig `config:"rotate"`
-	BulkProcessorConfig BulkProcessorConfig `config:"bulk_processing"`
+	SafetyParse   bool  `config:"safety_parse"`
+	ValidEachLine bool  `config:"validate_each_line"`
+	ValidMetadata bool  `config:"validate_metadata"`
+	ValidPayload  bool  `config:"validate_payload"`
+	StickToNode   bool  `config:"stick_to_node"`
+	DocBufferSize int   `config:"doc_buffer_size"`
+	Shards        []int `config:"shards"`
 }
 
 func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
@@ -66,13 +62,10 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 	cfg := BulkReshuffleConfig{
 		DocBufferSize:       256 * 1024,
 		IndexStatsAnalysis:  true,
-		SafetyParse:  true,
+		SafetyParse:         true,
 		ActionStatsAnalysis: true,
 		FixNullID:           true,
-		Level:               "node",
-		Mode:                "sync",
-		RotateConfig: rotate.DefaultConfig,
-		BulkProcessorConfig: DefaultBulkProcessorConfig,
+		Level:               NodeLevel,
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -81,10 +74,6 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 
 	runner := BulkReshuffle{config: &cfg}
 
-	runner.bulkProcessor = &BulkProcessor{
-		RotateConfig: cfg.RotateConfig,
-		Config:       cfg.BulkProcessorConfig,
-	}
 	return &runner, nil
 }
 
@@ -118,7 +107,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 		//index-shardID -> buffer
 		docBuf := map[string]*bytebufferpool.ByteBuffer{}
-		buffHosts := map[string]string{}
 
 		validEachLine := this.config.ValidEachLine
 		validMetadata := this.config.ValidMetadata
@@ -128,7 +116,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 		var buff *bytebufferpool.ByteBuffer
 		var ok bool
-		var bufferKey string
+		var queueName string
 		indexAnalysis := this.config.IndexStatsAnalysis   //sync and async
 		actionAnalysis := this.config.ActionStatsAnalysis //sync and async
 		validateRequest := this.config.ValidateRequest
@@ -139,7 +127,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		docBuffer = p.Get(this.config.DocBufferSize) //doc buffer for bytes scanner
 		defer p.Put(docBuffer)
 
-		docCount, err := WalkBulkRequests(this.config.SafetyParse,body, docBuffer, func(eachLine []byte) (skipNextLine bool) {
+		docCount, err := WalkBulkRequests(this.config.SafetyParse, body, docBuffer, func(eachLine []byte) (skipNextLine bool) {
 			if validEachLine {
 				obj := map[string]interface{}{}
 				err := util.FromJSONBytes(eachLine, &obj)
@@ -240,32 +228,17 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			}
 
 			//get routing table of index
-			table,err:=metadata.GetIndexRoutingTable(index)
-			if err!=nil{
+			table, err := metadata.GetIndexRoutingTable(index)
+			if err != nil {
 				if rate.GetRateLimiter("index_routing_table_not_found", index, 1, 2, time.Minute*1).Allow() {
-					log.Warn("index routing table not found,", index, ",", metaStr,",",err)
+					log.Warn("index routing table not found,", index, ",", metaStr, ",", err)
 				}
 				return err
 			}
 
-			//var indexSettings *elastic.IndexInfo
-			//index,indexSettings,err=metadata.GetIndexSetting(index)
-			//
-			//if err!=nil{
-			//	if rate.GetRateLimiter("index_setting_not_found", index, 1, 2, time.Minute*1).Allow() {
-			//		log.Warn("index setting not found,", index, ",", metaStr,",",err)
-			//	}
-			//	return err
-			//}
-
-			//if indexSettings.Shards <= 0 || indexSettings.Status == "close" {
-			//	log.Debugf("index %v closed,", indexSettings.Index)
-			//	return errors.Errorf("index %v closed,", indexSettings.Index)
-			//}
-
 			//not only one shard
-			totalShards:=len(table)
-			if totalShards >1 {
+			totalShards := len(table)
+			if totalShards > 1 {
 				//如果 shards=1，则直接找主分片所在节点，否则计算一下。
 				shardID = elastic.GetShardID(metadata.GetMajorVersion(), []byte(id), totalShards)
 
@@ -282,66 +255,55 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
-			shardInfo,err := metadata.GetPrimaryShardInfo(index, shardID)
-			if err!=nil{
-				return errors.Error("shardInfo was not found,", index, ",", shardID,",",err)
+			shardInfo, err := metadata.GetPrimaryShardInfo(index, shardID)
+			if err != nil {
+				return errors.Error("shard info was not found,", index, ",", shardID, ",", err)
 			}
 
 			if shardInfo == nil {
 				if rate.GetRateLimiter(fmt.Sprintf("shard_info_not_found_%v", index), util.IntToString(shardID), 1, 5, time.Minute*1).Allow() {
 					log.Warn("shardInfo was not found,", index, ",", shardID)
 				}
-				return errors.Error("shardInfo was not found,", index, ",", shardID)
+				return errors.Error("shard info was not found,", index, ",", shardID)
 			}
 
-			//write meta
-			bufferKey = common.GetNodeLevelShuffleKey(clusterName, shardInfo.Node)
+			var nodeID = shardInfo.Node
+			if nodeID == "" {
+				nodeID = "UNASSIGNED"
+			}
 
-			if reshuffleType == "cluster"{
-				bufferKey = common.GetClusterLevelShuffleKey(clusterName)
-			} else if reshuffleType == "shard" {
-				bufferKey = common.GetShardLevelShuffleKey(clusterName, index, shardID)
+			var partitionID = 0
+
+			//注册队列到元数据中，消费者自动订阅该队列列表，并根据元数据来分别进行相应的处理
+			switch reshuffleType {
+			case ClusterLevel:
+				queueName = fmt.Sprintf("async_bulk-cluster-%v", esConfig.ID)
+				break
+			case NodeLevel:
+				queueName = fmt.Sprintf("async_bulk-node-%v-%v", esConfig.ID, nodeID)
+				break
+			case IndexLevel:
+				queueName = fmt.Sprintf("async_bulk-index-%v-%v", esConfig.ID, index)
+				break
+			case ShardLevel:
+				queueName = fmt.Sprintf("async_bulk-shard-%v-%v-%v", esConfig.ID, index, shardID)
+				break
+			case PartitionLevel:
+				//queue: async_cluster-node-index-shard-partition
+				queueName = fmt.Sprintf("async_bulk-partition-%v-%v-%v-%v", esConfig.ID, index, shardID, partitionID)
+				break
 			}
 
 			if global.Env().IsDebug {
-				log.Tracef("%s/%s/%s => %v , %v", index, typeName, id, shardID, bufferKey)
+				log.Debugf("final queue name:", queueName)
+				log.Tracef("%s/%s/%s => %v , %v", index, typeName, id, shardID, queueName)
 			}
 
 			////update actionItem
-			buff, ok = docBuf[bufferKey]
+			buff, ok = docBuf[queueName]
 			if !ok {
-				var host string
-				switch reshuffleType {
-				case ClusterLevel:
-					host =esConfig.ID
-					break
-				case NodeLevel:
-					nodeInfo := metadata.GetNodeInfo(shardInfo.Node)
-					if global.Env().IsDebug{
-						log.Debugf("get node info by id:[%v], [%v]",shardInfo.Node,nodeInfo)
-					}
-					if nodeInfo == nil {
-						if rate.GetRateLimiter("node_info_not_found_%v", shardInfo.Node, 1, 5, time.Minute*1).Allow() {
-							log.Warnf("nodeInfo not found, %v %v", bufferKey, shardInfo.Node)
-						}
-						return errors.Errorf("nodeInfo not found, %v %v", bufferKey, shardInfo.Node)
-					}
-					host =nodeInfo.Http.PublishAddress
-					break
-				case IndexLevel:
-					break
-				case ShardLevel:
-					break
-				}
-
 				buff = bufferPool.Get()
-				docBuf[bufferKey] = buff
-
-				//TODO for sync usage, split sync and async
-				buffHosts[bufferKey] = host
-				if global.Env().IsDebug {
-					log.Debug(shardInfo.Index, ",", shardInfo.Shard, ",", host)
-				}
+				docBuf[queueName] = buff
 			}
 
 			//保存临时变量
@@ -351,11 +313,12 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		}, func(payloadBytes []byte) {
 
 			if actionMeta.Len() > 0 {
-				buff, ok := docBuf[bufferKey]
+				buff, ok := docBuf[queueName]
 				if !ok {
 					buff = bufferPool.Get()
-					docBuf[bufferKey] = buff
+					docBuf[queueName] = buff
 				}
+
 				if global.Env().IsDebug {
 					log.Trace("metadata:", string(payloadBytes))
 				}
@@ -391,69 +354,25 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			return
 		}
 
-		submitMode := this.config.Mode //sync and async
-		if submitMode == "sync" {
+		//send to queue
+		for x, y := range docBuf {
+			y.Write(NEWLINEBYTES)
+			data := y.Bytes()
 
-			for x, y := range docBuf {
-				y.Write(NEWLINEBYTES)
-				data := y.Bytes()
-
-				if validateRequest {
-					common.ValidateBulkRequest("sync-bulk", string(data))
-				}
-
-				endpoint, ok := buffHosts[x]
-				if !ok {
-					log.Error("shard endpoint was not found,", x)
-					//TODO
-					return
-				}
-
-				endpoint = path.Join(endpoint, pathStr)
-
-				start := time.Now()
-				code, status := this.bulkProcessor.Bulk(metadata, endpoint, data)
-				stats.Timing("elasticsearch."+esConfig.Name+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
-				switch status {
-				case SUCCESS:
-					break
-				case INVALID:
-					log.Error("invalid bulk requests failed on endpoint,", x, ", code:", code)
-					break
-				case PARTIAL:
-					log.Error("bulk requests partial failed on endpoint,", x, ", code:", code)
-					break
-				case FAILURE:
-					log.Error("bulk requests failed on endpoint,", x, ", code:", code)
-					return
-				}
-
-				ctx.SetDestination(fmt.Sprintf("%v:%v", "sync", x))
-				bufferPool.Put(y)
+			if validateRequest {
+				common.ValidateBulkRequest("aync-bulk", string(data))
 			}
 
-		} else {
-
-			for x, y := range docBuf {
-				y.Write(NEWLINEBYTES)
-				data := y.Bytes()
-
-				if validateRequest {
-					common.ValidateBulkRequest("aync-bulk", string(data))
+			if len(data) > 0 {
+				err := queue.Push(x, data)
+				if err != nil {
+					panic(err)
 				}
-
-				if len(data) > 0 {
-					err := queue.Push(x, data)
-					if err != nil {
-						panic(err)
-					}
-					ctx.SetDestination(fmt.Sprintf("%v:%v", "async", x))
-				} else {
-					log.Warn("zero message,", x, ",", len(data), ",", string(body))
-				}
-				bufferPool.Put(y)
+				ctx.SetDestination(fmt.Sprintf("%v:%v", "async", x))
+			} else {
+				log.Warn("zero message,", x, ",", len(data), ",", string(body))
 			}
-
+			bufferPool.Put(y)
 		}
 
 		if indexAnalysis {

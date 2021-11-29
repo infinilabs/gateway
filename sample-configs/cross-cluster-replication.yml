@@ -225,7 +225,7 @@ flow:
                 contains:
                   _ctx.request.path: /_bulk
               elasticsearch: "backup"
-              level: node
+              level: partition #cluster,node,index,shard,partition
               mode: async
               fix_null_id: true
           - echo:
