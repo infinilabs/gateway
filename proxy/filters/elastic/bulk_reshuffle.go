@@ -116,7 +116,8 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 		var buff *bytebufferpool.ByteBuffer
 		var ok bool
-		var queueName string
+		var queueConfig *queue.Config
+		//var queueName string
 		indexAnalysis := this.config.IndexStatsAnalysis   //sync and async
 		actionAnalysis := this.config.ActionStatsAnalysis //sync and async
 		validateRequest := this.config.ValidateRequest
@@ -274,36 +275,50 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 			var partitionID = 0
 
+			queueConfig=&queue.Config{}
+
 			//注册队列到元数据中，消费者自动订阅该队列列表，并根据元数据来分别进行相应的处理
 			switch reshuffleType {
 			case ClusterLevel:
-				queueName = fmt.Sprintf("async_bulk-cluster-%v", esConfig.ID)
+				queueConfig.Name = fmt.Sprintf("async_bulk-cluster##%v", esConfig.ID)
 				break
 			case NodeLevel:
-				queueName = fmt.Sprintf("async_bulk-node-%v-%v", esConfig.ID, nodeID)
+				queueConfig.Name = fmt.Sprintf("async_bulk-node##%v##%v", esConfig.ID, nodeID)
 				break
 			case IndexLevel:
-				queueName = fmt.Sprintf("async_bulk-index-%v-%v", esConfig.ID, index)
+				queueConfig.Name = fmt.Sprintf("async_bulk-index##%v##%v", esConfig.ID, index)
 				break
 			case ShardLevel:
-				queueName = fmt.Sprintf("async_bulk-shard-%v-%v-%v", esConfig.ID, index, shardID)
+				queueConfig.Name = fmt.Sprintf("async_bulk-shard##%v##%v##%v", esConfig.ID, index, shardID)
 				break
 			case PartitionLevel:
-				//queue: async_cluster-node-index-shard-partition
-				queueName = fmt.Sprintf("async_bulk-partition-%v-%v-%v-%v", esConfig.ID, index, shardID, partitionID)
+				queueConfig.Name = fmt.Sprintf("async_bulk-partition##%v##%v##%v##%v", esConfig.ID, index, shardID, partitionID)
 				break
 			}
+			queueConfig.Source="dynamic"
+			queueConfig.Metadata= map[string]interface{}{}
+			queueConfig.Metadata["level"]=ClusterLevel
+			queueConfig.Metadata["cluster_id"]=esConfig.ID
+			queueConfig.Metadata["node_id"]=nodeID
+			queueConfig.Metadata["index"]=index
+			queueConfig.Metadata["shard"]=shardID
+			queueConfig.Metadata["partition"]=partitionID
 
 			if global.Env().IsDebug {
-				log.Debugf("final queue name:", queueName)
-				log.Tracef("%s/%s/%s => %v , %v", index, typeName, id, shardID, queueName)
+				log.Debugf("final queue name: %v", queueConfig)
+				log.Tracef("%s/%s/%s => %v , %v", index, typeName, id, shardID, queueConfig)
 			}
 
 			////update actionItem
-			buff, ok = docBuf[queueName]
+			buff, ok = docBuf[queueConfig.Name]
 			if !ok {
 				buff = bufferPool.Get()
-				docBuf[queueName] = buff
+				docBuf[queueConfig.Name] = buff
+				var exists bool
+				exists,queueConfig,err=queue.RegisterConfig(queueConfig.Name,queueConfig)
+				if !exists&&err!=nil{
+					panic(err)
+				}
 			}
 
 			//保存临时变量
@@ -313,10 +328,10 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		}, func(payloadBytes []byte) {
 
 			if actionMeta.Len() > 0 {
-				buff, ok := docBuf[queueName]
+				buff, ok := docBuf[queueConfig.Name]
 				if !ok {
 					buff = bufferPool.Get()
-					docBuf[queueName] = buff
+					docBuf[queueConfig.Name] = buff
 				}
 
 				if global.Env().IsDebug {
@@ -364,7 +379,13 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			}
 
 			if len(data) > 0 {
-				err := queue.Push(x, data)
+
+				cfg,ok:=queue.GetConfig(x)
+				if !ok{
+					panic(errors.Errorf("queue config [%v] not exists",x))
+				}
+
+				err := queue.Push(cfg.Id, data)
 				if err != nil {
 					panic(err)
 				}
