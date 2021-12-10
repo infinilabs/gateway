@@ -1,0 +1,52 @@
+path.data: data
+path.logs: log
+
+entry:
+  - name: es_entrypoint
+    enabled: true
+    router: default
+    max_concurrency: 20000
+    network:
+      binding: 0.0.0.0:8000
+
+router:
+  - name: default
+    default_flow: main_flow
+
+flow:
+  - name: main_flow
+    filter:
+      - context_filter:
+          context: _ctx.request.path
+          message: "request not allowed."
+          action: redirect_flow
+          status: 403
+          flow: log4j_matched_flow
+          must_not: # any match will be filtered
+            contain:
+              - 'jndi:'
+              - "jndi:ldap:"
+              - "jndi:rmi:"
+      - context_filter:
+          context: _ctx.request.body
+          message: "request not allowed."
+          action: redirect_flow
+          status: 403
+          flow: log4j_matched_flow
+          must_not: # any match will be filtered
+            contain:
+              - "jndi:"
+              - "jndi:ldap:"
+              - "jndi:rmi:"
+      - elasticsearch:
+          elasticsearch: es-server
+  - name: log4j_matched_flow
+    filter:
+      - echo:
+          message: 'Apache Log4j 2, Boom!'
+
+elasticsearch:
+  - name: es-server
+    enabled: true
+    endpoints:
+      - http://localhost:9200
