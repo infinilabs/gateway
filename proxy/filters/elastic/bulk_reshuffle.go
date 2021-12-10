@@ -296,13 +296,13 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				break
 			}
 			queueConfig.Source="dynamic"
-			queueConfig.Metadata= map[string]interface{}{}
-			queueConfig.Metadata["level"]=ClusterLevel
-			queueConfig.Metadata["cluster_id"]=esConfig.ID
-			queueConfig.Metadata["node_id"]=nodeID
-			queueConfig.Metadata["index"]=index
-			queueConfig.Metadata["shard"]=shardID
-			queueConfig.Metadata["partition"]=partitionID
+			queueConfig.Labels= map[string]interface{}{}
+			queueConfig.Labels["level"]=ClusterLevel
+			queueConfig.Labels["cluster_id"]=esConfig.ID
+			queueConfig.Labels["node_id"]=nodeID
+			queueConfig.Labels["index"]=index
+			queueConfig.Labels["shard"]=shardID
+			queueConfig.Labels["partition"]=partitionID
 
 			if global.Env().IsDebug {
 				log.Debugf("final queue name: %v", queueConfig)
