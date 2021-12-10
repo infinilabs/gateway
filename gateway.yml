@@ -94,6 +94,8 @@ pipeline:
         idle_timeout_in_seconds: 1
         worker_size: 1
         bulk_size_in_mb: 10 #in MB
+        when:
+          cluster_available: [ "dev" ]
 - name: bulk_request_ingest
   auto_start: true
   keep_running: true
@@ -107,7 +109,8 @@ pipeline:
 #        process_failure_queue: true #process failed bulk messages
 #        queues: #process other bulk queue
 #          - dev-node-failure
-
+        when:
+          cluster_available: [ "dev" ]
 
 floating_ip:
   enabled: false
