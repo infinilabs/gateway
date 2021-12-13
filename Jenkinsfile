@@ -19,7 +19,8 @@ pipeline {
 
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE'){
-                    sh 'cd /home/jenkins/go/src/infini.sh/gateway && git stash && git pull origin master && make clean config build-linux build-arm'
+                    sh 'cd /home/jenkins/go/src/infini.sh/gateway && git stash && git pull origin master && make clean config build-linux'
+                    sh 'cd /home/jenkins/go/src/infini.sh/gateway && git stash && git pull origin master && make clean config build-arm'
                     sh label: 'package-linux-amd64', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-amd64.tar.gz gateway-linux-amd64 gateway.yml ../sample-configs'
                     sh label: 'package-linux-386', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-386.tar.gz gateway-linux-386 gateway.yml ../sample-configs'
                     sh label: 'package-linux-mips', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-mips.tar.gz gateway-linux-mips gateway.yml ../sample-configs'
