@@ -33,14 +33,18 @@ type ReverseProxy struct {
 
 func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 
-	log.Tracef("valid endpoint %v", node.Http.PublishAddress)
 	var hasExclude = false
 	var hasInclude = false
-	endpoint := node.Http.PublishAddress
+	endpoint := node.GetHttpPublishHost()
+
+	if global.Env().IsDebug{
+		log.Tracef("validate endpoint %v", endpoint)
+	}
+
 	for _, v := range cfg.Filter.Hosts.Exclude {
 		hasExclude = true
 		if endpoint == v {
-			log.Debugf("host [%v] in exclude list, mark as invalid", node.Http.PublishAddress)
+			log.Debugf("host [%v] in exclude list, mark as invalid", endpoint)
 			return false
 		}
 	}
@@ -48,7 +52,7 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 	for _, v := range cfg.Filter.Hosts.Include {
 		hasInclude = true
 		if endpoint == v {
-			log.Debugf("host [%v] in include list, mark as valid", node.Http.PublishAddress)
+			log.Debugf("host [%v] in include list, mark as valid", endpoint)
 			return true
 		}
 	}
@@ -63,7 +67,7 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 	for _, v := range cfg.Filter.Roles.Exclude {
 		hasExclude = true
 		if util.ContainsAnyInArray(v, node.Roles) {
-			log.Debugf("node [%v] role [%v] match exclude rule [%v], mark as invalid", node.Http.PublishAddress, node.Roles, v)
+			log.Debugf("node [%v] role [%v] match exclude rule [%v], mark as invalid", endpoint, node.Roles, v)
 			return false
 		}
 	}
@@ -71,7 +75,7 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 	for _, v := range cfg.Filter.Roles.Include {
 		hasInclude = true
 		if util.ContainsAnyInArray(v, node.Roles) {
-			log.Debugf("node [%v] role [%v] match include rule [%v], mark as valid", node.Http.PublishAddress, node.Roles, v)
+			log.Debugf("node [%v] role [%v] match include rule [%v], mark as valid", endpoint, node.Roles, v)
 			return true
 		}
 	}
@@ -88,7 +92,7 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 			v1, ok := node.Attributes[k]
 			if ok {
 				if v1 == v {
-					log.Debugf("node [%v] tags [%v:%v] in exclude list, mark as invalid", node.Http.PublishAddress, k, v)
+					log.Debugf("node [%v] tags [%v:%v] in exclude list, mark as invalid", endpoint, k, v)
 					return false
 				}
 			}
@@ -101,7 +105,7 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 			v1, ok := node.Attributes[k]
 			if ok {
 				if v1 == v {
-					log.Debugf("node [%v] tags [%v:%v] in include list, mark as valid", node.Http.PublishAddress, k, v)
+					log.Debugf("node [%v] tags [%v:%v] in include list, mark as valid", endpoint, k, v)
 					return true
 				}
 			}
@@ -161,15 +165,16 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 				continue
 			}
 
-			arry:=strings.Split(y.Http.PublishAddress,":")
+			endpoint:=y.GetHttpPublishHost()
+			arry:=strings.Split(endpoint,":")
 			if len(arry)==2{
 				if !util.TestTCPPort(arry[0],arry[1]){
-					log.Debugf("[%v] endpoint [%v] is not available",y.Name,y.Http.PublishAddress)
+					log.Debugf("[%v] endpoint [%v] is not available",y.Name,endpoint)
 					continue
 				}
 			}
 
-			hosts = append(hosts, y.Http.PublishAddress)
+			hosts = append(hosts, endpoint)
 		}
 		log.Tracef("discovery %v nodes: [%v]", len(hosts), util.JoinArray(hosts, ", "))
 	}
