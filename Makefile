@@ -4,7 +4,7 @@ SHELL=/bin/bash
 APP_NAME := gateway
 APP_VERSION := 1.0.0_SNAPSHOT
 APP_CONFIG := $(APP_NAME).yml
-APP_EOLDate := "2021-12-31 10:10:10"
+APP_EOLDate := "2022-12-31 10:10:10"
 APP_STATIC_FOLDER := .public
 APP_STATIC_PACKAGE := public
 APP_UI_FOLDER := ui
@@ -125,7 +125,7 @@ build-arm: config
 build-darwin: config
 	GOOS=darwin  GOARCH=amd64     $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-mac-amd64
 # 	GOOS=darwin  GOARCH=386       $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-mac-386
-# 	GOOS=darwin  GOARCH=arm64    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-mac-arm64
+	GOOS=darwin  GOARCH=arm64    $(GOBUILD) -o $(OUTPUT_DIR)/$(APP_NAME)-mac-arm64
 	@$(MAKE) restore-generated-file
 
 build-bsd: config
@@ -213,9 +213,9 @@ package-all-platform: package-darwin-platform package-linux-platform package-win
 
 package-darwin-platform:
 	@echo "Packaging Darwin"
-	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/mac-amd64.tar.gz      $(APP_NAME)-mac-amd64 $(APP_CONFIG)
-# 	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/mac-386.tar.gz      $(APP_NAME)-mac-386 $(APP_CONFIG)
-# 	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/mac-arm64.tar.gz      $(APP_NAME)-mac-arm64 $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && zip -r $(OUTPUT_DIR)/mac-amd64.zip      $(APP_NAME)-mac-amd64 $(APP_CONFIG)
+# 	cd $(OUTPUT_DIR) && zip -r $(OUTPUT_DIR)/mac-386.zip      $(APP_NAME)-mac-386 $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && zip -r $(OUTPUT_DIR)/mac-arm64.zip      $(APP_NAME)-mac-arm64 $(APP_CONFIG)
 
 package-linux-platform:
 	@echo "Packaging Linux"
@@ -235,8 +235,8 @@ package-linux-arm-platform:
 
 package-windows-platform:
 	@echo "Packaging Windows"
-	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/windows-amd64.tar.gz   $(APP_NAME)-windows-amd64.exe $(APP_CONFIG)
-	cd $(OUTPUT_DIR) && tar cfz $(OUTPUT_DIR)/windows-386.tar.gz   $(APP_NAME)-windows-386.exe $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && zip -r $(OUTPUT_DIR)/windows-amd64.zip   $(APP_NAME)-windows-amd64.exe $(APP_CONFIG)
+	cd $(OUTPUT_DIR) && zip -r $(OUTPUT_DIR)/windows-386.zip   $(APP_NAME)-windows-386.exe $(APP_CONFIG)
 
 test:
 	go get -u github.com/kardianos/govendor
