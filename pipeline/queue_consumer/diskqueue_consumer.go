@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/tls"
-	"infini.sh/framework/core/errors"
 	"fmt"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
+	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
@@ -161,7 +161,8 @@ READ_DOCS:
 
 		if len(waitingAfter) > 0 {
 			for _, v := range waitingAfter {
-				depth := queue.Depth(v)
+				qCfg:=queue.GetOrInitConfig(v)
+				depth := queue.Depth(qCfg)
 				if depth > 0 {
 					log.Debugf("%v has pending %v messages, cleanup it first", v, depth)
 					time.Sleep(5 * time.Second)
@@ -170,7 +171,7 @@ READ_DOCS:
 			}
 		}
 
-		pop, _, err := queue.PopTimeout(processor.config.InputQueue, idleDuration)
+		pop, _, err := queue.PopTimeout(queue.GetOrInitConfig(processor.config.InputQueue), idleDuration)
 		if err != nil {
 			log.Error(err)
 			panic(err)
@@ -189,12 +190,12 @@ READ_DOCS:
 
 				if status != 429 && status >= 400 && status < 500 {
 					log.Error("push to dead letter queue:", processor.config.InvalidQueue, ",", err)
-					err := queue.Push(processor.config.InvalidQueue, pop)
+					err := queue.Push(queue.GetOrInitConfig(processor.config.InvalidQueue), pop)
 					if err != nil {
 						panic(err)
 					}
 				} else {
-					err := queue.Push(processor.config.FailureQueue, pop)
+					err := queue.Push(queue.GetOrInitConfig(processor.config.FailureQueue), pop)
 					if err != nil {
 						panic(err)
 					}
@@ -307,21 +308,21 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 				if nonRetryableItems.Len() > 0 {
 					nonRetryableItems.WriteByte('\n')
 					bytes := req.OverrideBodyEncode(nonRetryableItems.Bytes(), true)
-					queue.Push(processor.config.InvalidQueue, bytes)
+					queue.Push(queue.GetOrInitConfig(processor.config.InvalidQueue), bytes)
 					bytebufferpool.Put(nonRetryableItems)
 				}
 
 				if retryableItems.Len() > 0 {
 					retryableItems.WriteByte('\n')
 					bytes := req.OverrideBodyEncode(retryableItems.Bytes(), true)
-					queue.Push(processor.config.FailureQueue, bytes)
+					queue.Push(queue.GetOrInitConfig(processor.config.FailureQueue), bytes)
 					bytebufferpool.Put(retryableItems)
 				}
 
 				if successItems.Len()>0 && processor.config.SaveSuccessDocsToQueue{
 					successItems.WriteByte('\n')
 					bytes := req.OverrideBodyEncode(successItems.Bytes(), true)
-					queue.Push(processor.config.PartialSuccessQueue, bytes)
+					queue.Push(queue.GetOrInitConfig(processor.config.PartialSuccessQueue), bytes)
 					bytebufferpool.Put(successItems)
 				}
 			}

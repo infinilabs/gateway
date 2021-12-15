@@ -38,7 +38,7 @@ func (filter *RetryLimiter) Filter(ctx *fasthttp.RequestCtx) {
 		log.Debugf("hit max retry times")
 		ctx.Finished()
 		ctx.Request.Header.Del(RetryKey)
-		queue.Push(filter.Queue,ctx.Request.Encode())
+		queue.Push(queue.GetOrInitConfig(filter.Queue),ctx.Request.Encode())
 		time.Sleep(time.Duration(filter.SleepInterval)*time.Millisecond)
 		return
 	}

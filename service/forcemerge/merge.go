@@ -220,7 +220,7 @@ func (module ForceMergeModule) Start() error {
 
 		for {
 
-			bytes,err:=queue.Pop(taskQueue)
+			bytes,err:=queue.Pop(queue.GetOrInitConfig(taskQueue))
 			if err!=nil{
 				panic(err)
 			}
@@ -251,7 +251,7 @@ func (module ForceMergeModule) Start() error {
 							if v.SegmentsCount> int64(mergeConfig.MinSegmentCount){
 								task:=ForceMergeTaskItem{Elasticsearch: mergeConfig.Elasticsearch,Index: v.Index}
 								log.Trace("add force_merge task to queue,",task)
-								err:=queue.Push(taskQueue,util.MustToJSONBytes(task))
+								err:=queue.Push(queue.GetOrInitConfig(taskQueue),util.MustToJSONBytes(task))
 								if err!=nil{
 									panic(err)
 								}

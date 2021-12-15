@@ -272,7 +272,7 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 	}
 
 	go processor.processMsg(func(result DiffResult) {
-		queue.Push(processor.config.DiffQueue, util.MustToJSONBytes(result))
+		queue.Push(queue.GetOrInitConfig(processor.config.DiffQueue), util.MustToJSONBytes(result))
 	})
 
 	processor.wg.Wait()
@@ -302,7 +302,7 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 			timeOut := 5 * time.Second
 			for {
 
-				v, timeout, err := queue.PopTimeout(processor.config.DiffQueue, timeOut)
+				v, timeout, err := queue.PopTimeout(queue.GetOrInitConfig(processor.config.DiffQueue), timeOut)
 				if timeout {
 
 					if len(processor.testChan.msgChans[processor.config.GetSortedLeftQueue()]) > 0 ||

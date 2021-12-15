@@ -128,6 +128,18 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 		return errors.New("metadata is nil")
 	}
 
+	cfgs:=queue.GetQueuesByLabel(map[string]interface{}{
+		"cluster_id":"backup",
+		"index":"medcl-dr-test",
+		"shard":2,
+	})
+
+	log.Errorf("num of queues: %v",len(cfgs))
+
+	for _,v:=range cfgs{
+		log.Error(v.Name)
+	}
+
 	//if processor.config.Level == "cluster" {
 	//	queueName := common.GetClusterLevelShuffleKey(processor.config.Elasticsearch)
 	//
@@ -294,7 +306,7 @@ READ_DOCS:
 		}
 
 		//each message is complete bulk message, must be end with \n
-		pop, _, err := queue.PopTimeout(queueName, idleDuration)
+		pop, _, err := queue.PopTimeout(queue.GetOrInitConfig(queueName), idleDuration)
 		if processor.config.ValidateRequest {
 			common.ValidateBulkRequest("write_pop", string(pop))
 		}

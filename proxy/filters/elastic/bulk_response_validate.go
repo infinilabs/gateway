@@ -51,21 +51,21 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 			if nonRetryableItems.Len() > 0 {
 				nonRetryableItems.WriteByte('\n')
 				bytes := ctx.Request.OverrideBodyEncode(nonRetryableItems.Bytes(), true)
-				queue.Push(this.config.InvalidQueue, bytes)
+				queue.Push(queue.GetOrInitConfig(this.config.InvalidQueue), bytes)
 				bytebufferpool.Put(nonRetryableItems)
 			}
 
 			if retryableItems.Len() > 0 {
 				retryableItems.WriteByte('\n')
 				bytes := ctx.Request.OverrideBodyEncode(retryableItems.Bytes(), true)
-				queue.Push(this.config.FailureQueue, bytes)
+				queue.Push(queue.GetOrInitConfig(this.config.FailureQueue), bytes)
 				bytebufferpool.Put(retryableItems)
 			}
 
 			if successItems.Len()>0&& this.config.SaveSuccessDocsToQueue{
 				successItems.WriteByte('\n')
 				bytes := ctx.Request.OverrideBodyEncode(successItems.Bytes(), true)
-				queue.Push(this.config.PartialSuccessQueue, bytes)
+				queue.Push(queue.GetOrInitConfig(this.config.PartialSuccessQueue), bytes)
 				bytebufferpool.Put(successItems)
 			}
 

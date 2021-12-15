@@ -20,7 +20,9 @@ func (filter *DiskEnqueueFilter) Name() string {
 }
 
 func (filter *DiskEnqueueFilter) Filter(ctx *fasthttp.RequestCtx) {
-	depth:=queue.Depth(filter.QueueName)
+	qCfg:=queue.GetOrInitConfig(filter.QueueName)
+
+	depth:=queue.Depth(qCfg)
 
 	if global.Env().IsDebug{
 		log.Trace(filter.QueueName," depth:",depth," vs threshold:",filter.DepthThreshold)
@@ -28,7 +30,7 @@ func (filter *DiskEnqueueFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	if depth>=filter.DepthThreshold{
 		data:=ctx.Request.Encode()
-		err:=queue.Push(filter.QueueName,data)
+		err:=queue.Push(qCfg,data)
 		if err!=nil{
 			panic(err)
 		}

@@ -277,7 +277,7 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 		panic(err)
 	}
 
-	err = queue.Push(this.config.QueueName, bytes)
+	err = queue.Push(queue.GetOrInitConfig(this.config.QueueName), bytes)
 	if err != nil {
 		panic(err)
 	}

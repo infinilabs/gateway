@@ -92,6 +92,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 	timeOut := 5
 	idleDuration := time.Duration(timeOut) * time.Second
 	flowProcessor := common.GetFlowProcess(processor.config.FlowName)
+	InputQCfg:=queue.GetOrInitConfig(processor.config.InputQueue)
 
 	READ_DOCS:
 		for {
@@ -105,14 +106,14 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 			case <-signalChannel:
 				return nil
 			default:
-					pop,timeout,err := queue.PopTimeout(processor.config.InputQueue,idleDuration)
+					pop,timeout,err := queue.PopTimeout(InputQCfg,idleDuration)
 					if err!=nil{
 						log.Error(err)
 						panic(err)
 					}
 					if timeout{
 
-						if queue.Depth(processor.config.InputQueue)>0{
+						if queue.Depth(InputQCfg)>0{
 							log.Warnf("%v %v no message but queue has lag, queue may broken",processor.config.InputQueue, idleDuration)
 						}else{
 							if global.Env().IsDebug {

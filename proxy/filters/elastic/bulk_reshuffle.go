@@ -232,7 +232,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			table, err := metadata.GetIndexRoutingTable(index)
 			if err != nil {
 				if rate.GetRateLimiter("index_routing_table_not_found", index, 1, 2, time.Minute*1).Allow() {
-					log.Warn("index routing table not found,", index, ",", metaStr, ",", err)
+					log.Warn(index, ",", metaStr, ",", err)
 				}
 				return err
 			}
@@ -315,7 +315,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				buff = bufferPool.Get()
 				docBuf[queueConfig.Name] = buff
 				var exists bool
-				exists,queueConfig,err=queue.RegisterConfig(queueConfig.Name,queueConfig)
+				exists,err=queue.RegisterConfig(queueConfig.Name,queueConfig)
 				if !exists&&err!=nil{
 					panic(err)
 				}
@@ -385,7 +385,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 					panic(errors.Errorf("queue config [%v] not exists",x))
 				}
 
-				err := queue.Push(cfg.Id, data)
+				err := queue.Push(cfg, data)
 				if err != nil {
 					panic(err)
 				}

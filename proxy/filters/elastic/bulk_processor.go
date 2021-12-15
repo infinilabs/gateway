@@ -252,7 +252,7 @@ func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host s
 		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "5xx_requests")
 
 		if joint.Config.SaveFailure {
-			queue.Push(joint.Config.InvalidRequestsQueue, data)
+			queue.Push(queue.GetOrInitConfig(joint.Config.InvalidRequestsQueue), data)
 		}
 
 		return 0, FAILURE
@@ -347,7 +347,7 @@ DO:
 		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "5xx_requests")
 
 		if joint.Config.SaveFailure {
-			queue.Push(joint.Config.FailureRequestsQueue, data)
+			queue.Push(queue.GetOrInitConfig(joint.Config.FailureRequestsQueue), data)
 		}
 
 		return 0, FAILURE
@@ -368,7 +368,7 @@ DO:
 		}
 
 		if joint.Config.SaveFailure {
-			queue.Push(joint.Config.FailureRequestsQueue, data)
+			queue.Push(queue.GetOrInitConfig(joint.Config.FailureRequestsQueue), data)
 		}
 
 		return resp.StatusCode(), FAILURE
@@ -392,7 +392,7 @@ DO:
 					nonRetryableItems.WriteByte('\n')
 					//bytes := req.OverrideBodyEncode(nonRetryableItems.Bytes(), true)
 					bytes := nonRetryableItems.Bytes()
-					queue.Push(joint.Config.InvalidRequestsQueue, bytes)
+					queue.Push(queue.GetOrInitConfig(joint.Config.InvalidRequestsQueue), bytes)
 					bytebufferpool.Put(nonRetryableItems)
 				}
 
@@ -400,7 +400,7 @@ DO:
 					retryableItems.WriteByte('\n')
 					//bytes := req.OverrideBodyEncode(retryableItems.Bytes(), true)
 					bytes := retryableItems.Bytes()
-					queue.Push(joint.Config.FailureRequestsQueue, bytes)
+					queue.Push(queue.GetOrInitConfig(joint.Config.FailureRequestsQueue), bytes)
 					bytebufferpool.Put(retryableItems)
 				}
 
@@ -408,7 +408,7 @@ DO:
 					successItems.WriteByte('\n')
 					//bytes := req.OverrideBodyEncode(successItems.Bytes(), true)
 					bytes := successItems.Bytes()
-					queue.Push(joint.Config.PartialSuccessQueue, bytes)
+					queue.Push(queue.GetOrInitConfig(joint.Config.PartialSuccessQueue), bytes)
 					bytebufferpool.Put(successItems)
 				}
 				return 400, PARTIAL
@@ -580,7 +580,7 @@ DO:
 		if retryTimes >= joint.Config.MaxRejectRetryTimes {
 			log.Errorf("rejected 429, retried %v times, quit retry", retryTimes)
 			if joint.Config.SaveFailure {
-				queue.Push(joint.Config.FailureRequestsQueue, data)
+				queue.Push(queue.GetOrInitConfig(joint.Config.FailureRequestsQueue), data)
 			}
 			return resp.StatusCode(), FAILURE
 		}
@@ -590,7 +590,7 @@ DO:
 	} else if resp.StatusCode() == 400 {
 		//handle 400 error
 		if joint.Config.SaveFailure {
-			queue.Push(joint.Config.InvalidRequestsQueue, data)
+			queue.Push(queue.GetOrInitConfig(joint.Config.InvalidRequestsQueue), data)
 		}
 
 		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "400_requests")
@@ -601,7 +601,7 @@ DO:
 		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "5xx_requests")
 
 		if joint.Config.SaveFailure {
-			queue.Push(joint.Config.FailureRequestsQueue, data)
+			queue.Push(queue.GetOrInitConfig(joint.Config.FailureRequestsQueue), data)
 		}
 
 		return resp.StatusCode(), FAILURE
