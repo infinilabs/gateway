@@ -42,6 +42,7 @@ type BulkIndexingProcessor struct {
 	bufferPool *bytebufferpool.Pool
 	initLocker sync.RWMutex
 	config     *Config
+	runningConfigs map[string]*queue.Config
 }
 
 type Config struct {
@@ -78,7 +79,8 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		return nil, fmt.Errorf("failed to unpack the configuration of flow_runner processor: %s", err)
 	}
 
-	runner := BulkIndexingProcessor{config: &cfg}
+	runner := BulkIndexingProcessor{config: &cfg,runningConfigs: map[string]*queue.Config{}}
+
 	return &runner, nil
 }
 
@@ -128,16 +130,18 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 		return errors.New("metadata is nil")
 	}
 
-	cfgs:=queue.GetQueuesByLabel(map[string]interface{}{
+	cfgs:=queue.GetQueuesFilterByLabel(map[string]interface{}{
 		"cluster_id":"backup",
 		"index":"medcl-dr-test",
-		"shard":2,
+		//"shard":2,
 	})
 
-	log.Errorf("num of queues: %v",len(cfgs))
+	log.Debugf("num of queues: %v",len(cfgs))
 
 	for _,v:=range cfgs{
-		log.Error(v.Name)
+		host := meta.GetActiveHost()
+		wg.Add(1)
+		go processor.NewBulkWorker(c, bulkSizeInByte, &wg, v, host)
 	}
 
 	//if processor.config.Level == "cluster" {
@@ -228,7 +232,7 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 			log.Debug("process bulk queue:", v)
 			for i := 0; i < processor.config.NumOfWorkers; i++ {
 				wg.Add(1)
-				go processor.NewBulkWorker(c, bulkSizeInByte, &wg, v, host)
+				go processor.NewBulkWorker(c, bulkSizeInByte, &wg, queue.GetOrInitConfig(v), host)
 			}
 		}
 	}
@@ -238,7 +242,7 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 	return nil
 }
 
-func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context, bulkSizeInByte int, wg *sync.WaitGroup, queueName string, host string) {
+func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context, bulkSizeInByte int, wg *sync.WaitGroup, qConfig *queue.Config, host string) {
 
 	defer func() {
 		if !global.Env().IsDebug {
@@ -259,7 +263,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context, bul
 		wg.Done()
 	}()
 
-	log.Debug("start worker:", queueName, ", host:", host)
+	log.Error("start worker:", qConfig.Name, ", host:", host)
 
 	mainBuf := processor.bufferPool.Get()
 	defer processor.bufferPool.Put(mainBuf)
@@ -306,7 +310,7 @@ READ_DOCS:
 		}
 
 		//each message is complete bulk message, must be end with \n
-		pop, _, err := queue.PopTimeout(queue.GetOrInitConfig(queueName), idleDuration)
+		pop, _, err := queue.PopTimeout(qConfig, idleDuration)
 		if processor.config.ValidateRequest {
 			common.ValidateBulkRequest("write_pop", string(pop))
 		}
@@ -329,7 +333,7 @@ READ_DOCS:
 
 		if mainBuf.Len() > (bulkSizeInByte) {
 			if global.Env().IsDebug {
-				log.Trace("hit buffer size,", mainBuf.Len(), ", ", queueName, ", submit")
+				log.Trace("hit buffer size,", mainBuf.Len(), ", ", qConfig.Name, ", submit")
 			}
 			goto CLEAN_BUFFER
 		}
