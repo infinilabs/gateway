@@ -40,7 +40,7 @@ pipeline {
                     sh 'cd /home/jenkins/go/src/infini.sh/gateway && git stash && git pull origin master && make config build-win'
                     sh label: 'package-win-amd64', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && zip -r ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-windows-amd64.zip gateway-windows-amd64.exe gateway.yml ../sample-configs'
                     sh label: 'package-win-386', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && zip -r ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-windows-386.zip gateway-windows-386.exe gateway.yml ../sample-configs'
-                    archiveArtifacts artifacts: 'gateway-$VERSION-$BUILD_NUMBER-*.*', fingerprint: true, followSymlinks: true, onlyIfSuccessful: false
+                    archiveArtifacts artifacts: 'gateway-$VERSION-$BUILD_NUMBER-*', fingerprint: true, followSymlinks: true, onlyIfSuccessful: false
                 }
             }
          }
