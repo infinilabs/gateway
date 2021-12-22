@@ -98,7 +98,7 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 				case string:
 					v = r.(string)
 				}
-				log.Error("error in bulk indexer,", v)
+				log.Error("error in bulk indexing processor,", v)
 			}
 		}
 	}()
@@ -124,99 +124,79 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 	log.Debugf("filter queue by:%v, num of queues:%v",processor.config.Queues,len(cfgs))
 
 	for _,v:=range cfgs{
+
+		log.Debugf("checking queue: %v",v)
+
 		elasticsearch,ok:=v.Labels["elasticsearch"]
 		if !ok{
-			return errors.Errorf("label [elasticsearch] was not found in: %v",v)
+			log.Errorf("label [elasticsearch] was not found in: %v",v)
+			continue
 		}
 
 		meta := elastic.GetMetadata(util.ToString(elasticsearch))
 		if meta == nil {
-			return errors.Errorf("metadata for [%v] is nil",elasticsearch)
+			log.Debugf("metadata for [%v] is nil",elasticsearch)
+			continue
 		}
 
 		level,ok:=v.Labels["level"]
-		host := meta.GetActiveHost()
 
-		if ok{
-			switch level {
-			case "node": //node level
-				nodeID,ok:=v.Labels["node_id"]
-				if ok{
-					nodeInfo := meta.GetNodeInfo(util.ToString(nodeID))
-					if nodeInfo!=nil{
-						host=nodeInfo.GetHttpPublishHost()
-						wg.Add(1)
-						go processor.NewBulkWorker(c, bulkSizeInByte, &wg, v, host)
-					}
+		if level=="node"{
+			nodeID,ok:=v.Labels["node_id"]
+			if ok{
+				nodeInfo := meta.GetNodeInfo(util.ToString(nodeID))
+				if nodeInfo!=nil{
+					host:=nodeInfo.GetHttpPublishHost()
+					wg.Add(1)
+					go processor.NewBulkWorker(c, bulkSizeInByte, &wg, v, host)
+				}else{
+					log.Debugf("node info not found: %v",nodeID)
 				}
-				break
-			case "shard": //shard level
-				index,ok:=v.Labels["index"]
+			}else{
+				log.Debugf("node_id not found: %v",v)
+			}
+		}else if level=="shard"||level=="partition"{
+			index,ok:=v.Labels["index"]
+			if ok{
+				routingTable, err := meta.GetIndexRoutingTable(util.ToString(index))
+				if err != nil {
+					log.Error(err)
+					continue
+				}
+				shard,ok:=v.Labels["shard"]
 				if ok{
-					routingTable, err := meta.GetIndexRoutingTable(util.ToString(index))
-					if err != nil {
-						return err
-					}
-
-					shard,ok:=v.Labels["shard"]
+					shards,ok:=routingTable[util.ToString(shard)]
 					if ok{
-						shards,ok:=routingTable[util.ToString(shard)]
-						if ok{
-							for _,x:=range shards{
-								if x.Primary{
-									//each primary shard has a goroutine, or run by one goroutine
-									if x.Node!=""{
-										nodeInfo := meta.GetNodeInfo(x.Node)
-										if nodeInfo!=nil{
-											host=nodeInfo.GetHttpPublishHost()
-											wg.Add(1)
-											go processor.NewBulkWorker(c, bulkSizeInByte, &wg, v, host)
-										}
+						for _,x:=range shards{
+							if x.Primary{
+								//each primary shard has a goroutine, or run by one goroutine
+								if x.Node!=""{
+									nodeInfo := meta.GetNodeInfo(x.Node)
+									if nodeInfo!=nil{
+										host:=nodeInfo.GetHttpPublishHost()
+										wg.Add(1)
+										go processor.NewBulkWorker(c, bulkSizeInByte, &wg, v, host)
+									}else{
+										log.Debugf("nodeInfo not found: %v",v)
 									}
+								}else{
+									log.Debugf("nodeID not found: %v",v)
 								}
 							}
 						}
+					}else{
+						log.Debugf("routing table not found: %v",v)
 					}
+				}else{
+					log.Debugf("shard not found: %v",v)
 				}
-				break
-			case "partition":
-				index,ok:=v.Labels["index"]
-				if ok{
-					shard,ok:=v.Labels["shard"]
-					if ok{
-						//partitionSize,ok1:=v.Labels["partition_size"]
-						//partition,ok2:=v.Labels["partition"]
-						//if ok1&&ok2{
-							routingTable, err := meta.GetIndexRoutingTable(util.ToString(index))
-							if err != nil {
-								return err
-							}
-							shards,ok:=routingTable[util.ToString(shard)]
-							if ok{
-								for _,x:=range shards{
-									if x.Primary{
-										//each primary shard has a goroutine, or run by one goroutine
-										if x.Node!=""{
-											nodeInfo := meta.GetNodeInfo(x.Node)
-											if nodeInfo!=nil{
-												host=nodeInfo.GetHttpPublishHost()
-												wg.Add(1)
-												go processor.NewBulkWorker(c, bulkSizeInByte, &wg, v, host)
-											}
-										}
-									}
-								}
-							}
-						//}
-					}
-				}
-
-				break
-			default: //cluster level
-				wg.Add(1)
-				go processor.NewBulkWorker(c, bulkSizeInByte, &wg, v, host)
-				break
+			}else{
+				log.Debugf("index not found: %v",v)
 			}
+		}else{
+			host := meta.GetActiveHost()
+			wg.Add(1)
+			go processor.NewBulkWorker(c, bulkSizeInByte, &wg, v, host)
 		}
 	}
 
@@ -239,7 +219,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context, bul
 				case string:
 					v = r.(string)
 				}
-				log.Error("error in indexer,", v)
+				log.Error("error in bulk_indexing processor,", v)
 				ctx.Failed()
 			}
 		}
