@@ -218,14 +218,15 @@ flow:
           - retry_limiter:
               queue_name: "backup-deadletter_requests"
               max_retry_times: 60
-          - dump:
-              request: true
+#          - dump:
+#              request: true
           - bulk_reshuffle:
               when:
                 contains:
                   _ctx.request.path: /_bulk
               elasticsearch: "backup"
-              level: partition #cluster,node,index,shard,partition
+              level: partition #cluster,node,shard,partition
+              partition_size: 10
               mode: async
               fix_null_id: true
           - echo:
@@ -471,15 +472,15 @@ pipeline:
 
 
 # option C - pipelines for backup cluster
-#  - name: queue_backup-failure-consumer
-#    auto_start: true
-#    keep_running: true
-#    processor:
-#      - flow_runner:
-#          input_queue: "backup-failure"
-#          flow: backup-flow-reshuffle-replicate-processing
-#          when:
-#            cluster_available: [ "backup" ]
+  - name: queue_backup-failure-consumer
+    auto_start: true
+    keep_running: true
+    processor:
+      - flow_runner:
+          input_queue: "backup-failure"
+          flow: backup-flow-reshuffle-replicate-processing
+          when:
+            cluster_available: [ "backup" ]
 
   - name: queue_backup-consumer
     auto_start: true
@@ -495,27 +496,27 @@ pipeline:
                     - queue_has_lag: [ "primary-partial-success_bulk_requests"]
               - cluster_available: ["backup"]
 
-#  - name: queue_backup-bulk-partial-consumer
-#    auto_start: true
-#    keep_running: true
-#    processor:
-#      - flow_runner:
-#          input_queue: "primary-partial-success_bulk_requests"
-#          flow: backup-flow-reshuffle-replicate-processing
-#          when:
-#            cluster_available: [ "backup" ]
+  - name: queue_backup-bulk-partial-consumer
+    auto_start: true
+    keep_running: true
+    processor:
+      - flow_runner:
+          input_queue: "primary-partial-success_bulk_requests"
+          flow: backup-flow-reshuffle-replicate-processing
+          when:
+            cluster_available: [ "backup" ]
 
-#  - name: queue_backup-bulk_request_ingest
-#    auto_start: true
-#    keep_running: true
-#    processor:
-#      - bulk_indexing:
-#          when:
-#            cluster_available: [ "backup" ]
-#          elasticsearch: "backup"
-##          compress: true
-#          bulk_size_in_mb: 10
-#          worker_size: 1
-#          level: node
-#          queues:
-#            - backup-bulk-failure-items
+  - name: queue_backup-bulk_request_ingest
+    auto_start: true
+    keep_running: true
+    processor:
+      - bulk_indexing:
+          when:
+            cluster_available: [ "backup" ]
+          elasticsearch: "backup"
+#          compress: true
+          bulk_size_in_mb: 10
+          worker_size: 1
+          queues:
+            type: bulk_reshuffle
+            level: partition

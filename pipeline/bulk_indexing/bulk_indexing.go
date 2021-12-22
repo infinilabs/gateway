@@ -51,12 +51,9 @@ type Config struct {
 	MaxConnectionPerHost int    `config:"max_connection_per_node"`
 	BulkSizeInKb         int    `config:"bulk_size_in_kb,omitempty"`
 	BulkSizeInMb         int    `config:"bulk_size_in_mb,omitempty"`
-	Elasticsearch        string `config:"elasticsearch,omitempty"`
-	Level                string `config:"level,omitempty"`
 
-	Indices         []string `config:"index,omitempty"`
-	EnabledShards   []string `config:"shards,omitempty"`
-	Queues          []string `config:"queues,omitempty"`
+	Queues          map[string]interface{} `config:"queues,omitempty"`
+
 	ValidateRequest bool     `config:"valid_request"`
 
 	RotateConfig rotate.RotateConfig          `config:"rotate"`
@@ -120,119 +117,105 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 		processor.initLocker.Unlock()
 	}
 
-//	//wait for nodes info
-//	var nodesFailureCount = 0
-//NODESINFO:
-
-	meta := elastic.GetMetadata(processor.config.Elasticsearch)
 	wg := sync.WaitGroup{}
-	if meta == nil {
-		return errors.New("metadata is nil")
-	}
 
-	cfgs:=queue.GetQueuesFilterByLabel(map[string]interface{}{
-		"cluster_id":"backup",
-		"index":"medcl-dr-test",
-		//"shard":2,
-	})
+	cfgs:=queue.GetQueuesFilterByLabel(processor.config.Queues)
 
-	log.Debugf("num of queues: %v",len(cfgs))
+	log.Debugf("filter queue by:%v, num of queues:%v",processor.config.Queues,len(cfgs))
 
 	for _,v:=range cfgs{
-		host := meta.GetActiveHost()
-		wg.Add(1)
-		go processor.NewBulkWorker(c, bulkSizeInByte, &wg, v, host)
-	}
+		elasticsearch,ok:=v.Labels["elasticsearch"]
+		if !ok{
+			return errors.Errorf("label [elasticsearch] was not found in: %v",v)
+		}
 
-	//if processor.config.Level == "cluster" {
-	//	queueName := common.GetClusterLevelShuffleKey(processor.config.Elasticsearch)
-	//
-	//	if global.Env().IsDebug {
-	//		log.Trace("queueName:", queueName)
-	//	}
-	//
-	//	for i := 0; i < processor.config.NumOfWorkers; i++ {
-	//		wg.Add(1)
-	//		go processor.NewBulkWorker(c, bulkSizeInByte, &wg, queueName, meta.GetActiveHost())
-	//	}
-	//} else {
-	//	//index,shard,level
-	//	if processor.config.Indices != nil && len(processor.config.Indices) > 0 {
-	//		if meta.ClusterState == nil {
-	//			time.Sleep(1 * time.Second)
-	//			log.Tracef("%v cluster state is not available, recheck now", meta.Config.Name)
-	//			goto NODESINFO
-	//		}
-	//
-	//		for _, v := range processor.config.Indices {
-	//			routingTable, err := meta.GetIndexRoutingTable(v)
-	//			if err != nil {
-	//				return err
-	//			}
-	//
-	//			//indexSettings := (*meta.Indices)[v]
-	//			for i := 0; i < len(routingTable); i++ {
-	//				queueName := common.GetShardLevelShuffleKey(processor.config.Elasticsearch, v, i)
-	//				shardInfo, err := meta.GetPrimaryShardInfo(v, i)
-	//				if err != nil {
-	//					return err
-	//				}
-	//
-	//				if len(processor.config.EnabledShards) > 0 {
-	//					if !util.ContainsAnyInArray(util.ToString(shardInfo.Shard), processor.config.EnabledShards) {
-	//						log.Debugf("%v-%v not enabled, skip processing", shardInfo.Index, shardInfo.Shard)
-	//						continue
-	//					}
-	//				}
-	//
-	//				nodeInfo := meta.GetNodeInfo(shardInfo.Node)
-	//
-	//				if global.Env().IsDebug {
-	//					log.Debug(shardInfo.Index, ",", shardInfo.Shard, ",", nodeInfo.Http.PublishAddress)
-	//				}
-	//
-	//				for i := 0; i < processor.config.NumOfWorkers; i++ {
-	//					wg.Add(1)
-	//					go processor.NewBulkWorker(c, bulkSizeInByte, &wg, queueName, nodeInfo.Http.PublishAddress)
-	//				}
-	//			}
-	//		}
-	//	} else { //node level
-	//		if meta.Nodes == nil {
-	//			nodesFailureCount++
-	//			if nodesFailureCount > 5 {
-	//				log.Debug("enough wait for none nil nodes")
-	//				return errors.New("nodes is nil")
-	//			}
-	//			time.Sleep(1 * time.Second)
-	//			log.Tracef("%v is not available, recheck now", meta.Config.Name)
-	//			goto NODESINFO
-	//		}
-	//
-	//		//TODO only get data nodes or filtered nodes
-	//		for k, v := range *meta.Nodes {
-	//			queueName := common.GetNodeLevelShuffleKey(processor.config.Elasticsearch, k)
-	//
-	//			if global.Env().IsDebug {
-	//				log.Trace("queueName:", queueName, ",", v)
-	//				log.Debug("nodeInfo:", k, ",", v.Http.PublishAddress)
-	//			}
-	//
-	//			for i := 0; i < processor.config.NumOfWorkers; i++ {
-	//				wg.Add(1)
-	//				go processor.NewBulkWorker(c, bulkSizeInByte, &wg, queueName, v.Http.PublishAddress)
-	//			}
-	//		}
-	//	}
-	//}
+		meta := elastic.GetMetadata(util.ToString(elasticsearch))
+		if meta == nil {
+			return errors.Errorf("metadata for [%v] is nil",elasticsearch)
+		}
 
-	if len(processor.config.Queues) > 0 {
+		level,ok:=v.Labels["level"]
 		host := meta.GetActiveHost()
-		for _, v := range processor.config.Queues {
-			log.Debug("process bulk queue:", v)
-			for i := 0; i < processor.config.NumOfWorkers; i++ {
+
+		if ok{
+			switch level {
+			case "node": //node level
+				nodeID,ok:=v.Labels["node_id"]
+				if ok{
+					nodeInfo := meta.GetNodeInfo(util.ToString(nodeID))
+					if nodeInfo!=nil{
+						host=nodeInfo.GetHttpPublishHost()
+						wg.Add(1)
+						go processor.NewBulkWorker(c, bulkSizeInByte, &wg, v, host)
+					}
+				}
+				break
+			case "shard": //shard level
+				index,ok:=v.Labels["index"]
+				if ok{
+					routingTable, err := meta.GetIndexRoutingTable(util.ToString(index))
+					if err != nil {
+						return err
+					}
+
+					shard,ok:=v.Labels["shard"]
+					if ok{
+						shards,ok:=routingTable[util.ToString(shard)]
+						if ok{
+							for _,x:=range shards{
+								if x.Primary{
+									//each primary shard has a goroutine, or run by one goroutine
+									if x.Node!=""{
+										nodeInfo := meta.GetNodeInfo(x.Node)
+										if nodeInfo!=nil{
+											host=nodeInfo.GetHttpPublishHost()
+											wg.Add(1)
+											go processor.NewBulkWorker(c, bulkSizeInByte, &wg, v, host)
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+				break
+			case "partition":
+				index,ok:=v.Labels["index"]
+				if ok{
+					shard,ok:=v.Labels["shard"]
+					if ok{
+						//partitionSize,ok1:=v.Labels["partition_size"]
+						//partition,ok2:=v.Labels["partition"]
+						//if ok1&&ok2{
+							routingTable, err := meta.GetIndexRoutingTable(util.ToString(index))
+							if err != nil {
+								return err
+							}
+							shards,ok:=routingTable[util.ToString(shard)]
+							if ok{
+								for _,x:=range shards{
+									if x.Primary{
+										//each primary shard has a goroutine, or run by one goroutine
+										if x.Node!=""{
+											nodeInfo := meta.GetNodeInfo(x.Node)
+											if nodeInfo!=nil{
+												host=nodeInfo.GetHttpPublishHost()
+												wg.Add(1)
+												go processor.NewBulkWorker(c, bulkSizeInByte, &wg, v, host)
+											}
+										}
+									}
+								}
+							}
+						//}
+					}
+				}
+
+				break
+			default: //cluster level
 				wg.Add(1)
-				go processor.NewBulkWorker(c, bulkSizeInByte, &wg, queue.GetOrInitConfig(v), host)
+				go processor.NewBulkWorker(c, bulkSizeInByte, &wg, v, host)
+				break
 			}
 		}
 	}
@@ -263,16 +246,21 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context, bul
 		wg.Done()
 	}()
 
-	log.Error("start worker:", qConfig.Name, ", host:", host)
+	log.Info("start worker:", qConfig.Name, ", host:", host)
 
 	mainBuf := processor.bufferPool.Get()
 	defer processor.bufferPool.Put(mainBuf)
 
 	idleDuration := time.Duration(processor.config.IdleTimeoutInSecond) * time.Second
-	meta := elastic.GetMetadata(processor.config.Elasticsearch)
+	elasticsearch,ok:=qConfig.Labels["elasticsearch"]
+	if !ok{
+		panic(errors.Errorf("label [elasticsearch] was not found: %v", qConfig))
+	}
+	esClusterID:=util.ToString(elasticsearch)
+	meta := elastic.GetMetadata(esClusterID)
 
 	if meta == nil {
-		panic(errors.Errorf("cluster metadata [%v] not ready", processor.config.Elasticsearch))
+		panic(errors.Errorf("cluster metadata [%v] not ready", esClusterID))
 	}
 
 	bulkProcessor := elastic2.BulkProcessor{
@@ -281,17 +269,17 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context, bul
 	}
 
 	if bulkProcessor.Config.FailureRequestsQueue == "" {
-		bulkProcessor.Config.FailureRequestsQueue = fmt.Sprintf("%v-bulk-failure-items", processor.config.Elasticsearch)
+		bulkProcessor.Config.FailureRequestsQueue = fmt.Sprintf("%v-bulk-failure-items", esClusterID) //TODO record offset instead of new queue
 	}
 	if bulkProcessor.Config.DeadletterRequestsQueue == "" {
-		bulkProcessor.Config.DeadletterRequestsQueue = fmt.Sprintf("%v-bulk-dead_letter-items", processor.config.Elasticsearch)
+		bulkProcessor.Config.DeadletterRequestsQueue = fmt.Sprintf("%v-bulk-dead_letter-items", esClusterID)
 	}
 
 	if bulkProcessor.Config.InvalidRequestsQueue == "" {
-		bulkProcessor.Config.InvalidRequestsQueue = fmt.Sprintf("%v-bulk-invalid-items", processor.config.Elasticsearch)
+		bulkProcessor.Config.InvalidRequestsQueue = fmt.Sprintf("%v-bulk-invalid-items", esClusterID)
 	}
 	if bulkProcessor.Config.PartialSuccessQueue == "" {
-		bulkProcessor.Config.PartialSuccessQueue = fmt.Sprintf("%v-bulk-partial-success-items", processor.config.Elasticsearch)
+		bulkProcessor.Config.PartialSuccessQueue = fmt.Sprintf("%v-bulk-partial-success-items", esClusterID)
 	}
 
 	var lastCommit time.Time = time.Now()
@@ -320,7 +308,7 @@ READ_DOCS:
 		}
 
 		if len(pop) > 0 {
-			stats.IncrementBy("elasticsearch."+processor.config.Elasticsearch+".bulk", "bytes.received", int64(mainBuf.Len()))
+			stats.IncrementBy("elasticsearch."+esClusterID+".bulk", "bytes_received_from_queue", int64(mainBuf.Len()))
 			mainBuf.Write(pop)
 		}
 
@@ -350,23 +338,10 @@ CLEAN_BUFFER:
 		data := mainBuf.Bytes()
 		log.Trace(meta.Config.Name, ", starting submit bulk request")
 		status, success := bulkProcessor.Bulk(meta, host, data)
-		stats.Timing("elasticsearch."+meta.Config.Name+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
+		stats.Timing("elasticsearch."+esClusterID+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
 		log.Debug(meta.Config.Name, ", ", host, ", result:", success, ", status:", status, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elapsed:", time.Since(start))
-
-		switch success {
-		case elastic2.SUCCESS:
-			stats.IncrementBy("elasticsearch."+processor.config.Elasticsearch+".bulk", "bytes.success", int64(mainBuf.Len()))
-			break
-		case elastic2.INVALID:
-			stats.IncrementBy("elasticsearch."+processor.config.Elasticsearch+".bulk", "bytes.invalid", int64(mainBuf.Len()))
-			break
-		case elastic2.PARTIAL:
-			stats.IncrementBy("elasticsearch."+processor.config.Elasticsearch+".bulk", "bytes.partial", int64(mainBuf.Len()))
-			break
-		case elastic2.FAILURE:
-			stats.IncrementBy("elasticsearch."+processor.config.Elasticsearch+".bulk", "bytes.failure", int64(mainBuf.Len()))
-			break
-		}
+		stats.IncrementBy("elasticsearch."+esClusterID+".bulk", string(success+".bytes"), int64(mainBuf.Len()))
+		stats.IncrementBy("elasticsearch."+esClusterID+".bulk", fmt.Sprintf("%v.bytes",status), int64(mainBuf.Len()))
 
 		mainBuf.Reset()
 	}

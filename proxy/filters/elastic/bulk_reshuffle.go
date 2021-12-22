@@ -41,6 +41,7 @@ const PartitionLevel = "partition"
 type BulkReshuffleConfig struct {
 	Elasticsearch       string `config:"elasticsearch"`
 	Level               string `config:"level"` //cluster/node(will,change)/index/shard/partition
+	PartitionSize       int    `config:"partition_size"`
 	FixNullID           bool   `config:"fix_null_id"`
 	IndexStatsAnalysis  bool   `config:"index_stats_analysis"`
 	ActionStatsAnalysis bool   `config:"action_stats_analysis"`
@@ -54,7 +55,7 @@ type BulkReshuffleConfig struct {
 	ValidPayload  bool  `config:"validate_payload"`
 	StickToNode   bool  `config:"stick_to_node"`
 	DocBufferSize int   `config:"doc_buffer_size"`
-	Shards        []int `config:"shards"`
+	EnabledShards        []int `config:"shards"`
 }
 
 func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
@@ -247,9 +248,9 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 					log.Tracef("%s/%s => %v", index, id, shardID)
 				}
 
-				//skip configured shards
-				if len(this.config.Shards) > 0 {
-					if !util.ContainsInAnyInt32Array(shardID, this.config.Shards) {
+				//check enabled shards
+				if len(this.config.EnabledShards) > 0 {
+					if !util.ContainsInAnyInt32Array(shardID, this.config.EnabledShards) {
 						log.Debugf("shard %s-%s not enabled, skip processing", index, shardID)
 						return errors.Errorf("shard %s-%v not enabled, skip processing", index, shardID)
 					}
@@ -269,13 +270,12 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			}
 
 			var nodeID = shardInfo.Node
-			if nodeID == "" {
-				nodeID = "UNASSIGNED"
-			}
-
-			var partitionID = 0
-
 			queueConfig=&queue.Config{}
+			queueConfig.Source="dynamic"
+			queueConfig.Labels= map[string]interface{}{}
+			queueConfig.Labels["type"]="bulk_reshuffle"
+			queueConfig.Labels["level"]=reshuffleType
+			queueConfig.Labels["elasticsearch"]=esConfig.ID
 
 			//注册队列到元数据中，消费者自动订阅该队列列表，并根据元数据来分别进行相应的处理
 			switch reshuffleType {
@@ -283,26 +283,38 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				queueConfig.Name = fmt.Sprintf("async_bulk-cluster##%v", esConfig.ID)
 				break
 			case NodeLevel:
-				queueConfig.Name = fmt.Sprintf("async_bulk-node##%v##%v", esConfig.ID, nodeID)
+				if nodeID == "" {
+					queueConfig.Name = fmt.Sprintf("async_bulk-node##%v##%v", esConfig.ID, "UNASSIGNED")
+				}else{
+					queueConfig.Labels["node_id"]=nodeID
+					queueConfig.Name = fmt.Sprintf("async_bulk-node##%v##%v", esConfig.ID, nodeID)
+				}
 				break
 			case IndexLevel:
+				queueConfig.Labels["index"]=index
 				queueConfig.Name = fmt.Sprintf("async_bulk-index##%v##%v", esConfig.ID, index)
 				break
 			case ShardLevel:
+				queueConfig.Labels["index"]=index
+				queueConfig.Labels["shard"]=shardID
 				queueConfig.Name = fmt.Sprintf("async_bulk-shard##%v##%v##%v", esConfig.ID, index, shardID)
 				break
 			case PartitionLevel:
+				queueConfig.Labels["index"]=index
+				queueConfig.Labels["shard"]=shardID
+				if this.config.PartitionSize<=0{
+					this.config.PartitionSize=1
+				}
+				queueConfig.Labels["partition_size"]=this.config.PartitionSize
+
+				partitionID:= elastic.GetShardID(metadata.GetMajorVersion(), []byte(id), this.config.PartitionSize)
+				queueConfig.Labels["partition"]=partitionID
+
 				queueConfig.Name = fmt.Sprintf("async_bulk-partition##%v##%v##%v##%v", esConfig.ID, index, shardID, partitionID)
 				break
 			}
-			queueConfig.Source="dynamic"
-			queueConfig.Labels= map[string]interface{}{}
-			queueConfig.Labels["level"]=ClusterLevel
-			queueConfig.Labels["cluster_id"]=esConfig.ID
-			queueConfig.Labels["node_id"]=nodeID
-			queueConfig.Labels["index"]=index
-			queueConfig.Labels["shard"]=shardID
-			queueConfig.Labels["partition"]=partitionID
+
+
 
 			if global.Env().IsDebug {
 				log.Debugf("final queue name: %v", queueConfig)
