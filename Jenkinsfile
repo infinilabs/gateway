@@ -32,7 +32,15 @@ pipeline {
                     sh label: 'package-linux-arm6', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-arm6.tar.gz gateway-linux-armv6 gateway.yml ../sample-configs'
                     sh label: 'package-linux-arm7', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-arm7.tar.gz gateway-linux-armv7 gateway.yml ../sample-configs'
                     sh label: 'package-linux-arm64', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-arm64.tar.gz gateway-linux-arm64 gateway.yml ../sample-configs'
-                    archiveArtifacts artifacts: 'gateway-$VERSION-$BUILD_NUMBER-*.tar.gz', fingerprint: true, followSymlinks: true, onlyIfSuccessful: false
+
+                    sh 'cd /home/jenkins/go/src/infini.sh/gateway && git stash && git pull origin master && make config build-darwin'
+                    sh label: 'package-mac-amd64', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && zip -r ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-mac-amd64.zip gateway-mac-amd64 gateway.yml ../sample-configs'
+                    sh label: 'package-mac-arm64', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && zip -r ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-mac-arm64.zip gateway-mac-arm64 gateway.yml ../sample-configs'
+
+                    sh 'cd /home/jenkins/go/src/infini.sh/gateway && git stash && git pull origin master && make config build-win'
+                    sh label: 'package-win-amd64', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && zip -r ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-windows-amd64.zip gateway-windows-amd64.exe gateway.yml ../sample-configs'
+                    sh label: 'package-win-386', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && zip -r ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-windows-386.zip gateway-windows-386.exe gateway.yml ../sample-configs'
+                    archiveArtifacts artifacts: 'gateway-$VERSION-$BUILD_NUMBER-*.*', fingerprint: true, followSymlinks: true, onlyIfSuccessful: false
                 }
             }
          }
