@@ -19,7 +19,7 @@ flow:
             contains:
               _ctx.request.path: /_bulk
           elasticsearch: dev
-          level: cluster
+          level: cluster #cluster,node,shard,partition
           mode: async
           fix_null_id: true
       - elasticsearch:
@@ -68,11 +68,6 @@ pipeline:
           compress: true
           bulk_size_in_mb: 10
           worker_size: 10
-          level: cluster
           queues:
-            - dev-failure
-#            - dev-dead_letter
-#          index:
-#            - medcl-a
-#          shards:
-#            - 0
+            type: bulk_reshuffle
+            level: cluster
