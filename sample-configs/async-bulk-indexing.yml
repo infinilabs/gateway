@@ -19,7 +19,7 @@ flow:
             contains:
               _ctx.request.path: /_bulk
           elasticsearch: dev
-          level: cluster #cluster,node,shard,partition
+          level: partition #cluster,node,shard,partition
           mode: async
           fix_null_id: true
       - elasticsearch:
@@ -64,10 +64,7 @@ pipeline:
       - bulk_indexing:
           when:
             cluster_available: [ "dev" ]
-          elasticsearch: "dev"
-          compress: true
           bulk_size_in_mb: 10
-          worker_size: 10
           queues:
             type: bulk_reshuffle
-            level: cluster
+            level: node
