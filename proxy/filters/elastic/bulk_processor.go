@@ -45,7 +45,7 @@ func WalkBulkRequests(safetyParse bool,data []byte, docBuff []byte, eachLineFunc
 		for _, line := range lines {
 			bytesCount := len(line)
 			if line == nil || bytesCount <= 0 {
-				log.Debug("invalid line, continue")
+				log.Tracef("invalid line, continue, [%v]",string(line))
 				continue
 			}
 

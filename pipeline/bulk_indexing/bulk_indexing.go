@@ -5,6 +5,7 @@ import (
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/rotate"
 	"infini.sh/framework/lib/bytebufferpool"
+	"infini.sh/gateway/common"
 	elastic2 "infini.sh/gateway/proxy/filters/elastic"
 	"runtime"
 	"sync"
@@ -18,7 +19,6 @@ import (
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
-	"infini.sh/gateway/common"
 )
 
 //#操作合并任务
@@ -39,10 +39,14 @@ import (
 
 //处理 bulk 格式的数据索引。
 type BulkIndexingProcessor struct {
-	bufferPool *bytebufferpool.Pool
-	initLocker sync.RWMutex
-	config     *Config
+	bufferPool     *bytebufferpool.Pool
+	config         *Config
 	runningConfigs map[string]*queue.Config
+	bulkSizeInByte int
+	wg             sync.WaitGroup
+	inFlightQueueConfigs sync.Map
+	detectorRunning bool
+	id string
 }
 
 type Config struct {
@@ -54,7 +58,13 @@ type Config struct {
 
 	Queues          map[string]interface{} `config:"queues,omitempty"`
 
+	MaxWorkers int      `config:"max_worker_size"`
+
+	DetectActiveQueue bool     `config:"detect_active_queue"`
+	DetectIntervalInMs   int         `config:"detect_interval"`
+
 	ValidateRequest bool     `config:"valid_request"`
+	SkipEmptyQueue bool     `config:"skip_empty_queue"`
 
 	RotateConfig rotate.RotateConfig          `config:"rotate"`
 	BulkConfig   elastic2.BulkProcessorConfig `config:"bulk"`
@@ -63,10 +73,14 @@ type Config struct {
 func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
 		NumOfWorkers:         1,
+		MaxWorkers:           10,
 		MaxConnectionPerHost: 1,
 		IdleTimeoutInSecond:  5,
 		BulkSizeInMb:         10,
+		DetectIntervalInMs:   10000,
+		DetectActiveQueue:    true,
 		ValidateRequest:      false,
+		SkipEmptyQueue:      true,
 		RotateConfig:         rotate.DefaultConfig,
 		BulkConfig:           elastic2.DefaultBulkProcessorConfig,
 	}
@@ -76,7 +90,22 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		return nil, fmt.Errorf("failed to unpack the configuration of flow_runner processor: %s", err)
 	}
 
-	runner := BulkIndexingProcessor{config: &cfg,runningConfigs: map[string]*queue.Config{}}
+	runner := BulkIndexingProcessor{
+		id:util.GetUUID(),
+		config: &cfg,
+		runningConfigs: map[string]*queue.Config{},
+		inFlightQueueConfigs:sync.Map{},
+	}
+
+	runner.bulkSizeInByte= 1048576 * runner.config.BulkSizeInMb
+	if runner.config.BulkSizeInKb > 0 {
+		runner.bulkSizeInByte = 1024 * runner.config.BulkSizeInKb
+	}
+
+	estimatedBulkSizeInByte := runner.bulkSizeInByte + (runner.bulkSizeInByte / 3)
+	runner.bufferPool = bytebufferpool.NewPool(uint64(estimatedBulkSizeInByte), uint64(runner.bulkSizeInByte*2))
+
+	runner.wg = sync.WaitGroup{}
 
 	return &runner, nil
 }
@@ -86,6 +115,9 @@ func (processor *BulkIndexingProcessor) Name() string {
 }
 
 func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
+
+	log.Trace("init bulk indexing processor")
+
 	defer func() {
 		if !global.Env().IsDebug {
 			if r := recover(); r != nil {
@@ -101,111 +133,161 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 				log.Error("error in bulk indexing processor,", v)
 			}
 		}
+		log.Trace("exit bulk indexing processor")
 	}()
-
-	bulkSizeInByte := 1048576 * processor.config.BulkSizeInMb
-	if processor.config.BulkSizeInKb > 0 {
-		bulkSizeInByte = 1024 * processor.config.BulkSizeInKb
-	}
-
-	if processor.bufferPool == nil {
-		processor.initLocker.Lock()
-		if processor.bufferPool == nil {
-			estimatedBulkSizeInByte := bulkSizeInByte + (bulkSizeInByte / 3)
-			processor.bufferPool = bytebufferpool.NewPool(uint64(estimatedBulkSizeInByte), uint64(bulkSizeInByte*2))
-		}
-		processor.initLocker.Unlock()
-	}
-
-	wg := sync.WaitGroup{}
 
 	cfgs:=queue.GetQueuesFilterByLabel(processor.config.Queues)
 
 	log.Debugf("filter queue by:%v, num of queues:%v",processor.config.Queues,len(cfgs))
 
 	for _,v:=range cfgs{
+		log.Tracef("checking queue: %v",v)
+		processor.HandleQueueConfig(v,c)
+	}
 
-		log.Debugf("checking queue: %v",v)
+	//handle updates
+	if processor.config.DetectActiveQueue{
+		log.Debugf("detectorRunning [%v]",processor.detectorRunning)
 
-		elasticsearch,ok:=v.Labels["elasticsearch"]
-		if !ok{
-			log.Errorf("label [elasticsearch] was not found in: %v",v)
-			continue
-		}
+		if !processor.detectorRunning{
+			processor.detectorRunning=true
+			go func(c *pipeline.Context) {
+				log.Debugf("[%v] init detector for active queue",processor.id)
+				defer func() {
+					processor.detectorRunning=false
+					log.Debug("exit detector for active queue")
+				}()
 
-		meta := elastic.GetMetadata(util.ToString(elasticsearch))
-		if meta == nil {
-			log.Debugf("metadata for [%v] is nil",elasticsearch)
-			continue
-		}
+				for {
+					log.Debugf("inflight queues: %v",util.MapLength(&processor.inFlightQueueConfigs))
 
-		level,ok:=v.Labels["level"]
+					if global.Env().IsDebug{
+						processor.inFlightQueueConfigs.Range(func(key, value interface{}) bool {
+							log.Tracef("inflight queue:%v",key)
+							return true
+						})
+					}
 
-		if level=="node"{
-			nodeID,ok:=v.Labels["node_id"]
-			if ok{
-				nodeInfo := meta.GetNodeInfo(util.ToString(nodeID))
-				if nodeInfo!=nil{
-					host:=nodeInfo.GetHttpPublishHost()
-					wg.Add(1)
-					go processor.NewBulkWorker(c, bulkSizeInByte, &wg, v, host)
-				}else{
-					log.Debugf("node info not found: %v",nodeID)
-				}
-			}else{
-				log.Debugf("node_id not found: %v",v)
-			}
-		}else if level=="shard"||level=="partition"{
-			index,ok:=v.Labels["index"]
-			if ok{
-				routingTable, err := meta.GetIndexRoutingTable(util.ToString(index))
-				if err != nil {
-					log.Error(err)
-					continue
-				}
-				shard,ok:=v.Labels["shard"]
-				if ok{
-					shards,ok:=routingTable[util.ToString(shard)]
-					if ok{
-						for _,x:=range shards{
-							if x.Primary{
-								//each primary shard has a goroutine, or run by one goroutine
-								if x.Node!=""{
-									nodeInfo := meta.GetNodeInfo(x.Node)
-									if nodeInfo!=nil{
-										host:=nodeInfo.GetHttpPublishHost()
-										wg.Add(1)
-										go processor.NewBulkWorker(c, bulkSizeInByte, &wg, v, host)
-									}else{
-										log.Debugf("nodeInfo not found: %v",v)
-									}
-								}else{
-									log.Debugf("nodeID not found: %v",v)
-								}
+					cfgs:=queue.GetQueuesFilterByLabel(processor.config.Queues)
+					for _,v:=range cfgs{
+						if c.IsCanceled() {
+							return
+						}
+						//if have depth and not in in flight
+						if queue.Depth(v)>0{
+							_,ok:=processor.inFlightQueueConfigs.Load(v.Id)
+							if !ok{
+								log.Tracef("detecting new queue: %v",v.Name)
+								processor.HandleQueueConfig(v,c)
 							}
 						}
-					}else{
-						log.Debugf("routing table not found: %v",v)
 					}
-				}else{
-					log.Debugf("shard not found: %v",v)
+					if processor.config.DetectIntervalInMs>0{
+						time.Sleep(time.Millisecond*time.Duration(processor.config.DetectIntervalInMs))
+					}
 				}
-			}else{
-				log.Debugf("index not found: %v",v)
-			}
-		}else{
-			host := meta.GetActiveHost()
-			wg.Add(1)
-			go processor.NewBulkWorker(c, bulkSizeInByte, &wg, v, host)
+			}(c)
 		}
 	}
 
-	wg.Wait()
+	processor.wg.Wait()
 
 	return nil
 }
 
-func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context, bulkSizeInByte int, wg *sync.WaitGroup, qConfig *queue.Config, host string) {
+func (processor *BulkIndexingProcessor) HandleQueueConfig(v *queue.Config,c *pipeline.Context){
+
+	if processor.config.SkipEmptyQueue{
+		if queue.Depth(v)<=0{
+			if global.Env().IsDebug{
+				log.Tracef("skip empty queue:[%v]",v.Name)
+			}
+			return
+		}
+	}
+
+	elasticsearch,ok:=v.Labels["elasticsearch"]
+	if !ok{
+		log.Errorf("label [elasticsearch] was not found in: %v",v)
+		return
+	}
+
+	meta := elastic.GetMetadata(util.ToString(elasticsearch))
+	if meta == nil {
+		log.Debugf("metadata for [%v] is nil",elasticsearch)
+		return
+	}
+
+	level,ok:=v.Labels["level"]
+
+	if level=="node"{
+		nodeID,ok:=v.Labels["node_id"]
+		if ok{
+			nodeInfo := meta.GetNodeInfo(util.ToString(nodeID))
+			if nodeInfo!=nil{
+				host:=nodeInfo.GetHttpPublishHost()
+				processor.wg.Add(1)
+				go processor.NewBulkWorker(c, processor.bulkSizeInByte, v, host)
+			}else{
+				log.Debugf("node info not found: %v",nodeID)
+			}
+		}else{
+			log.Debugf("node_id not found: %v",v)
+		}
+	}else if level=="shard"||level=="partition"{
+		index,ok:=v.Labels["index"]
+		if ok{
+			routingTable, err := meta.GetIndexRoutingTable(util.ToString(index))
+			if err != nil {
+				log.Error(err)
+				return
+			}
+			shard,ok:=v.Labels["shard"]
+			if ok{
+				shards,ok:=routingTable[util.ToString(shard)]
+				if ok{
+					for _,x:=range shards{
+						if x.Primary{
+							//each primary shard has a goroutine, or run by one goroutine
+							if x.Node!=""{
+								nodeInfo := meta.GetNodeInfo(x.Node)
+								if nodeInfo!=nil{
+									host:=nodeInfo.GetHttpPublishHost()
+									processor.wg.Add(1)
+									go processor.NewBulkWorker(c, processor.bulkSizeInByte, v, host)
+								}else{
+									log.Debugf("nodeInfo not found: %v",v)
+								}
+							}else{
+								log.Debugf("nodeID not found: %v",v)
+							}
+						}
+					}
+				}else{
+					log.Debugf("routing table not found: %v",v)
+				}
+			}else{
+				log.Debugf("shard not found: %v",v)
+			}
+		}else{
+			log.Debugf("index not found: %v",v)
+		}
+	}else{
+		host := meta.GetActiveHost()
+		processor.wg.Add(1)
+		go processor.NewBulkWorker(c, processor.bulkSizeInByte, v, host)
+	}
+}
+
+func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context, bulkSizeInByte int, qConfig *queue.Config, host string) {
+
+	if processor.config.MaxWorkers>0&&util.MapLength(&processor.inFlightQueueConfigs)>processor.config.MaxWorkers{
+		log.Debugf("reached max num of workers, skip init [%v]",qConfig.Name)
+		processor.wg.Done()
+		return
+	}
+
+	processor.inFlightQueueConfigs.Store(qConfig.Id,qConfig)
 
 	defer func() {
 		if !global.Env().IsDebug {
@@ -223,10 +305,15 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context, bul
 				ctx.Failed()
 			}
 		}
-		wg.Done()
+
+		//TODO cleanup buffer before exit worker
+
+		processor.inFlightQueueConfigs.Delete(qConfig.Id)
+		processor.wg.Done()
+		log.Debugf("exit worker [%v]",qConfig.Name)
 	}()
 
-	log.Info("start worker:", qConfig.Name, ", host:", host)
+	log.Debug("start worker:", qConfig.Name, ", host:", host)
 
 	mainBuf := processor.bufferPool.Get()
 	defer processor.bufferPool.Put(mainBuf)
@@ -254,7 +341,6 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(ctx *pipeline.Context, bul
 	if bulkProcessor.Config.DeadletterRequestsQueue == "" {
 		bulkProcessor.Config.DeadletterRequestsQueue = fmt.Sprintf("%v-bulk-dead_letter-items", esClusterID)
 	}
-
 	if bulkProcessor.Config.InvalidRequestsQueue == "" {
 		bulkProcessor.Config.InvalidRequestsQueue = fmt.Sprintf("%v-bulk-invalid-items", esClusterID)
 	}
@@ -278,16 +364,30 @@ READ_DOCS:
 		}
 
 		//each message is complete bulk message, must be end with \n
-		pop, _, err := queue.PopTimeout(qConfig, idleDuration)
-		if processor.config.ValidateRequest {
-			common.ValidateBulkRequest("write_pop", string(pop))
+		pop, timeout, err := queue.PopTimeout(qConfig, idleDuration)
+
+		if timeout{
+
+			log.Tracef("timeout on queue:[%v]",qConfig.Name)
+
+			ctx.Failed()
+
+			log.Tracef("call canceled on queue:[%v]",qConfig.Name)
+
+			goto CLEAN_BUFFER
 		}
 
 		if err != nil {
+			log.Tracef("error on queue:[%v]",qConfig.Name)
 			panic(err)
 		}
 
 		if len(pop) > 0 {
+
+			if processor.config.ValidateRequest {
+				common.ValidateBulkRequest("write_pop", string(pop))
+			}
+
 			stats.IncrementBy("elasticsearch."+esClusterID+".bulk", "bytes_received_from_queue", int64(mainBuf.Len()))
 			mainBuf.Write(pop)
 		}
@@ -310,6 +410,8 @@ READ_DOCS:
 
 CLEAN_BUFFER:
 
+	log.Tracef("CLEAN_BUFFER on queue:[%v]",qConfig.Name)
+
 	lastCommit = time.Now()
 
 	if mainBuf.Len() > 0 {
@@ -326,9 +428,12 @@ CLEAN_BUFFER:
 		mainBuf.Reset()
 	}
 
-	if ctx.IsCanceled() {
+	if ctx.IsCanceled()||ctx.IsFailed() {
+		log.Tracef("IsCanceled, return on queue:[%v]",qConfig.Name)
 		return
 	}
+
+	log.Tracef("goto READ_DOCS, return on queue:[%v]",qConfig.Name)
 
 	goto READ_DOCS
 
