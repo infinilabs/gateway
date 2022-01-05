@@ -212,6 +212,24 @@ func TestDatePrecisionTuning2(t *testing.T) {
 
 }
 
+func TestDatePrecisionTuning4(t *testing.T) {
+	//data:=[]byte("{\"size\":0,\"query\":{\"bool\":{\"must\":[{\"range\":{\"@timestamp\":{\"gte\":\"2021-12-29T08:50:33.345Z\",\"lte\":\"2022-01-05T08:50:33.345Z\",\"format\":\"strict_date_optional_time\"}}},{\"bool\":{\"must\":[],\"filter\":[{\"match_all\":{}}],\"should\":[],\"must_not\":[]}}],\"filter\":[{\"match_all\":{}}],\"should\":[],\"must_not\":[]}},\"aggs\":{\"timeseries\":{\"date_histogram\":{\"field\":\"@timestamp\",\"min_doc_count\":0,\"time_zone\":\"Asia/Shanghai\",\"extended_bounds\":{\"min\":1640767833345,\"max\":1641372633345},\"calendar_interval\":\"1d\"},\"aggs\":{\"61ca57f2-469d-11e7-af02-69e470af7417\":{\"cardinality\":{\"field\":\"source.ip\"}}},\"meta\":{\"timeField\":\"@timestamp\",\"intervalString\":\"1d\",\"bucketSize\":86400,\"seriesId\":\"61ca57f1-469d-11e7-af02-69e470af7417\"}}},\"timeout\":\"30000ms\"}")
+	data:=[]byte("12345121231231231232131312312312{\"range\":{\"@timestamp\":{\"gte\":\"2021-12-29T08:50:33.345Z\",\"lte\":\"2022-01-05T08:50:33.345Z\",\"format\":\"strict_date_optional_time\"}}},{\"bool\":{\"must\":[],\"filter\":[{\"match_all\":{}}],\"should\":[],\"must_not\":[]}}],\"filter\":[{\"match_all\":{}}],\"should\":[],\"must_not\":[]}},\"aggs\":{\"timeseries\":{\"date_histogram\":{\"field\":\"@timestamp\",\"min_doc_count\":0,\"time_zone\":\"Asia/Shanghai\",\"extended_bounds\":{\"min\":1640767833345,\"max\":1641372633345},\"calendar_interval\":\"1d\"},\"aggs\":{\"61ca57f2-469d-11e7-af02-69e470af7417\":{\"cardinality\":{\"field\":\"source.ip\"}}},\"meta\":{\"timeField\":\"@timestamp\",\"intervalString\":\"1d\",\"bucketSize\":86400,\"seriesId\":\"61ca57f1-469d-11e7-af02-69e470af7417\"}}},\"timeout\":\"30000ms\"}")
+	filter:= DatePrecisionTuning{config: &defaultConfig}
+	ctx:=&fasthttp.RequestCtx{}
+	ctx.Request=fasthttp.Request{}
+	ctx.Request.SetRequestURI("/_search")
+	ctx.Request.Header.SetMethod(fasthttp.MethodPost)
+	ctx.Request.SetBody(data)
+
+	filter.config.TimePrecision=2
+	filter.Filter(ctx)
+	rePrecisedBody:=string(ctx.Request.Body())
+	fmt.Println(rePrecisedBody)
+	assert.Equal(t,rePrecisedBody,"12345121231231231232131312312312{\"range\":{\"@timestamp\":{\"gte\":\"2021-12-29T08:00:00.000Z\",\"lte\":\"2022-01-05T08:59:59.999Z\",\"format\":\"strict_date_optional_time\"}}},{\"bool\":{\"must\":[],\"filter\":[{\"match_all\":{}}],\"should\":[],\"must_not\":[]}}],\"filter\":[{\"match_all\":{}}],\"should\":[],\"must_not\":[]}},\"aggs\":{\"timeseries\":{\"date_histogram\":{\"field\":\"@timestamp\",\"min_doc_count\":0,\"time_zone\":\"Asia/Shanghai\",\"extended_bounds\":{\"min\":1640767833345,\"max\":1641372633345},\"calendar_interval\":\"1d\"},\"aggs\":{\"61ca57f2-469d-11e7-af02-69e470af7417\":{\"cardinality\":{\"field\":\"source.ip\"}}},\"meta\":{\"timeField\":\"@timestamp\",\"intervalString\":\"1d\",\"bucketSize\":86400,\"seriesId\":\"61ca57f1-469d-11e7-af02-69e470af7417\"}}},\"timeout\":\"30000ms\"}")
+
+}
+
 func TestDatePrecisionTuning3(t *testing.T) {
 
 	filter:= DatePrecisionTuning{config: &defaultConfig}
@@ -230,3 +248,4 @@ func TestDatePrecisionTuning3(t *testing.T) {
 	assert.Equal(t,rePrecisedBody,"{\n  \"query\": {\n    \"query_string\": {\n      \"default_field\": \"title\",\n      \"query\": \"this range AND gte TO goodbye 2019-09-26T00:10:00.000Z thus\"\n    }\n  }\n}")
 
 }
+

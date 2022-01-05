@@ -69,6 +69,7 @@ func (this *DatePrecisionTuning) Filter(ctx *fasthttp.RequestCtx) {
 			startProcess := false
 			precisionOffset := 0
 			matchCount := 0
+			//fmt.Println("body[start:end]: ",string(body[start:end]))
 			for i, v := range body[start:end] {
 				if v == 84 { //T
 					startProcess = true
