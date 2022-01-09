@@ -19,7 +19,7 @@ flow:
             contains:
               _ctx.request.path: /_bulk
           elasticsearch: dev
-          level: partition #cluster,node,shard,partition
+          level: cluster #cluster,node,shard,partition
           mode: async
           fix_null_id: true
       - elasticsearch:
@@ -43,7 +43,7 @@ router:
 elasticsearch:
   - name: dev
     enabled: true
-    endpoint: http://192.168.3.188:9206 # if your elasticsearch is using https, your gateway should be listen on as https as well
+    endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
     traffic_control: #global traffic control
       max_bps_per_node: 20971520 #max total bytes send to es per node, 20MB/s
       max_qps_per_node: 50000 #max total requests send to es per node, 20k/s
@@ -60,11 +60,11 @@ pipeline:
   - name: bulk_request_ingest
     auto_start: true
     keep_running: true
+    retry_delay_in_ms: 0
     processor:
       - bulk_indexing:
-          when:
-            cluster_available: [ "dev" ]
-          bulk_size_in_mb: 10
+          bulk_size_in_mb: 5
+          bulk.compress: true
+#          skip_info_missing: true
           queues:
             type: bulk_reshuffle
-            level: node

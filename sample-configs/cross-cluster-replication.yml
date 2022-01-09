@@ -516,4 +516,3 @@ pipeline:
           bulk_size_in_mb: 10
           queues:
             type: bulk_reshuffle
-            level: partition

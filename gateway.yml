@@ -102,13 +102,11 @@ pipeline:
   processor:
     - bulk_indexing:
         elasticsearch: "dev"
-        compress: true
-        worker_size: 1
+        bulk.compress: true
         bulk_size_in_mb: 1  #in MB
         retry_delay_in_seconds: 5
-#        process_failure_queue: true #process failed bulk messages
-#        queues: #process other bulk queue
-#          - dev-node-failure
+        queues:
+          type: bulk_reshuffle
         when:
           cluster_available: [ "dev" ]
 
