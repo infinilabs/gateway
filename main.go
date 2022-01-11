@@ -24,6 +24,7 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/modules/api"
 	"infini.sh/framework/modules/elastic"
+	"infini.sh/framework/modules/filter"
 	"infini.sh/framework/modules/pipeline"
 	"infini.sh/framework/modules/queue"
 	stats2 "infini.sh/framework/modules/stats"
@@ -67,7 +68,7 @@ func main() {
 		module.RegisterUserPlugin(&stats.StatsDModule{})
 
 		module.RegisterUserPlugin(translog.TranslogModule{})
-		//module.RegisterSystemModule(filter.FilterModule{})
+		module.RegisterSystemModule(&filter.FilterModule{})
 
 		module.RegisterSystemModule(&queue.DiskQueue{})
 		module.RegisterSystemModule(&queue.RedisModule{})
