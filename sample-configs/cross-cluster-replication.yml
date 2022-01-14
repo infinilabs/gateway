@@ -321,7 +321,7 @@ router:
 elasticsearch:
   - name: primary
     enabled: true
-    endpoint: http://192.168.3.188:9204
+    endpoint: http://localhost:9200
     basic_auth:
       username: elastic
       password: changeme
@@ -334,7 +334,7 @@ elasticsearch:
         interval: 60s
   - name: backup
     enabled: true
-    endpoint: http://192.168.3.188:9206
+    endpoint: http://localhost:9201
     basic_auth:
       username: test
       password: testtest

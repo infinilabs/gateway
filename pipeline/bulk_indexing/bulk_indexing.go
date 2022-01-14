@@ -323,6 +323,9 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 	var bulkProcessor elastic2.BulkProcessor
 	var esClusterID string
 	var meta *elastic.ElasticsearchMetadata
+	var initOfffset string
+	var offset string
+	var consumer=queue.GetOrInitConsumerConfig(qConfig.Id,"group-001","consumer-001")
 
 	defer func() {
 		if !global.Env().IsDebug {
@@ -344,7 +347,17 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 		processor.inFlightQueueConfigs.Delete(key)
 
 		//cleanup buffer before exit worker
-		processor.submitBulkRequest(esClusterID,meta,host,bulkProcessor,mainBuf)
+		success:=processor.submitBulkRequest(esClusterID,meta,host,bulkProcessor,mainBuf)
+		if success{
+			if offset!=""&&initOfffset!=offset{
+				ok,err:=queue.CommitOffset(qConfig,consumer,offset)
+				if !ok||err!=nil{
+					panic(err)
+				}
+			}
+		}else{
+			log.Errorf("error between offset [%v]-[%v]",initOfffset,offset)
+		}
 		log.Debugf("exit worker[%v], queue:[%v]",workerID,qConfig.Id)
 	}()
 
@@ -379,12 +392,11 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 	}
 
 	var lastCommit time.Time = time.Now()
-	var consumer=queue.GetOrInitConsumerConfig(qConfig.Id,"group-001","consumer-001")
 
 
 READ_DOCS:
-	var initOfffset,_=queue.GetOffset(qConfig,consumer)
-	offset:=initOfffset
+	initOfffset,_=queue.GetOffset(qConfig,consumer)
+	offset=initOfffset
 
 	for {
 		if ctx.IsCanceled() {
@@ -427,6 +439,9 @@ READ_DOCS:
 
 		HANDLE_MESSAGE:
 
+		//update temp offset, not committed, continued reading
+		offset=ctx1.NextOffset
+
 		if len(messages) > 0 {
 			for _,pop:=range messages{
 
@@ -453,9 +468,6 @@ READ_DOCS:
 			}
 		}
 
-		//update temp offset, not committed, continued reading
-		offset=ctx1.NextOffset
-
 		if time.Since(lastCommit) > idleDuration && mainBuf.Len() > 0 {
 			if global.Env().IsDebug {
 				log.Trace("hit idle timeout, ", idleDuration.String())
@@ -468,7 +480,6 @@ READ_DOCS:
 CLEAN_BUFFER:
 
 	lastCommit = time.Now()
-
 	//TODO, check bulk result, if ok, then commit offset, or retry non-200 requests, or save failure offset
 	success:=processor.submitBulkRequest(esClusterID,meta,host,bulkProcessor,mainBuf)
 	if success{
@@ -479,7 +490,7 @@ CLEAN_BUFFER:
 			}
 		}
 	}else{
-		//TODO logging failure offset boundry
+		//logging failure offset boundry
 		log.Errorf("error between offset [%v]-[%v]",initOfffset,offset)
 	}
 
@@ -495,6 +506,9 @@ CLEAN_BUFFER:
 }
 
 func (processor *BulkIndexingProcessor) submitBulkRequest(esClusterID string, meta *elastic.ElasticsearchMetadata, host string, bulkProcessor elastic2.BulkProcessor, mainBuf *bytebufferpool.ByteBuffer)bool {
+
+	log.Tracef("submit BulkRequest")
+
 	if  mainBuf==nil||meta==nil{
 		return true
 	}
