@@ -27,6 +27,8 @@ import (
 	"infini.sh/framework/modules/filter"
 	"infini.sh/framework/modules/pipeline"
 	"infini.sh/framework/modules/queue"
+	queue2 "infini.sh/framework/modules/queue/disk_queue"
+	"infini.sh/framework/modules/s3"
 	stats2 "infini.sh/framework/modules/stats"
 	"infini.sh/framework/modules/task"
 	"infini.sh/framework/plugins/elastic/json_indexing"
@@ -45,7 +47,7 @@ import (
 
 func main() {
 
-	terminalHeader := ("   ___   _   _____  __  __    __  _       \n")
+	terminalHeader := ("\n   ___   _   _____  __  __    __  _       \n")
 	terminalHeader += ("  / _ \\ /_\\ /__   \\/__\\/ / /\\ \\ \\/_\\ /\\_/\\\n")
 	terminalHeader += (" / /_\\///_\\\\  / /\\/_\\  \\ \\/  \\/ //_\\\\\\_ _/\n")
 	terminalHeader += ("/ /_\\\\/  _  \\/ / //__   \\  /\\  /  _  \\/ \\ \n")
@@ -70,10 +72,10 @@ func main() {
 		module.RegisterUserPlugin(translog.TranslogModule{})
 		module.RegisterSystemModule(&filter.FilterModule{})
 
-		module.RegisterSystemModule(&queue.DiskQueue{})
+		module.RegisterSystemModule(&queue2.DiskQueue{})
 		module.RegisterSystemModule(&queue.RedisModule{})
+		module.RegisterSystemModule(&s3.S3Module{})
 		module.RegisterSystemModule(&queue.QueueModule{})
-
 		module.RegisterSystemModule(elastic.ElasticModule{})
 
 		module.RegisterSystemModule(&task.TaskModule{})

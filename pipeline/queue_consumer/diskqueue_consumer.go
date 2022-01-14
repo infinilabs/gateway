@@ -265,7 +265,7 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 	//execute
 	err = fastHttpClient.Do(req, resp)
 
-	metadata.CheckNodeTrafficThrottle(util.UnsafeBytesToString(req.Header.Host()),0,resp.GetResponseLength(),0)
+	//metadata.CheckNodeTrafficThrottle(util.UnsafeBytesToString(req.Header.Host()),0,resp.GetResponseLength(),0)
 
 	if !acceptGzipped&&compressed{
 		body:=resp.GetRawBody()

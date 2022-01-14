@@ -60,11 +60,35 @@ pipeline:
   - name: bulk_request_ingest
     auto_start: true
     keep_running: true
-    retry_delay_in_ms: 0
+    retry_delay_in_ms: 1000
     processor:
       - bulk_indexing:
+          when:
+            cluster_available: [ "dev" ]
           bulk_size_in_mb: 5
           bulk.compress: true
 #          skip_info_missing: true
+          fetch_max_messages: 1000
           queues:
             type: bulk_reshuffle
+
+#disk_queue:
+#  upload_to_s3: true
+#  s3:
+#    server: my_blob_store
+#    location: cn-beijing-001
+#    bucket: infini-store
+#  max_msg_size: 209715200 #200MB
+#  max_used_bytes: 102400
+#  warning_free_bytes: 322122547200
+#  reserved_free_bytes: 322122547200
+#  max_bytes_per_file: 10576
+
+
+s3:
+  my_blob_store:
+    endpoint: "192.168.3.63:9000"
+    access_key: "minio"
+    access_secret: "gogoaminio"
+    #  token:
+#    ssl: false

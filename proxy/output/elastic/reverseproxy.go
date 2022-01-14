@@ -458,7 +458,7 @@ START:
 
 	stats.Increment("reverse_proxy","do")
 
-	metadata.CheckNodeTrafficThrottle(util.UnsafeBytesToString(req.Header.Host()),0,res.GetResponseLength(),0)
+	//metadata.CheckNodeTrafficThrottle(util.UnsafeBytesToString(req.Header.Host()),0,res.GetResponseLength(),0)
 
 
 	// restore schema

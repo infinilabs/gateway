@@ -134,7 +134,21 @@ floating_ip:
 #    type: redis
 
 disk_queue:
+  upload_to_s3: true
+  s3:
+    server: my_blob_store
+    location: cn-beijing-001
+    bucket: infini-store
 #  max_used_bytes: 102400
 #  warning_free_bytes: 322122547200
 #  reserved_free_bytes: 322122547200
 #  max_bytes_per_file: 1048576
+
+
+s3:
+  my_blob_store:
+    endpoint: "192.168.3.63:9000"
+    access_key: "minio"
+    access_secret: "gogoaminio"
+#    token: "XXXX"
+#    ssl: true
