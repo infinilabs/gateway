@@ -506,7 +506,7 @@ START:
 		myctx.SetStatusCode(500)
 	} else {
 		if global.Env().IsDebug {
-			log.Tracef("request [%v] [%v] [%v]", req.URI().String(), res.StatusCode(), util.SubString(string(res.GetRawBody()), 0, 256))
+			log.Tracef("request [%v] [%v] [%v] [%v]", req.URI().String(), util.SubString(string(req.GetRawBody()), 0, 256), res.StatusCode(), util.SubString(string(res.GetRawBody()), 0, 256))
 		}
 	}
 

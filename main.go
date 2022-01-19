@@ -72,9 +72,10 @@ func main() {
 		module.RegisterUserPlugin(translog.TranslogModule{})
 		module.RegisterSystemModule(&filter.FilterModule{})
 
+		module.RegisterSystemModule(&s3.S3Module{})
+
 		module.RegisterSystemModule(&queue2.DiskQueue{})
 		module.RegisterSystemModule(&redis.RedisModule{})
-		module.RegisterSystemModule(&s3.S3Module{})
 		module.RegisterSystemModule(elastic.ElasticModule{})
 
 		module.RegisterSystemModule(&task.TaskModule{})

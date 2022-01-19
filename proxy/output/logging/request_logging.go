@@ -223,7 +223,8 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 
 	respBody := string(ctx.Response.GetRawBody())
 	if global.Env().IsDebug {
-		log.Debug("response body:", string(respBody))
+		log.Debug("logging request body:", string(reqBody))
+		log.Debug("logging response body:", string(respBody))
 	}
 
 	if len(respBody) > this.config.MaxResponseBodySize {

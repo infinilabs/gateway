@@ -519,13 +519,13 @@ func (processor *BulkIndexingProcessor) submitBulkRequest(esClusterID string, me
 
 		start := time.Now()
 		data := mainBuf.Bytes()
-		status, success, err := bulkProcessor.Bulk(meta, host, data)
+		contrinueRequest,status, success, err := bulkProcessor.Bulk(meta, host, data)
 		stats.Timing("elasticsearch."+esClusterID+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
 		log.Debug(meta.Config.Name, ", ", host, ", result:", success, ", status:", status, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elapsed:", time.Since(start)," ",err)
 		stats.IncrementBy("elasticsearch."+esClusterID+".bulk", string(success+".bytes"), int64(mainBuf.Len()))
 		stats.IncrementBy("elasticsearch."+esClusterID+".bulk", fmt.Sprintf("%v.bytes",status), int64(mainBuf.Len()))
 		mainBuf.Reset()
-		return success=="success"
+		return contrinueRequest
 	}
 
 	return true

@@ -244,16 +244,11 @@ const PARTIAL API_STATUS = "partial"
 const FAILURE API_STATUS = "failure"
 
 
-func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host string, data []byte) (status_code int, status API_STATUS,err error) {
+func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host string, data []byte) (continueNext bool,status_code int, status API_STATUS,err error) {
 
 	if data == nil || len(data) == 0 {
-		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "5xx_requests")
-
-		if joint.Config.SaveFailure {
-			queue.Push(queue.GetOrInitConfig(joint.Config.InvalidRequestsQueue), data)
-		}
-
-		return 0, FAILURE,errors.Errorf("bulk data is empty, host: %v", host)
+		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "invalid_requests")
+		return true,0, FAILURE,errors.Errorf("bulk data is empty, host: %v", host)
 	}
 
 	httpClient:=metadata.GetActivePreferredHost(host)
@@ -324,7 +319,7 @@ DO:
 	//execute
 	err = httpClient.Do(req, resp)
 	if err!=nil{
-		return 0, FAILURE, err
+		return false,0, FAILURE, err
 	}
 
 	//metadata.CheckNodeTrafficThrottle(util.UnsafeBytesToString(req.Header.Host()),0,resp.GetResponseLength(),0)
@@ -351,7 +346,7 @@ DO:
 			queue.Push(queue.GetOrInitConfig(joint.Config.FailureRequestsQueue), data)
 		}
 
-		return 0, FAILURE,nil
+		return false,0, FAILURE,nil
 	}
 
 	// Do we need to decompress the response?
@@ -372,7 +367,7 @@ DO:
 			queue.Push(queue.GetOrInitConfig(joint.Config.FailureRequestsQueue), data)
 		}
 
-		return resp.StatusCode(), FAILURE,err
+		return false,resp.StatusCode(), FAILURE,err
 	}
 
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated {
@@ -387,7 +382,7 @@ DO:
 			containError:=HandleBulkResponse(joint.Config.SafetyParse,data,resbody,joint.Config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
 			if containError {
 
-				log.Error("error in bulk requests,",host,",", resp.StatusCode(), util.SubString(string(resbody), 0, 256))
+				log.Errorf("error in bulk requests,host:%v,status:%v,invalid:%v,success:%v,failure:%v,res:%v",host,resp.StatusCode(),nonRetryableItems.Len(),retryableItems.Len(),successItems.Len(), util.SubString(string(resbody), 0, 256))
 
 				if nonRetryableItems.Len() > 0 {
 					nonRetryableItems.WriteByte('\n')
@@ -416,11 +411,11 @@ DO:
 					queue.Push(queue.GetOrInitConfig(joint.Config.PartialSuccessQueue), bytes)
 					bytebufferpool.Put(successItems)
 				}
-				return 400, PARTIAL,nil
+				return true,400, PARTIAL,nil
 			}
 		}
 
-		return resp.StatusCode(), SUCCESS,nil
+		return true,resp.StatusCode(), SUCCESS,nil
 	} else if resp.StatusCode() == 429 {
 		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "429_requests")
 
@@ -437,7 +432,7 @@ DO:
 			if joint.Config.SaveFailure {
 				queue.Push(queue.GetOrInitConfig(joint.Config.FailureRequestsQueue), data)
 			}
-			return resp.StatusCode(), FAILURE, nil
+			return false,resp.StatusCode(), FAILURE, nil
 		}
 		log.Debugf("rejected 429, retried %v times, will try again", retryTimes)
 		retryTimes++
@@ -450,7 +445,7 @@ DO:
 
 		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "400_requests")
 
-		return resp.StatusCode(), INVALID,nil
+		return true,resp.StatusCode(), INVALID,nil
 	} else {
 
 		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "5xx_requests")
@@ -459,7 +454,7 @@ DO:
 			queue.Push(queue.GetOrInitConfig(joint.Config.FailureRequestsQueue), data)
 		}
 
-		return resp.StatusCode(), FAILURE,nil
+		return false,resp.StatusCode(), FAILURE,nil
 	}
 
 }
