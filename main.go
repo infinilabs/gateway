@@ -39,9 +39,9 @@ import (
 	"infini.sh/gateway/pipeline/flow_runner"
 	"infini.sh/gateway/pipeline/index_diff"
 	"infini.sh/gateway/pipeline/queue_consumer"
+	"infini.sh/gateway/proxy"
 	"infini.sh/gateway/service/floating_ip"
 	"infini.sh/gateway/service/forcemerge"
-	"infini.sh/gateway/service/gateway"
 	"infini.sh/gateway/service/translog"
 )
 
@@ -79,7 +79,7 @@ func main() {
 		module.RegisterSystemModule(elastic.ElasticModule{})
 
 		module.RegisterSystemModule(&task.TaskModule{})
-		module.RegisterUserPlugin(&gateway.GatewayModule{})
+		module.RegisterUserPlugin(&proxy.GatewayModule{})
 		module.RegisterUserPlugin(forcemerge.ForceMergeModule{})
 		module.RegisterSystemModule(&pipeline.PipeModule{})
 		module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
