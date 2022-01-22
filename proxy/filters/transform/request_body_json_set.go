@@ -37,7 +37,6 @@ func (filter *RequestBodyJsonSet) Filter(ctx *fasthttp.RequestCtx) {
 		for path,value:=range filter.m{
 			pathArray:=strings.Split(path,".")
 			v,t,offset,err:=jsonparser.Get(bodyBytes,pathArray...)
-			fmt.Println(v,t,offset,err)
 			if t==jsonparser.NotExist&&filter.IgnoreMissing{
 				log.Debugf("path:%v, value:%v, %v, %v, %v, %v",path,value,err,v,t,offset)
 				continue
@@ -71,8 +70,6 @@ func NewRequestBodyJsonSet(c *config.Config) (pipeline.Filter, error) {
 		}
 		runner.m[k]=v
 	}
-
-	fmt.Println(runner.m)
 
 	return &runner, nil
 }

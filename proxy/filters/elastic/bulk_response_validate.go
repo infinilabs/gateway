@@ -91,7 +91,7 @@ func HandleBulkResponse(safetyParse bool,requestBytes,resbody []byte,docBuffSize
 		if err != nil {
 			panic(err)
 		}
-		var contains400Error = false
+		//var contains400Error = false
 		invalidOffset := map[int]elastic.BulkActionMetadata{}
 		var validCount = 0
 		var statsCodeStats = map[int]int{}
@@ -135,7 +135,7 @@ func HandleBulkResponse(safetyParse bool,requestBytes,resbody []byte,docBuffSize
 				//find invalid request
 				if actionMetadata.GetItem().Status >= 400 && actionMetadata.GetItem().Status < 500 && actionMetadata.GetItem().Status != 429 {
 					retryable = false
-					contains400Error = true
+					//contains400Error = true
 					if nonRetryableItems.Len() > 0 {
 						nonRetryableItems.WriteByte('\n')
 					}
