@@ -65,9 +65,20 @@ func ProxyHandler(ctx *fasthttp.RequestCtx) {
 }
 
 type GatewayModule struct {
-	 api.Handler
-	 entryConfigs []common.EntryConfig
-	 entryPoints  map[string]*entry.Entrypoint
+	api.Handler
+	entryPoints map[string]*entry.Entrypoint
+
+	API struct {
+		Enabled bool `config:"enabled"`
+	} `config:"api"`
+
+	ORM struct {
+		Enabled bool `config:"enabled"`
+	} `config:"orm"`
+
+	entryConfigs  []common.EntryConfig
+	flowConfigs   []common.FlowConfig
+	routerConfigs []common.RouterConfig
 }
 
 func (this *GatewayModule) Name() string {
@@ -76,49 +87,57 @@ func (this *GatewayModule) Name() string {
 
 func (module *GatewayModule) Setup(cfg *Config) {
 
-	module.entryConfigs =[]common.EntryConfig{}
+	module.entryConfigs = []common.EntryConfig{}
 	module.entryPoints = map[string]*entry.Entrypoint{}
+	module.routerConfigs = []common.RouterConfig{}
+	module.flowConfigs = []common.FlowConfig{}
 
 	initFilters()
 
-	ok, err := env.ParseConfig("entry", &module.entryConfigs)
+	ok, err := env.ParseConfig("gateway", &module.flowConfigs)
 	if ok && err != nil {
 		panic(err)
 	}
 
-	flowConfigs := []common.FlowConfig{}
-	ok, err = env.ParseConfig("flow", &flowConfigs)
-	if ok&&err != nil {
+	ok, err = env.ParseConfig("entry", &module.entryConfigs)
+	if ok && err != nil {
+		panic(err)
+	}
+
+	ok, err = env.ParseConfig("flow", &module.flowConfigs)
+	if ok && err != nil {
 		panic(err)
 	}
 	if ok {
-		for _, v := range flowConfigs {
+		for _, v := range module.flowConfigs {
 			common.RegisterFlowConfig(v)
 		}
 	}
 
-	routerConfigs := []common.RouterConfig{}
-	ok, err = env.ParseConfig("router", &routerConfigs)
+	ok, err = env.ParseConfig("router", &module.routerConfigs)
 	if ok && err != nil {
 		panic(err)
 	}
 
 	if ok {
-		for _, v := range routerConfigs {
+		for _, v := range module.routerConfigs {
 			common.RegisterRouterConfig(v)
 		}
 	}
 
+	api := api2.GatewayAPI{}
+	if module.API.Enabled {
+		api.RegisterAPI("")
+	}
+	if module.ORM.Enabled {
+		api.RegisterSchema()
+	}
+
 	module.registerAPI("")
 
-	api:= api2.GatewayAPI{}
-	api.RegisterAPI("")
 }
 
-
 func (module *GatewayModule) Start() error {
-
-
 
 	for _, v := range module.entryConfigs {
 		entry := entry.NewEntrypoint(v)

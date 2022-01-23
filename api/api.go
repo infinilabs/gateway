@@ -13,11 +13,23 @@ type GatewayAPI struct {
 
 const DefaultAPIPrefix = "gateway"
 
-func (this *GatewayAPI) RegisterAPI(prefix string) {
-	err := orm.RegisterSchemaWithIndexName(common.EntryConfig{}, "entrypoint")
+func (this *GatewayAPI) RegisterSchema() {
+	err := orm.RegisterSchemaWithIndexName(common.EntryConfig{}, "entry")
 	if err != nil {
 		panic(err)
 	}
+	err = orm.RegisterSchemaWithIndexName(common.RouterConfig{}, "router")
+	if err != nil {
+		panic(err)
+	}
+	err = orm.RegisterSchemaWithIndexName(common.FlowConfig{}, "flow")
+	if err != nil {
+		panic(err)
+	}
+
+}
+
+func (this *GatewayAPI) RegisterAPI(prefix string) {
 
 	if prefix == "" {
 		prefix = DefaultAPIPrefix
