@@ -19,12 +19,12 @@ func (filter StatsFilter) Name() string {
 
 func (filter StatsFilter) Filter(ctx *fasthttp.RequestCtx) {
 
-	stats.Timing(filter.Category,"response.elapsed_ms",ctx.GetElapsedTime().Milliseconds())
-	stats.IncrementBy(filter.Category,"response.bytes", int64(ctx.Response.GetResponseLength()))
-	stats.Increment(filter.Category,fmt.Sprintf("response.status.%v",ctx.Response.StatusCode()))
+	stats.Timing(filter.Category, "response.elapsed_ms", ctx.GetElapsedTime().Milliseconds())
+	stats.IncrementBy(filter.Category, "response.bytes", int64(ctx.Response.GetResponseLength()))
+	stats.Increment(filter.Category, fmt.Sprintf("response.status.%v", ctx.Response.StatusCode()))
 
-	stats.IncrementBy(filter.Category,"request.bytes", int64(ctx.Request.GetRequestLength()))
-	stats.Increment(filter.Category,fmt.Sprintf("request.method.%v",string(ctx.Request.Header.Method())))
+	stats.IncrementBy(filter.Category, "request.bytes", int64(ctx.Request.GetRequestLength()))
+	stats.Increment(filter.Category, fmt.Sprintf("request.method.%v", string(ctx.Request.Header.Method())))
 
 }
 

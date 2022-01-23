@@ -11,8 +11,8 @@ import (
 	"strings"
 )
 
-func (h *GatewayAPI) createEntry(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	var obj = &common.EntryConfig{}
+func (h *GatewayAPI) createFlow(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+	var obj = &common.FlowConfig{}
 	err := h.DecodeJSON(req, obj)
 	if err != nil {
 		h.WriteError(w, err.Error(), http.StatusInternalServerError)
@@ -32,10 +32,10 @@ func (h *GatewayAPI) createEntry(w http.ResponseWriter, req *http.Request, ps ht
 
 }
 
-func (h *GatewayAPI) getEntry(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	id := ps.MustGetParameter("entry_id")
+func (h *GatewayAPI) getFlow(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+	id := ps.MustGetParameter("flow_id")
 
-	obj := common.EntryConfig{}
+	obj := common.FlowConfig{}
 	obj.ID = id
 
 	exists, err := orm.Get(&obj)
@@ -54,9 +54,9 @@ func (h *GatewayAPI) getEntry(w http.ResponseWriter, req *http.Request, ps httpr
 	}, 200)
 }
 
-func (h *GatewayAPI) updateEntry(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	id := ps.MustGetParameter("entry_id")
-	obj := common.EntryConfig{}
+func (h *GatewayAPI) updateFlow(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+	id := ps.MustGetParameter("flow_id")
+	obj := common.FlowConfig{}
 
 	obj.ID = id
 	exists, err := orm.Get(&obj)
@@ -92,10 +92,10 @@ func (h *GatewayAPI) updateEntry(w http.ResponseWriter, req *http.Request, ps ht
 	}, 200)
 }
 
-func (h *GatewayAPI) deleteEntry(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	id := ps.MustGetParameter("entry_id")
+func (h *GatewayAPI) deleteFlow(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+	id := ps.MustGetParameter("flow_id")
 
-	obj := common.EntryConfig{}
+	obj := common.FlowConfig{}
 	obj.ID = id
 
 	exists, err := orm.Get(&obj)
@@ -119,7 +119,8 @@ func (h *GatewayAPI) deleteEntry(w http.ResponseWriter, req *http.Request, ps ht
 	}, 200)
 }
 
-func (h *GatewayAPI) searchEntry(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+func (h *GatewayAPI) searchFlow(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+
 	var (
 		name        = h.GetParameterOrDefault(req, "name", "")
 		queryDSL    = `{"query":{"bool":{"must":[%s]}}, "size": %d, "from": %d}`
@@ -143,7 +144,7 @@ func (h *GatewayAPI) searchEntry(w http.ResponseWriter, req *http.Request, ps ht
 	queryDSL = fmt.Sprintf(queryDSL, mustBuilder.String(), size, from)
 	q.RawQuery = []byte(queryDSL)
 
-	err, res := orm.Search(&common.EntryConfig{}, &q)
+	err, res := orm.Search(&common.FlowConfig{}, &q)
 	if err != nil {
 		h.WriteError(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -12,9 +12,9 @@ import (
 )
 
 type RetryLimiter struct {
-	MaxRetryTimes int `config:"max_retry_times"`
-	SleepInterval int `config:"retry_interval_in_ms"`
-	Queue string `config:"queue_name"`
+	MaxRetryTimes int    `config:"max_retry_times"`
+	SleepInterval int    `config:"retry_interval_in_ms"`
+	Queue         string `config:"queue_name"`
 }
 
 func (filter *RetryLimiter) Name() string {
@@ -25,28 +25,27 @@ const RetryKey = "Retried_times"
 
 func (filter *RetryLimiter) Filter(ctx *fasthttp.RequestCtx) {
 
-	timeBytes:=ctx.Request.Header.Peek(RetryKey)
-	times:=0
-	if timeBytes!=nil{
-		t,err:=util.ToInt(string(timeBytes))
-		if err==nil{
-			times=t
+	timeBytes := ctx.Request.Header.Peek(RetryKey)
+	times := 0
+	if timeBytes != nil {
+		t, err := util.ToInt(string(timeBytes))
+		if err == nil {
+			times = t
 		}
 	}
 
-	if times>filter.MaxRetryTimes{
+	if times > filter.MaxRetryTimes {
 		log.Debugf("hit max retry times")
 		ctx.Finished()
 		ctx.Request.Header.Del(RetryKey)
-		queue.Push(queue.GetOrInitConfig(filter.Queue),ctx.Request.Encode())
-		time.Sleep(time.Duration(filter.SleepInterval)*time.Millisecond)
+		queue.Push(queue.GetOrInitConfig(filter.Queue), ctx.Request.Encode())
+		time.Sleep(time.Duration(filter.SleepInterval) * time.Millisecond)
 		return
 	}
 
 	times++
-	ctx.Request.Header.Set(RetryKey,util.IntToString(times))
+	ctx.Request.Header.Set(RetryKey, util.IntToString(times))
 }
-
 
 func NewRetryLimiter(c *config.Config) (pipeline.Filter, error) {
 

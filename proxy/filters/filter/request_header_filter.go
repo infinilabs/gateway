@@ -21,18 +21,16 @@ func (filter *RequestHeaderFilter) Name() string {
 	return "request_header_filter"
 }
 
-
 func NewRequestHeaderFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := RequestHeaderFilter {
-	}
+	runner := RequestHeaderFilter{}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	runner.genericFilter= &RequestFilter {
+	runner.genericFilter = &RequestFilter{
 		Action: "deny",
-		Status:403,
+		Status: 403,
 	}
 
 	if err := c.Unpack(runner.genericFilter); err != nil {
@@ -48,7 +46,7 @@ func (filter RequestHeaderFilter) Filter(ctx *fasthttp.RequestCtx) {
 		log.Debug("headers:", string(util.EscapeNewLine(ctx.Request.Header.Header())))
 	}
 
-	if len(filter.Exclude)>0 {
+	if len(filter.Exclude) > 0 {
 		for _, x := range filter.Exclude {
 			for k, v := range x {
 				v1 := ctx.Request.Header.Peek(k)
@@ -67,7 +65,7 @@ func (filter RequestHeaderFilter) Filter(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	if len(filter.Include)>0 {
+	if len(filter.Include) > 0 {
 		for _, x := range filter.Include {
 			for k, v := range x {
 				v1 := ctx.Request.Header.Peek(k)
@@ -90,4 +88,3 @@ func (filter RequestHeaderFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 }
-

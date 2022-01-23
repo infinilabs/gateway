@@ -11,8 +11,8 @@ import (
 )
 
 type DiskEnqueueFilter struct {
-	DepthThreshold int64 `config:"depth_threshold"`
-	QueueName string `config:"queue_name"`
+	DepthThreshold int64  `config:"depth_threshold"`
+	QueueName      string `config:"queue_name"`
 }
 
 func (filter *DiskEnqueueFilter) Name() string {
@@ -20,29 +20,28 @@ func (filter *DiskEnqueueFilter) Name() string {
 }
 
 func (filter *DiskEnqueueFilter) Filter(ctx *fasthttp.RequestCtx) {
-	qCfg:=queue.GetOrInitConfig(filter.QueueName)
+	qCfg := queue.GetOrInitConfig(filter.QueueName)
 
-	depth:=queue.Depth(qCfg)
+	depth := queue.Depth(qCfg)
 
-	if global.Env().IsDebug{
-		log.Trace(filter.QueueName," depth:",depth," vs threshold:",filter.DepthThreshold)
+	if global.Env().IsDebug {
+		log.Trace(filter.QueueName, " depth:", depth, " vs threshold:", filter.DepthThreshold)
 	}
 
-	if depth>=filter.DepthThreshold{
-		data:=ctx.Request.Encode()
-		err:=queue.Push(qCfg,data)
-		if err!=nil{
+	if depth >= filter.DepthThreshold {
+		data := ctx.Request.Encode()
+		err := queue.Push(qCfg, data)
+		if err != nil {
 			panic(err)
 		}
-	}else{
-		log.Debug("skip enqueue, ",filter.QueueName," depth:",depth," vs threshold:",filter.DepthThreshold)
+	} else {
+		log.Debug("skip enqueue, ", filter.QueueName, " depth:", depth, " vs threshold:", filter.DepthThreshold)
 	}
 }
 
 func NewDiskEnqueueFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := DiskEnqueueFilter{
-	}
+	runner := DiskEnqueueFilter{}
 
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)

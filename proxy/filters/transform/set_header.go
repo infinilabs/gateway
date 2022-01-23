@@ -10,7 +10,7 @@ import (
 
 type SetRequestHeader struct {
 	Headers []string `config:"headers"`
-	m map[string]string
+	m       map[string]string
 }
 
 func (filter *SetRequestHeader) Name() string {
@@ -19,39 +19,37 @@ func (filter *SetRequestHeader) Name() string {
 
 func NewSetRequestHeader(c *config.Config) (pipeline.Filter, error) {
 
-	runner := SetRequestHeader{
-	}
+	runner := SetRequestHeader{}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	runner.m= map[string]string{}
-	for _,item:=range runner.Headers{
-		k,v,err:=util.ConvertStringToMap(item,"->")
-		if err!=nil{
+	runner.m = map[string]string{}
+	for _, item := range runner.Headers {
+		k, v, err := util.ConvertStringToMap(item, "->")
+		if err != nil {
 			panic(err)
 		}
-		runner.m[k]=v
+		runner.m[k] = v
 	}
 	return &runner, nil
 }
 
-
 func (filter *SetRequestHeader) Filter(ctx *fasthttp.RequestCtx) {
 
-	for k,v:=range filter.m{
+	for k, v := range filter.m {
 		//remove old one
-		value:=ctx.Request.Header.Peek(k)
-		if len(value)>0{
+		value := ctx.Request.Header.Peek(k)
+		if len(value) > 0 {
 			ctx.Request.Header.Del(k)
 		}
-		ctx.Request.Header.Set(k,v)
+		ctx.Request.Header.Set(k, v)
 	}
 }
 
 type SetRequestQueryArgs struct {
 	Args []string `config:"args"`
-	m map[string]string
+	m    map[string]string
 }
 
 func (filter *SetRequestQueryArgs) Name() string {
@@ -59,30 +57,29 @@ func (filter *SetRequestQueryArgs) Name() string {
 }
 
 func (filter *SetRequestQueryArgs) Filter(ctx *fasthttp.RequestCtx) {
-	for k,v:=range filter.m{
-		value:=ctx.Request.Header.Peek(k)
-		if len(value)>0{
+	for k, v := range filter.m {
+		value := ctx.Request.Header.Peek(k)
+		if len(value) > 0 {
 			ctx.Request.URI().QueryArgs().Del(k)
 		}
-		ctx.Request.URI().QueryArgs().Set(k,v)
+		ctx.Request.URI().QueryArgs().Set(k, v)
 	}
 }
 
 func NewSetRequestQueryArgs(c *config.Config) (pipeline.Filter, error) {
 
-	runner := SetRequestQueryArgs{
-	}
+	runner := SetRequestQueryArgs{}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	runner.m= map[string]string{}
-	for _,item:=range runner.Args{
-		k,v,err:=util.ConvertStringToMap(item,"->")
-		if err!=nil{
+	runner.m = map[string]string{}
+	for _, item := range runner.Args {
+		k, v, err := util.ConvertStringToMap(item, "->")
+		if err != nil {
 			panic(err)
 		}
-		runner.m[k]=v
+		runner.m[k] = v
 	}
 
 	return &runner, nil
@@ -90,7 +87,7 @@ func NewSetRequestQueryArgs(c *config.Config) (pipeline.Filter, error) {
 
 type SetResponseHeader struct {
 	Headers []string `config:"headers"`
-	m map[string]string
+	m       map[string]string
 }
 
 func (filter *SetResponseHeader) Name() string {
@@ -99,31 +96,30 @@ func (filter *SetResponseHeader) Name() string {
 
 func (filter *SetResponseHeader) Filter(ctx *fasthttp.RequestCtx) {
 
-	for k,v:=range filter.m{
+	for k, v := range filter.m {
 		//remove old one
-		value:=ctx.Response.Header.Peek(k)
-		if len(value)>0{
+		value := ctx.Response.Header.Peek(k)
+		if len(value) > 0 {
 			ctx.Response.Header.Del(k)
 		}
-		ctx.Response.Header.Set(k,v)
+		ctx.Response.Header.Set(k, v)
 	}
 }
 
 func NewSetResponseHeader(c *config.Config) (pipeline.Filter, error) {
 
-	runner := SetResponseHeader{
-	}
+	runner := SetResponseHeader{}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	runner.m= map[string]string{}
-	for _,item:=range runner.Headers{
-		k,v,err:=util.ConvertStringToMap(item,"->")
-		if err!=nil{
+	runner.m = map[string]string{}
+	for _, item := range runner.Headers {
+		k, v, err := util.ConvertStringToMap(item, "->")
+		if err != nil {
 			panic(err)
 		}
-		runner.m[k]=v
+		runner.m[k] = v
 	}
 
 	return &runner, nil
@@ -139,15 +135,14 @@ func (filter *SetHostname) Name() string {
 
 func (filter *SetHostname) Filter(ctx *fasthttp.RequestCtx) {
 
-	if filter.Hostname!=""{
+	if filter.Hostname != "" {
 		ctx.Request.SetHost(filter.Hostname)
 	}
 }
 
 func NewSetHostname(c *config.Config) (pipeline.Filter, error) {
 
-	runner := SetHostname{
-	}
+	runner := SetHostname{}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
@@ -156,9 +151,9 @@ func NewSetHostname(c *config.Config) (pipeline.Filter, error) {
 }
 
 type SetResponse struct {
-	Status int `config:"status"`
+	Status      int    `config:"status"`
 	ContentType string `config:"content_type"`
-	Body string `config:"body"`
+	Body        string `config:"body"`
 }
 
 func (filter *SetResponse) Name() string {
@@ -167,24 +162,22 @@ func (filter *SetResponse) Name() string {
 
 func (filter *SetResponse) Filter(ctx *fasthttp.RequestCtx) {
 
-	if filter.Status>0{
+	if filter.Status > 0 {
 		ctx.Response.SetStatusCode(filter.Status)
 	}
 
-	if filter.ContentType!=""{
+	if filter.ContentType != "" {
 		ctx.SetContentType(filter.ContentType)
 	}
 
-	if filter.Body!=""{
+	if filter.Body != "" {
 		ctx.Response.SetBody(util.UnsafeStringToBytes(filter.Body))
 	}
 }
 
 func NewSetResponse(c *config.Config) (pipeline.Filter, error) {
 
-	runner := SetResponse{
-
-	}
+	runner := SetResponse{}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}

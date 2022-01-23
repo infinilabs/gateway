@@ -13,13 +13,13 @@ import (
 )
 
 type RedisPubSub struct {
-	Request bool `config:"request"`
-	Response bool `config:"response"`
-	Channel string `config:"channel"`
-	Host string `config:"host"`
+	Request  bool   `config:"request"`
+	Response bool   `config:"response"`
+	Channel  string `config:"channel"`
+	Host     string `config:"host"`
 	Password string `config:"password"`
-	Port int `config:"port"`
-	Db int `config:"db"`
+	Port     int    `config:"port"`
+	Db       int    `config:"db"`
 
 	client *redis.Client
 }
@@ -30,24 +30,24 @@ func (filter *RedisPubSub) Name() string {
 
 func (filter *RedisPubSub) Filter(ctx *fasthttp.RequestCtx) {
 
-	buffer:=bytebufferpool.Get()
+	buffer := bytebufferpool.Get()
 
-	if filter.Request{
+	if filter.Request {
 		data := ctx.Request.Encode()
 		buffer.Write(data)
 	}
 
-	if filter.Response{
-		data:=ctx.Response.Encode()
+	if filter.Response {
+		data := ctx.Response.Encode()
 		buffer.Write(data)
 	}
 
-	if buffer.Len()>0{
-		v,err:=filter.client.Publish(ctx,filter.Channel,buffer.Bytes()).Result()
-		if global.Env().IsDebug{
-			log.Trace(v,err)
+	if buffer.Len() > 0 {
+		v, err := filter.client.Publish(ctx, filter.Channel, buffer.Bytes()).Result()
+		if global.Env().IsDebug {
+			log.Trace(v, err)
 		}
-		if err!=nil{
+		if err != nil {
 			panic(err)
 		}
 	}
@@ -59,18 +59,18 @@ func (filter *RedisPubSub) Filter(ctx *fasthttp.RequestCtx) {
 func NewRedisPubSub(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RedisPubSub{
-		Request: true,
+		Request:  true,
 		Response: true,
-		Host: "localhost",
-		Port: 6379,
-		Db: 0,
+		Host:     "localhost",
+		Port:     6379,
+		Db:       0,
 	}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
 	runner.client = redis.NewClient(&redis.Options{
-		Addr: fmt.Sprintf("%s:%v", runner.Host,runner.Port),
+		Addr:     fmt.Sprintf("%s:%v", runner.Host, runner.Port),
 		Password: runner.Password,
 		DB:       runner.Db,
 	})
@@ -83,4 +83,3 @@ func NewRedisPubSub(c *config.Config) (pipeline.Filter, error) {
 
 	return &runner, nil
 }
-

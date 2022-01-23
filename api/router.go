@@ -56,13 +56,7 @@ func (h *GatewayAPI) getRouter(w http.ResponseWriter, req *http.Request, ps http
 
 func (h *GatewayAPI) updateRouter(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 	id := ps.MustGetParameter("router_id")
-
 	obj := common.RouterConfig{}
-	err := h.DecodeJSON(req, &obj)
-	if err != nil {
-		h.WriteError(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 
 	obj.ID = id
 	exists, err := orm.Get(&obj)
@@ -73,6 +67,18 @@ func (h *GatewayAPI) updateRouter(w http.ResponseWriter, req *http.Request, ps h
 		}, http.StatusNotFound)
 		return
 	}
+
+	id = obj.ID
+	create := obj.Created
+	err = h.DecodeJSON(req, &obj)
+	if err != nil {
+		h.WriteError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	//protect
+	obj.ID = id
+	obj.Created = create
 
 	err = orm.Update(&obj)
 	if err != nil {

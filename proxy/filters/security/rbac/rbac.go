@@ -11,10 +11,10 @@ import (
 )
 
 type RBACFilter struct {
-	Action string `config:"action"`
-	Users []string `config:"users"`
-	Roles []string `config:"roles"`
-	DefaultAction string `config:"default_action"`
+	Action        string   `config:"action"`
+	Users         []string `config:"users"`
+	Roles         []string `config:"roles"`
+	DefaultAction string   `config:"default_action"`
 }
 
 func (filter *RBACFilter) Name() string {
@@ -22,25 +22,25 @@ func (filter *RBACFilter) Name() string {
 }
 
 const AccessDeniedMessage = "Access denied"
-const NoUserMessage ="No user found"
-const NoRoleMessage ="No roles found"
+const NoUserMessage = "No user found"
+const NoRoleMessage = "No roles found"
 
 func (filter *RBACFilter) Filter(ctx *fasthttp.RequestCtx) {
 
-	if len(filter.Users)>0{
-		currentUsername,ok1:=ctx.GetString("user_name")
-		if !ok1{
-			ctx.Error(NoUserMessage,401)
+	if len(filter.Users) > 0 {
+		currentUsername, ok1 := ctx.GetString("user_name")
+		if !ok1 {
+			ctx.Error(NoUserMessage, 401)
 			ctx.Finished()
 			return
 		}
 		for _, v := range filter.Users {
-			if v==currentUsername{
-				if filter.Action=="allow"{
+			if v == currentUsername {
+				if filter.Action == "allow" {
 					filter.checkES(ctx)
 					return
-				}else{
-					ctx.Error(AccessDeniedMessage,403)
+				} else {
+					ctx.Error(AccessDeniedMessage, 403)
 					ctx.Finished()
 					return
 				}
@@ -48,21 +48,21 @@ func (filter *RBACFilter) Filter(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	if len(filter.Roles)>0{
-		currentRoles,ok2:=ctx.GetStringArray("user_roles")
-		if !ok2{
-			ctx.Error(NoRoleMessage,401)
+	if len(filter.Roles) > 0 {
+		currentRoles, ok2 := ctx.GetStringArray("user_roles")
+		if !ok2 {
+			ctx.Error(NoRoleMessage, 401)
 			ctx.Finished()
 			return
 		}
 		for _, v := range filter.Roles {
-			for _,z:=range currentRoles{
-				if v==z{
-					if filter.Action=="allow"{
+			for _, z := range currentRoles {
+				if v == z {
+					if filter.Action == "allow" {
 						filter.checkES(ctx)
 						return
-					}else{
-						ctx.Error(AccessDeniedMessage,403)
+					} else {
+						ctx.Error(AccessDeniedMessage, 403)
 						ctx.Finished()
 						return
 					}
@@ -71,31 +71,31 @@ func (filter *RBACFilter) Filter(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	if filter.DefaultAction=="deny"{
-		ctx.Error(AccessDeniedMessage,403)
+	if filter.DefaultAction == "deny" {
+		ctx.Error(AccessDeniedMessage, 403)
 		ctx.Finished()
 		return
-	}else{
+	} else {
 		filter.checkES(ctx)
 	}
 }
 
-func (filter *RBACFilter) checkES(ctx *fasthttp.RequestCtx){
+func (filter *RBACFilter) checkES(ctx *fasthttp.RequestCtx) {
 	//check clusters
 
 }
 
-func (filter *RBACFilter) checkClusters(ctx *fasthttp.RequestCtx){
+func (filter *RBACFilter) checkClusters(ctx *fasthttp.RequestCtx) {
 	//check indices
 
 }
 
-func (filter *RBACFilter) checkIndices(ctx *fasthttp.RequestCtx){
+func (filter *RBACFilter) checkIndices(ctx *fasthttp.RequestCtx) {
 	//check actions
 
 }
 
-func (filter *RBACFilter) checkActions(ctx *fasthttp.RequestCtx){
+func (filter *RBACFilter) checkActions(ctx *fasthttp.RequestCtx) {
 
 }
 
@@ -111,4 +111,3 @@ func NewRBACFilter(c *config.Config) (pipeline.Filter, error) {
 
 	return &runner, nil
 }
-

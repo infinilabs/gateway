@@ -19,15 +19,14 @@ func (filter *RequestUrlPathFilter) Name() string {
 
 func NewRequestUrlPathFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := RequestUrlPathFilter {
-	}
+	runner := RequestUrlPathFilter{}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	runner.genericFilter= &RequestFilter {
+	runner.genericFilter = &RequestFilter{
 		Action: "deny",
-		Status:403,
+		Status: 403,
 	}
 
 	if err := c.Unpack(runner.genericFilter); err != nil {
@@ -89,4 +88,3 @@ func (filter *RequestUrlPathFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 }
-

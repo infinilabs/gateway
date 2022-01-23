@@ -12,9 +12,9 @@ import (
 
 type ContextFilter struct {
 	genericFilter *RequestFilter
-	Context string   `config:"context"`
-	Include []string `config:"include"`
-	Exclude []string `config:"exclude"`
+	Context       string   `config:"context"`
+	Include       []string `config:"include"`
+	Exclude       []string `config:"exclude"`
 }
 
 func (filter *ContextFilter) Name() string {
@@ -23,15 +23,14 @@ func (filter *ContextFilter) Name() string {
 
 func NewContextFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := ContextFilter {
-	}
+	runner := ContextFilter{}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	runner.genericFilter= &RequestFilter {
+	runner.genericFilter = &RequestFilter{
 		Action: "deny",
-		Status:403,
+		Status: 403,
 	}
 
 	if err := c.Unpack(runner.genericFilter); err != nil {
@@ -41,17 +40,17 @@ func NewContextFilter(c *config.Config) (pipeline.Filter, error) {
 }
 
 func (filter *ContextFilter) Filter(ctx *fasthttp.RequestCtx) {
-	context,err:=ctx.GetValue(filter.Context)
-	if err!=nil{
-		log.Debugf("context [%v] not exist",context)
+	context, err := ctx.GetValue(filter.Context)
+	if err != nil {
+		log.Debugf("context [%v] not exist", context)
 		return
 	}
 
-	str :=util.ToString(context)
+	str := util.ToString(context)
 
-	if len(filter.Exclude)>0{
-		valid, hasRule:= CheckExcludeStringRules(str,filter.Exclude, ctx)
-		if hasRule&&!valid {
+	if len(filter.Exclude) > 0 {
+		valid, hasRule := CheckExcludeStringRules(str, filter.Exclude, ctx)
+		if hasRule && !valid {
 			filter.genericFilter.Filter(ctx)
 			if global.Env().IsDebug {
 				log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
@@ -60,9 +59,9 @@ func (filter *ContextFilter) Filter(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	if len(filter.Include)>0{
-		valid, hasRule:= CheckIncludeStringRules(str,filter.Include, ctx)
-		if hasRule&&!valid {
+	if len(filter.Include) > 0 {
+		valid, hasRule := CheckIncludeStringRules(str, filter.Include, ctx)
+		if hasRule && !valid {
 			filter.genericFilter.Filter(ctx)
 			if global.Env().IsDebug {
 				log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
@@ -70,11 +69,10 @@ func (filter *ContextFilter) Filter(ctx *fasthttp.RequestCtx) {
 			return
 		}
 	}
-
 
 	var hasOtherRules = false
 	var hasRules = false
-	var  valid=false
+	var valid = false
 
 	valid, hasRules = filter.genericFilter.CheckMustNotRules(str, ctx)
 	if !valid {
@@ -115,4 +113,3 @@ func (filter *ContextFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 }
-

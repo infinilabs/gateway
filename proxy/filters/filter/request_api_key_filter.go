@@ -11,8 +11,8 @@ import (
 
 type RequestAPIKeyFilter struct {
 	genericFilter *RequestFilter
-	Include []string `config:"include"`
-	Exclude []string `config:"exclude"`
+	Include       []string `config:"include"`
+	Exclude       []string `config:"exclude"`
 }
 
 func (filter *RequestAPIKeyFilter) Name() string {
@@ -21,15 +21,14 @@ func (filter *RequestAPIKeyFilter) Name() string {
 
 func NewRequestAPIKeyFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := RequestAPIKeyFilter {
-	}
+	runner := RequestAPIKeyFilter{}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	runner.genericFilter= &RequestFilter {
+	runner.genericFilter = &RequestFilter{
 		Action: "deny",
-		Status:403,
+		Status: 403,
 	}
 
 	if err := c.Unpack(runner.genericFilter); err != nil {
@@ -40,17 +39,17 @@ func NewRequestAPIKeyFilter(c *config.Config) (pipeline.Filter, error) {
 }
 
 func (filter *RequestAPIKeyFilter) Filter(ctx *fasthttp.RequestCtx) {
-	exists,apiID,_:=ctx.ParseAPIKey()
-	if !exists{
-		if global.Env().IsDebug{
+	exists, apiID, _ := ctx.ParseAPIKey()
+	if !exists {
+		if global.Env().IsDebug {
 			log.Tracef("API not exist")
 		}
 		return
 	}
 
-	apiIDStr :=string(apiID)
-	valid, hasRule:= CheckExcludeStringRules(apiIDStr,filter.Exclude, ctx)
-	if hasRule&&!valid {
+	apiIDStr := string(apiID)
+	valid, hasRule := CheckExcludeStringRules(apiIDStr, filter.Exclude, ctx)
+	if hasRule && !valid {
 		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {
 			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
@@ -58,8 +57,8 @@ func (filter *RequestAPIKeyFilter) Filter(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	valid, hasRule= CheckIncludeStringRules(apiIDStr,filter.Include, ctx)
-	if hasRule&&!valid {
+	valid, hasRule = CheckIncludeStringRules(apiIDStr, filter.Include, ctx)
+	if hasRule && !valid {
 		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {
 			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
@@ -68,4 +67,3 @@ func (filter *RequestAPIKeyFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 }
-

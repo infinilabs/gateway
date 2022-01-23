@@ -14,8 +14,8 @@ import (
 )
 
 type CloneFlowFilter struct {
-	Flows     []string `config:"flows"`
-	Continue    bool `config:"continue"`
+	Flows    []string `config:"flows"`
+	Continue bool     `config:"continue"`
 }
 
 func (filter *CloneFlowFilter) Name() string {
@@ -36,17 +36,15 @@ func (filter *CloneFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 		flow.Process(ctx)
 	}
 
-	if len(filter.Flows)>0&&!filter.Continue {
+	if len(filter.Flows) > 0 && !filter.Continue {
 		ctx.Finished()
 	}
 
 }
 
-
 func NewCloneFlowFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := CloneFlowFilter{
-	}
+	runner := CloneFlowFilter{}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}

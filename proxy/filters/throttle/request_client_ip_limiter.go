@@ -11,20 +11,19 @@ import (
 
 type RequestClientIPLimitFilter struct {
 	limiter *GenericLimiter
-	IP []string    `config:"ip"`
+	IP      []string `config:"ip"`
 }
 
 func NewRequestClientIPLimitFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := RequestHostLimitFilter{
-	}
+	runner := RequestHostLimitFilter{}
 
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	limiter:=genericLimiter
-	runner.limiter=&limiter
+	limiter := genericLimiter
+	runner.limiter = &limiter
 
 	if err := c.Unpack(runner.limiter); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
@@ -54,7 +53,7 @@ func (filter *RequestClientIPLimitFilter) Filter(ctx *fasthttp.RequestCtx) {
 				if global.Env().IsDebug {
 					log.Debug(clientIP, "met check rules")
 				}
-				filter.limiter.internalProcess("clientIP",clientIP,ctx)
+				filter.limiter.internalProcess("clientIP", clientIP, ctx)
 				return
 			}
 		}
@@ -62,5 +61,5 @@ func (filter *RequestClientIPLimitFilter) Filter(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	filter.limiter.internalProcess("clientIP",clientIP,ctx)
+	filter.limiter.internalProcess("clientIP", clientIP, ctx)
 }

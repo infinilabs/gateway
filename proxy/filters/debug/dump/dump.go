@@ -20,13 +20,13 @@ type Config struct {
 
 	URI            bool `config:"uri"`
 	Request        bool `config:"request"`
-	Response        bool `config:"response"`
+	Response       bool `config:"response"`
 	QueryArgs      bool `config:"query_args"`
 	User           bool `config:"user"`
 	APIKey         bool `config:"api_key"`
 	RequestHeader  bool `config:"request_header"`
 	ResponseHeader bool `config:"response_header"`
-	StatusCode bool `config:"status_code"`
+	StatusCode     bool `config:"status_code"`
 }
 
 func (filter *DumpFilter) Name() string {
@@ -52,7 +52,6 @@ func (filter *DumpFilter) Filter(ctx *fasthttp.RequestCtx) {
 		fmt.Println("REQUEST_HEADER:")
 		fmt.Println(ctx.Request.Header.String())
 	}
-
 
 	if filter.config.Response {
 		fmt.Println("RESPONSE:\n", ctx.Response.String())

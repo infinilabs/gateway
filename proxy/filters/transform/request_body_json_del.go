@@ -14,8 +14,8 @@ import (
 )
 
 type RequestBodyJsonDel struct {
-	IgnoreMissing bool `config:"ignore_missing"`
-	Path []string `config:"path"`
+	IgnoreMissing bool     `config:"ignore_missing"`
+	Path          []string `config:"path"`
 }
 
 func (filter *RequestBodyJsonDel) Name() string {
@@ -23,23 +23,23 @@ func (filter *RequestBodyJsonDel) Name() string {
 }
 
 func (filter *RequestBodyJsonDel) Filter(ctx *fasthttp.RequestCtx) {
-	bodyBytes:=ctx.Request.GetRawBody()
-	if len(filter.Path)>0 {
-		if len(bodyBytes)==0{
-			bodyBytes=[]byte("{}")
+	bodyBytes := ctx.Request.GetRawBody()
+	if len(filter.Path) > 0 {
+		if len(bodyBytes) == 0 {
+			bodyBytes = []byte("{}")
 		}
 
-		for _,path:=range filter.Path{
-			pathArray:=strings.Split(path,".")
-			v,t,offset,err:=jsonparser.Get(bodyBytes,pathArray...)
-			if t==jsonparser.NotExist&&filter.IgnoreMissing{
-				log.Debugf("path:%v, %v, %v, %v, %v",path,err,v,t,offset)
+		for _, path := range filter.Path {
+			pathArray := strings.Split(path, ".")
+			v, t, offset, err := jsonparser.Get(bodyBytes, pathArray...)
+			if t == jsonparser.NotExist && filter.IgnoreMissing {
+				log.Debugf("path:%v, %v, %v, %v, %v", path, err, v, t, offset)
 				continue
 			}
 
-			bodyBytes=jsonparser.Delete(bodyBytes,pathArray...)
-			if err!=nil{
-				log.Errorf("path:%v, %v",path,err)
+			bodyBytes = jsonparser.Delete(bodyBytes, pathArray...)
+			if err != nil {
+				log.Errorf("path:%v, %v", path, err)
 				return
 			}
 		}

@@ -15,9 +15,9 @@ import (
 )
 
 type RequestBodyJsonSet struct {
-	IgnoreMissing bool `config:"ignore_missing"`
-	Path []string `config:"path"`
-	m map[string]string
+	IgnoreMissing bool     `config:"ignore_missing"`
+	Path          []string `config:"path"`
+	m             map[string]string
 }
 
 func (filter *RequestBodyJsonSet) Name() string {
@@ -26,25 +26,25 @@ func (filter *RequestBodyJsonSet) Name() string {
 
 func (filter *RequestBodyJsonSet) Filter(ctx *fasthttp.RequestCtx) {
 
-	bodyBytes:=ctx.Request.GetRawBody()
+	bodyBytes := ctx.Request.GetRawBody()
 
 	//var err error
-	if len(filter.m)>0 {
-		if len(bodyBytes)==0{
-			bodyBytes=[]byte("{}")
+	if len(filter.m) > 0 {
+		if len(bodyBytes) == 0 {
+			bodyBytes = []byte("{}")
 		}
 
-		for path,value:=range filter.m{
-			pathArray:=strings.Split(path,".")
-			v,t,offset,err:=jsonparser.Get(bodyBytes,pathArray...)
-			if t==jsonparser.NotExist&&filter.IgnoreMissing{
-				log.Debugf("path:%v, value:%v, %v, %v, %v, %v",path,value,err,v,t,offset)
+		for path, value := range filter.m {
+			pathArray := strings.Split(path, ".")
+			v, t, offset, err := jsonparser.Get(bodyBytes, pathArray...)
+			if t == jsonparser.NotExist && filter.IgnoreMissing {
+				log.Debugf("path:%v, value:%v, %v, %v, %v, %v", path, value, err, v, t, offset)
 				continue
 			}
 
-			bodyBytes,err=jsonparser.Set(bodyBytes,[]byte(value),pathArray...)
-			if err!=nil{
-				log.Errorf("path:%v, value:%v, %v",path,value,err)
+			bodyBytes, err = jsonparser.Set(bodyBytes, []byte(value), pathArray...)
+			if err != nil {
+				log.Errorf("path:%v, value:%v, %v", path, value, err)
 				return
 			}
 		}
@@ -62,13 +62,13 @@ func NewRequestBodyJsonSet(c *config.Config) (pipeline.Filter, error) {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	runner.m= map[string]string{}
-	for _,item:=range runner.Path{
-		k,v,err:=util.ConvertStringToMap(item,"->")
-		if err!=nil{
+	runner.m = map[string]string{}
+	for _, item := range runner.Path {
+		k, v, err := util.ConvertStringToMap(item, "->")
+		if err != nil {
 			panic(err)
 		}
-		runner.m[k]=v
+		runner.m[k] = v
 	}
 
 	return &runner, nil

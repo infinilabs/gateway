@@ -17,12 +17,11 @@ func (filter *SleepFilter) Name() string {
 }
 
 func (filter *SleepFilter) Filter(ctx *fasthttp.RequestCtx) {
-	if filter.SleepInMs<=0{
+	if filter.SleepInMs <= 0 {
 		return
 	}
-	time.Sleep(time.Duration(filter.SleepInMs)*time.Millisecond)
+	time.Sleep(time.Duration(filter.SleepInMs) * time.Millisecond)
 }
-
 
 func NewSleepFilter(c *config.Config) (pipeline.Filter, error) {
 

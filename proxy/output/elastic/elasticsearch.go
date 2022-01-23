@@ -17,7 +17,7 @@ import (
 
 type Elasticsearch struct {
 	param.Parameters
-	config *ProxyConfig
+	config   *ProxyConfig
 	instance *ReverseProxy
 }
 
@@ -25,62 +25,60 @@ func (filter *Elasticsearch) Name() string {
 	return "elasticsearch"
 }
 
-var faviconPath=[]byte("/favicon.ico")
+var faviconPath = []byte("/favicon.ico")
 
 //var singleSetCache singleflight.Group
 
 func (filter *Elasticsearch) Filter(ctx *fasthttp.RequestCtx) {
 
-	if bytes.Equal(faviconPath,ctx.Request.URI().Path()){
-		if global.Env().IsDebug{
+	if bytes.Equal(faviconPath, ctx.Request.URI().Path()) {
+		if global.Env().IsDebug {
 			log.Tracef("skip to delegate favicon.io")
 		}
 		ctx.Finished()
 		return
 	}
 
+	metadata := elastic.GetMetadata(filter.config.Elasticsearch)
 
-	metadata :=elastic.GetMetadata(filter.config.Elasticsearch)
-
-	if metadata !=nil&&!metadata.IsAvailable(){
-		if rate.GetRateLimiter("cluster_check_health", metadata.Config.ID,1,1,time.Second*1).Allow(){
-			log.Debugf("Elasticsearch [%v] not available",filter.config.Elasticsearch)
-			result,err:=elastic.GetClient(metadata.Config.Name).ClusterHealth()
-			if err!=nil&&result.StatusCode==200{
+	if metadata != nil && !metadata.IsAvailable() {
+		if rate.GetRateLimiter("cluster_check_health", metadata.Config.ID, 1, 1, time.Second*1).Allow() {
+			log.Debugf("Elasticsearch [%v] not available", filter.config.Elasticsearch)
+			result, err := elastic.GetClient(metadata.Config.Name).ClusterHealth()
+			if err != nil && result.StatusCode == 200 {
 				metadata.ReportSuccess()
 			}
 		}
 
 		ctx.SetContentType(util.ContentTypeJson)
-		ctx.Response.SwapBody([]byte(fmt.Sprintf("{\"error\":true,\"message\":\"Elasticsearch [%v] Service Unavailable\"}",filter.config.Elasticsearch)))
+		ctx.Response.SwapBody([]byte(fmt.Sprintf("{\"error\":true,\"message\":\"Elasticsearch [%v] Service Unavailable\"}", filter.config.Elasticsearch)))
 		ctx.SetStatusCode(503)
 		ctx.Finished()
-		time.Sleep(100*time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		return
 	}
 
 	//TODO move clients selection async
 
-	filter.instance.DelegateRequest(filter.config.Elasticsearch, metadata,ctx)
+	filter.instance.DelegateRequest(filter.config.Elasticsearch, metadata, ctx)
 }
-
 
 func New(c *config.Config) (pipeline.Filter, error) {
 
 	cfg := ProxyConfig{
-		Balancer: "weight",
-		MaxResponseBodySize: 100*1024*1024,
-		MaxConnection: 5000,
-		maxRetryTimes: 10,
-		retryDelayInMs: 1000,
+		Balancer:              "weight",
+		MaxResponseBodySize:   100 * 1024 * 1024,
+		MaxConnection:         5000,
+		maxRetryTimes:         10,
+		retryDelayInMs:        1000,
 		TLSInsecureSkipVerify: true,
-		ReadBufferSize: 4096*4,
-		WriteBufferSize: 4096*4,
-		MaxConnWaitTimeout: util.GetDurationOrDefault("0s",0*time.Second),
-		MaxConnDuration: util.GetDurationOrDefault("0s",0*time.Second),
-		ReadTimeout: util.GetDurationOrDefault("0s",0*time.Second),
-		WriteTimeout: util.GetDurationOrDefault("0s",0*time.Second),
-		MaxIdleConnDuration: util.GetDurationOrDefault("0s",0*time.Second),
+		ReadBufferSize:        4096 * 4,
+		WriteBufferSize:       4096 * 4,
+		MaxConnWaitTimeout:    util.GetDurationOrDefault("0s", 0*time.Second),
+		MaxConnDuration:       util.GetDurationOrDefault("0s", 0*time.Second),
+		ReadTimeout:           util.GetDurationOrDefault("0s", 0*time.Second),
+		WriteTimeout:          util.GetDurationOrDefault("0s", 0*time.Second),
+		MaxIdleConnDuration:   util.GetDurationOrDefault("0s", 0*time.Second),
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -91,7 +89,7 @@ func New(c *config.Config) (pipeline.Filter, error) {
 
 	runner.instance = NewReverseProxy(&cfg)
 
-	log.Debugf("init elasticsearch proxy instance: %v",cfg.Elasticsearch )
+	log.Debugf("init elasticsearch proxy instance: %v", cfg.Elasticsearch)
 
 	return &runner, nil
 }

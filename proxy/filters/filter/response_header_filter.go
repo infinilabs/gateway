@@ -12,26 +12,24 @@ import (
 
 type ResponseHeaderFilter struct {
 	genericFilter *RequestFilter
-	Include []map[string]string `config:"include"`
-	Exclude []map[string]string `config:"exclude"`
+	Include       []map[string]string `config:"include"`
+	Exclude       []map[string]string `config:"exclude"`
 }
 
 func (filter *ResponseHeaderFilter) Name() string {
 	return "response_header_filter"
 }
 
-
 func NewResponseHeaderFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := ResponseHeaderFilter {
-	}
+	runner := ResponseHeaderFilter{}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	runner.genericFilter= &RequestFilter {
+	runner.genericFilter = &RequestFilter{
 		Action: "deny",
-		Status:403,
+		Status: 403,
 	}
 
 	if err := c.Unpack(runner.genericFilter); err != nil {
@@ -47,7 +45,7 @@ func (filter *ResponseHeaderFilter) Filter(ctx *fasthttp.RequestCtx) {
 		log.Debug("headers:", string(util.EscapeNewLine(ctx.Response.Header.Header())))
 	}
 
-	if len(filter.Exclude)>0 {
+	if len(filter.Exclude) > 0 {
 		for _, x := range filter.Exclude {
 			for k, v := range x {
 				v1 := ctx.Response.Header.Peek(k)
@@ -66,7 +64,7 @@ func (filter *ResponseHeaderFilter) Filter(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	if len(filter.Include)>0 {
+	if len(filter.Include) > 0 {
 		for _, x := range filter.Include {
 			for k, v := range x {
 				v1 := ctx.Response.Header.Peek(k)
@@ -89,4 +87,3 @@ func (filter *ResponseHeaderFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 }
-

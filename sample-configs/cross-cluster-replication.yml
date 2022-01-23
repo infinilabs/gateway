@@ -321,7 +321,7 @@ router:
 elasticsearch:
   - name: primary
     enabled: true
-    endpoint: http://localhost:9200
+    endpoint: http://192.168.3.188:9204
     basic_auth:
       username: elastic
       password: changeme
@@ -334,7 +334,7 @@ elasticsearch:
         interval: 60s
   - name: backup
     enabled: true
-    endpoint: http://localhost:9201
+    endpoint: http://192.168.3.188:9206
     basic_auth:
       username: test
       password: testtest
@@ -516,3 +516,22 @@ pipeline:
           bulk_size_in_mb: 10
           queues:
             type: bulk_reshuffle
+
+
+elastic:
+  elasticsearch: backup
+  enabled: true
+  remote_configs: true
+  health_check:
+    enabled: true
+  availability_check:
+    enabled: false
+  metadata_refresh:
+    enabled: true
+  store:
+    enabled: true
+  orm:
+    enabled: true
+    init_template: true
+    template_name: ".infini"
+    index_prefix: ".infini_"

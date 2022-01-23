@@ -11,19 +11,18 @@ import (
 
 type RequestAPIKeyLimitFilter struct {
 	limiter *GenericLimiter
-	APIKeys []string    `config:"id"`
+	APIKeys []string `config:"id"`
 }
 
 func NewRequestAPIKeyLimitFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := RequestAPIKeyLimitFilter{
-	}
+	runner := RequestAPIKeyLimitFilter{}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	limiter:=genericLimiter
-	runner.limiter=&limiter
+	limiter := genericLimiter
+	runner.limiter = &limiter
 
 	if err := c.Unpack(runner.limiter); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
@@ -31,10 +30,8 @@ func NewRequestAPIKeyLimitFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner.limiter.init()
 
-
 	return &runner, nil
 }
-
 
 func (filter *RequestAPIKeyLimitFilter) Name() string {
 	return "request_api_key_limiter"
@@ -42,15 +39,15 @@ func (filter *RequestAPIKeyLimitFilter) Name() string {
 
 func (filter *RequestAPIKeyLimitFilter) Filter(ctx *fasthttp.RequestCtx) {
 
-	exists,apiID,_:=ctx.ParseAPIKey()
-	if !exists{
-		if global.Env().IsDebug{
+	exists, apiID, _ := ctx.ParseAPIKey()
+	if !exists {
+		if global.Env().IsDebug {
 			log.Tracef("api not exist")
 		}
 		return
 	}
 
-	apiIDStr :=string(apiID)
+	apiIDStr := string(apiID)
 	if global.Env().IsDebug {
 		log.Trace("api rules: ", len(filter.APIKeys), ", api: ", apiIDStr)
 	}
@@ -61,12 +58,12 @@ func (filter *RequestAPIKeyLimitFilter) Filter(ctx *fasthttp.RequestCtx) {
 				if global.Env().IsDebug {
 					log.Debug(apiIDStr, "met check rules")
 				}
-				filter.limiter.internalProcess("api", apiIDStr,ctx)
+				filter.limiter.internalProcess("api", apiIDStr, ctx)
 				return
 			}
 		}
 		return
 	}
 
-	filter.limiter.internalProcess("api", apiIDStr,ctx)
+	filter.limiter.internalProcess("api", apiIDStr, ctx)
 }

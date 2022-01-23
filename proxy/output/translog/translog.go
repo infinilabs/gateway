@@ -17,10 +17,10 @@ const SplitLine = "#\r\n\r\n#"
 var splitBytes = []byte(SplitLine)
 
 type TranslogOutput struct {
-	Path string `config:"path"`
-	Category string `config:"category"`
-	Filename string `config:"filename"`
-	RotateConfig rotate.RotateConfig  `config:"rotate"`
+	Path         string              `config:"path"`
+	Category     string              `config:"category"`
+	Filename     string              `config:"filename"`
+	RotateConfig rotate.RotateConfig `config:"rotate"`
 }
 
 func (filter *TranslogOutput) Name() string {
@@ -33,15 +33,15 @@ func (filter *TranslogOutput) Filter(ctx *fasthttp.RequestCtx) {
 		log.Trace("saving request to translog")
 	}
 
-	logPath := path.Join(filter.Path, "translog",filter.Category)
+	logPath := path.Join(filter.Path, "translog", filter.Category)
 
 	os.MkdirAll(logPath, 0755)
-	logPath=path.Join(logPath,filter.Filename)
+	logPath = path.Join(logPath, filter.Filename)
 
-	handler:=rotate.GetFileHandler(logPath,filter.RotateConfig)
+	handler := rotate.GetFileHandler(logPath, filter.RotateConfig)
 
 	data := ctx.Request.Encode()
-	_, err := handler.WriteBytesArray(data,splitBytes)
+	_, err := handler.WriteBytesArray(data, splitBytes)
 	if err != nil {
 		log.Error(err)
 	}
@@ -51,9 +51,9 @@ func (filter *TranslogOutput) Filter(ctx *fasthttp.RequestCtx) {
 func NewTranslogOutput(c *config.Config) (pipeline.Filter, error) {
 
 	runner := TranslogOutput{
-		Path: global.Env().GetDataDir(),
-		Category: "default",
-		Filename: "translog.log",
+		Path:         global.Env().GetDataDir(),
+		Category:     "default",
+		Filename:     "translog.log",
 		RotateConfig: rotate.DefaultConfig,
 	}
 	if err := c.Unpack(&runner); err != nil {

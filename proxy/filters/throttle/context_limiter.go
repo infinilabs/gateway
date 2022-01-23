@@ -12,20 +12,19 @@ import (
 
 type ContextLimitFilter struct {
 	limiter *GenericLimiter
-	Context []string    `config:"context"`
+	Context []string `config:"context"`
 }
 
 func NewContextLimitFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := ContextLimitFilter{
-	}
+	runner := ContextLimitFilter{}
 
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	limiter:=genericLimiter
-	runner.limiter=&limiter
+	limiter := genericLimiter
+	runner.limiter = &limiter
 
 	if err := c.Unpack(runner.limiter); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
@@ -35,7 +34,6 @@ func NewContextLimitFilter(c *config.Config) (pipeline.Filter, error) {
 
 	return &runner, nil
 }
-
 
 func (filter *ContextLimitFilter) Name() string {
 	return "context_limiter"
@@ -48,17 +46,17 @@ func (filter *ContextLimitFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 	if len(filter.Context) > 0 {
-		data:=[]string{}
+		data := []string{}
 		for _, v := range filter.Context {
-				x,err:=ctx.GetValue(v)
-				if err!=nil{
-					log.Debugf("context:%v,%v,%v",v,x,err)
-				}else{
-					data=append(data,util.ToString(x))
-				}
+			x, err := ctx.GetValue(v)
+			if err != nil {
+				log.Debugf("context:%v,%v,%v", v, x, err)
+			} else {
+				data = append(data, util.ToString(x))
+			}
 		}
-		if len(data)>0{
-			filter.limiter.internalProcess("context", util.JoinArray(data,","),ctx)
+		if len(data) > 0 {
+			filter.limiter.internalProcess("context", util.JoinArray(data, ","), ctx)
 		}
 	}
 }

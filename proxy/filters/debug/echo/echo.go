@@ -56,5 +56,3 @@ func (filter *EchoMessage) Filter(ctx *fasthttp.RequestCtx) {
 		ctx.Finished()
 	}
 }
-
-

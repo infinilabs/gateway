@@ -18,7 +18,7 @@ func (filter *ResponseHeaderFormatFilter) Name() string {
 func (filter *ResponseHeaderFormatFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	ctx.Request.Header.VisitAll(func(key, value []byte) {
-		ctx.Response.Header.SetBytesKV(util.ToLowercase(key),value)
+		ctx.Response.Header.SetBytesKV(util.ToLowercase(key), value)
 	})
 }
 

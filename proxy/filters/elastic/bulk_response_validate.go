@@ -42,7 +42,7 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 		retryableItems := bytebufferpool.Get()
 		successItems := bytebufferpool.Get()
 
-		containError:=HandleBulkResponse(this.config.SafetyParse,requestBytes,resbody,this.config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
+		containError := HandleBulkResponse(this.config.SafetyParse, requestBytes, resbody, this.config.DocBufferSize, nonRetryableItems, retryableItems, successItems)
 		if containError {
 			if global.Env().IsDebug {
 				log.Error("error in bulk requests,", ctx.Response.StatusCode(), util.SubString(string(resbody), 0, 256))
@@ -62,14 +62,14 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 				bytebufferpool.Put(retryableItems)
 			}
 
-			if successItems.Len()>0&& this.config.SaveSuccessDocsToQueue{
+			if successItems.Len() > 0 && this.config.SaveSuccessDocsToQueue {
 				successItems.WriteByte('\n')
 				bytes := ctx.Request.OverrideBodyEncode(successItems.Bytes(), true)
 				queue.Push(queue.GetOrInitConfig(this.config.PartialSuccessQueue), bytes)
 				bytebufferpool.Put(successItems)
 			}
 
-			if nonRetryableItems.Len()>0 {
+			if nonRetryableItems.Len() > 0 {
 				ctx.Response.SetStatusCode(this.config.InvalidStatus)
 			} else {
 				ctx.Response.SetStatusCode(this.config.FailureStatus)
@@ -82,7 +82,7 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 	}
 }
 
-func HandleBulkResponse(safetyParse bool,requestBytes,resbody []byte,docBuffSize int,nonRetryableItems,retryableItems,successItems *bytebufferpool.ByteBuffer)(bool) {
+func HandleBulkResponse(safetyParse bool, requestBytes, resbody []byte, docBuffSize int, nonRetryableItems, retryableItems, successItems *bytebufferpool.ByteBuffer) bool {
 	containError := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
 	if containError {
 		//decode response
@@ -107,12 +107,12 @@ func HandleBulkResponse(safetyParse bool,requestBytes,resbody []byte,docBuffSize
 
 			if item.Error != nil {
 				invalidOffset[i] = v
-			}else{
+			} else {
 				validCount++
 			}
 		}
 
-		log.Debug("bulk status:",statsCodeStats)
+		log.Debug("bulk status:", statsCodeStats)
 
 		for x, y := range statsCodeStats {
 			stats.IncrementBy("bulk_items", fmt.Sprintf("%v", x), int64(y))
@@ -126,7 +126,7 @@ func HandleBulkResponse(safetyParse bool,requestBytes,resbody []byte,docBuffSize
 		docBuffer = p.Get(docBuffSize)
 		defer p.Put(docBuffer)
 
-		WalkBulkRequests(safetyParse,requestBytes, docBuffer, func(eachLine []byte) (skipNextLine bool) {
+		WalkBulkRequests(safetyParse, requestBytes, docBuffer, func(eachLine []byte) (skipNextLine bool) {
 			return false
 		}, func(metaBytes []byte, actionStr, index, typeName, id string) (err error) {
 			actionMetadata, match = invalidOffset[offset]
@@ -147,7 +147,7 @@ func HandleBulkResponse(safetyParse bool,requestBytes,resbody []byte,docBuffSize
 					}
 					retryableItems.Write(metaBytes)
 				}
-			}else{
+			} else {
 				if successItems.Len() > 0 {
 					successItems.WriteByte('\n')
 				}
@@ -170,7 +170,7 @@ func HandleBulkResponse(safetyParse bool,requestBytes,resbody []byte,docBuffSize
 						nonRetryableItems.Write(payloadBytes)
 					}
 				}
-			}else {
+			} else {
 				if successItems.Len() > 0 {
 					successItems.WriteByte('\n')
 				}
@@ -183,24 +183,23 @@ func HandleBulkResponse(safetyParse bool,requestBytes,resbody []byte,docBuffSize
 }
 
 type Config struct {
-
 	SafetyParse bool `config:"safety_parse"`
 
 	DocBufferSize int `config:"doc_buffer_size"`
 
-	SaveSuccessDocsToQueue bool   `config:"save_partial_success_requests"`
+	SaveSuccessDocsToQueue bool `config:"save_partial_success_requests"`
 
-	PartialSuccessQueue           string `config:"partial_success_queue"`
+	PartialSuccessQueue string `config:"partial_success_queue"`
 
-	InvalidQueue    string `config:"invalid_queue"`
+	InvalidQueue string `config:"invalid_queue"`
 
-	FailureQueue    string `config:"failure_queue"`
+	FailureQueue string `config:"failure_queue"`
 
-	InvalidStatus   int    `config:"invalid_status"`
+	InvalidStatus int `config:"invalid_status"`
 
-	FailureStatus   int    `config:"failure_status"`
+	FailureStatus int `config:"failure_status"`
 
-	ContinueOnError bool   `config:"continue_on_error"`
+	ContinueOnError bool `config:"continue_on_error"`
 }
 
 func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
@@ -208,7 +207,7 @@ func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 		InvalidStatus: 400,
 		FailureStatus: 507,
 		DocBufferSize: 256 * 1024,
-		SafetyParse: true,
+		SafetyParse:   true,
 	}
 	if err := c.Unpack(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)

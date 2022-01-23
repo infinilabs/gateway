@@ -55,7 +55,7 @@ type BulkReshuffleConfig struct {
 	ValidPayload  bool  `config:"validate_payload"`
 	StickToNode   bool  `config:"stick_to_node"`
 	DocBufferSize int   `config:"doc_buffer_size"`
-	EnabledShards        []int `config:"shards"`
+	EnabledShards []int `config:"shards"`
 }
 
 func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
@@ -270,12 +270,12 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			}
 
 			var nodeID = shardInfo.Node
-			queueConfig=&queue.Config{}
-			queueConfig.Source="dynamic"
-			queueConfig.Labels= map[string]interface{}{}
-			queueConfig.Labels["type"]="bulk_reshuffle"
-			queueConfig.Labels["level"]=reshuffleType
-			queueConfig.Labels["elasticsearch"]=esConfig.ID
+			queueConfig = &queue.Config{}
+			queueConfig.Source = "dynamic"
+			queueConfig.Labels = map[string]interface{}{}
+			queueConfig.Labels["type"] = "bulk_reshuffle"
+			queueConfig.Labels["level"] = reshuffleType
+			queueConfig.Labels["elasticsearch"] = esConfig.ID
 
 			//注册队列到元数据中，消费者自动订阅该队列列表，并根据元数据来分别进行相应的处理
 			switch reshuffleType {
@@ -285,36 +285,34 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			case NodeLevel:
 				if nodeID == "" {
 					queueConfig.Name = fmt.Sprintf("async_bulk-node##%v##%v", esConfig.ID, "UNASSIGNED")
-				}else{
-					queueConfig.Labels["node_id"]=nodeID
+				} else {
+					queueConfig.Labels["node_id"] = nodeID
 					queueConfig.Name = fmt.Sprintf("async_bulk-node##%v##%v", esConfig.ID, nodeID)
 				}
 				break
 			case IndexLevel:
-				queueConfig.Labels["index"]=index
+				queueConfig.Labels["index"] = index
 				queueConfig.Name = fmt.Sprintf("async_bulk-index##%v##%v", esConfig.ID, index)
 				break
 			case ShardLevel:
-				queueConfig.Labels["index"]=index
-				queueConfig.Labels["shard"]=shardID
+				queueConfig.Labels["index"] = index
+				queueConfig.Labels["shard"] = shardID
 				queueConfig.Name = fmt.Sprintf("async_bulk-shard##%v##%v##%v", esConfig.ID, index, shardID)
 				break
 			case PartitionLevel:
-				queueConfig.Labels["index"]=index
-				queueConfig.Labels["shard"]=shardID
-				if this.config.PartitionSize<=0{
-					this.config.PartitionSize=1
+				queueConfig.Labels["index"] = index
+				queueConfig.Labels["shard"] = shardID
+				if this.config.PartitionSize <= 0 {
+					this.config.PartitionSize = 1
 				}
-				queueConfig.Labels["partition_size"]=this.config.PartitionSize
+				queueConfig.Labels["partition_size"] = this.config.PartitionSize
 
-				partitionID:= elastic.GetShardID(metadata.GetMajorVersion(), []byte(id), this.config.PartitionSize)
-				queueConfig.Labels["partition"]=partitionID
+				partitionID := elastic.GetShardID(metadata.GetMajorVersion(), []byte(id), this.config.PartitionSize)
+				queueConfig.Labels["partition"] = partitionID
 
 				queueConfig.Name = fmt.Sprintf("async_bulk-partition##%v##%v##%v##%v", esConfig.ID, index, shardID, partitionID)
 				break
 			}
-
-
 
 			if global.Env().IsDebug {
 				log.Debugf("final queue name: %v", queueConfig)
@@ -327,8 +325,8 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				buff = bufferPool.Get()
 				docBuf[queueConfig.Name] = buff
 				var exists bool
-				exists,err=queue.RegisterConfig(queueConfig.Name,queueConfig)
-				if !exists&&err!=nil{
+				exists, err = queue.RegisterConfig(queueConfig.Name, queueConfig)
+				if !exists && err != nil {
 					panic(err)
 				}
 			}
@@ -392,9 +390,9 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 			if len(data) > 0 {
 
-				cfg,ok:=queue.GetConfig(x)
-				if !ok{
-					panic(errors.Errorf("queue config [%v] not exists",x))
+				cfg, ok := queue.GetConfig(x)
+				if !ok {
+					panic(errors.Errorf("queue config [%v] not exists", x))
 				}
 
 				err := queue.Push(cfg, data)

@@ -11,26 +11,24 @@ import (
 
 type ResponseStatusCodeFilter struct {
 	genericFilter *RequestFilter
-	Include []int `config:"include"`
-	Exclude []int `config:"exclude"`
+	Include       []int `config:"include"`
+	Exclude       []int `config:"exclude"`
 }
 
 func (filter ResponseStatusCodeFilter) Name() string {
 	return "response_status_filter"
 }
 
-
 func NewResponseStatusCodeFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := ResponseStatusCodeFilter {
-	}
+	runner := ResponseStatusCodeFilter{}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	runner.genericFilter= &RequestFilter {
+	runner.genericFilter = &RequestFilter{
 		Action: "deny",
-		Status:403,
+		Status: 403,
 	}
 
 	if err := c.Unpack(runner.genericFilter); err != nil {
@@ -45,13 +43,13 @@ func (filter *ResponseStatusCodeFilter) Filter(ctx *fasthttp.RequestCtx) {
 	code := ctx.Response.StatusCode()
 
 	if global.Env().IsDebug {
-		log.Debug("code:", code,",exclude:", filter.Exclude)
+		log.Debug("code:", code, ",exclude:", filter.Exclude)
 	}
-	if len(filter.Exclude)>0 {
+	if len(filter.Exclude) > 0 {
 		for _, x := range filter.Exclude {
-			y:=int(x)
+			y := int(x)
 			if global.Env().IsDebug {
-				log.Debugf("exclude code: %v vs %v, match: %v", x, code,  y== code)
+				log.Debugf("exclude code: %v vs %v, match: %v", x, code, y == code)
 			}
 			if y == code {
 				filter.genericFilter.Filter(ctx)
@@ -66,9 +64,9 @@ func (filter *ResponseStatusCodeFilter) Filter(ctx *fasthttp.RequestCtx) {
 	if global.Env().IsDebug {
 		log.Debug("include:", filter.Include)
 	}
-	if len(filter.Include)>0 {
+	if len(filter.Include) > 0 {
 		for _, x := range filter.Include {
-			y:=int(x)
+			y := int(x)
 			if global.Env().IsDebug {
 				log.Debugf("include code: %v vs %v, match: %v", x, code, y == code)
 			}
@@ -85,4 +83,3 @@ func (filter *ResponseStatusCodeFilter) Filter(ctx *fasthttp.RequestCtx) {
 		}
 	}
 }
-

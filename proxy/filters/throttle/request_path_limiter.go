@@ -13,13 +13,13 @@ import (
 )
 
 type RequestPathLimitFilter struct {
-	Message string    `config:"message"`
-	Rules []*MatchRules    `config:"rules"`
+	Message string        `config:"message"`
+	Rules   []*MatchRules `config:"rules"`
 }
 
 func NewRequestPathLimitFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := RequestPathLimitFilter {
+	runner := RequestPathLimitFilter{
 		Message: "Reach request limit!",
 	}
 
@@ -27,60 +27,58 @@ func NewRequestPathLimitFilter(c *config.Config) (pipeline.Filter, error) {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-
-	for _,v:=range runner.Rules{
-		if !v.Valid(){
-			panic(errors.Errorf("invalid pattern:%v",v))
+	for _, v := range runner.Rules {
+		if !v.Valid() {
+			panic(errors.Errorf("invalid pattern:%v", v))
 		}
 	}
 
 	return &runner, nil
 }
 
-
 func (filter *RequestPathLimitFilter) Name() string {
 	return "request_path_limiter"
 }
 
 type MatchRules struct {
-	Pattern string  `config:"pattern"` //pattern
-	MaxQPS  int64   `config:"max_qps"`//max_qps
-	reg     *regexp.Regexp
+	Pattern      string `config:"pattern"` //pattern
+	MaxQPS       int64  `config:"max_qps"` //max_qps
+	reg          *regexp.Regexp
 	ExtractGroup string `config:"group"`
 }
 
-func (this *MatchRules)Extract(input string)string  {
+func (this *MatchRules) Extract(input string) string {
 	match := this.reg.FindStringSubmatch(input)
 	for i, name := range this.reg.SubexpNames() {
-		if name==this.ExtractGroup{
+		if name == this.ExtractGroup {
 			return match[i]
 		}
 	}
 	return ""
 }
 
-func (this *MatchRules)Match(input string)bool  {
+func (this *MatchRules) Match(input string) bool {
 	return this.reg.MatchString(input)
 }
 
-func (this *MatchRules) Valid()bool {
+func (this *MatchRules) Valid() bool {
 
-	if this.MaxQPS<=0{
-		log.Warnf("invalid throttle rule, pattern:[%v] group:[%v] max_qps:[%v], reset max_qps to 10,000",this.Pattern,this.ExtractGroup,this.MaxQPS)
-		this.MaxQPS=10000
+	if this.MaxQPS <= 0 {
+		log.Warnf("invalid throttle rule, pattern:[%v] group:[%v] max_qps:[%v], reset max_qps to 10,000", this.Pattern, this.ExtractGroup, this.MaxQPS)
+		this.MaxQPS = 10000
 	}
 
-	reg,err:= regexp.Compile(this.Pattern)
-	if err!=nil{
+	reg, err := regexp.Compile(this.Pattern)
+	if err != nil {
 		return false
 	}
 
-	if this.ExtractGroup==""{
+	if this.ExtractGroup == "" {
 		return false
 	}
 
-	if this.reg==nil{
-		this.reg=reg
+	if this.reg == nil {
+		this.reg = reg
 	}
 
 	return true
@@ -88,21 +86,21 @@ func (this *MatchRules) Valid()bool {
 
 func (filter *RequestPathLimitFilter) Filter(ctx *fasthttp.RequestCtx) {
 
-	key:=string(ctx.Path())
+	key := string(ctx.Path())
 
-	for _,v:=range filter.Rules{
-		if v.Match(key){
-			item:=v.Extract(key)
+	for _, v := range filter.Rules {
+		if v.Match(key) {
+			item := v.Extract(key)
 
-			if global.Env().IsDebug{
-				log.Debug(key," matches ",v.Pattern,", extract:",item)
+			if global.Env().IsDebug {
+				log.Debug(key, " matches ", v.Pattern, ", extract:", item)
 			}
 
-			if item!=""{
-				if !rate.GetRateLimiterPerSecond(v.Pattern,item, int(v.MaxQPS)).Allow(){
+			if item != "" {
+				if !rate.GetRateLimiterPerSecond(v.Pattern, item, int(v.MaxQPS)).Allow() {
 
-					if global.Env().IsDebug{
-						log.Debug(key," reach limited ",v.Pattern,",extract:",item)
+					if global.Env().IsDebug {
+						log.Debug(key, " reach limited ", v.Pattern, ",extract:", item)
 					}
 
 					ctx.SetStatusCode(429)

@@ -57,10 +57,6 @@ func BasicAuth1(h fasthttp.RequestHandler, requiredUser, requiredPassword string
 	})
 }
 
-
-
-
-
 type BasicAuth struct {
 	ValidUsers map[string]string `config:"valid_users"`
 }
@@ -71,32 +67,31 @@ func (filter *BasicAuth) Name() string {
 
 func (filter *BasicAuth) Filter(ctx *fasthttp.RequestCtx) {
 
-	exists,user,pass:=ctx.Request.ParseBasicAuth()
+	exists, user, pass := ctx.Request.ParseBasicAuth()
 
-	if !exists{
-		ctx.Error("Basic Authentication Required",403)
+	if !exists {
+		ctx.Error("Basic Authentication Required", 403)
 		ctx.Finished()
 		return
 	}
 
-	if len(filter.ValidUsers)>0{
-		p,ok:=filter.ValidUsers[util.UnsafeBytesToString(user)]
-		if ok{
-			if util.UnsafeBytesToString(pass)==p{
+	if len(filter.ValidUsers) > 0 {
+		p, ok := filter.ValidUsers[util.UnsafeBytesToString(user)]
+		if ok {
+			if util.UnsafeBytesToString(pass) == p {
 				return
 			}
 		}
 	}
 
-	ctx.Error("Basic Authentication Required",403)
+	ctx.Error("Basic Authentication Required", 403)
 	ctx.Finished()
 
 }
 
 func NewBasicAuthFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := BasicAuth{
-	}
+	runner := BasicAuth{}
 
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)

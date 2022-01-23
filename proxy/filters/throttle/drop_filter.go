@@ -19,7 +19,6 @@ func (filter *DropFilter) Filter(ctx *fasthttp.RequestCtx) {
 	ctx.Finished()
 }
 
-
 func NewDropFilter(c *config.Config) (pipeline.Filter, error) {
 	runner := DropFilter{}
 	return &runner, nil

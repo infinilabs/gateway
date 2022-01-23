@@ -6,7 +6,6 @@ package common
 import (
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/orm"
-	"infini.sh/framework/core/pipeline"
 )
 
 type EntryConfig struct {
@@ -56,12 +55,26 @@ type RouterConfig struct {
 }
 
 type FlowConfig struct {
-	Name      string                `config:"name"`
-	Filters   []FilterConfig        `config:"filter_v1"`
-	FiltersV2 pipeline.PluginConfig `config:"filter"`
+	orm.ORMObjectBase
+
+	Name        string                   `config:"name" json:"name,omitempty" elastic_mapping:"name:{type:keyword,fields:{text: {type: text}}}"`
+	Filters     []*config.Config         `config:"filter" json:"-"`
+	JsonFilters []map[string]interface{} `json:"filter,omitempty"`
 }
 
-type FilterPropertie struct {
+func (flow *FlowConfig) GetConfig() []*config.Config {
+
+	for _, v := range flow.JsonFilters {
+		c, err := config.NewConfigFrom(v)
+		if err != nil {
+			panic(err)
+		}
+		flow.Filters = append(flow.Filters, c)
+	}
+	return flow.Filters
+}
+
+type FilterProperty struct {
 	Type         string      `config:"type" json:"type"`
 	SubType      string      `config:"sub_type" json:"sub_type"`
 	DefaultValue interface{} `config:"default_value" json:"default_value"`

@@ -9,11 +9,10 @@ import (
 	"infini.sh/framework/lib/fasthttp"
 )
 
-
 type RequestServerHostFilter struct {
 	genericFilter *RequestFilter
-	Include []string `config:"include"`
-	Exclude []string `config:"exclude"`
+	Include       []string `config:"include"`
+	Exclude       []string `config:"exclude"`
 }
 
 func (filter *RequestServerHostFilter) Name() string {
@@ -22,15 +21,14 @@ func (filter *RequestServerHostFilter) Name() string {
 
 func NewRequestServerHostFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := RequestServerHostFilter {
-	}
+	runner := RequestServerHostFilter{}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	runner.genericFilter= &RequestFilter {
+	runner.genericFilter = &RequestFilter{
 		Action: "deny",
-		Status:403,
+		Status: 403,
 	}
 
 	if err := c.Unpack(runner.genericFilter); err != nil {
@@ -41,9 +39,9 @@ func NewRequestServerHostFilter(c *config.Config) (pipeline.Filter, error) {
 }
 
 func (filter *RequestServerHostFilter) Filter(ctx *fasthttp.RequestCtx) {
-	host:=string(ctx.Request.Host())
-	valid, hasRule:= CheckExcludeStringRules(host,filter.Exclude, ctx)
-	if hasRule&&!valid {
+	host := string(ctx.Request.Host())
+	valid, hasRule := CheckExcludeStringRules(host, filter.Exclude, ctx)
+	if hasRule && !valid {
 		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {
 			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
@@ -51,8 +49,8 @@ func (filter *RequestServerHostFilter) Filter(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	valid, hasRule= CheckIncludeStringRules(host,filter.Include, ctx)
-	if hasRule&&!valid {
+	valid, hasRule = CheckIncludeStringRules(host, filter.Include, ctx)
+	if hasRule && !valid {
 		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {
 			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())

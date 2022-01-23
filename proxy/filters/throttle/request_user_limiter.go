@@ -11,20 +11,19 @@ import (
 
 type RequestUserLimitFilter struct {
 	limiter *GenericLimiter
-	User []string    `config:"user"`
+	User    []string `config:"user"`
 }
 
 func NewRequestUserLimitFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := RequestUserLimitFilter{
-	}
+	runner := RequestUserLimitFilter{}
 
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	limiter:=genericLimiter
-	runner.limiter=&limiter
+	limiter := genericLimiter
+	runner.limiter = &limiter
 
 	if err := c.Unpack(runner.limiter); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
@@ -35,33 +34,32 @@ func NewRequestUserLimitFilter(c *config.Config) (pipeline.Filter, error) {
 	return &runner, nil
 }
 
-
 func (filter *RequestUserLimitFilter) Name() string {
 	return "request_user_limiter"
 }
 
 func (filter *RequestUserLimitFilter) Filter(ctx *fasthttp.RequestCtx) {
 
-	exists,user,_:=ctx.Request.ParseBasicAuth()
-	if !exists{
-		if global.Env().IsDebug{
+	exists, user, _ := ctx.Request.ParseBasicAuth()
+	if !exists {
+		if global.Env().IsDebug {
 			log.Tracef("user not exist")
 		}
 		return
 	}
 
-	userStr:=string(user)
+	userStr := string(user)
 	if global.Env().IsDebug {
-		log.Trace("user rules: ", len( filter.User), ", user: ", userStr)
+		log.Trace("user rules: ", len(filter.User), ", user: ", userStr)
 	}
 
-	if len( filter.User) > 0 {
-		for _, v := range  filter.User {
+	if len(filter.User) > 0 {
+		for _, v := range filter.User {
 			if v == userStr {
 				if global.Env().IsDebug {
 					log.Debug(userStr, "met check rules")
 				}
-				filter.limiter.internalProcess("user",userStr,ctx)
+				filter.limiter.internalProcess("user", userStr, ctx)
 				return
 			}
 		}
@@ -69,5 +67,5 @@ func (filter *RequestUserLimitFilter) Filter(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	filter.limiter.internalProcess("user",userStr,ctx)
+	filter.limiter.internalProcess("user", userStr, ctx)
 }

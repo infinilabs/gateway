@@ -12,8 +12,8 @@ import (
 
 type RequestMethodFilter struct {
 	genericFilter *RequestFilter
-	Include []string `config:"include"`
-	Exclude []string `config:"exclude"`
+	Include       []string `config:"include"`
+	Exclude       []string `config:"exclude"`
 }
 
 func (filter *RequestMethodFilter) Name() string {
@@ -22,15 +22,14 @@ func (filter *RequestMethodFilter) Name() string {
 
 func NewRequestMethodFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := RequestMethodFilter {
-	}
+	runner := RequestMethodFilter{}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	runner.genericFilter= &RequestFilter {
+	runner.genericFilter = &RequestFilter{
 		Action: "deny",
-		Status:403,
+		Status: 403,
 	}
 
 	if err := c.Unpack(runner.genericFilter); err != nil {
@@ -45,10 +44,10 @@ func (filter *RequestMethodFilter) Filter(ctx *fasthttp.RequestCtx) {
 	method := string(ctx.Method())
 
 	if global.Env().IsDebug {
-		log.Debug("method:", method,",exclude:", filter.Exclude)
+		log.Debug("method:", method, ",exclude:", filter.Exclude)
 	}
 
-	if len(filter.Exclude)>0 {
+	if len(filter.Exclude) > 0 {
 		for _, x := range filter.Exclude {
 			if global.Env().IsDebug {
 				log.Debugf("exclude method: %v vs %v, match: %v", x, method, util.ToString(x) == method)
@@ -63,7 +62,7 @@ func (filter *RequestMethodFilter) Filter(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	if len(filter.Include)>0 {
+	if len(filter.Include) > 0 {
 		for _, x := range filter.Include {
 			if global.Env().IsDebug {
 				log.Debugf("include method: %v vs %v, match: %v", x, method, util.ToString(x) == string(method))
@@ -83,4 +82,3 @@ func (filter *RequestMethodFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 }
-

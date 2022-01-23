@@ -43,7 +43,7 @@ router:
 elasticsearch:
   - name: dev
     enabled: true
-    endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
+    endpoint: http://192.168.3.188:9206 # if your elasticsearch is using https, your gateway should be listen on as https as well
     traffic_control: #global traffic control
       max_bps_per_node: 20971520 #max total bytes send to es per node, 20MB/s
       max_qps_per_node: 50000 #max total requests send to es per node, 20k/s
@@ -92,3 +92,22 @@ s3:
     access_secret: "gogoaminio"
     #  token:
 #    ssl: false
+
+
+elastic:
+  elasticsearch: dev
+  enabled: true
+  remote_configs: true
+  health_check:
+    enabled: true
+  availability_check:
+    enabled: false
+  metadata_refresh:
+    enabled: true
+  store:
+    enabled: true
+  orm:
+    enabled: true
+    init_template: true
+    template_name: ".infini"
+    index_prefix: ".infini_"

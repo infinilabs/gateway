@@ -25,15 +25,14 @@ import (
 	"time"
 )
 
-func NewEntrypoint(config common.EntryConfig) *Entrypoint{
+func NewEntrypoint(config common.EntryConfig) *Entrypoint {
 	return &Entrypoint{
 		config: config,
 	}
 }
 
 type Entrypoint struct {
-
-	config       common.EntryConfig
+	config common.EntryConfig
 
 	routerConfig common.RouterConfig
 
@@ -55,21 +54,21 @@ func (this *Entrypoint) Start() error {
 		return nil
 	}
 
-	if this.config.NetworkConfig.ReusePort==this.config.NetworkConfig.SkipOccupiedPort&&this.config.NetworkConfig.ReusePort==true{
-		return errors.New("port reuse and skip occupied can't be enabled at the same time for entry:"+this.config.Name)
+	if this.config.NetworkConfig.ReusePort == this.config.NetworkConfig.SkipOccupiedPort && this.config.NetworkConfig.ReusePort == true {
+		return errors.New("port reuse and skip occupied can't be enabled at the same time for entry:" + this.config.Name)
 	}
 
 	this.listenAddress = this.config.NetworkConfig.GetBindingAddr()
 
 	if !this.config.NetworkConfig.ReusePort && this.config.NetworkConfig.SkipOccupiedPort {
 		this.listenAddress = util.AutoGetAddress(this.config.NetworkConfig.GetBindingAddr())
-		log.Trace("auto skip address ",this.listenAddress)
+		log.Trace("auto skip address ", this.listenAddress)
 	}
 
 	var ln net.Listener
 	var err error
 	if this.config.NetworkConfig.ReusePort {
-		log.Debug("reuse port ",this.listenAddress)
+		log.Debug("reuse port ", this.listenAddress)
 		ln, err = reuseport.Listen("tcp4", this.config.NetworkConfig.GetBindingAddr())
 	} else {
 		ln, err = net.Listen("tcp", this.listenAddress)
@@ -78,86 +77,81 @@ func (this *Entrypoint) Start() error {
 		panic(errors.Errorf("error in listener: %s", err))
 	}
 
-	this.router=r.New()
+	this.router = r.New()
 
-	if this.config.RouterConfigName!=""{
-		this.routerConfig=common.GetRouter(this.config.RouterConfigName)
+	if this.config.RouterConfigName != "" {
+		this.routerConfig = common.GetRouter(this.config.RouterConfigName)
 	}
 
-	if len(this.routerConfig.Rules)>0{
-		for _, rule :=range this.routerConfig.Rules{
+	if len(this.routerConfig.Rules) > 0 {
+		for _, rule := range this.routerConfig.Rules {
 
-			flow:=common.FilterFlow{}
-			for _,y:=range rule.Flow{
+			flow := common.FilterFlow{}
+			for _, y := range rule.Flow {
 
-				cfg:=common.GetFlowConfig(y)
+				cfg := common.GetFlowConfig(y)
 
-				if len(cfg.FiltersV2)>0{
-					flow1, err := pipeline.NewFilter(cfg.FiltersV2)
+				if len(cfg.Filters) > 0 {
+					flow1, err := pipeline.NewFilter(cfg.GetConfig())
 					if err != nil {
 						panic(err)
 					}
 					flow.JoinFilter(flow1)
-				}else{
-					for _,z:=range cfg.Filters{
-						f:= common.GetFilterInstanceWithConfig(&z)
-						flow.JoinFilter(f)
-					}
 				}
 			}
 
-			for _,v:=range rule.Method{
-				for _,u:=range rule.PathPattern{
-					log.Debugf("apply filter flow: [%s] [%s] [ %s ]",v,u,flow.ToString())
-					if v=="*"{
-						this.router.ANY(u,flow.Process)
-					}else{
-						this.router.Handle(v,u,flow.Process)
+			for _, v := range rule.Method {
+				for _, u := range rule.PathPattern {
+					log.Debugf("apply filter flow: [%s] [%s] [ %s ]", v, u, flow.ToString())
+					if v == "*" {
+						this.router.ANY(u, flow.Process)
+					} else {
+						this.router.Handle(v, u, flow.Process)
 					}
 				}
 			}
 		}
 	}
 
-	if this.routerConfig.DefaultFlow !=""{
-		this.router.NotFound=common.GetFlowProcess(this.routerConfig.DefaultFlow)
-	}else{
-		this.router.NotFound= func(ctx *fasthttp.RequestCtx) {
+	if this.routerConfig.DefaultFlow != "" {
+		this.router.NotFound = common.GetFlowProcess(this.routerConfig.DefaultFlow)
+	} else {
+		this.router.NotFound = func(ctx *fasthttp.RequestCtx) {
 			ctx.Response.SetBody([]byte("NOT FOUND"))
 			ctx.Response.SetStatusCode(404)
 		}
 	}
 
-	if this.routerConfig.TracingFlow!=""{
-		if global.Env().IsDebug{
-			log.Debugf("tracing flow placed: %s",this.routerConfig.TracingFlow)
+	if this.routerConfig.TracingFlow != "" {
+		if global.Env().IsDebug {
+			log.Debugf("tracing flow placed: %s", this.routerConfig.TracingFlow)
 		}
 
-		this.router.TraceHandler =common.GetFlowProcess(this.routerConfig.TracingFlow)
+		this.router.TraceHandler = common.GetFlowProcess(this.routerConfig.TracingFlow)
 	}
 
-	if this.config.MaxConcurrency<=0{
-		this.config.MaxConcurrency=10000
+	if this.config.MaxConcurrency <= 0 {
+		this.config.MaxConcurrency = 10000
 	}
 
-	if this.config.ReadTimeout<=0{
-		this.config.ReadTimeout=30
+	if this.config.ReadTimeout <= 0 {
+		this.config.ReadTimeout = 30
 	}
 
-	if this.config.WriteTimeout<=0{
-		this.config.WriteTimeout=30
+	if this.config.WriteTimeout <= 0 {
+		this.config.WriteTimeout = 30
 	}
 
-	if this.config.ReadBufferSize<=0{
-		this.config.ReadBufferSize=4*4096
+	if this.config.ReadBufferSize <= 0 {
+		this.config.ReadBufferSize = 4 * 4096
 	}
 
-	if this.config.WriteBufferSize<=0{
-		this.config.WriteBufferSize=4*4096
+	if this.config.WriteBufferSize <= 0 {
+		this.config.WriteBufferSize = 4 * 4096
 	}
 
-	if this.config.MaxRequestBodySize<=0{
-		this.config.MaxRequestBodySize=200 * 1024 * 1024
+	if this.config.MaxRequestBodySize <= 0 {
+		this.config.MaxRequestBodySize = 200 * 1024 * 1024
 	}
 
 	this.server = &fasthttp.Server{
@@ -170,12 +164,12 @@ func (this *Entrypoint) Start() error {
 		MaxRequestBodySize:            this.config.MaxRequestBodySize, //200 * 1024 * 1024,
 		GetOnly:                       false,
 		ReduceMemoryUsage:             this.config.ReduceMemoryUsage,
-		TCPKeepalive:  		   		   this.config.TCPKeepalive,
-		TCPKeepalivePeriod:  		   time.Duration(this.config.TCPKeepaliveSeconds) * time.Second,
-		IdleTimeout:  				   time.Duration(this.config.IdleTimeout) * time.Second,
+		TCPKeepalive:                  this.config.TCPKeepalive,
+		TCPKeepalivePeriod:            time.Duration(this.config.TCPKeepaliveSeconds) * time.Second,
+		IdleTimeout:                   time.Duration(this.config.IdleTimeout) * time.Second,
 		ReadTimeout:                   time.Duration(this.config.ReadTimeout) * time.Second,
 		WriteTimeout:                  time.Duration(this.config.WriteTimeout) * time.Second,
-		ReadBufferSize:                this.config.ReadBufferSize,//16 * 1024,
+		ReadBufferSize:                this.config.ReadBufferSize, //16 * 1024,
 		WriteBufferSize:               this.config.WriteBufferSize,
 	}
 
@@ -312,7 +306,7 @@ func (this *Entrypoint) Stop() error {
 		case <-time.After(time.Duration(time.Second * 120)):
 			log.Debug("entry shutdown 5s timeout")
 		}
-	}else{
+	} else {
 		this.server.Shutdown()
 	}
 
@@ -320,8 +314,8 @@ func (this *Entrypoint) Stop() error {
 }
 
 func (this *Entrypoint) Stats() util.MapStr {
-	data:=util.MapStr{
-		"open_connections":this.server.GetOpenConnectionsCount(),
+	data := util.MapStr{
+		"open_connections": this.server.GetOpenConnectionsCount(),
 	}
 	return data
 }
