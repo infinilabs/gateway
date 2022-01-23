@@ -38,8 +38,8 @@ func (h *GatewayAPI) getEntry(w http.ResponseWriter, req *http.Request, ps httpr
 	obj := common.EntryConfig{}
 	obj.ID = id
 
-	err := orm.Get(&obj)
-	if err != nil {
+	exists, err := orm.Get(&obj)
+	if !exists || err != nil {
 		h.WriteJSON(w, util.MapStr{
 			"_id":   id,
 			"found": false,
@@ -65,6 +65,15 @@ func (h *GatewayAPI) updateEntry(w http.ResponseWriter, req *http.Request, ps ht
 	}
 
 	obj.ID = id
+	exists, err := orm.Get(&obj)
+	if !exists || err != nil {
+		h.WriteJSON(w, util.MapStr{
+			"_id":    id,
+			"result": "not_found",
+		}, http.StatusNotFound)
+		return
+	}
+
 	err = orm.Update(&obj)
 	if err != nil {
 		h.WriteError(w, err.Error(), http.StatusInternalServerError)
@@ -83,8 +92,8 @@ func (h *GatewayAPI) deleteEntry(w http.ResponseWriter, req *http.Request, ps ht
 	obj := common.EntryConfig{}
 	obj.ID = id
 
-	err := orm.Get(&obj)
-	if err != nil {
+	exists, err := orm.Get(&obj)
+	if !exists || err != nil {
 		h.WriteJSON(w, util.MapStr{
 			"_id":    id,
 			"result": "not_found",
