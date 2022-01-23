@@ -33,12 +33,7 @@ func (h *GatewayAPI) createEntry(w http.ResponseWriter, req *http.Request, ps ht
 }
 
 func (h *GatewayAPI) getEntry(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	id := ps.ByName("entry_id")
-
-	if id == "" {
-		h.WriteError(w, "id was not set", 500)
-		return
-	}
+	id := ps.MustGetParameter("entry_id")
 
 	obj := common.EntryConfig{}
 	obj.ID = id
@@ -60,12 +55,7 @@ func (h *GatewayAPI) getEntry(w http.ResponseWriter, req *http.Request, ps httpr
 }
 
 func (h *GatewayAPI) updateEntry(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	id := ps.ByName("entry_id")
-
-	if id == "" {
-		h.WriteError(w, "id was not set", 500)
-		return
-	}
+	id := ps.MustGetParameter("entry_id")
 
 	obj := common.EntryConfig{}
 	err := h.DecodeJSON(req, &obj)
@@ -88,12 +78,7 @@ func (h *GatewayAPI) updateEntry(w http.ResponseWriter, req *http.Request, ps ht
 }
 
 func (h *GatewayAPI) deleteEntry(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	id := ps.ByName("entry_id")
-
-	if id == "" {
-		h.WriteError(w, "id was not set", 500)
-		return
-	}
+	id := ps.MustGetParameter("entry_id")
 
 	obj := common.EntryConfig{}
 	obj.ID = id

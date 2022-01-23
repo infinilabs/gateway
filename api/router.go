@@ -33,12 +33,7 @@ func (h *GatewayAPI) createRouter(w http.ResponseWriter, req *http.Request, ps h
 }
 
 func (h *GatewayAPI) getRouter(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	id := ps.ByName("router_id")
-
-	if id == "" {
-		h.WriteError(w, "id was not set", 500)
-		return
-	}
+	id := ps.MustGetParameter("router_id")
 
 	obj := common.RouterConfig{}
 	obj.ID = id
@@ -60,12 +55,7 @@ func (h *GatewayAPI) getRouter(w http.ResponseWriter, req *http.Request, ps http
 }
 
 func (h *GatewayAPI) updateRouter(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	id := ps.ByName("router_id")
-
-	if id == "" {
-		h.WriteError(w, "id was not set", 500)
-		return
-	}
+	id := ps.MustGetParameter("router_id")
 
 	obj := common.RouterConfig{}
 	err := h.DecodeJSON(req, &obj)
@@ -88,12 +78,7 @@ func (h *GatewayAPI) updateRouter(w http.ResponseWriter, req *http.Request, ps h
 }
 
 func (h *GatewayAPI) deleteRouter(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	id := ps.ByName("router_id")
-
-	if id == "" {
-		h.WriteError(w, "id was not set", 500)
-		return
-	}
+	id := ps.MustGetParameter("router_id")
 
 	obj := common.RouterConfig{}
 	obj.ID = id
