@@ -7,6 +7,7 @@ import (
 	"infini.sh/framework/core/env"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/lib/fasthttp"
+	api2 "infini.sh/gateway/api"
 	"infini.sh/gateway/common"
 	"infini.sh/gateway/proxy/entry"
 )
@@ -110,8 +111,8 @@ func (module *GatewayModule) Setup(cfg *Config) {
 
 	module.registerAPI("")
 
-	api:=GatewayAPI{}
-	api.registerAPI("")
+	api:= api2.GatewayAPI{}
+	api.RegisterAPI("")
 }
 
 

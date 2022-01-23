@@ -85,11 +85,7 @@ func (this *Entrypoint) Start() error {
 	}
 
 	if len(this.routerConfig.Rules)>0{
-		for i, rule :=range this.routerConfig.Rules{
-			if rule.ID==""{
-				rule.ID=util.GetUUID()
-				this.routerConfig.Rules[i]=rule
-			}
+		for _, rule :=range this.routerConfig.Rules{
 
 			flow:=common.FilterFlow{}
 			for _,y:=range rule.Flow{

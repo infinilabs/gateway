@@ -5,16 +5,12 @@ package common
 
 import (
 	"infini.sh/framework/core/config"
+	"infini.sh/framework/core/orm"
 	"infini.sh/framework/core/pipeline"
-	"time"
 )
 
 type EntryConfig struct {
-	//common properties start
-	Id      string    `json:"id,omitempty"      elastic_meta:"_id" elastic_mapping:"id: { type: keyword }"`
-	Created time.Time `json:"created,omitempty" elastic_mapping:"created: { type: date }"`
-	Updated time.Time `json:"updated,omitempty" elastic_mapping:"updated: { type: date }"`
-	//common properties end
+	orm.ORMObjectBase
 
 	Name                string `config:"name" json:"name,omitempty" elastic_mapping:"name:{type:keyword,fields:{text: {type: text}}}"`
 	Enabled             bool   `config:"enabled" json:"enabled,omitempty" elastic_mapping:"enabled: { type: boolean }"`
@@ -37,11 +33,10 @@ type EntryConfig struct {
 }
 
 type RuleConfig struct {
-	ID          string   `config:"id"`
-	Description string   `config:"desc"`
-	Method      []string `config:"method"`
-	PathPattern []string `config:"pattern"`
-	Flow        []string `config:"flow"`
+	Method      []string `config:"method" json:"method,omitempty"      elastic_mapping:"method: { type: keyword }"`
+	PathPattern []string `config:"pattern" json:"pattern,omitempty"      elastic_mapping:"pattern: { type: keyword }"`
+	Flow        []string `config:"flow" json:"flow,omitempty"      elastic_mapping:"flow: { type: keyword }"`
+	Description string   `config:"description" json:"description,omitempty"      elastic_mapping:"description: { type: keyword }"`
 }
 
 type FilterConfig struct {
@@ -51,10 +46,13 @@ type FilterConfig struct {
 }
 
 type RouterConfig struct {
-	Name        string       `config:"name"`
-	DefaultFlow string       `config:"default_flow"`
-	Rules       []RuleConfig `config:"rules"`
-	TracingFlow string       `config:"tracing_flow"`
+	orm.ORMObjectBase
+
+	Name        string `config:"name" json:"name,omitempty" elastic_mapping:"name:{type:keyword,fields:{text: {type: text}}}"`
+	DefaultFlow string `config:"default_flow" json:"default_flow,omitempty" elastic_mapping:"default_flow: { type: keyword }"`
+	TracingFlow string `config:"tracing_flow" json:"tracing_flow,omitempty" elastic_mapping:"tracing_flow: { type: keyword }"`
+
+	Rules []RuleConfig `config:"rules" json:"rules,omitempty" elastic_mapping:"rules: { type: object }"`
 }
 
 type FlowConfig struct {
