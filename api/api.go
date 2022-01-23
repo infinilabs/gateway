@@ -35,6 +35,8 @@ func (this *GatewayAPI) RegisterAPI(prefix string) {
 	api.HandleAPIMethod(api.DELETE, path.Join("/", prefix, "/router/:router_id"), this.deleteRouter)
 	api.HandleAPIMethod(api.GET, path.Join("/", prefix, "/router/_search"), this.searchRouter)
 
+	api.HandleAPIMethod(api.GET, path.Join("/", prefix, "/filter/metadata"), this.getFlowFilters)
+
 	api.HandleAPIMethod(api.POST, path.Join("/", prefix, "/flow"), this.createFlow)
 	api.HandleAPIMethod(api.GET, path.Join("/", prefix, "/flow/:flow_id"), this.getFlow)
 	api.HandleAPIMethod(api.PUT, path.Join("/", prefix, "/flow/:flow_id"), this.updateFlow)
