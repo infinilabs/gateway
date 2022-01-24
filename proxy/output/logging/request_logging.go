@@ -32,7 +32,7 @@ type Config struct {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("logging", New)
+	pipeline.RegisterFilterPluginWithConfigMetadata("logging", New,&Config{})
 }
 
 func New(c *config.Config) (pipeline.Filter, error) {

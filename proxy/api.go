@@ -18,6 +18,7 @@ func (this *GatewayModule) registerAPI(prefix string) {
 	api.HandleAPIMethod(api.POST, path.Join("/", prefix, "/entry/:id/_start"), this.startEntry)
 	api.HandleAPIMethod(api.POST, path.Join("/", prefix, "/entry/:id/_stop"), this.stopEntry)
 }
+
 func (this *GatewayModule) getEntries(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 	data := util.MapStr{}
 	for k, v := range this.entryPoints {

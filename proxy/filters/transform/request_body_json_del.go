@@ -49,7 +49,7 @@ func (filter *RequestBodyJsonDel) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("request_body_json_del",NewRequestBodyJsonDel)
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_body_json_del",NewRequestBodyJsonDel,&RequestBodyJsonDel{})
 }
 
 func NewRequestBodyJsonDel(c *config.Config) (pipeline.Filter, error) {

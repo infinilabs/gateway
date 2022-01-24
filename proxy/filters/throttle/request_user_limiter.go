@@ -15,7 +15,7 @@ type RequestUserLimitFilter struct {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("request_user_limiter",NewRequestUserLimitFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_user_limiter",NewRequestUserLimitFilter,&RequestUserLimitFilter{})
 }
 
 func NewRequestUserLimitFilter(c *config.Config) (pipeline.Filter, error) {

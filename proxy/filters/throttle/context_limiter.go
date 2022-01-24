@@ -16,7 +16,7 @@ type ContextLimitFilter struct {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("context_limiter",NewContextLimitFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("context_limiter",NewContextLimitFilter,&ContextLimitFilter{})
 }
 
 func NewContextLimitFilter(c *config.Config) (pipeline.Filter, error) {

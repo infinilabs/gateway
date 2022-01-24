@@ -23,7 +23,7 @@ var defaultConfig = Config{
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("date_range_precision_tuning", New)
+	pipeline.RegisterFilterPluginWithConfigMetadata("date_range_precision_tuning", New,&defaultConfig)
 }
 
 func New(c *config.Config) (pipeline.Filter, error) {

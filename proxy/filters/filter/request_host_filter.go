@@ -20,7 +20,7 @@ func (filter *RequestServerHostFilter) Name() string {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("request_host_filter",NewRequestServerHostFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_host_filter",NewRequestServerHostFilter,&RequestServerHostFilter{})
 }
 
 func NewRequestServerHostFilter(c *config.Config) (pipeline.Filter, error) {

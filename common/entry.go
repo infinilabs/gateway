@@ -73,9 +73,3 @@ func (flow *FlowConfig) GetConfig() []*config.Config {
 	}
 	return flow.Filters
 }
-
-type FilterProperty struct {
-	Type         string      `config:"type" json:"type"`
-	SubType      string      `config:"sub_type" json:"sub_type"`
-	DefaultValue interface{} `config:"default_value" json:"default_value"`
-}

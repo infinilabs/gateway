@@ -15,7 +15,7 @@ type RequestClientIPLimitFilter struct {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("request_client_ip_limiter",NewRequestClientIPLimitFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_client_ip_limiter",NewRequestClientIPLimitFilter,&RequestClientIPLimitFilter{})
 }
 
 func NewRequestClientIPLimitFilter(c *config.Config) (pipeline.Filter, error) {

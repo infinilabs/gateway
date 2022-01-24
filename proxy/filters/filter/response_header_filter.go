@@ -21,7 +21,7 @@ func (filter *ResponseHeaderFilter) Name() string {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("response_header_filter",NewResponseHeaderFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("response_header_filter",NewResponseHeaderFilter,&ResponseHeaderFilter{})
 }
 
 func NewResponseHeaderFilter(c *config.Config) (pipeline.Filter, error) {

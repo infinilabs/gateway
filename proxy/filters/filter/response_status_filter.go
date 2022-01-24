@@ -20,7 +20,7 @@ func (filter ResponseStatusCodeFilter) Name() string {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("response_status_filter",NewResponseStatusCodeFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("response_status_filter",NewResponseStatusCodeFilter,&ResponseStatusCodeFilter{})
 }
 
 func NewResponseStatusCodeFilter(c *config.Config) (pipeline.Filter, error) {

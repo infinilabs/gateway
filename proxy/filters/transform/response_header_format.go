@@ -23,7 +23,7 @@ func (filter *ResponseHeaderFormatFilter) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("response_header_format",NewResponseHeaderFormatFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("response_header_format",NewResponseHeaderFormatFilter,&ResponseHeaderFormatFilter{})
 }
 
 func NewResponseHeaderFormatFilter(c *config.Config) (pipeline.Filter, error) {

@@ -37,7 +37,7 @@ func (filter *ElasticsearchHealthCheckFilter) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("elasticsearch_health_check", NewHealthCheckFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("elasticsearch_health_check", NewHealthCheckFilter,&ElasticsearchHealthCheckFilter{})
 }
 
 func NewHealthCheckFilter(c *config.Config) (pipeline.Filter, error) {

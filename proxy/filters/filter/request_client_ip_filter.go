@@ -44,7 +44,7 @@ func (filter *RequestClientIPFilter) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("request_client_ip_filter",NewRequestClientIPFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_client_ip_filter",NewRequestClientIPFilter,&RequestAPIKeyFilter{})
 }
 
 func NewRequestClientIPFilter(c *config.Config) (pipeline.Filter, error) {

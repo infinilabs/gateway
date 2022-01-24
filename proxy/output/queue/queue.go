@@ -40,7 +40,7 @@ func (filter *DiskEnqueueFilter) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("queue",NewDiskEnqueueFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("queue",NewDiskEnqueueFilter,&DiskEnqueueFilter{})
 }
 
 func NewDiskEnqueueFilter(c *config.Config) (pipeline.Filter, error) {

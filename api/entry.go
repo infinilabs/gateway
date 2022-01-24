@@ -7,7 +7,6 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/gateway/common"
 	"net/http"
-	"strconv"
 	"strings"
 )
 
@@ -123,18 +122,18 @@ func (h *GatewayAPI) searchEntry(w http.ResponseWriter, req *http.Request, ps ht
 	var (
 		name        = h.GetParameterOrDefault(req, "name", "")
 		queryDSL    = `{"query":{"bool":{"must":[%s]}}, "size": %d, "from": %d}`
-		strSize     = h.GetParameterOrDefault(req, "size", "20")
-		strFrom     = h.GetParameterOrDefault(req, "from", "0")
+		size     = h.GetIntOrDefault(req, "size", 20)
+		from     = h.GetIntOrDefault(req, "from", 0)
 		mustBuilder = &strings.Builder{}
 	)
 	if name != "" {
 		mustBuilder.WriteString(fmt.Sprintf(`{"prefix":{"name.text": "%s"}}`, name))
 	}
-	size, _ := strconv.Atoi(strSize)
+
 	if size <= 0 {
 		size = 20
 	}
-	from, _ := strconv.Atoi(strFrom)
+
 	if from < 0 {
 		from = 0
 	}

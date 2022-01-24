@@ -90,7 +90,7 @@ func (filter *BasicAuth) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("basic_auth",NewBasicAuthFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("basic_auth",NewBasicAuthFilter,&BasicAuth{})
 }
 
 func NewBasicAuthFilter(c *config.Config) (pipeline.Filter, error) {

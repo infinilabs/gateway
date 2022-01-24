@@ -33,7 +33,7 @@ func (filter *SetContext) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("set_context",NewSetContext)
+	pipeline.RegisterFilterPluginWithConfigMetadata("set_context",NewSetContext,&SetContext{})
 }
 
 func NewSetContext(c *config.Config) (pipeline.Filter, error) {

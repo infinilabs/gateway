@@ -43,7 +43,7 @@ func (filter *CloneFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("clone",NewCloneFlowFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("clone",NewCloneFlowFilter,&CloneFlowFilter{})
 }
 
 func NewCloneFlowFilter(c *config.Config) (pipeline.Filter, error) {

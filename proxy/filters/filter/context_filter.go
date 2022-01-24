@@ -22,7 +22,7 @@ func (filter *ContextFilter) Name() string {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("context_filter",NewContextFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("context_filter",NewContextFilter,&ContextFilter{})
 }
 
 func NewContextFilter(c *config.Config) (pipeline.Filter, error) {

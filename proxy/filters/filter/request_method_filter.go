@@ -21,7 +21,7 @@ func (filter *RequestMethodFilter) Name() string {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("request_method_filter",NewRequestMethodFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_method_filter",NewRequestMethodFilter,&RequestMethodFilter{})
 }
 
 func NewRequestMethodFilter(c *config.Config) (pipeline.Filter, error) {

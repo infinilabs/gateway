@@ -20,7 +20,7 @@ func (filter *RequestAPIKeyFilter) Name() string {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("request_api_key_filter",NewRequestAPIKeyFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_api_key_filter",NewRequestAPIKeyFilter,&RequestAPIKeyFilter{})
 }
 
 func NewRequestAPIKeyFilter(c *config.Config) (pipeline.Filter, error) {

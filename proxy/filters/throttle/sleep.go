@@ -24,7 +24,7 @@ func (filter *SleepFilter) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("sleep",NewSleepFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("sleep",NewSleepFilter,&SleepFilter{})
 }
 
 func NewSleepFilter(c *config.Config) (pipeline.Filter, error) {

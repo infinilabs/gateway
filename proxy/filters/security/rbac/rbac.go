@@ -100,7 +100,7 @@ func (filter *RBACFilter) checkActions(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("rbac",NewRBACFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("rbac",NewRBACFilter,&RBACFilter{})
 }
 
 func NewRBACFilter(c *config.Config) (pipeline.Filter, error) {

@@ -59,7 +59,9 @@ type BulkReshuffleConfig struct {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("bulk_reshuffle", pipeline.FilterConfigChecked(NewBulkReshuffle, pipeline.RequireFields("elasticsearch")))
+	pipeline.RegisterFilterPluginWithConfigMetadata("bulk_reshuffle",
+		pipeline.FilterConfigChecked(NewBulkReshuffle, pipeline.RequireFields("elasticsearch")),
+		&BulkReshuffleConfig{})
 }
 
 func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {

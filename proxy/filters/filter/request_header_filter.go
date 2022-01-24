@@ -22,7 +22,7 @@ func (filter *RequestHeaderFilter) Name() string {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("request_header_filter",NewRequestHeaderFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_header_filter",NewRequestHeaderFilter,&RequestHeaderFilter{})
 }
 
 func NewRequestHeaderFilter(c *config.Config) (pipeline.Filter, error) {

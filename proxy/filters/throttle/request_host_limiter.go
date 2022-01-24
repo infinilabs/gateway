@@ -15,7 +15,7 @@ type RequestHostLimitFilter struct {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("request_host_limiter",NewRequestHostLimitFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_host_limiter",NewRequestHostLimitFilter,&RequestHostLimitFilter{})
 }
 
 func NewRequestHostLimitFilter(c *config.Config) (pipeline.Filter, error) {

@@ -64,7 +64,7 @@ func (filter *Elasticsearch) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("elasticsearch", New)
+	pipeline.RegisterFilterPluginWithConfigMetadata("elasticsearch", New,&ProxyConfig{})
 }
 
 func New(c *config.Config) (pipeline.Filter, error) {

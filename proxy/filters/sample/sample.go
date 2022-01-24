@@ -43,7 +43,7 @@ func (filter *SampleFilter) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("sample",NewSampleFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("sample",NewSampleFilter,&SampleFilter{})
 }
 
 func NewSampleFilter(c *config.Config) (pipeline.Filter, error) {

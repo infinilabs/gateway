@@ -18,7 +18,7 @@ type RequestPathLimitFilter struct {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("request_path_limiter",NewRequestPathLimitFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_path_limiter",NewRequestPathLimitFilter,&RequestPathLimitFilter{})
 }
 
 func NewRequestPathLimitFilter(c *config.Config) (pipeline.Filter, error) {

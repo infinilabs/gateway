@@ -58,7 +58,7 @@ func (filter *SwitchFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("switch",NewSwitchFlowFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("switch",NewSwitchFlowFilter,&SwitchFlowFilter{})
 }
 
 func NewSwitchFlowFilter(c *config.Config) (pipeline.Filter, error) {

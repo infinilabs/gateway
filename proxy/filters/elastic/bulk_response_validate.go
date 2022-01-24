@@ -203,10 +203,9 @@ type Config struct {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("bulk_response_validate", pipeline.FilterConfigChecked(NewBulkResponseValidate,
+	pipeline.RegisterFilterPluginWithConfigMetadata("bulk_response_validate", pipeline.FilterConfigChecked(NewBulkResponseValidate,
 		pipeline.RequireFields("invalid_queue"),
-		pipeline.RequireFields("failure_queue"),
-	))
+		pipeline.RequireFields("failure_queue"), ),&Config{})
 }
 
 func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {

@@ -20,7 +20,7 @@ func (filter *RequestUserFilter) Name() string {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("request_user_filter",NewRequestUserFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_user_filter",NewRequestUserFilter,&RequestUserFilter{})
 }
 
 func NewRequestUserFilter(c *config.Config) (pipeline.Filter, error) {

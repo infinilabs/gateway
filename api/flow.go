@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"infini.sh/framework/core/api/router"
 	"infini.sh/framework/core/orm"
+	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
 	"infini.sh/gateway/common"
 	"net/http"
@@ -155,36 +156,7 @@ func (h *GatewayAPI) searchFlow(w http.ResponseWriter, req *http.Request, ps htt
 
 func (h *GatewayAPI) getFlowFilters(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 
-	//var (
-	//	name        = h.GetParameterOrDefault(req, "name", "")
-	//	queryDSL    = `{"query":{"bool":{"must":[%s]}}, "size": %d, "from": %d}`
-	//	strSize     = h.GetParameterOrDefault(req, "size", "20")
-	//	strFrom     = h.GetParameterOrDefault(req, "from", "0")
-	//	mustBuilder = &strings.Builder{}
-	//)
-	//if name != "" {
-	//	mustBuilder.WriteString(fmt.Sprintf(`{"prefix":{"name.text": "%s"}}`, name))
-	//}
-	//size, _ := strconv.Atoi(strSize)
-	//if size <= 0 {
-	//	size = 20
-	//}
-	//from, _ := strconv.Atoi(strFrom)
-	//if from < 0 {
-	//	from = 0
-	//}
-	//
-	//q := orm.Query{}
-	//queryDSL = fmt.Sprintf(queryDSL, mustBuilder.String(), size, from)
-	//q.RawQuery = []byte(queryDSL)
-	//
-	//err, res := orm.Search(&common.FlowConfig{}, &q)
-	//if err != nil {
-	//	h.WriteError(w, err.Error(), http.StatusInternalServerError)
-	//	return
-	//}
+	meta:=pipeline.GetFilterMetadata()
 
-	data := []byte("{\n    \"request_body_json_del\": {\n        \"properties\": {\n            \"path\": {\n                \"type\": \"array\", \n                \"sub_type\": \"string\"\n            }\n        }\n    }, \n    \"request_body_json_set\": {\n        \"properties\": {\n            \"path\": {\n                \"type\": \"array\", \n                \"sub_type\": \"keyvalue\"\n            }\n        }\n    }, \n    \"ldap_auth\": {\n        \"properties\": {\n            \"host\": {\n                \"type\": \"string\", \n                \"default_value\": \"ldap.forumsys.com\"\n            }, \n            \"port\": {\n                \"type\": \"number\", \n                \"default_value\": 389\n            }, \n            \"bind_dn\": {\n                \"type\": \"string\"\n            }, \n            \"bind_password\": {\n                \"type\": \"string\"\n            }, \n            \"base_dn\": {\n                \"type\": \"string\"\n            }, \n            \"user_filter\": {\n                \"type\": \"string\"\n            }\n        }\n    }\n}")
-
-	h.Write(w, data)
+	h.WriteJSON(w, meta,200)
 }

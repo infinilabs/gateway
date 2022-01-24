@@ -10,20 +10,21 @@ import (
 	"infini.sh/framework/lib/fasthttp"
 )
 
-type EchoMessage struct {
-	RepeatTimes int    `config:"repeat"`
-	Continue    bool   `config:"continue"`
-	Terminal    bool   `config:"stdout"`
-	Message     string `config:"message"`
+type Echo struct {
+	RepeatTimes int    `config:"repeat"    type:"number"  default_value:"1" `
+	Continue    bool   `config:"continue"  type:"bool"    default_value:"true" `
+	Terminal    bool   `config:"stdout"    type:"bool"    default_value:"false" `
+	Message     string `config:"message"   type:"string"  default_value:"." `
+	Messages    []string `config:"messages" `
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("echo", New)
+	pipeline.RegisterFilterPluginWithConfigMetadata("echo", New, &Echo{})
 }
 
 func New(c *config.Config) (pipeline.Filter, error) {
 
-	runner := EchoMessage{
+	runner := Echo{
 		RepeatTimes: 1,
 		Continue:    true,
 		Message:     ".",
@@ -36,11 +37,11 @@ func New(c *config.Config) (pipeline.Filter, error) {
 	return &runner, nil
 }
 
-func (filter *EchoMessage) Name() string {
+func (filter *Echo) Name() string {
 	return "echo"
 }
 
-func (filter *EchoMessage) Filter(ctx *fasthttp.RequestCtx) {
+func (filter *Echo) Filter(ctx *fasthttp.RequestCtx) {
 	str := filter.Message
 	size := filter.RepeatTimes
 	for i := 0; i < size; i++ {

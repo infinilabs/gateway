@@ -29,7 +29,7 @@ func (filter *SetBasicAuth) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("set_basic_auth",NewSetBasicAuth)
+	pipeline.RegisterFilterPluginWithConfigMetadata("set_basic_auth",NewSetBasicAuth,&SetBasicAuth{})
 }
 
 func NewSetBasicAuth(c *config.Config) (pipeline.Filter, error) {

@@ -57,8 +57,8 @@ var defaultConfig = Config{
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("get_cache", NewGet)
-	pipeline.RegisterFilterPlugin("set_cache", NewSet)
+	pipeline.RegisterFilterPluginWithConfigMetadata("get_cache", NewGet,&defaultConfig)
+	pipeline.RegisterFilterPluginWithConfigMetadata("set_cache", NewSet,&defaultConfig)
 }
 
 func NewGet(c *config.Config) (pipeline.Filter, error) {

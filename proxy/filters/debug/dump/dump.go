@@ -30,7 +30,7 @@ type Config struct {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("dump", New)
+	pipeline.RegisterFilterPluginWithConfigMetadata("dump", New, &Config{})
 }
 
 func (filter *DumpFilter) Name() string {

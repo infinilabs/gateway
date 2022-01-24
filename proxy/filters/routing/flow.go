@@ -30,7 +30,7 @@ func (filter *FlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("flow",NewFlowFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("flow",NewFlowFilter,&FlowFilter{})
 }
 
 func NewFlowFilter(c *config.Config) (pipeline.Filter, error) {

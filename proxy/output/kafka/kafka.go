@@ -57,7 +57,7 @@ func (filter *Kafka) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("kafka",NewKafkaFilter)
+	pipeline.RegisterFilterPluginWithConfigMetadata("kafka",NewKafkaFilter,&Kafka{})
 }
 
 func NewKafkaFilter(c *config.Config) (pipeline.Filter, error) {

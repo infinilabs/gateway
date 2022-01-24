@@ -47,7 +47,7 @@ func (filter *ContextRegexReplace) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPlugin("context_regex_replace",NewContextRegexReplace)
+	pipeline.RegisterFilterPluginWithConfigMetadata("context_regex_replace",NewContextRegexReplace,&ContextRegexReplace{})
 }
 
 func NewContextRegexReplace(c *config.Config) (filter pipeline.Filter, err error) {
