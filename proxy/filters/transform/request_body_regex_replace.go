@@ -34,6 +34,10 @@ func (filter *RequestBodyRegexReplace) Filter(ctx *fasthttp.RequestCtx) {
 	}
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("request_body_regex_replace",NewRequestBodyRegexReplace)
+}
+
 func NewRequestBodyRegexReplace(c *config.Config) (filter pipeline.Filter, err error) {
 
 	runner := RequestBodyRegexReplace{}

@@ -202,6 +202,13 @@ type Config struct {
 	ContinueOnError bool `config:"continue_on_error"`
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("bulk_response_validate", pipeline.FilterConfigChecked(NewBulkResponseValidate,
+		pipeline.RequireFields("invalid_queue"),
+		pipeline.RequireFields("failure_queue"),
+	))
+}
+
 func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 	cfg := Config{
 		InvalidStatus: 400,

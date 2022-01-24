@@ -17,6 +17,10 @@ func (filter *SetRequestHeader) Name() string {
 	return "set_request_header"
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("set_request_header",NewSetRequestHeader)
+}
+
 func NewSetRequestHeader(c *config.Config) (pipeline.Filter, error) {
 
 	runner := SetRequestHeader{}
@@ -66,6 +70,10 @@ func (filter *SetRequestQueryArgs) Filter(ctx *fasthttp.RequestCtx) {
 	}
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("set_request_query_args",NewSetRequestQueryArgs)
+}
+
 func NewSetRequestQueryArgs(c *config.Config) (pipeline.Filter, error) {
 
 	runner := SetRequestQueryArgs{}
@@ -106,6 +114,10 @@ func (filter *SetResponseHeader) Filter(ctx *fasthttp.RequestCtx) {
 	}
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("set_response_header",NewSetResponseHeader)
+}
+
 func NewSetResponseHeader(c *config.Config) (pipeline.Filter, error) {
 
 	runner := SetResponseHeader{}
@@ -138,6 +150,10 @@ func (filter *SetHostname) Filter(ctx *fasthttp.RequestCtx) {
 	if filter.Hostname != "" {
 		ctx.Request.SetHost(filter.Hostname)
 	}
+}
+
+func init() {
+	pipeline.RegisterFilterPlugin("set_hostname",NewSetHostname)
 }
 
 func NewSetHostname(c *config.Config) (pipeline.Filter, error) {
@@ -173,6 +189,10 @@ func (filter *SetResponse) Filter(ctx *fasthttp.RequestCtx) {
 	if filter.Body != "" {
 		ctx.Response.SetBody(util.UnsafeStringToBytes(filter.Body))
 	}
+}
+
+func init() {
+	pipeline.RegisterFilterPlugin("set_response",NewSetResponse)
 }
 
 func NewSetResponse(c *config.Config) (pipeline.Filter, error) {

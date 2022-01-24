@@ -56,6 +56,10 @@ func (filter *RedisPubSub) Filter(ctx *fasthttp.RequestCtx) {
 
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("redis_pubsub",pipeline.FilterConfigChecked(NewRedisPubSub, pipeline.RequireFields("channel")))
+}
+
 func NewRedisPubSub(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RedisPubSub{

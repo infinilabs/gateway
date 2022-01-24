@@ -23,6 +23,10 @@ func (filter *SleepFilter) Filter(ctx *fasthttp.RequestCtx) {
 	time.Sleep(time.Duration(filter.SleepInMs) * time.Millisecond)
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("sleep",NewSleepFilter)
+}
+
 func NewSleepFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := SleepFilter{}

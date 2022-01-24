@@ -17,6 +17,10 @@ type RequestPathLimitFilter struct {
 	Rules   []*MatchRules `config:"rules"`
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("request_path_limiter",NewRequestPathLimitFilter)
+}
+
 func NewRequestPathLimitFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RequestPathLimitFilter{

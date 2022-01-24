@@ -176,6 +176,10 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("bulk_request_mutate",NewElasticsearchBulkRequestMutateFilter)
+}
+
 func NewElasticsearchBulkRequestMutateFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := ElasticsearchBulkRequestMutate{

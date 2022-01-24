@@ -19,6 +19,10 @@ func (filter ResponseStatusCodeFilter) Name() string {
 	return "response_status_filter"
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("response_status_filter",NewResponseStatusCodeFilter)
+}
+
 func NewResponseStatusCodeFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := ResponseStatusCodeFilter{}

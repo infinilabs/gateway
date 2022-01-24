@@ -19,6 +19,10 @@ func (filter *RequestAPIKeyFilter) Name() string {
 	return "request_api_key_filter"
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("request_api_key_filter",NewRequestAPIKeyFilter)
+}
+
 func NewRequestAPIKeyFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RequestAPIKeyFilter{}

@@ -22,6 +22,10 @@ var defaultConfig = Config{
 	TimePrecision: 4,
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("date_range_precision_tuning", New)
+}
+
 func New(c *config.Config) (pipeline.Filter, error) {
 	cfg := defaultConfig
 	if err := c.Unpack(&cfg); err != nil {

@@ -53,6 +53,10 @@ func (filter *RequestBodyJsonSet) Filter(ctx *fasthttp.RequestCtx) {
 	}
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("request_body_json_set",NewRequestBodyJsonSet)
+}
+
 func NewRequestBodyJsonSet(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RequestBodyJsonSet{

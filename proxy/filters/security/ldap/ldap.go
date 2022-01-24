@@ -95,6 +95,10 @@ func (filter *LDAPFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("ldap_auth",pipeline.FilterConfigChecked(NewLDAPFilter, pipeline.RequireFields("host","bind_dn","base_dn")))
+}
+
 func NewLDAPFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := LDAPFilter{

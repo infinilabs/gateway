@@ -48,6 +48,10 @@ func (filter *TranslogOutput) Filter(ctx *fasthttp.RequestCtx) {
 
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("translog",NewTranslogOutput)
+}
+
 func NewTranslogOutput(c *config.Config) (pipeline.Filter, error) {
 
 	runner := TranslogOutput{

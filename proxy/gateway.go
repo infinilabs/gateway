@@ -92,9 +92,7 @@ func (module *GatewayModule) Setup(cfg *Config) {
 	module.routerConfigs = []common.RouterConfig{}
 	module.flowConfigs = []common.FlowConfig{}
 
-	initFilters()
-
-	ok, err := env.ParseConfig("gateway", &module.flowConfigs)
+	ok, err := env.ParseConfig("gateway", &module)
 	if ok && err != nil {
 		panic(err)
 	}

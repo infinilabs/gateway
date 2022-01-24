@@ -32,6 +32,10 @@ func (filter *SetContext) Filter(ctx *fasthttp.RequestCtx) {
 	}
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("set_context",NewSetContext)
+}
+
 func NewSetContext(c *config.Config) (pipeline.Filter, error) {
 
 	runner := SetContext{}

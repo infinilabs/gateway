@@ -42,6 +42,10 @@ func (filter *SampleFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("sample",NewSampleFilter)
+}
+
 func NewSampleFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := SampleFilter{

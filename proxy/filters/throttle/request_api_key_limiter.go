@@ -14,6 +14,10 @@ type RequestAPIKeyLimitFilter struct {
 	APIKeys []string `config:"id"`
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("request_api_key_limiter",NewRequestAPIKeyLimitFilter)
+}
+
 func NewRequestAPIKeyLimitFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RequestAPIKeyLimitFilter{}

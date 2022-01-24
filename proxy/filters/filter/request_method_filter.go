@@ -20,6 +20,10 @@ func (filter *RequestMethodFilter) Name() string {
 	return "request_method_filter"
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("request_method_filter",NewRequestMethodFilter)
+}
+
 func NewRequestMethodFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RequestMethodFilter{}

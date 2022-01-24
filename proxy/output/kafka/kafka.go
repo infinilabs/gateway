@@ -56,6 +56,10 @@ func (filter *Kafka) Filter(ctx *fasthttp.RequestCtx) {
 	lock.Unlock()
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("kafka",NewKafkaFilter)
+}
+
 func NewKafkaFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := Kafka{

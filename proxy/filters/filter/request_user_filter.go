@@ -19,6 +19,10 @@ func (filter *RequestUserFilter) Name() string {
 	return "request_user_filter"
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("request_user_filter",NewRequestUserFilter)
+}
+
 func NewRequestUserFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RequestUserFilter{}

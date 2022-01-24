@@ -20,6 +20,10 @@ func (filter *ResponseHeaderFilter) Name() string {
 	return "response_header_filter"
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("response_header_filter",NewResponseHeaderFilter)
+}
+
 func NewResponseHeaderFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := ResponseHeaderFilter{}

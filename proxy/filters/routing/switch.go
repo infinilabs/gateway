@@ -57,6 +57,10 @@ func (filter *SwitchFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("switch",NewSwitchFlowFilter)
+}
+
 func NewSwitchFlowFilter(c *config.Config) (pipeline.Filter, error) {
 	runner := SwitchFlowFilter{
 		RemovePrefix: true,

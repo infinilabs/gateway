@@ -22,6 +22,10 @@ func (filter *ResponseHeaderFormatFilter) Filter(ctx *fasthttp.RequestCtx) {
 	})
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("response_header_format",NewResponseHeaderFormatFilter)
+}
+
 func NewResponseHeaderFormatFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := ResponseHeaderFormatFilter{}

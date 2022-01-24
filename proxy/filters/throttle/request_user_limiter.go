@@ -14,6 +14,10 @@ type RequestUserLimitFilter struct {
 	User    []string `config:"user"`
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("request_user_limiter",NewRequestUserLimitFilter)
+}
+
 func NewRequestUserLimitFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RequestUserLimitFilter{}

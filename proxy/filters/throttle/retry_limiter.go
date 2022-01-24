@@ -47,6 +47,10 @@ func (filter *RetryLimiter) Filter(ctx *fasthttp.RequestCtx) {
 	ctx.Request.Header.Set(RetryKey, util.IntToString(times))
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("retry_limiter",pipeline.FilterConfigChecked(NewRetryLimiter, pipeline.RequireFields("queue_name")))
+}
+
 func NewRetryLimiter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RetryLimiter{

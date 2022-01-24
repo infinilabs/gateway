@@ -58,6 +58,10 @@ type BulkReshuffleConfig struct {
 	EnabledShards []int `config:"shards"`
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("bulk_reshuffle", pipeline.FilterConfigChecked(NewBulkReshuffle, pipeline.RequireFields("elasticsearch")))
+}
+
 func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 
 	cfg := BulkReshuffleConfig{

@@ -14,6 +14,10 @@ type RequestClientIPLimitFilter struct {
 	IP      []string `config:"ip"`
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("request_client_ip_limiter",NewRequestClientIPLimitFilter)
+}
+
 func NewRequestClientIPLimitFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RequestHostLimitFilter{}

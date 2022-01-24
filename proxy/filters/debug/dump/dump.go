@@ -29,6 +29,10 @@ type Config struct {
 	StatusCode     bool `config:"status_code"`
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("dump", New)
+}
+
 func (filter *DumpFilter) Name() string {
 	return "dump"
 }

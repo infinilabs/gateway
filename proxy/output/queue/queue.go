@@ -39,6 +39,10 @@ func (filter *DiskEnqueueFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("queue",NewDiskEnqueueFilter)
+}
+
 func NewDiskEnqueueFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := DiskEnqueueFilter{}

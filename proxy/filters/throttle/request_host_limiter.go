@@ -14,6 +14,10 @@ type RequestHostLimitFilter struct {
 	Host    []string `config:"host"`
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("request_host_limiter",NewRequestHostLimitFilter)
+}
+
 func NewRequestHostLimitFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RequestHostLimitFilter{}

@@ -21,6 +21,10 @@ func (filter *RequestHeaderFilter) Name() string {
 	return "request_header_filter"
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("request_header_filter",NewRequestHeaderFilter)
+}
+
 func NewRequestHeaderFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RequestHeaderFilter{}

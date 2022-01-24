@@ -63,6 +63,10 @@ func (filter *Elasticsearch) Filter(ctx *fasthttp.RequestCtx) {
 	filter.instance.DelegateRequest(filter.config.Elasticsearch, metadata, ctx)
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("elasticsearch", New)
+}
+
 func New(c *config.Config) (pipeline.Filter, error) {
 
 	cfg := ProxyConfig{

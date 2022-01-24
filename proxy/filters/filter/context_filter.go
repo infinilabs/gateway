@@ -21,6 +21,10 @@ func (filter *ContextFilter) Name() string {
 	return "context_filter"
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("context_filter",NewContextFilter)
+}
+
 func NewContextFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := ContextFilter{}

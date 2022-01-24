@@ -31,6 +31,10 @@ type Config struct {
 	QueueName           string `config:"queue_name"`
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("logging", New)
+}
+
 func New(c *config.Config) (pipeline.Filter, error) {
 
 	cfg := Config{

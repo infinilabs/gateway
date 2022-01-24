@@ -43,6 +43,10 @@ func (filter *RequestClientIPFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("request_client_ip_filter",NewRequestClientIPFilter)
+}
+
 func NewRequestClientIPFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RequestClientIPFilter{}

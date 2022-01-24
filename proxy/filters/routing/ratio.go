@@ -53,6 +53,10 @@ func (filter *RatioRoutingFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("ratio",NewRatioRoutingFlowFilter)
+}
+
 func NewRatioRoutingFlowFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RatioRoutingFlowFilter{

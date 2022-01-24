@@ -29,6 +29,10 @@ func (filter *FlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("flow",NewFlowFilter)
+}
+
 func NewFlowFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := FlowFilter{}

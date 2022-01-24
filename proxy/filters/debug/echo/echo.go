@@ -11,29 +11,27 @@ import (
 )
 
 type EchoMessage struct {
-	config *Config
-}
-
-type Config struct {
 	RepeatTimes int    `config:"repeat"`
 	Continue    bool   `config:"continue"`
 	Terminal    bool   `config:"stdout"`
 	Message     string `config:"message"`
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("echo", New)
+}
+
 func New(c *config.Config) (pipeline.Filter, error) {
 
-	cfg := Config{
+	runner := EchoMessage{
 		RepeatTimes: 1,
 		Continue:    true,
 		Message:     ".",
 	}
 
-	if err := c.Unpack(&cfg); err != nil {
+	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
-
-	runner := EchoMessage{config: &cfg}
 
 	return &runner, nil
 }
@@ -43,15 +41,15 @@ func (filter *EchoMessage) Name() string {
 }
 
 func (filter *EchoMessage) Filter(ctx *fasthttp.RequestCtx) {
-	str := filter.config.Message
-	size := filter.config.RepeatTimes
+	str := filter.Message
+	size := filter.RepeatTimes
 	for i := 0; i < size; i++ {
 		ctx.WriteString(str)
-		if filter.config.Terminal {
+		if filter.Terminal {
 			fmt.Print(str)
 		}
 	}
-	if !filter.config.Continue {
+	if !filter.Continue {
 		ctx.Response.SetStatusCode(200)
 		ctx.Finished()
 	}

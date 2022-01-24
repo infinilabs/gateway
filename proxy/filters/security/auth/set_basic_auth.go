@@ -28,6 +28,10 @@ func (filter *SetBasicAuth) Filter(ctx *fasthttp.RequestCtx) {
 	ctx.Request.SetBasicAuth(filter.Username, filter.Password)
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("set_basic_auth",NewSetBasicAuth)
+}
+
 func NewSetBasicAuth(c *config.Config) (pipeline.Filter, error) {
 
 	runner := SetBasicAuth{}

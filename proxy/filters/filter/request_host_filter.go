@@ -19,6 +19,10 @@ func (filter *RequestServerHostFilter) Name() string {
 	return "request_host_filter"
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("request_host_filter",NewRequestServerHostFilter)
+}
+
 func NewRequestServerHostFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RequestServerHostFilter{}

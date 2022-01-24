@@ -17,6 +17,10 @@ func (filter *RequestUrlPathFilter) Name() string {
 	return "request_path_filter"
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("request_path_filter",NewRequestUrlPathFilter)
+}
+
 func NewRequestUrlPathFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RequestUrlPathFilter{}

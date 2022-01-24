@@ -56,6 +56,11 @@ var defaultConfig = Config{
 	CacheType:           defaultCacheType,
 }
 
+func init() {
+	pipeline.RegisterFilterPlugin("get_cache", NewGet)
+	pipeline.RegisterFilterPlugin("set_cache", NewSet)
+}
+
 func NewGet(c *config.Config) (pipeline.Filter, error) {
 
 	cfg := defaultConfig
