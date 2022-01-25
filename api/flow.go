@@ -71,6 +71,7 @@ func (h *GatewayAPI) updateFlow(w http.ResponseWriter, req *http.Request, ps htt
 
 	id = obj.ID
 	create := obj.Created
+	obj = common.FlowConfig{}
 	err = h.DecodeJSON(req, &obj)
 	if err != nil {
 		h.WriteError(w, err.Error(), http.StatusInternalServerError)
@@ -80,7 +81,6 @@ func (h *GatewayAPI) updateFlow(w http.ResponseWriter, req *http.Request, ps htt
 	//protect
 	obj.ID = id
 	obj.Created = create
-
 	err = orm.Update(&obj)
 	if err != nil {
 		h.WriteError(w, err.Error(), http.StatusInternalServerError)

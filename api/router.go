@@ -70,6 +70,7 @@ func (h *GatewayAPI) updateRouter(w http.ResponseWriter, req *http.Request, ps h
 
 	id = obj.ID
 	create := obj.Created
+	obj = common.RouterConfig{}
 	err = h.DecodeJSON(req, &obj)
 	if err != nil {
 		h.WriteError(w, err.Error(), http.StatusInternalServerError)

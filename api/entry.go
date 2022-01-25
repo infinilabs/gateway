@@ -69,6 +69,8 @@ func (h *GatewayAPI) updateEntry(w http.ResponseWriter, req *http.Request, ps ht
 
 	id = obj.ID
 	create := obj.Created
+
+	obj = common.EntryConfig{}
 	err = h.DecodeJSON(req, &obj)
 	if err != nil {
 		h.WriteError(w, err.Error(), http.StatusInternalServerError)
@@ -78,7 +80,6 @@ func (h *GatewayAPI) updateEntry(w http.ResponseWriter, req *http.Request, ps ht
 	//protect
 	obj.ID = id
 	obj.Created = create
-
 	err = orm.Update(&obj)
 	if err != nil {
 		h.WriteError(w, err.Error(), http.StatusInternalServerError)
