@@ -76,7 +76,7 @@ func main() {
 
 		module.RegisterSystemModule(&queue2.DiskQueue{})
 		module.RegisterSystemModule(&redis.RedisModule{})
-		module.RegisterSystemModule(elastic.ElasticModule{})
+		module.RegisterSystemModule(&elastic.ElasticModule{})
 
 		module.RegisterSystemModule(&task.TaskModule{})
 		module.RegisterUserPlugin(&proxy.GatewayModule{})
