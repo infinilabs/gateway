@@ -347,8 +347,8 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 		processor.inFlightQueueConfigs.Delete(key)
 
 		//cleanup buffer before exit worker
-		success:=processor.submitBulkRequest(esClusterID,meta,host,bulkProcessor,mainBuf)
-		if success{
+		continueNext :=processor.submitBulkRequest(esClusterID,meta,host,bulkProcessor,mainBuf)
+		if continueNext {
 			if offset!=""&&initOfffset!=offset{
 				ok,err:=queue.CommitOffset(qConfig,consumer,offset)
 				if !ok||err!=nil{
@@ -481,8 +481,8 @@ CLEAN_BUFFER:
 
 	lastCommit = time.Now()
 	//TODO, check bulk result, if ok, then commit offset, or retry non-200 requests, or save failure offset
-	success:=processor.submitBulkRequest(esClusterID,meta,host,bulkProcessor,mainBuf)
-	if success{
+	continueNext:=processor.submitBulkRequest(esClusterID,meta,host,bulkProcessor,mainBuf)
+	if continueNext{
 		if offset!=""{
 			ok,err:=queue.CommitOffset(qConfig,consumer,offset)
 			if !ok||err!=nil{
