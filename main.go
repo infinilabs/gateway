@@ -94,11 +94,11 @@ func main() {
 
 		module.RegisterSystemModule(&api.APIModule{})
 
+	}, func() {
 		//start each module, with enabled provider
 		module.Start()
 
-
-	}, nil,nil){
+	},nil){
 		app.Run()
 	}
 
