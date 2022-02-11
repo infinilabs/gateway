@@ -18,6 +18,7 @@ type ElasticsearchBulkRequestMutate struct {
 	DefaultType      string            `config:"default_type"`
 	FixNilType       bool              `config:"fix_null_type"`
 	FixNilID         bool              `config:"fix_null_id"`
+	RemoveTypeMeta         bool         `config:"remove_type"`
 	AddTimestampToID bool              `config:"generate_enhanced_id"`
 	SafetyParse      bool              `config:"safety_parse"`
 	DocBufferSize    int               `config:"doc_buffer_size"`
@@ -61,7 +62,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 				indexNew = urlLevelIndex
 			}
 
-			if typeName == "" && urlLevelType != "" {
+			if typeName == "" &&!this.RemoveTypeMeta && urlLevelType != "" {
 				typeName = urlLevelType
 				typeNew = urlLevelType
 			}
@@ -79,7 +80,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
-			if typeNew == "" && this.FixNilType && this.DefaultType != "" {
+			if typeNew == "" &&!this.RemoveTypeMeta && this.FixNilType && this.DefaultType != "" {
 				typeNew = this.DefaultType
 				if global.Env().IsDebug {
 					log.Trace("use default type: ", this.DefaultType, " for: ", metaStr)
@@ -100,7 +101,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
-			if typeName != "" && len(this.TypeNameRename) > 0 {
+			if typeName != "" &&!this.RemoveTypeMeta && len(this.TypeNameRename) > 0 {
 				v, ok := this.TypeNameRename[typeName]
 				if ok {
 					typeNew = v
@@ -115,7 +116,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 			}
 
 			//update metadata changes
-			if indexNew != "" || typeNew != "" || idNew != "" {
+			if indexNew != "" || (typeNew != ""&&!this.RemoveTypeMeta) || idNew != "" {
 				var err error
 				metaBytes, err = updateJsonWithNewIndex(actionStr, metaBytes, indexNew, typeNew, idNew)
 				if err != nil {
@@ -126,6 +127,10 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
+			if this.RemoveTypeMeta{
+				metaBytes, err =removeTypeFromAction(actionStr,metaBytes)
+			}
+
 			if actionStr == "" || index == "" || id == "" {
 				log.Warn("invalid bulk action:", actionStr, ",index:", string(index), ",id:", string(id), ",", metaStr)
 				return errors.Error("invalid bulk action:", actionStr, ",index:", string(index), ",id:", string(id), ",", metaStr)
@@ -133,9 +138,6 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 
 			if global.Env().IsDebug {
 				log.Tracef("final path: %s/%s/%s", index, typeName, id)
-			}
-
-			if global.Env().IsDebug {
 				log.Tracef("metadata:\n%v", string(metaBytes))
 			}
 			actionMeta.Write(metaBytes)

@@ -549,6 +549,13 @@ func updateJsonWithNewIndex(action string, scannedByte []byte, index, typeName, 
 	return newBytes, err
 }
 
+func removeTypeFromAction(action string,scannedByte []byte) (newBytes []byte, err error) {
+	newBytes = make([]byte, len(scannedByte))
+	copy(newBytes, scannedByte)
+	newBytes = jsonparser.Delete(newBytes, action,"_type")
+	return newBytes, nil
+}
+
 //performance is poor
 func safetyParseActionMeta(scannedByte []byte) (action, index, typeName, id string) {
 
