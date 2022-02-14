@@ -119,7 +119,7 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 
 	//request.ID = ctx.ID()
 
-	request.ID = uint64(ctx.SequenceID)
+	//request.ID = uint64(ctx.SequenceID)
 
 	//request.ConnTime = ctx.ConnTime().UTC().Format("2006-01-02T15:04:05.000Z")
 	request.LoggingTime = time.Now().UTC().Format("2006-01-02T15:04:05.000Z")

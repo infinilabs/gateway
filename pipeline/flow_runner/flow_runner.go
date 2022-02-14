@@ -7,7 +7,6 @@ import (
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
-	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
 	"runtime"
@@ -23,7 +22,7 @@ type Config struct {
 var ctxPool = &sync.Pool{
 	New: func() interface{} {
 		c := fasthttp.RequestCtx{
-			SequenceID: util.GetIncrementID("ctx"),
+			//SequenceID: util.GetIncrementID("ctx"),
 		}
 		return &c
 	},
@@ -31,7 +30,7 @@ var ctxPool = &sync.Pool{
 
 func acquireCtx() (ctx *fasthttp.RequestCtx) {
 	x1 := ctxPool.Get().(*fasthttp.RequestCtx)
-	x1.SequenceID = util.GetIncrementID("ctx")
+	//x1.SequenceID = util.GetIncrementID("ctx")
 	x1.Reset()
 	return x1
 }

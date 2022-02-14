@@ -456,7 +456,7 @@ START:
 
 	err := pc.Do(req, res)
 
-	stats.Increment("reverse_proxy","do")
+	//stats.Increment("reverse_proxy","do")
 
 	//metadata.CheckNodeTrafficThrottle(util.UnsafeBytesToString(req.Header.Host()),0,res.GetResponseLength(),0)
 
