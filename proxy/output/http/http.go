@@ -10,12 +10,16 @@ import (
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/lib/fasthttp"
-	log "github.com/cihub/seelog"
+	"time"
 )
 
 type HTTPFilter struct {
+	requestTimeout time.Duration
+
+	Timeout int `config:"timeout_in_second"`
 	Schema string `config:"schema"`
 	Host   string `config:"host"`
+	Hosts   []string `config:"hosts"`
 	client *fasthttp.Client
 }
 
@@ -24,17 +28,23 @@ func (filter *HTTPFilter) Name() string {
 }
 
 func (filter *HTTPFilter) Filter(ctx *fasthttp.RequestCtx) {
+	for _,v:=range filter.Hosts{
+		err:=filter.forward(v,ctx)
+		if err==nil{
+			return
+		}
+	}
+}
+
+func (filter *HTTPFilter)forward(host string,ctx *fasthttp.RequestCtx)error{
 	orignalHost:=string(ctx.Request.URI().Host())
 	orignalSchema:=string(ctx.Request.URI().Scheme())
-	ctx.Request.SetHost(filter.Host)
+	ctx.Request.SetHost(host)
 	ctx.Request.URI().SetScheme(filter.Schema)
-	err:=filter.client.Do(&ctx.Request,&ctx.Response)
-	if err!=nil{
-		log.Error(err)
-	}
-
+	err:=filter.client.DoTimeout(&ctx.Request,&ctx.Response,filter.requestTimeout)
 	ctx.Request.URI().SetScheme(orignalSchema)
 	ctx.Request.SetHost(orignalHost)
+	return err
 }
 
 func init() {
@@ -43,7 +53,9 @@ func init() {
 
 func NewHTTPFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := HTTPFilter{}
+	runner := HTTPFilter{
+		Timeout: 10,
+	}
 
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
@@ -54,6 +66,12 @@ func NewHTTPFilter(c *config.Config) (pipeline.Filter, error) {
 		TLSConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
+	}
+
+	runner.requestTimeout=time.Duration(runner.Timeout)*time.Second
+
+	if runner.Host!=""{
+		runner.Hosts=append(runner.Hosts,runner.Host)
 	}
 
 	return &runner, nil
