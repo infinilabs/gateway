@@ -51,6 +51,7 @@ func BasicAuth1(h fasthttp.RequestHandler, requiredUser, requiredPassword string
 			h(ctx)
 			return
 		}
+
 		// Request Basic Authentication otherwise
 		ctx.Error(fasthttp.StatusMessage(fasthttp.StatusUnauthorized), fasthttp.StatusUnauthorized)
 		ctx.Response.Header.Set("WWW-Authenticate", "Basic realm=Restricted")
@@ -68,14 +69,7 @@ func (filter *BasicAuth) Name() string {
 func (filter *BasicAuth) Filter(ctx *fasthttp.RequestCtx) {
 
 	exists, user, pass := ctx.Request.ParseBasicAuth()
-
-	if !exists {
-		ctx.Error("Basic Authentication Required", 403)
-		ctx.Finished()
-		return
-	}
-
-	if len(filter.ValidUsers) > 0 {
+	if exists&& len(filter.ValidUsers) > 0 {
 		p, ok := filter.ValidUsers[util.UnsafeBytesToString(user)]
 		if ok {
 			if util.UnsafeBytesToString(pass) == p {
@@ -84,7 +78,9 @@ func (filter *BasicAuth) Filter(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	ctx.Error("Basic Authentication Required", 403)
+	// Request Basic Authentication otherwise
+	ctx.Error(fasthttp.StatusMessage(fasthttp.StatusUnauthorized), fasthttp.StatusUnauthorized)
+	ctx.Response.Header.Set("WWW-Authenticate", "Basic realm=Restricted")
 	ctx.Finished()
 
 }
