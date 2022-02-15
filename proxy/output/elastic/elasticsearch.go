@@ -78,11 +78,16 @@ func New(c *config.Config) (pipeline.Filter, error) {
 		TLSInsecureSkipVerify: true,
 		ReadBufferSize:        4096 * 4,
 		WriteBufferSize:       4096 * 4,
-		MaxConnWaitTimeout:    util.GetDurationOrDefault("0s", 0*time.Second),
+		//maxt wait timeout for free connection
+		MaxConnWaitTimeout:    util.GetDurationOrDefault("30s", 30*time.Second),
+
+		//keep alived connection
 		MaxConnDuration:       util.GetDurationOrDefault("0s", 0*time.Second),
-		ReadTimeout:           util.GetDurationOrDefault("0s", 0*time.Second),
-		WriteTimeout:          util.GetDurationOrDefault("0s", 0*time.Second),
-		MaxIdleConnDuration:   util.GetDurationOrDefault("0s", 0*time.Second),
+
+		ReadTimeout:           util.GetDurationOrDefault("0s", 0*time.Hour),
+		WriteTimeout:          util.GetDurationOrDefault("0s", 0*time.Hour),
+		//idle alive connection will be closed
+		MaxIdleConnDuration:   util.GetDurationOrDefault("30s", 30*time.Second),
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
