@@ -138,6 +138,14 @@ func (this *Entrypoint) Start() error {
 		this.config.ReadTimeout = 30
 	}
 
+	if this.config.IdleTimeout <= 0 {
+		this.config.IdleTimeout = 30
+	}
+
+	if this.config.MaxIdleWorkerDurationSeconds <= 0 {
+		this.config.MaxIdleWorkerDurationSeconds = 10
+	}
+
 	if this.config.WriteTimeout <= 0 {
 		this.config.WriteTimeout = 30
 	}
@@ -166,6 +174,7 @@ func (this *Entrypoint) Start() error {
 		ReduceMemoryUsage:             this.config.ReduceMemoryUsage,
 		TCPKeepalive:                  this.config.TCPKeepalive,
 		TCPKeepalivePeriod:            time.Duration(this.config.TCPKeepaliveSeconds) * time.Second,
+		MaxIdleWorkerDuration:            time.Duration(this.config.MaxIdleWorkerDurationSeconds) * time.Second,
 		IdleTimeout:                   time.Duration(this.config.IdleTimeout) * time.Second,
 		ReadTimeout:                   time.Duration(this.config.ReadTimeout) * time.Second,
 		WriteTimeout:                  time.Duration(this.config.WriteTimeout) * time.Second,
