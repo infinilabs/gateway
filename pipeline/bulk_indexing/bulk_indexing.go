@@ -158,7 +158,22 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 			processor.detectorRunning=true
 			go func(c *pipeline.Context) {
 				log.Tracef("[%v] init detector for active queue",processor.id)
+
 				defer func() {
+					if !global.Env().IsDebug {
+						if r := recover(); r != nil {
+							var v string
+							switch r.(type) {
+							case error:
+								v = r.(error).Error()
+							case runtime.Error:
+								v = r.(runtime.Error).Error()
+							case string:
+								v = r.(string)
+							}
+							log.Error("error in bulk indexing processor,", v)
+						}
+					}
 					processor.detectorRunning=false
 					log.Debug("exit detector for active queue")
 				}()
@@ -299,7 +314,26 @@ func (processor *BulkIndexingProcessor) HandleQueueConfig(v *queue.Config,c *pip
 }
 
 func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.Context, bulkSizeInByte int, qConfig *queue.Config, host string) {
-	defer processor.wg.Done()
+
+	defer func() {
+		if !global.Env().IsDebug {
+			if r := recover(); r != nil {
+				var v string
+				switch r.(type) {
+				case error:
+					v = r.(error).Error()
+				case runtime.Error:
+					v = r.(runtime.Error).Error()
+				case string:
+					v = r.(string)
+				}
+				log.Error("error in bulk indexing processor,", v)
+			}
+		}
+		processor.wg.Done()
+		log.Trace("exit bulk indexing processor")
+	}()
+
 
 	key:=fmt.Sprintf("%v",qConfig.Id)
 
