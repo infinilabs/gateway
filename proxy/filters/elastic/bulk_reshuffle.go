@@ -263,13 +263,14 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
-			shardInfo, err := metadata.GetPrimaryShardInfo(index, shardID)
+			var ShardIDStr=util.IntToString(shardID)
+			shardInfo, err := metadata.GetPrimaryShardInfo(index, ShardIDStr)
 			if err != nil {
 				return errors.Error("shard info was not found,", index, ",", shardID, ",", err)
 			}
 
 			if shardInfo == nil {
-				if rate.GetRateLimiter(fmt.Sprintf("shard_info_not_found_%v", index), util.IntToString(shardID), 1, 5, time.Minute*1).Allow() {
+				if rate.GetRateLimiter(fmt.Sprintf("shard_info_not_found_%v", index), ShardIDStr, 1, 5, time.Minute*1).Allow() {
 					log.Warn("shardInfo was not found,", index, ",", shardID)
 				}
 				return errors.Error("shard info was not found,", index, ",", shardID)
@@ -286,24 +287,24 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			//注册队列到元数据中，消费者自动订阅该队列列表，并根据元数据来分别进行相应的处理
 			switch reshuffleType {
 			case ClusterLevel:
-				queueConfig.Name = fmt.Sprintf("async_bulk-cluster##%v", esConfig.ID)
+				queueConfig.Name ="async_bulk-cluster##"+ esConfig.ID
 				break
 			case NodeLevel:
 				if nodeID == "" {
-					queueConfig.Name = fmt.Sprintf("async_bulk-node##%v##%v", esConfig.ID, "UNASSIGNED")
+					queueConfig.Name = "async_bulk-node##"+ esConfig.ID+ "##UNASSIGNED"
 				} else {
 					queueConfig.Labels["node_id"] = nodeID
-					queueConfig.Name = fmt.Sprintf("async_bulk-node##%v##%v", esConfig.ID, nodeID)
+					queueConfig.Name = "async_bulk-node##"+esConfig.ID+"##"+ nodeID
 				}
 				break
 			case IndexLevel:
 				queueConfig.Labels["index"] = index
-				queueConfig.Name = fmt.Sprintf("async_bulk-index##%v##%v", esConfig.ID, index)
+				queueConfig.Name = "async_bulk-index##"+ esConfig.ID+"##"+ index
 				break
 			case ShardLevel:
 				queueConfig.Labels["index"] = index
 				queueConfig.Labels["shard"] = shardID
-				queueConfig.Name = fmt.Sprintf("async_bulk-shard##%v##%v##%v", esConfig.ID, index, shardID)
+				queueConfig.Name = "async_bulk-shard##"+esConfig.ID+"##"+index+"##"+ShardIDStr
 				break
 			case PartitionLevel:
 				queueConfig.Labels["index"] = index
@@ -315,8 +316,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 				partitionID := elastic.GetShardID(metadata.GetMajorVersion(), []byte(id), this.config.PartitionSize)
 				queueConfig.Labels["partition"] = partitionID
-
-				queueConfig.Name = fmt.Sprintf("async_bulk-partition##%v##%v##%v##%v", esConfig.ID, index, shardID, partitionID)
+				queueConfig.Name = "async_bulk-partition##"+esConfig.ID+"##"+index+"##"+ShardIDStr+"##"+util.IntToString(partitionID)
 				break
 			}
 

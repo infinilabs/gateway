@@ -193,6 +193,24 @@ func TestGetUrlLevelMeta(t *testing.T) {
 	assert.Equal(t,tindex,"")
 	assert.Equal(t,ttype,"")
 
+	pathStr="/index/_bulk"
+	tindex,ttype= getUrlLevelBulkMeta(pathStr)
+	fmt.Println(tindex,ttype)
+	assert.Equal(t,tindex,"index")
+	assert.Equal(t,ttype,"")
+
+	pathStr="//index/_bulk"
+	tindex,ttype= getUrlLevelBulkMeta(pathStr)
+	fmt.Println(tindex,ttype)
+	assert.Equal(t,tindex,"index")
+	assert.Equal(t,ttype,"")
+
+	pathStr="//index//_bulk"
+	tindex,ttype= getUrlLevelBulkMeta(pathStr)
+	fmt.Println(tindex,ttype)
+	assert.Equal(t,tindex,"index")
+	assert.Equal(t,ttype,"")
+
 	pathStr="/index/doc/_bulk"
 	tindex,ttype= getUrlLevelBulkMeta(pathStr)
 	fmt.Println(tindex,ttype)
