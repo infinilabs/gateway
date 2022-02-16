@@ -3,6 +3,7 @@ package bulk_indexing
 import (
 	"fmt"
 	"infini.sh/framework/core/config"
+	"infini.sh/framework/core/rate"
 	"infini.sh/framework/core/rotate"
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/gateway/common"
@@ -265,7 +266,9 @@ func (processor *BulkIndexingProcessor) HandleQueueConfig(v *queue.Config,c *pip
 		if ok{
 			routingTable, err := meta.GetIndexRoutingTable(util.ToString(index))
 			if err != nil {
-				log.Error(err)
+				if rate.GetRateLimiter("error",err.Error(),1,1, time.Second*3).Allow() {
+					log.Warn(err)
+				}
 				return
 			}
 			shard,ok:=v.Labels["shard"]
@@ -333,7 +336,6 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 		processor.wg.Done()
 		log.Trace("exit bulk indexing processor")
 	}()
-
 
 	key:=fmt.Sprintf("%v",qConfig.Id)
 
@@ -407,6 +409,10 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 		panic(errors.Errorf("cluster metadata [%v] not ready", esClusterID))
 	}
 
+	if elastic.IsHostDead(host){
+		host=meta.GetActiveHost()
+	}
+
 	bulkProcessor = elastic2.BulkProcessor{
 		RotateConfig: processor.config.RotateConfig,
 		Config:       processor.config.BulkConfig,
@@ -439,8 +445,17 @@ READ_DOCS:
 
 		//TODO add config to enable check or not
 		if !elastic.IsHostAvailable(host) {
-			time.Sleep(time.Second * 1)
-			log.Debugf("host [%v] is not available", host)
+			if elastic.IsHostDead(host){
+				host1:=host
+				host=meta.GetActiveHost()
+				if rate.GetRateLimiter("host_dead",host,1,1, time.Second*3).Allow() {
+					log.Infof("host [%v] is dead, use: [%v]", host1,host)
+				}
+			}else{
+				log.Debugf("host [%v] is not available", host)
+				time.Sleep(time.Second * 1)
+			}
+
 			goto READ_DOCS
 		}
 
