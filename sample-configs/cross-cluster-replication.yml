@@ -321,7 +321,8 @@ router:
 elasticsearch:
   - name: primary
     enabled: true
-    endpoint: http://192.168.3.188:9204
+    endpoints:
+    - http://192.168.3.188:9204
     basic_auth:
       username: elastic
       password: changeme
@@ -334,7 +335,9 @@ elasticsearch:
         interval: 60s
   - name: backup
     enabled: true
-    endpoint: http://192.168.3.188:9206
+    endpoints:
+    - http://192.168.3.188:9206
+    - http://192.168.3.188:9226
     basic_auth:
       username: test
       password: testtest
@@ -392,85 +395,6 @@ pipeline:
           when:
             cluster_available: [ "primary" ]
 
-## option A - pipelines for backup cluster
-#  - name: queue_backup-failure-consumer
-#    auto_start: true
-#    keep_running: true
-#    processor:
-#      - flow_runner:
-#          input_queue: "backup-failure"
-#          flow: backup-flow-replicate-processing
-#          when:
-#            cluster_available: [ "backup" ]
-#
-#  - name: queue_backup-consumer
-#    auto_start: true
-#    keep_running: true
-#    processor:
-#      - flow_runner:
-#          input_queue: "backup"
-#          flow: backup-flow-replicate-processing
-#          when:
-#            and:
-#              - not:
-#                  or:
-#                    - queue_has_lag: [ "backup-failure", "primary-partial-success_bulk_requests"]
-#              - cluster_available: ["backup"]
-#
-#  - name: queue_backup-bulk-partial-consumer
-#    auto_start: true
-#    keep_running: true
-#    processor:
-#      - flow_runner:
-#          input_queue: "primary-partial-success_bulk_requests"
-#          flow: backup-flow-replicate-processing
-#          when:
-#            cluster_available: [ "backup" ]
-
-## option B - pipelines for backup cluster
-#  - name: queue_backup-failure-consumer
-#    auto_start: true
-#    keep_running: true
-#    processor:
-#      - queue_consumer:
-#          input_queue: "backup-failure"
-#          elasticsearch: "backup"
-#          failure_queue: "backup-failure"
-#          worker_size: 1
-##          compress: true
-#          when:
-#            cluster_available: [ "backup" ]
-#  - name: queue_backup-consumer
-#    auto_start: true
-#    keep_running: true
-#    processor:
-#      - queue_consumer:
-#          input_queue: "backup"
-#          elasticsearch: "backup"
-#          failure_queue: "backup-failure"
-#          invalid_queue: "backup-invalid"
-#          dead_letter_queue: "backup-dead_letter"
-#          waiting_after: [ "primary-partial-success_bulk_requests","backup-failure"]
-#          worker_size: 10
-##          compress: true
-#          when:
-#            cluster_available: [ "backup" ]
-#  - name: queue_backup-partial-consumer
-#    auto_start: true
-#    keep_running: true
-#    processor:
-#      - queue_consumer:
-#          input_queue: "primary-partial-success_bulk_requests"
-#          elasticsearch: "backup"
-#          failure_queue: "backup-failure"
-#          invalid_queue: "backup-invalid"
-#          dead_letter_queue: "backup-dead_letter"
-#          worker_size: 10
-##          compress: true
-#          when:
-#            cluster_available: [ "backup" ]
-
-
 # option C - pipelines for backup cluster
   - name: queue_backup-failure-consumer
     auto_start: true
@@ -516,4 +440,3 @@ pipeline:
           bulk_size_in_mb: 10
           queues:
             type: bulk_reshuffle
-

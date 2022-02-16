@@ -28,11 +28,10 @@ flow:
               _ctx.request.path: /_bulk
           elasticsearch: dev
           level: node
-          mode: async
           fix_null_id: true
       - elasticsearch:
           elasticsearch: dev  #elasticsearch configure reference name
-          max_connection_per_node: 100 #max tcp connection to upstream, default for all nodes
+          max_connection_per_node: 1000 #max tcp connection to upstream, default for all nodes
           max_response_size: -1 #default for all nodes
           balancer: weight
           refresh: # refresh upstream nodes list, need to enable this feature to use elasticsearch nodes auto discovery
@@ -103,15 +102,15 @@ pipeline:
     - bulk_indexing:
         elasticsearch: "dev"
         bulk.compress: true
-        bulk_size_in_mb: 1  #in MB
+        bulk_size_in_mb: 50  #in MB
         retry_delay_in_seconds: 5
         queues:
           type: bulk_reshuffle
         when:
           cluster_available: [ "dev" ]
 
-floating_ip:
-  enabled: false
+#floating_ip:
+#  enabled: false
 #  ip: 192.168.3.234      #yep, it's optional, infini-gateway could detect one but maybe not the right one
 ##  netmask: 255.255.255.0 #optional
 ##  interface: en1         #optional
@@ -132,42 +131,42 @@ floating_ip:
 #queue:
 #  - name: dev-node-yNgVusnXSgqvP2fZeGFSLw
 #    type: redis
-
-disk_queue:
-  upload_to_s3: true
-  s3:
-    server: my_blob_store
-    location: cn-beijing-001
-    bucket: infini-store
-#  max_used_bytes: 102400
-#  warning_free_bytes: 322122547200
-#  reserved_free_bytes: 322122547200
-#  max_bytes_per_file: 1048576
-
-
-s3:
-  my_blob_store:
-    endpoint: "192.168.3.63:9000"
-    access_key: "minio"
-    access_secret: "gogoaminio"
-#    token: "XXXX"
-#    ssl: true
-
-
-elastic:
-  elasticsearch: dev
-  enabled: true
-  remote_configs: true
-  health_check:
-    enabled: true
-  availability_check:
-    enabled: false
-  metadata_refresh:
-    enabled: true
-  store:
-    enabled: true
-  orm:
-    enabled: true
-    init_template: true
-    template_name: ".infini"
-    index_prefix: ".infini_"
+#
+#disk_queue:
+#  upload_to_s3: true
+#  s3:
+#    server: my_blob_store
+#    location: cn-beijing-001
+#    bucket: infini-store
+##  max_used_bytes: 102400
+##  warning_free_bytes: 322122547200
+##  reserved_free_bytes: 322122547200
+##  max_bytes_per_file: 1048576
+#
+#
+#s3:
+#  my_blob_store:
+#    endpoint: "192.168.3.63:9000"
+#    access_key: "minio"
+#    access_secret: "gogoaminio"
+##    token: "XXXX"
+##    ssl: true
+#
+#
+#elastic:
+#  elasticsearch: dev
+#  enabled: true
+#  remote_configs: true
+#  health_check:
+#    enabled: true
+#  availability_check:
+#    enabled: true
+#  metadata_refresh:
+#    enabled: true
+#  store:
+#    enabled: true
+#  orm:
+#    enabled: true
+#    init_template: true
+#    template_name: ".infini"
+#    index_prefix: ".infini_"
