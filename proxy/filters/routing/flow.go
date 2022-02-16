@@ -11,6 +11,7 @@ import (
 )
 
 type FlowFilter struct {
+	Flow string `config:"flow"`
 	Flows []string `config:"flows"`
 }
 
@@ -39,6 +40,8 @@ func NewFlowFilter(c *config.Config) (pipeline.Filter, error) {
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
+
+	runner.Flows=append(runner.Flows,runner.Flow)
 
 	return &runner, nil
 }
