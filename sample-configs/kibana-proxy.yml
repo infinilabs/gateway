@@ -16,6 +16,10 @@ flow:
           status: 401
           body: "Success logout!"
       - drop:
+  - name: replace_logo_flow
+    filter:
+      - redirect:
+          uri: https://elasticsearch.cn/uploads/event/20211120/458c74ca3169260dbb2308dd06ef930a.png
   - name: default_flow
     filter:
       - basic_auth:
@@ -35,3 +39,10 @@ router:
           - "/_logout"
         flow:
           - logout_flow
+      - method:
+          - GET
+          - POST
+        pattern:
+          - "/plugins/kibanaReact/assets/illustration_integrations_lightmode.svg"
+        flow:
+          - replace_logo_flow
