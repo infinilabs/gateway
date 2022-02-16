@@ -20,6 +20,7 @@ func (filter *FlowFilter) Name() string {
 }
 
 func (filter *FlowFilter) Filter(ctx *fasthttp.RequestCtx) {
+
 	for _, v := range filter.Flows {
 		flow := common.MustGetFlow(v)
 		if global.Env().IsDebug {
@@ -41,7 +42,9 @@ func NewFlowFilter(c *config.Config) (pipeline.Filter, error) {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	runner.Flows=append(runner.Flows,runner.Flow)
+	if runner.Flow!=""{
+		runner.Flows=append(runner.Flows,runner.Flow)
+	}
 
 	return &runner, nil
 }

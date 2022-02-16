@@ -54,6 +54,11 @@ func (flow *FilterFlow) Process(ctx *fasthttp.RequestCtx) {
 }
 
 func MustGetFlow(flowID string) FilterFlow {
+
+	if flowID==""{
+		panic("flow id can't be nil")
+	}
+
 	v, ok := flows[flowID]
 	if ok {
 		return v
