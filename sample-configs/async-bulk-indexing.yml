@@ -92,22 +92,3 @@ s3:
     access_secret: "gogoaminio"
     #  token:
 #    ssl: false
-
-
-elastic:
-  elasticsearch: dev
-  enabled: true
-  remote_configs: true
-  health_check:
-    enabled: true
-  availability_check:
-    enabled: false
-  metadata_refresh:
-    enabled: true
-  store:
-    enabled: true
-  orm:
-    enabled: true
-    init_template: true
-    template_name: ".infini"
-    index_prefix: ".infini_"
