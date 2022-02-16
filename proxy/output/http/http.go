@@ -28,11 +28,16 @@ func (filter *HTTPFilter) Name() string {
 }
 
 func (filter *HTTPFilter) Filter(ctx *fasthttp.RequestCtx) {
+	var err error
 	for _,v:=range filter.Hosts{
-		err:=filter.forward(v,ctx)
+		err=filter.forward(v,ctx)
 		if err==nil{
 			return
 		}
+	}
+	if err!=nil{
+		ctx.Response.SetBodyString(err.Error())
+		return
 	}
 }
 
