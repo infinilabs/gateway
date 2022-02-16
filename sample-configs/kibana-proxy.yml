@@ -10,6 +10,12 @@ entry:
       enabled: true
 
 flow:
+  - name: logout_flow
+    filter:
+      - set_response:
+          status: 401
+          body: "Success logout!"
+      - drop:
   - name: default_flow
     filter:
       - basic_auth:
@@ -17,7 +23,15 @@ flow:
             medcl: passwd
       - http:
           schema: "http" #https or http
-          host: "192.168.3.98:5601"
+          host: "192.168.3.188:5602"
 router:
   - name: my_router
     default_flow: default_flow
+    rules:
+      - method:
+          - GET
+          - POST
+        pattern:
+          - "/_logout"
+        flow:
+          - logout_flow
