@@ -21,6 +21,8 @@ type EntryConfig struct {
 	TCPKeepaliveSeconds int    `config:"tcp_keepalive_in_seconds" json:"tcp_keepalive_in_seconds,omitempty" elastic_mapping:"tcp_keepalive_in_seconds: { type: integer }"`
 	IdleTimeout         int    `config:"idle_timeout" json:"idle_timeout,omitempty" elastic_mapping:"idle_timeout: { type: integer }"`
 
+	MaxIdleWorkerDurationSeconds int    `config:"max_idle_worker_duration_in_seconds" json:"max_idle_worker_duration_in_seconds,omitempty" elastic_mapping:"max_idle_worker_duration_in_seconds: { type: integer }"`
+
 	ReadBufferSize  int `config:"read_buffer_size" json:"read_buffer_size,omitempty" elastic_mapping:"read_buffer_size: { type: integer }"`
 	WriteBufferSize int `config:"write_buffer_size" json:"write_buffer_size,omitempty" elastic_mapping:"write_buffer_size: { type: integer }"`
 

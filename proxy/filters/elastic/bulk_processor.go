@@ -210,6 +210,7 @@ type BulkProcessorConfig struct {
 	MaxRejectRetryTimes       int  `config:"max_reject_retry_times"`
 	MaxRetryTimes             int  `config:"max_retry_times"`
 	SaveFailure          bool   `config:"save_failure"`
+	RequestTimeoutInSecond          int   `config:"request_timeout_in_second"`
 
 	DeadletterRequestsQueue string `config:"dead_letter_queue"`
 	FailureRequestsQueue string `config:"failure_queue"`
@@ -233,6 +234,7 @@ var DefaultBulkProcessorConfig = BulkProcessorConfig{
 		SaveFailure:          true,
 		SafetyParse:          true,
 		DocBufferSize:       256*1024,
+		RequestTimeoutInSecond:60,
 }
 
 
@@ -323,7 +325,7 @@ DO:
 	metadata.CheckNodeTrafficThrottle(util.UnsafeBytesToString(req.Header.Host()),1,req.GetRequestLength(),0)
 
 	//execute
-	err = httpClient.Do(req, resp)
+	err = httpClient.DoTimeout(req, resp,time.Duration(joint.Config.RequestTimeoutInSecond)*time.Second)
 	if err!=nil{
 		return false,0, FAILURE, err
 	}
