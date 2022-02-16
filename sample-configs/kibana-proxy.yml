@@ -41,7 +41,6 @@ router:
           - logout_flow
       - method:
           - GET
-          - POST
         pattern:
           - "/plugins/kibanaReact/assets/illustration_integrations_lightmode.svg"
         flow:
