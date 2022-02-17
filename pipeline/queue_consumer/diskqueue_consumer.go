@@ -38,9 +38,6 @@ type Config struct {
 	FailureQueue        string   `config:"failure_queue"`
 	InvalidQueue        string   `config:"invalid_queue"`
 
-	SaveSuccessDocsToQueue bool   `config:"save_partial_success_requests"`
-	PartialSuccessQueue           string `config:"partial_success_queue"`
-
 	Elasticsearch       string   `config:"elasticsearch"`
 	WaitingAfter        []string `config:"waiting_after"`
 	Compress            bool     `config:"compress"`
@@ -142,9 +139,6 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context, count *
 		processor.config.InvalidQueue = processor.config.InputQueue + "-invalid"
 	}
 
-	if processor.config.PartialSuccessQueue == "" {
-		processor.config.PartialSuccessQueue = processor.config.InputQueue + "-partial-success"
-	}
 
 READ_DOCS:
 	for {
@@ -265,8 +259,6 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 	//execute
 	err = fastHttpClient.Do(req, resp)
 
-	//metadata.CheckNodeTrafficThrottle(util.UnsafeBytesToString(req.Header.Host()),0,resp.GetResponseLength(),0)
-
 	if !acceptGzipped&&compressed{
 		body:=resp.GetRawBody()
 		resp.SwapBody(body)
@@ -298,9 +290,8 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 
 			nonRetryableItems := bytebufferpool.Get()
 			retryableItems := bytebufferpool.Get()
-			successItems := bytebufferpool.Get()
 
-			containError:=es.HandleBulkResponse(processor.config.SafetyParse,requestBytes,resbody,processor.config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
+			containError:=es.HandleBulkResponse(processor.config.SafetyParse,requestBytes,resbody,processor.config.DocBufferSize,nonRetryableItems,retryableItems)
 			if containError {
 
 				log.Error("error in bulk requests,", resp.StatusCode(), util.SubString(string(resbody), 0, 256))
@@ -319,12 +310,10 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 					bytebufferpool.Put(retryableItems)
 				}
 
-				if successItems.Len()>0 && processor.config.SaveSuccessDocsToQueue{
-					successItems.WriteByte('\n')
-					bytes := req.OverrideBodyEncode(successItems.Bytes(), true)
-					queue.Push(queue.GetOrInitConfig(processor.config.PartialSuccessQueue), bytes)
-					bytebufferpool.Put(successItems)
-				}
+				//save message bytes, with metadata, set codec to wrapped bulk messages
+				queue.Push(queue.GetOrInitConfig("failure_messages"), util.MustToJSONBytes(buffer.GetMessageStatus(true)))
+
+
 			}
 		}
 		return true, resp.StatusCode(), nil

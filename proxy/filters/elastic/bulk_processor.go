@@ -16,6 +16,7 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/gateway/common"
 	"net/http"
 	"strings"
 	"time"
@@ -252,10 +253,10 @@ const PARTIAL API_STATUS = "partial"
 const FAILURE API_STATUS = "failure"
 
 
-func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host string, data []byte) (continueNext bool,status_code int, status API_STATUS,err error) {
+func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host string, buffer *common.BulkBuffer) (continueNext bool,status_code int, status API_STATUS,err error) {
 
-	if data == nil || len(data) == 0 {
-		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "invalid_requests")
+	if buffer == nil || buffer.GetMessageSize() == 0 {
+		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "empty_bulk_requests")
 		return true,0, FAILURE,errors.Errorf("bulk data is empty, host: %v", host)
 	}
 
@@ -287,6 +288,8 @@ func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host s
 
 	acceptGzipped:=req.AcceptGzippedResponse()
 	compressed:=false
+
+	data:=buffer.Buffer.Bytes()
 
 	if !req.IsGzipped() && joint.Config.Compress {
 
@@ -329,8 +332,6 @@ DO:
 	if err!=nil{
 		return false,0, FAILURE, err
 	}
-
-	//metadata.CheckNodeTrafficThrottle(util.UnsafeBytesToString(req.Header.Host()),0,resp.GetResponseLength(),0)
 
 	//restore body and header
 	if !acceptGzipped&&compressed{
@@ -385,16 +386,14 @@ DO:
 		if util.ContainStr(string(req.RequestURI()), "_bulk") {
 			nonRetryableItems := bytebufferpool.Get()
 			retryableItems := bytebufferpool.Get()
-			successItems := bytebufferpool.Get()
 
-			containError:=HandleBulkResponse(joint.Config.SafetyParse,data,resbody,joint.Config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
+			containError:=HandleBulkResponse2(joint.Config.SafetyParse,data,resbody,joint.Config.DocBufferSize,buffer,nonRetryableItems,retryableItems)
 			if containError {
 
-				log.Errorf("error in bulk requests,host:%v,status:%v,invalid:%v,success:%v,failure:%v,res:%v",host,resp.StatusCode(),nonRetryableItems.Len(),retryableItems.Len(),successItems.Len(), util.SubString(string(resbody), 0, 256))
+				log.Errorf("error in bulk requests,host:%v,status:%v,invalid:%v,failure:%v,res:%v",host,resp.StatusCode(),nonRetryableItems.Len(),retryableItems.Len(),util.SubString(string(resbody), 0, 256))
 
 				if nonRetryableItems.Len() > 0 {
 					nonRetryableItems.WriteByte('\n')
-					//bytes := req.OverrideBodyEncode(nonRetryableItems.Bytes(), true)
 					bytes := nonRetryableItems.Bytes()
 					queue.Push(queue.GetOrInitConfig(joint.Config.InvalidRequestsQueue), bytes)
 					bytebufferpool.Put(nonRetryableItems)
@@ -402,23 +401,17 @@ DO:
 
 				if retryableItems.Len() > 0 {
 					retryableItems.WriteByte('\n')
-					//bytes := req.OverrideBodyEncode(retryableItems.Bytes(), true)
 					bytes := retryableItems.Bytes()
 					queue.Push(queue.GetOrInitConfig(joint.Config.FailureRequestsQueue), bytes)
 					bytebufferpool.Put(retryableItems)
 				}
 
-				if successItems.Len()>0 && joint.Config.SaveSuccessDocsToQueue{
+				//	//TODO retry 429 docs
+				//	//TODO handle partial failure
 
-					//TODO retry 429 docs
-					//TODO handle partial failure
+				//save message bytes, with metadata, set codec to wrapped bulk messages
+				queue.Push(queue.GetOrInitConfig("failure_messages"), util.MustToJSONBytes(buffer.GetMessageStatus(true)))
 
-					successItems.WriteByte('\n')
-					//bytes := req.OverrideBodyEncode(successItems.Bytes(), true)
-					bytes := successItems.Bytes()
-					queue.Push(queue.GetOrInitConfig(joint.Config.PartialSuccessQueue), bytes)
-					bytebufferpool.Put(successItems)
-				}
 				return true,400, PARTIAL,nil
 			}
 		}

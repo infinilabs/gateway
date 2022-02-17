@@ -561,6 +561,7 @@ func safetyParseActionMeta(scannedByte []byte) (action, index, typeName, id stri
 
 	////{ "index" : { "_index" : "test", "_id" : "1" } }
 	var meta = elastic.BulkActionMetadata{}
+	log.Error(string(scannedByte))
 	meta.UnmarshalJSON(scannedByte)
 	if meta.Index != nil {
 		index = meta.Index.Index

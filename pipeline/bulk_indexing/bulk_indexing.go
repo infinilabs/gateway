@@ -58,6 +58,7 @@ type Config struct {
 
 	BulkSizeInKb         int    `config:"bulk_size_in_kb,omitempty"`
 	BulkSizeInMb         int    `config:"bulk_size_in_mb,omitempty"`
+	BulkMaxDocsCount     int    `config:"bulk_max_docs_count,omitempty"`
 
 	Queues          map[string]interface{} `config:"queues,omitempty"`
 
@@ -316,6 +317,7 @@ func (processor *BulkIndexingProcessor) HandleQueueConfig(v *queue.Config,c *pip
 	go processor.NewBulkWorker("300",c, processor.bulkSizeInByte, v, host)
 }
 
+
 func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.Context, bulkSizeInByte int, qConfig *queue.Config, host string) {
 
 	defer func() {
@@ -354,8 +356,9 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 	processor.inFlightQueueConfigs.Store(key,workerID)
 	log.Debugf("starting worker:[%v], queue:[%v], host:[%v]",workerID, qConfig.Name, host)
 
-	mainBuf := processor.bufferPool.Get()
-	defer processor.bufferPool.Put(mainBuf)
+	mainBuf := common.AcquireBulkBuffer()
+	defer common.ReturnBulkBuffer(mainBuf)
+
 	var bulkProcessor elastic2.BulkProcessor
 	var esClusterID string
 	var meta *elastic.ElasticsearchMetadata
@@ -392,7 +395,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 				}
 			}
 		}else{
-			log.Errorf("error between offset [%v]-[%v]",initOfffset,offset)
+			log.Errorf("error between queue:[%v] offset [%v]-[%v]",qConfig.Id,initOfffset,offset)
 		}
 		log.Debugf("exit worker[%v], queue:[%v]",workerID,qConfig.Id)
 	}()
@@ -435,6 +438,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 
 
 READ_DOCS:
+
 	initOfffset,_=queue.GetOffset(qConfig,consumer)
 	offset=initOfffset
 
@@ -446,7 +450,7 @@ READ_DOCS:
 		//TODO add config to enable check or not
 		if !elastic.IsHostAvailable(host) {
 			if elastic.IsHostDead(host){
-				host1:=host
+				host1:= host
 				host=meta.GetActiveHost()
 				if rate.GetRateLimiter("host_dead",host,1,1, time.Second*3).Allow() {
 					log.Infof("host [%v] is dead, use: [%v]", host1,host)
@@ -465,6 +469,7 @@ READ_DOCS:
 		log.Debugf("worker:[%v] start consume queue:[%v] offset:%v",workerID,qConfig.Id,offset)
 
 		ctx1,messages,timeout,err:=queue.Consume(qConfig,consumer.Name,offset,processor.config.FetchMaxMessages,time.Millisecond*time.Duration(processor.config.FetchMaxWaitMs))
+
 		if global.Env().IsDebug{
 			log.Debugf("[%v] consume message:%v,offset:%v,next:%v,timeout:%v,err:%v",consumer.Name,len(messages),ctx1.InitOffset,ctx1.NextOffset,timeout,err)
 		}
@@ -498,26 +503,31 @@ READ_DOCS:
 					common.ValidateBulkRequest("write_pop", string(pop.Data))
 				}
 
-				stats.IncrementBy("elasticsearch."+esClusterID+".bulk", "bytes_received_from_queue", int64(mainBuf.Len()))
+				//stats.IncrementBy("elasticsearch."+esClusterID+".bulk", "bytes_received_from_queue", int64(pop.Size))
 
-				mainBuf.Write(pop.Data)
+				mainBuf.WriteMessageID(pop.Offset)
+				mainBuf.WriteByteBuffer(pop.Data)
 
 				if global.Env().IsDebug {
-					log.Tracef("message size: %v", util.ByteSize(uint64(mainBuf.Len())))
+					log.Tracef("message count: %v, size: %v", mainBuf.GetMessageCount(),util.ByteSize(uint64(mainBuf.GetMessageSize())))
 				}
-
-				if mainBuf.Len() > (bulkSizeInByte) {
+				msgSize:=mainBuf.GetMessageSize()
+				if msgSize > (bulkSizeInByte) ||(processor.config.BulkMaxDocsCount>0&&msgSize>processor.config.BulkMaxDocsCount) {
 					if global.Env().IsDebug {
-						log.Trace("hit buffer size,", mainBuf.Len(), ", ", qConfig.Name, ", submit")
+						log.Tracef("consuming [%v], hit buffer limit, size:%v, count:%v, submit now", qConfig.Name, msgSize, mainBuf.GetMessageCount())
 					}
+
 					//submit request
 					processor.submitBulkRequest(esClusterID,meta,host,bulkProcessor,mainBuf)
+
+					//reset buffer
+					mainBuf.Reset()
 				}
 
 			}
 		}
 
-		if time.Since(lastCommit) > idleDuration && mainBuf.Len() > 0 {
+		if time.Since(lastCommit) > idleDuration && mainBuf.GetMessageSize() > 0 {
 			if global.Env().IsDebug {
 				log.Trace("hit idle timeout, ", idleDuration.String())
 			}
@@ -543,6 +553,9 @@ CLEAN_BUFFER:
 		log.Errorf("error between offset [%v]-[%v]",initOfffset,offset)
 	}
 
+	//reset buffer
+	mainBuf.Reset()
+
 	if offset==""||ctx.IsCanceled()||ctx.IsFailed() {
 		log.Tracef("invalid offset or canceled, return on queue:[%v]",qConfig.Name)
 		return
@@ -550,11 +563,12 @@ CLEAN_BUFFER:
 
 	log.Tracef("goto READ_DOCS, return on queue:[%v]",qConfig.Name)
 
+
 	goto READ_DOCS
 
 }
 
-func (processor *BulkIndexingProcessor) submitBulkRequest(esClusterID string, meta *elastic.ElasticsearchMetadata, host string, bulkProcessor elastic2.BulkProcessor, mainBuf *bytebufferpool.ByteBuffer)bool {
+func (processor *BulkIndexingProcessor) submitBulkRequest(esClusterID string, meta *elastic.ElasticsearchMetadata, host string, bulkProcessor elastic2.BulkProcessor, mainBuf *common.BulkBuffer)bool {
 
 	log.Tracef("submit BulkRequest")
 
@@ -562,18 +576,22 @@ func (processor *BulkIndexingProcessor) submitBulkRequest(esClusterID string, me
 		return true
 	}
 
-	if mainBuf.Len() > 0 {
+	count:=mainBuf.GetMessageCount()
+	size:=mainBuf.GetMessageSize()
+
+	if mainBuf.GetMessageCount() > 0 {
 
 		log.Trace(meta.Config.Name, ", starting submit bulk request")
 
 		start := time.Now()
-		data := mainBuf.Bytes()
-		contrinueRequest,status, success, err := bulkProcessor.Bulk(meta, host, data)
+		//data := mainBuf.Bytes()
+		contrinueRequest,status, success, err := bulkProcessor.Bulk(meta, host, mainBuf)
 		stats.Timing("elasticsearch."+esClusterID+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
-		log.Debug(meta.Config.Name, ", ", host, ", result:", success, ", status:", status, ", size:", util.ByteSize(uint64(mainBuf.Len())), ", elapsed:", time.Since(start)," ",err)
-		stats.IncrementBy("elasticsearch."+esClusterID+".bulk", string(success+".bytes"), int64(mainBuf.Len()))
-		stats.IncrementBy("elasticsearch."+esClusterID+".bulk", fmt.Sprintf("%v.bytes",status), int64(mainBuf.Len()))
-		mainBuf.Reset()
+		log.Debug(meta.Config.Name, ", ", host, ", result:", success, ", status:", status,", count:",count, ", size:", util.ByteSize(uint64(size)), ", elapsed:", time.Since(start)," ",err)
+		stats.IncrementBy("elasticsearch."+esClusterID+".bulk", string(success+".bytes"), int64(size))
+		stats.IncrementBy("elasticsearch."+esClusterID+".bulk", string(success+".count"), int64(count))
+		//stats.IncrementBy("elasticsearch."+esClusterID+".bulk", fmt.Sprintf("%v.bytes",status), int64(size))
+		//mainBuf.Reset()
 		return contrinueRequest
 	}
 
