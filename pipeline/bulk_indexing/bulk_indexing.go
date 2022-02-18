@@ -148,7 +148,6 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 				log.Error("error in bulk indexing processor,", v)
 			}
 		}
-		processor.wg.Wait()
 		log.Trace("exit bulk indexing processor")
 	}()
 
@@ -157,9 +156,10 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 		log.Tracef("detectorRunning [%v]",processor.detectorRunning)
 		if !processor.detectorRunning{
 			processor.detectorRunning=true
+			processor.wg.Add(1)
 			go func(c *pipeline.Context) {
+				defer processor.wg.Done()
 				log.Tracef("[%v] init detector for active queue",processor.id)
-
 				defer func() {
 					if !global.Env().IsDebug {
 						if r := recover(); r != nil {
@@ -217,6 +217,8 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 			processor.HandleQueueConfig(v,c)
 		}
 	}
+
+	processor.wg.Wait()
 
 	return nil
 }
