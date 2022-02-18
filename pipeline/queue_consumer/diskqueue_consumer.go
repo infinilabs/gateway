@@ -33,8 +33,16 @@ func (processor *DiskQueueConsumer) Name() string {
 type Config struct {
 	NumOfWorkers        int      `config:"worker_size"`
 	IdleTimeoutInSecond int      `config:"idle_timeout_in_seconds"`
-	InputQueue          string   `config:"input_queue"`
 
+	FetchMinBytes    int `config:"fetch_min_bytes"`
+	FetchMaxBytes    int `config:"fetch_max_bytes"`
+	FetchMaxMessages int `config:"fetch_max_messages"`
+	FetchMaxWaitMs   int `config:"fetch_max_wait_ms"`
+
+	SaveSuccessDocsToQueue bool `config:"save_partial_success_requests"`
+	PartialSuccessQueue string `config:"partial_success_queue"`
+
+	InputQueue          string   `config:"input_queue"`
 	FailureQueue        string   `config:"failure_queue"`
 	InvalidQueue        string   `config:"invalid_queue"`
 
@@ -52,6 +60,9 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		IdleTimeoutInSecond: 5,
 		DocBufferSize: 256*1024,
 		SafetyParse: true,
+		FetchMinBytes:   	1,
+		FetchMaxMessages:   100,
+		FetchMaxWaitMs:   10000,
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -122,7 +133,6 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context, count *
 		wg.Done()
 	}()
 
-	timeOut := processor.config.IdleTimeoutInSecond
 	esInstanceVal := processor.config.Elasticsearch
 	waitingAfter := processor.config.WaitingAfter
 	metadata := elastic.GetMetadata(esInstanceVal)
@@ -131,7 +141,7 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context, count *
 	}
 
 
-	idleDuration := time.Duration(timeOut) * time.Second
+	//idleDuration := time.Duration(timeOut) * time.Second
 	if processor.config.FailureQueue == "" {
 		processor.config.FailureQueue = processor.config.InputQueue + "-failure"
 	}
@@ -139,8 +149,20 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context, count *
 		processor.config.InvalidQueue = processor.config.InputQueue + "-invalid"
 	}
 
+	if processor.config.PartialSuccessQueue == "" {
+		processor.config.PartialSuccessQueue = processor.config.InputQueue + "-partial"
+	}
+
+	qConfig :=queue.GetOrInitConfig(processor.config.InputQueue)
+	var consumer=queue.GetOrInitConsumerConfig(qConfig.Id,"group-001","consumer-001")
+	var initOfffset string
+	var offset string
+
 
 READ_DOCS:
+	initOfffset,_=queue.GetOffset(qConfig,consumer)
+	offset=initOfffset
+
 	for {
 
 		if ctx.IsCanceled() {
@@ -165,34 +187,46 @@ READ_DOCS:
 			}
 		}
 
-		pop, _, err := queue.PopTimeout(queue.GetOrInitConfig(processor.config.InputQueue), idleDuration)
-		if err != nil {
-			log.Error(err)
-			panic(err)
-		}
-
-		if len(pop) > 0 {
-			ok, status, err := processor.processMessage(metadata, pop)
-			if err != nil {
-				log.Error(ok, status, err)
-			}
-
-			if !ok {
-				if global.Env().IsDebug {
-					log.Debug(ok, status, err)
+		_,messages,_,err:=queue.Consume(qConfig,consumer.Name,offset,processor.config.FetchMaxMessages,time.Millisecond*time.Duration(processor.config.FetchMaxWaitMs))
+		if len(messages) > 0 {
+			for _,pop:=range messages {
+				if err != nil {
+					log.Error(err)
+					panic(err)
 				}
 
-				if status != 429 && status >= 400 && status < 500 {
-					log.Error("push to dead letter queue:", processor.config.InvalidQueue, ",", err)
-					err := queue.Push(queue.GetOrInitConfig(processor.config.InvalidQueue), pop)
+				if len(pop.Data) > 0 {
+					ok, status, err := processor.processMessage(metadata, &pop)
 					if err != nil {
-						panic(err)
+						log.Error(ok, status, err)
 					}
-				} else {
-					err := queue.Push(queue.GetOrInitConfig(processor.config.FailureQueue), pop)
-					if err != nil {
-						panic(err)
+
+					if !ok {
+						if global.Env().IsDebug {
+							log.Debug(ok, status, err)
+						}
+
+						if status != 429 && status >= 400 && status < 500 {
+							log.Error("push to dead letter queue:", processor.config.InvalidQueue, ",", err)
+							err := queue.Push(queue.GetOrInitConfig(processor.config.InvalidQueue), pop.Data)
+							if err != nil {
+								panic(err)
+							}
+						} else {
+							err := queue.Push(queue.GetOrInitConfig(processor.config.FailureQueue), pop.Data)
+							if err != nil {
+								panic(err)
+							}
+						}
 					}
+				}
+				offset=pop.NextOffset
+			}
+
+			if offset!=""&&offset!=initOfffset{
+				ok,err:=queue.CommitOffset(qConfig,consumer,offset)
+				if !ok||err!=nil{
+					panic(err)
 				}
 			}
 		}
@@ -214,10 +248,10 @@ func gzipBest(a *[]byte) []byte {
 	return b.Bytes()
 }
 
-func (processor *DiskQueueConsumer) processMessage(metadata *elastic.ElasticsearchMetadata, pop []byte) (bool, int, error) {
+func (processor *DiskQueueConsumer) processMessage(metadata *elastic.ElasticsearchMetadata, msg *queue.Message) (bool, int, error) {
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)
-	err := req.Decode(pop)
+	err := req.Decode(msg.Data)
 	if err != nil {
 		log.Error("failed to decode request, ", metadata.Config.Name)
 		return false, 408, err
@@ -290,8 +324,10 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 
 			nonRetryableItems := bytebufferpool.Get()
 			retryableItems := bytebufferpool.Get()
+			successItems := bytebufferpool.Get()
 
-			containError:=es.HandleBulkResponse(processor.config.SafetyParse,requestBytes,resbody,processor.config.DocBufferSize,nonRetryableItems,retryableItems)
+
+			containError:=es.HandleBulkResponse(processor.config.SafetyParse,requestBytes,resbody,processor.config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
 			if containError {
 
 				log.Error("error in bulk requests,", resp.StatusCode(), util.SubString(string(resbody), 0, 256))
@@ -310,8 +346,16 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 					bytebufferpool.Put(retryableItems)
 				}
 
+
+				if successItems.Len() > 0 && processor.config.SaveSuccessDocsToQueue {
+					successItems.WriteByte('\n')
+					bytes := req.OverrideBodyEncode(successItems.Bytes(), true)
+					queue.Push(queue.GetOrInitConfig(processor.config.PartialSuccessQueue), bytes)
+					bytebufferpool.Put(successItems)
+				}
+
 				//save message bytes, with metadata, set codec to wrapped bulk messages
-				queue.Push(queue.GetOrInitConfig("failure_messages"), util.MustToJSONBytes(buffer.GetMessageStatus(true)))
+				queue.Push(queue.GetOrInitConfig("failure_messages"), util.MustToJSONBytes(msg.Offset))
 
 
 			}

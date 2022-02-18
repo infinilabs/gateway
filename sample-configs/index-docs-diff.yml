@@ -29,7 +29,7 @@ pipeline:
     - dag:
         parallel:
           - dump_hash: #dump es1's doc
-              indices: "logstash-test7"
+              indices: "test"
               scroll_time: "10m"
               elasticsearch: "source"
 #              query: "field1:elastic"
@@ -39,7 +39,7 @@ pipeline:
               slice_size: 3
 #              hash_func: "xxhash64"
           - dump_hash: #dump es2's doc
-              indices: "logstash-test7"
+              indices: "test"
               scroll_time: "10m"
 #              fields: "doc_hash"
 #              query: "field1:elastic"

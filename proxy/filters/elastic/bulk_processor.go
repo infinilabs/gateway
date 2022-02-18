@@ -215,11 +215,6 @@ type BulkProcessorConfig struct {
 
 	DeadletterRequestsQueue string `config:"dead_letter_queue"`
 	FailureRequestsQueue string `config:"failure_queue"`
-
-
-	SaveSuccessDocsToQueue bool   `config:"save_partial_success_requests"`
-	PartialSuccessQueue           string `config:"partial_success_queue"`
-
 	InvalidRequestsQueue string `config:"invalid_queue"`
 
 	SafetyParse bool `config:"safety_parse"`
@@ -237,8 +232,6 @@ var DefaultBulkProcessorConfig = BulkProcessorConfig{
 		DocBufferSize:       256*1024,
 		RequestTimeoutInSecond:60,
 }
-
-
 
 type BulkProcessor struct {
 	RotateConfig rotate.RotateConfig
@@ -387,30 +380,34 @@ DO:
 			nonRetryableItems := bytebufferpool.Get()
 			retryableItems := bytebufferpool.Get()
 
+			//TODO remove, use dedicated response validater filer to handle failure messages
 			containError:=HandleBulkResponse2(joint.Config.SafetyParse,data,resbody,joint.Config.DocBufferSize,buffer,nonRetryableItems,retryableItems)
 			if containError {
 
 				log.Errorf("error in bulk requests,host:%v,status:%v,invalid:%v,failure:%v,res:%v",host,resp.StatusCode(),nonRetryableItems.Len(),retryableItems.Len(),util.SubString(string(resbody), 0, 256))
 
-				if nonRetryableItems.Len() > 0 {
-					nonRetryableItems.WriteByte('\n')
-					bytes := nonRetryableItems.Bytes()
-					queue.Push(queue.GetOrInitConfig(joint.Config.InvalidRequestsQueue), bytes)
-					bytebufferpool.Put(nonRetryableItems)
-				}
-
-				if retryableItems.Len() > 0 {
-					retryableItems.WriteByte('\n')
-					bytes := retryableItems.Bytes()
-					queue.Push(queue.GetOrInitConfig(joint.Config.FailureRequestsQueue), bytes)
-					bytebufferpool.Put(retryableItems)
-				}
+				//if nonRetryableItems.Len() > 0 {
+				//	nonRetryableItems.WriteByte('\n')
+				//	bytes := nonRetryableItems.Bytes()
+				//	queue.Push(queue.GetOrInitConfig(joint.Config.InvalidRequestsQueue), bytes)
+				//	bytebufferpool.Put(nonRetryableItems)
+				//}
+				//
+				//if retryableItems.Len() > 0 {
+				//	retryableItems.WriteByte('\n')
+				//	bytes := retryableItems.Bytes()
+				//	queue.Push(queue.GetOrInitConfig(joint.Config.FailureRequestsQueue), bytes)
+				//	bytebufferpool.Put(retryableItems)
+				//}
 
 				//	//TODO retry 429 docs
 				//	//TODO handle partial failure
 
 				//save message bytes, with metadata, set codec to wrapped bulk messages
-				queue.Push(queue.GetOrInitConfig("failure_messages"), util.MustToJSONBytes(buffer.GetMessageStatus(true)))
+				queue.Push(queue.GetOrInitConfig("failure_messages"), util.MustToJSONBytes(util.MapStr{
+					"queue":buffer.Queue,
+					"status":buffer.StatusCode,
+				}))
 
 				return true,400, PARTIAL,nil
 			}

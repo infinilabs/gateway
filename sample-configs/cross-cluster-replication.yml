@@ -51,14 +51,12 @@ flow:
             then:
               - queue:
                   queue_name: "primary-failure"
-#              - stats:
               - drop:
           - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
               range:
                 _ctx.response.status.gte: 400
                 _ctx.response.status.lt: 500
             then:
-#              - stats:
               - drop:
           - if:
               in:
@@ -121,7 +119,6 @@ flow:
           - bulk_response_validate: #如果是 bulk 请求，还需要进一步验证是否存在部分请求失败的错误异常
               invalid_status: 400
               failure_status: 507
-              save_partial_success_requests: true
               partial_success_queue: "primary-partial-success_bulk_requests"
               invalid_queue: "primary-invalid_bulk_requests"
               failure_queue: "primary-failure_bulk_requests"
@@ -179,14 +176,12 @@ flow:
             then:
               - queue:
                   queue_name: "backup-failure"
-#              - stats:
               - drop:
           - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
               range:
                 _ctx.response.status.gte: 400
                 _ctx.response.status.lt: 500
             then:
-#              - stats:
               - queue:
                   queue_name: "backup-invalid"
               - drop:
@@ -218,8 +213,6 @@ flow:
           - retry_limiter:
               queue_name: "backup-deadletter_requests"
               max_retry_times: 60
-#          - dump:
-#              request: true
           - bulk_reshuffle:
               when:
                 contains:
@@ -246,17 +239,14 @@ flow:
             then:
               - queue:
                   queue_name: "backup-failure"
-#              - stats:
               - drop:
           - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
               range:
                 _ctx.response.status.gte: 400
                 _ctx.response.status.lt: 500
             then:
-#              - stats:
               - queue:
                   queue_name: "backup-invalid"
-#              - drop:
           - if:
               not:
                 in:
@@ -276,7 +266,6 @@ flow:
             - request_logging
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
-#      - stats:
       - context_filter:
           context: _ctx.request.path
           exclude:
@@ -336,8 +325,9 @@ elasticsearch:
   - name: backup
     enabled: true
     endpoints:
+#    - http://localhost:9200
     - http://192.168.3.188:9206
-    - http://192.168.3.188:9226
+#    - http://192.168.3.188:9226
     basic_auth:
       username: test
       password: testtest
@@ -348,6 +338,7 @@ elasticsearch:
         interval: 60s
 
 pipeline:
+  # pipelines for logging
   - name: request_logging_index
     auto_start: true
     keep_running: true
@@ -395,7 +386,7 @@ pipeline:
           when:
             cluster_available: [ "primary" ]
 
-# option C - pipelines for backup cluster
+# pipelines for backup cluster
   - name: queue_backup-failure-consumer
     auto_start: true
     keep_running: true
@@ -417,7 +408,9 @@ pipeline:
             and:
               - not:
                   or:
-                    - queue_has_lag: [ "primary-partial-success_bulk_requests"]
+#                    - queue_has_lag: [ "primary-partial-success_bulk_requests"]
+                    - consumer_has_lag:
+                        queue: "primary-partial-success_bulk_requests"
               - cluster_available: ["backup"]
 
   - name: queue_backup-bulk-partial-consumer

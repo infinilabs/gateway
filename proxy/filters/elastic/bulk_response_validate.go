@@ -39,8 +39,9 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 
 		nonRetryableItems := bytebufferpool.Get()
 		retryableItems := bytebufferpool.Get()
+		successItems := bytebufferpool.Get()
 
-		containError := HandleBulkResponse(this.config.SafetyParse, requestBytes, resbody, this.config.DocBufferSize, nonRetryableItems, retryableItems)
+		containError := HandleBulkResponse(this.config.SafetyParse, requestBytes, resbody, this.config.DocBufferSize, nonRetryableItems, retryableItems,successItems)
 		if containError {
 			if global.Env().IsDebug {
 				log.Error("error in bulk requests,", ctx.Response.StatusCode(), util.SubString(string(resbody), 0, 256))
@@ -66,6 +67,13 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 				ctx.Response.SetStatusCode(this.config.FailureStatus)
 			}
 
+			if successItems.Len() > 0 && this.config.SaveSuccessDocsToQueue {
+				successItems.WriteByte('\n')
+				bytes := ctx.Request.OverrideBodyEncode(successItems.Bytes(), true)
+				queue.Push(queue.GetOrInitConfig(this.config.PartialSuccessQueue), bytes)
+				bytebufferpool.Put(successItems)
+			}
+
 			if !this.config.ContinueOnError {
 				ctx.Finished()
 			}
@@ -73,7 +81,7 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 	}
 }
 
-func HandleBulkResponse(safetyParse bool, requestBytes, resbody []byte, docBuffSize int, nonRetryableItems, retryableItems *bytebufferpool.ByteBuffer) bool {
+func HandleBulkResponse(safetyParse bool, requestBytes, resbody []byte, docBuffSize int, nonRetryableItems, retryableItems,successItems *bytebufferpool.ByteBuffer) bool {
 	containError := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
 	if containError {
 		//decode response
@@ -101,8 +109,9 @@ func HandleBulkResponse(safetyParse bool, requestBytes, resbody []byte, docBuffS
 				validCount++
 			}
 		}
-
-		log.Debug("bulk status:", statsCodeStats)
+		if len(invalidOffset)>0{
+			log.Info("bulk status:", statsCodeStats)
+		}
 
 		for x, y := range statsCodeStats {
 			stats.IncrementBy("bulk_items", fmt.Sprintf("%v", x), int64(y))
@@ -137,6 +146,11 @@ func HandleBulkResponse(safetyParse bool, requestBytes, resbody []byte, docBuffS
 					}
 					retryableItems.Write(metaBytes)
 				}
+			}else {
+				if successItems.Len() > 0 {
+					successItems.WriteByte('\n')
+				}
+				successItems.Write(metaBytes)
 			}
 
 			offset++
@@ -156,6 +170,11 @@ func HandleBulkResponse(safetyParse bool, requestBytes, resbody []byte, docBuffS
 						nonRetryableItems.Write(payloadBytes)
 					}
 				}
+			}else {
+				if successItems.Len() > 0 {
+					successItems.WriteByte('\n')
+				}
+				successItems.Write(payloadBytes)
 			}
 		})
 
@@ -163,6 +182,7 @@ func HandleBulkResponse(safetyParse bool, requestBytes, resbody []byte, docBuffS
 	return containError
 }
 
+//TODO remove
 func HandleBulkResponse2(safetyParse bool, requestBytes, resbody []byte, docBuffSize int, reqBuffer *common.BulkBuffer,nonRetryableItems,retryableItems *bytebufferpool.ByteBuffer) bool {
 	containError := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
 	if containError {
@@ -194,7 +214,9 @@ func HandleBulkResponse2(safetyParse bool, requestBytes, resbody []byte, docBuff
 			}
 		}
 
-		log.Debug("bulk status:", statsCodeStats)
+		if len(invalidOffset)>0{
+			log.Info("bulk status:", statsCodeStats)
+		}
 
 		//de-dup
 		for x, y := range statsCodeStats {
@@ -285,6 +307,8 @@ func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 		FailureStatus: 507,
 		DocBufferSize: 256 * 1024,
 		SafetyParse:   true,
+		ContinueOnError: false,
+		SaveSuccessDocsToQueue: true,
 	}
 	if err := c.Unpack(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)

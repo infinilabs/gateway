@@ -187,6 +187,12 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 	}
 
 	for _, endpoint := range hosts {
+
+		if !elastic.IsHostAvailable(endpoint){
+			log.Info(endpoint," is not available")
+			continue
+		}
+
 		_, ok := p.hostClients[endpoint]
 		if !ok {
 			p.hostClients[endpoint] = &fasthttp.HostClient{

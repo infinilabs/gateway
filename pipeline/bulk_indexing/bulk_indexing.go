@@ -133,8 +133,6 @@ func (processor *BulkIndexingProcessor) Name() string {
 
 func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 
-	defer processor.wg.Wait()
-
 	defer func() {
 		if !global.Env().IsDebug {
 			if r := recover(); r != nil {
@@ -150,6 +148,7 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 				log.Error("error in bulk indexing processor,", v)
 			}
 		}
+		processor.wg.Wait()
 		log.Trace("exit bulk indexing processor")
 	}()
 
@@ -357,6 +356,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 	log.Debugf("starting worker:[%v], queue:[%v], host:[%v]",workerID, qConfig.Name, host)
 
 	mainBuf := common.AcquireBulkBuffer()
+	mainBuf.Queue=qConfig.Id
 	defer common.ReturnBulkBuffer(mainBuf)
 
 	var bulkProcessor elastic2.BulkProcessor
@@ -429,9 +429,6 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 	}
 	if bulkProcessor.Config.InvalidRequestsQueue == "" {
 		bulkProcessor.Config.InvalidRequestsQueue = fmt.Sprintf("%v-bulk-invalid-items", esClusterID)
-	}
-	if bulkProcessor.Config.PartialSuccessQueue == "" {
-		bulkProcessor.Config.PartialSuccessQueue = fmt.Sprintf("%v-bulk-partial-success-items", esClusterID)
 	}
 
 	var lastCommit time.Time = time.Now()
@@ -542,7 +539,7 @@ CLEAN_BUFFER:
 	//TODO, check bulk result, if ok, then commit offset, or retry non-200 requests, or save failure offset
 	continueNext:=processor.submitBulkRequest(esClusterID,meta,host,bulkProcessor,mainBuf)
 	if continueNext{
-		if offset!=""{
+		if offset!=""&&offset!=initOfffset{
 			ok,err:=queue.CommitOffset(qConfig,consumer,offset)
 			if !ok||err!=nil{
 				panic(err)

@@ -17,6 +17,13 @@ import (
 type Config struct {
 	FlowName   string `config:"flow"`
 	InputQueue string `config:"input_queue"`
+
+	FetchMinBytes    int `config:"fetch_min_bytes"`
+	FetchMaxBytes    int `config:"fetch_max_bytes"`
+	FetchMaxMessages int `config:"fetch_max_messages"`
+	FetchMaxWaitMs   int `config:"fetch_max_wait_ms"`
+
+
 }
 
 var ctxPool = &sync.Pool{
@@ -48,7 +55,11 @@ var signalChannel = make(chan bool, 1)
 
 
 func New(c *config.Config) (pipeline.Processor, error) {
-	cfg := Config{}
+	cfg := Config{
+		FetchMinBytes:   	1,
+		FetchMaxMessages:   100,
+		FetchMaxWaitMs:   10000,
+	}
 
 	if err := c.Unpack(&cfg); err != nil {
 		log.Error(err)
@@ -91,49 +102,67 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 	timeOut := 5
 	idleDuration := time.Duration(timeOut) * time.Second
 	flowProcessor := common.GetFlowProcess(processor.config.FlowName)
-	InputQCfg:=queue.GetOrInitConfig(processor.config.InputQueue)
+	qConfig :=queue.GetOrInitConfig(processor.config.InputQueue)
+	var consumer=queue.GetOrInitConsumerConfig(qConfig.Id,"group-001","consumer-001")
+	var initOfffset string
+	var offset string
 
 	READ_DOCS:
+		initOfffset,_=queue.GetOffset(qConfig,consumer)
+		offset=initOfffset
+
 		for {
 
 			if ctx.IsCanceled(){
 				return nil
 			}
 
-
 			select {
 			case <-signalChannel:
 				return nil
 			default:
-					pop,timeout,err := queue.PopTimeout(InputQCfg,idleDuration)
-					if err!=nil{
-						log.Error(err)
-						panic(err)
-					}
-					if timeout{
+				_,messages,timeout,err:=queue.Consume(qConfig,consumer.Name,offset,processor.config.FetchMaxMessages,time.Millisecond*time.Duration(processor.config.FetchMaxWaitMs))
+				if len(messages) > 0 {
+					for _,pop:=range messages {
+						if err!=nil{
+							log.Error(err)
+							panic(err)
+						}
+						if timeout{
 
-						if queue.Depth(InputQCfg)>0{
-							log.Warnf("%v %v no message but queue has lag, queue may broken",processor.config.InputQueue, idleDuration)
-						}else{
-							if global.Env().IsDebug {
-								log.Tracef("%v %v no message input",processor.config.InputQueue, idleDuration)
+							if queue.Depth(qConfig)>0{
+								log.Warnf("%v %v no message but queue has lag, queue may broken",processor.config.InputQueue, idleDuration)
+							}else{
+								if global.Env().IsDebug {
+									log.Tracef("%v %v no message input",processor.config.InputQueue, idleDuration)
+								}
 							}
+
+							goto READ_DOCS
 						}
 
-						goto READ_DOCS
-					}
+						ctx := acquireCtx()
+						err = ctx.Request.Decode(pop.Data)
+						if err != nil {
+							log.Error(err)
+							panic(err)
+						}
 
-					ctx := acquireCtx()
-					err = ctx.Request.Decode(pop)
-					if err != nil {
-						log.Error(err)
+						flowProcessor(ctx)
+
+						releaseCtx(ctx)
+
+						offset=pop.NextOffset
+					}
+				}
+				if offset!=""&&offset!=initOfffset{
+					ok,err:=queue.CommitOffset(qConfig,consumer,offset)
+					if !ok||err!=nil{
 						panic(err)
 					}
-
-					flowProcessor(ctx)
-
-					releaseCtx(ctx)
 				}
+
+			}
 		}
 
 	return nil

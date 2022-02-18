@@ -6,15 +6,17 @@ import (
 )
 
 type BulkBuffer struct {
+	Queue string
 	Buffer *bytebufferpool.ByteBuffer
 	MessageIDs []string
-	StatusCode []int
+	StatusCode map[int]int
 }
 
 var bulkBufferPool= &sync.Pool {
 	New: func()interface{} {
 		v:= new(BulkBuffer)
 		v.Buffer=bytebufferpool.Get()
+		v.Reset()
 		return v
 	},
 }
@@ -73,8 +75,9 @@ func (receiver *BulkBuffer) GetMessageStatus(non200Only bool)map[string]int {
 }
 func (receiver *BulkBuffer) Reset() {
 	receiver.Buffer.Reset()
+	receiver.Queue=""
 	receiver.MessageIDs=receiver.MessageIDs[:0]
-	receiver.StatusCode=receiver.StatusCode[:0]
+	receiver.StatusCode=map[int]int{}
 }
 
 func (receiver *BulkBuffer) SetResponseStatus(i int, status int) {
