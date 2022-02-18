@@ -40,7 +40,7 @@ flow:
               max_connection_per_node: 1000
           - bulk_response_validate:
               invalid_status: 400
-              failure_status: 200
+              failure_status: 507
               save_partial_success_requests: true
               partial_success_queue: "primary-partial-success_bulk_requests"
               invalid_queue: "primary-invalid_bulk_requests"
@@ -120,7 +120,7 @@ flow:
               max_connection_per_node: 1000
           - bulk_response_validate: #如果是 bulk 请求，还需要进一步验证是否存在部分请求失败的错误异常
               invalid_status: 400
-              failure_status: 200
+              failure_status: 507
               partial_success_queue: "primary-partial-success_bulk_requests"
               invalid_queue: "primary-invalid_bulk_requests"
               failure_queue: "primary-failure_bulk_requests"
@@ -168,7 +168,7 @@ flow:
               max_connection_per_node: 1000
           - bulk_response_validate:
               invalid_status: 400
-              failure_status: 200
+              failure_status: 507
               save_partial_success_requests: false
               invalid_queue: "backup-invalid"
               failure_queue: "backup-failure"
@@ -231,7 +231,7 @@ flow:
               max_connection_per_node: 1000
           - bulk_response_validate:
               invalid_status: 400
-              failure_status: 200
+              failure_status: 507
               save_partial_success_requests: false
               invalid_queue: "backup-invalid"
               failure_queue: "backup-failure"
