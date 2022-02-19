@@ -169,7 +169,6 @@ flow:
               max_connection_per_node: 1000
           - bulk_response_process:
               continue_on_error: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
-              save_partial_success_requests: false #执行成功的不需要保存
               invalid_queue: "backup-invalid"
               failure_queue: "backup-failure"
               when:
@@ -231,7 +230,6 @@ flow:
               max_connection_per_node: 1000
           - bulk_response_process:
               continue_on_error: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
-              save_partial_success_requests: false # 执行成功的请求不需要继续处理
               invalid_queue: "backup-invalid"
               failure_queue: "backup-failure"
               when:

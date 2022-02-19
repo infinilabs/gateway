@@ -61,7 +61,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 				bytebufferpool.Put(retryableItems)
 			}
 
-			if successItems.Len() > 0 && this.config.SaveSuccessDocsToQueue {
+			if successItems.Len() > 0 && this.config.SuccessQueue!="" {
 				successItems.WriteByte('\n')
 				bytes := ctx.Request.OverrideBodyEncode(successItems.Bytes(), true)
 				queue.Push(queue.GetOrInitConfig(this.config.SuccessQueue), bytes)
@@ -276,9 +276,6 @@ type Config struct {
 	SafetyParse bool `config:"safety_parse"`
 
 	DocBufferSize int `config:"doc_buffer_size"`
-
-	SaveSuccessDocsToQueue bool `config:"save_partial_success_requests"`
-
 	SuccessQueue string `config:"success_queue"`
 	InvalidQueue string `config:"invalid_queue"`
 	FailureQueue string `config:"failure_queue"`
@@ -297,7 +294,6 @@ func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 		DocBufferSize: 256 * 1024,
 		SafetyParse:   true,
 		ContinueOnError: false,
-		SaveSuccessDocsToQueue: false,
 	}
 	if err := c.Unpack(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
