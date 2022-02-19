@@ -61,7 +61,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		DocBufferSize: 256*1024,
 		SafetyParse: true,
 		FetchMinBytes:   	1,
-		FetchMaxMessages:   100,
+		FetchMaxMessages:   10,
 		FetchMaxWaitMs:   10000,
 	}
 
@@ -178,6 +178,7 @@ READ_DOCS:
 		if len(waitingAfter) > 0 {
 			for _, v := range waitingAfter {
 				qCfg:=queue.GetOrInitConfig(v)
+				//TODO handle consumer type
 				depth := queue.Depth(qCfg)
 				if depth > 0 {
 					log.Debugf("%v has pending %v messages, cleanup it first", v, depth)
@@ -326,7 +327,7 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 			retryableItems := bytebufferpool.Get()
 			successItems := bytebufferpool.Get()
 
-
+			//TODO remove
 			containError:=es.HandleBulkResponse(processor.config.SafetyParse,requestBytes,resbody,processor.config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
 			if containError {
 
@@ -355,7 +356,10 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 				}
 
 				//save message bytes, with metadata, set codec to wrapped bulk messages
-				queue.Push(queue.GetOrInitConfig("failure_messages"), util.MustToJSONBytes(msg.Offset))
+				queue.Push(queue.GetOrInitConfig("failure_messages"), util.MustToJSONBytes(util.MapStr{
+					"offset":msg.Offset,
+					"response":string(resbody),
+				}))
 
 
 			}

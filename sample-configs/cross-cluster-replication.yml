@@ -24,7 +24,7 @@ flow:
           - elasticsearch:
               elasticsearch: "backup"
 
-  - name: primary-flow-post-processing
+  - name: primary-flow-post-processing #主集群的请求离线回放
     filter:
 #      - set_basic_auth: #覆盖身份信息
 #          username: elastic
@@ -34,25 +34,27 @@ flow:
         then:
           - retry_limiter:
               queue_name: "primary-deadletter_requests"
+              retry_interval_in_ms: 1000
               max_retry_times: 60
           - elasticsearch:
               elasticsearch: "primary"
               max_connection_per_node: 1000
-          - bulk_response_validate:
-              invalid_status: 400
-              failure_status: 507
-              save_partial_success_requests: true
-              partial_success_queue: "primary-partial-success_bulk_requests"
-              invalid_queue: "primary-invalid_bulk_requests"
-              failure_queue: "primary-failure_bulk_requests"
+          - bulk_response_process:
+              continue_on_error: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
+              success_queue: "backup" #执行成功的请求可以复制到备份集群
+              invalid_queue: "primary-deadletter_requests" #离线回放的时候的错误请求，直接进死信队列，只能人工处理
+              failure_queue: "primary-post-processing-failure" #重放还失败的请求，TODO panic，发起重试
+              when:
+                contains:
+                  _ctx.request.path: /_bulk
           - if: #429 重试
               in:
                 _ctx.response.status: [ 429 ]
             then:
               - queue:
-                  queue_name: "primary-failure"
+                  queue_name: "primary-post-processing-failure"
               - drop:
-          - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
+          - if: #不合法的请求，403,404,413,400，直接丢弃，不用入队列
               range:
                 _ctx.response.status.gte: 400
                 _ctx.response.status.lt: 500
@@ -60,7 +62,7 @@ flow:
               - drop:
           - if:
               in:
-                _ctx.response.status: [ 200,201 ]
+                _ctx.response.status: [ 200,201,404 ]
             then:
 #              - set_basic_auth: #覆盖身份信息
 #                  username: test
@@ -69,25 +71,23 @@ flow:
                   queue_name: "backup"
             else:
               - queue:
-                  queue_name: "primary-failure"
+                  queue_name: "primary-post-processing-failure"
         else:
           - queue:
-              queue_name: "primary-failure"
+              queue_name: "primary-post-processing-failure"
           - elasticsearch_health_check:
               elasticsearch: "primary"
           - sleep:
               sleep_in_million_seconds: 5000
-      - flow:
-          flows:
-            - request_logging
-  - name: primary-write-flow
+
+  - name: primary-write-flow #正常的主写流程
     filter:
 #      - set_basic_auth: #覆盖身份信息
 #          username: elastic
 #          password: changeme
       - if:
           and:
-            - queue_has_lag: [ "primary", "primary-failure", "primary-failure_bulk_requests"]
+            - queue_has_lag: [ "primary", "primary-failure"]
             - cluster_available: ["primary"]
         then: #集群可用但是集群有堆积的情况，不处理客户端请求，待服务恢复之后再提供服务
           - set_response:
@@ -109,6 +109,8 @@ flow:
               - drop:
           - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
               fix_null_id: true
+              fix_null_type: true
+              default_type: _doc
               type_rename:
                 "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
               generate_enhanced_id: true
@@ -118,12 +120,11 @@ flow:
           - elasticsearch: #集群可用，直接处理请求
               elasticsearch: "primary"
               max_connection_per_node: 1000
-          - bulk_response_validate: #如果是 bulk 请求，还需要进一步验证是否存在部分请求失败的错误异常
-              invalid_status: 400
-              failure_status: 507
-              partial_success_queue: "primary-partial-success_bulk_requests"
-              invalid_queue: "primary-invalid_bulk_requests"
-              failure_queue: "primary-failure_bulk_requests"
+          - bulk_response_process: #如果是 bulk 请求，还需要进一步验证是否存在部分请求失败的错误异常
+              continue_on_error: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
+              success_queue: "backup" #已经写入成功的请求，发送到备份集群的队列，进行复制
+              invalid_queue: "primary-invalid" #TODO 记录日志，请求和响应结果
+              failure_queue: "primary-failure" # 记录完整请求到失败队列，可以根据需要重做
               when:
                 contains:
                   _ctx.request.path: /_bulk
@@ -142,7 +143,7 @@ flow:
               - drop:
           - if: #正常的请求, 复制到备份集群
               in:
-                _ctx.response.status: [200,201]
+                _ctx.response.status: [200,201,404]
             then: #仅正常处理的集群才转发给后端集群
 #              - set_basic_auth: #覆盖身份信息
 #                  username: test
@@ -166,12 +167,14 @@ flow:
           - elasticsearch:
               elasticsearch: "backup"
               max_connection_per_node: 1000
-          - bulk_response_validate:
-              invalid_status: 400
-              failure_status: 507
-              save_partial_success_requests: false
+          - bulk_response_process:
+              continue_on_error: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
+              save_partial_success_requests: false #执行成功的不需要保存
               invalid_queue: "backup-invalid"
               failure_queue: "backup-failure"
+              when:
+                contains:
+                  _ctx.request.path: /_bulk
           - if: #429 重试
               in:
                 _ctx.response.status: [ 429 ]
@@ -201,9 +204,6 @@ flow:
               elasticsearch: "backup"
           - sleep:
               sleep_in_million_seconds: 5000
-      - flow:
-          flows:
-            - request_logging
   - name: backup-flow-reshuffle-replicate-processing
     filter:
 #      - set_basic_auth: #覆盖身份信息
@@ -229,12 +229,14 @@ flow:
           - elasticsearch:
               elasticsearch: "backup"
               max_connection_per_node: 1000
-          - bulk_response_validate:
-              invalid_status: 400
-              failure_status: 507
-              save_partial_success_requests: false
+          - bulk_response_process:
+              continue_on_error: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
+              save_partial_success_requests: false # 执行成功的请求不需要继续处理
               invalid_queue: "backup-invalid"
               failure_queue: "backup-failure"
+              when:
+                contains:
+                  _ctx.request.path: /_bulk
           - if: #429 重试
               in:
                 _ctx.response.status: [ 429 ]
@@ -263,9 +265,6 @@ flow:
               elasticsearch: "backup"
           - sleep:
               sleep_in_million_seconds: 5000
-      - flow:
-          flows:
-            - request_logging
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
       - context_filter:
@@ -313,6 +312,7 @@ elasticsearch:
   - name: primary
     enabled: true
     endpoints:
+#    - http://localhost:9200
     - http://192.168.3.188:9204
     basic_auth:
       username: elastic
@@ -329,7 +329,7 @@ elasticsearch:
     endpoints:
 #    - http://localhost:9200
     - http://192.168.3.188:9206
-#    - http://192.168.3.188:9226
+    - http://192.168.3.98:9200
     basic_auth:
       username: test
       password: testtest
@@ -371,31 +371,15 @@ pipeline:
           flow: primary-flow-post-processing
           when:
             cluster_available: [ "primary" ]
-  - name: queue_primary-bulk-failure-consumer
-    auto_start: true
-    keep_running: true
-    processor:
-      - flow_runner:
-          input_queue: "primary-failure_bulk_requests"
-          flow: primary-flow-post-processing
-          when:
-            cluster_available: [ "primary" ]
-  - name: queue_primary-invalid_bulk_requests-consumer
-    processor:
-      - flow_runner:
-          input_queue: "primary-invalid_bulk_requests"
-          flow: primary-flow-post-processing
-          when:
-            cluster_available: [ "primary" ]
 
-# pipelines for backup cluster
+# option A - pipelines for backup cluster - safety first, each requests are replicated in order, the speed may slow
   - name: queue_backup-failure-consumer
     auto_start: true
     keep_running: true
     processor:
       - flow_runner:
           input_queue: "backup-failure"
-          flow: backup-flow-reshuffle-replicate-processing
+          flow: backup-flow-replicate-processing
           when:
             cluster_available: [ "backup" ]
 
@@ -405,33 +389,41 @@ pipeline:
     processor:
       - flow_runner:
           input_queue: "backup"
-          flow: backup-flow-reshuffle-replicate-processing
+          flow: backup-flow-replicate-processing
           when:
             and:
               - not:
                   or:
-#                    - queue_has_lag: [ "primary-partial-success_bulk_requests"]
-                    - consumer_has_lag:
-                        queue: "primary-partial-success_bulk_requests"
+                    - queue_has_lag: [ "backup-failure"]
               - cluster_available: ["backup"]
 
-  - name: queue_backup-bulk-partial-consumer
-    auto_start: true
-    keep_running: true
-    processor:
-      - flow_runner:
-          input_queue: "primary-partial-success_bulk_requests"
-          flow: backup-flow-reshuffle-replicate-processing
-          when:
-            cluster_available: [ "backup" ]
-
-  - name: queue_backup-bulk_request_ingest
-    auto_start: true
-    keep_running: true
-    processor:
-      - bulk_indexing:
-          when:
-            cluster_available: [ "backup" ]
-          bulk_size_in_mb: 10
-          queues:
-            type: bulk_reshuffle
+## option B - pipelines for backup cluster
+#  - name: queue_backup-consumer
+#    auto_start: true
+#    keep_running: true
+#    processor:
+#      - flow_runner:
+#          input_queue: "backup"
+#          flow: backup-flow-reshuffle-replicate-processing
+#          when:
+#            and:
+#              - cluster_available: ["backup"]
+#  - name: queue_backup-failure-consumer
+#    auto_start: true
+#    keep_running: true
+#    processor:
+#      - flow_runner:
+#          input_queue: "backup-failure"
+#          flow: backup-flow-reshuffle-replicate-processing
+#          when:
+#            cluster_available: [ "backup" ]
+#  - name: queue_backup-bulk_request_ingest
+#    auto_start: true
+#    keep_running: true
+#    processor:
+#      - bulk_indexing:
+#          when:
+#            cluster_available: [ "backup" ]
+#          bulk_size_in_mb: 10
+#          queues:
+#            type: bulk_reshuffle

@@ -19,15 +19,15 @@ import (
 	"net/http"
 )
 
-type BulkResponseValidate struct {
+type BulkResponseProcess struct {
 	config *Config
 }
 
-func (this *BulkResponseValidate) Name() string {
-	return "bulk_response_validate"
+func (this *BulkResponseProcess) Name() string {
+	return "bulk_response_process"
 }
 
-func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
+func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 	path := string(ctx.URI().Path())
 	if string(ctx.Request.Header.Method()) != "POST" || !util.ContainStr(path, "_bulk") {
 		return
@@ -61,16 +61,16 @@ func (this *BulkResponseValidate) Filter(ctx *fasthttp.RequestCtx) {
 				bytebufferpool.Put(retryableItems)
 			}
 
-			if nonRetryableItems.Len() > 0 {
-				ctx.Response.SetStatusCode(this.config.InvalidStatus)
-			} else {
-				ctx.Response.SetStatusCode(this.config.FailureStatus)
-			}
+			//if nonRetryableItems.Len() > 0 {
+			//	ctx.Response.SetStatusCode(this.config.InvalidStatus)
+			//} else {
+			//	ctx.Response.SetStatusCode(this.config.FailureStatus)
+			//}
 
 			if successItems.Len() > 0 && this.config.SaveSuccessDocsToQueue {
 				successItems.WriteByte('\n')
 				bytes := ctx.Request.OverrideBodyEncode(successItems.Bytes(), true)
-				queue.Push(queue.GetOrInitConfig(this.config.PartialSuccessQueue), bytes)
+				queue.Push(queue.GetOrInitConfig(this.config.SuccessQueue), bytes)
 				bytebufferpool.Put(successItems)
 			}
 
@@ -110,7 +110,7 @@ func HandleBulkResponse(safetyParse bool, requestBytes, resbody []byte, docBuffS
 			}
 		}
 		if len(invalidOffset)>0{
-			log.Info("bulk status:", statsCodeStats)
+			log.Debug("bulk status:", statsCodeStats)
 		}
 
 		for x, y := range statsCodeStats {
@@ -282,38 +282,30 @@ type Config struct {
 
 	SaveSuccessDocsToQueue bool `config:"save_partial_success_requests"`
 
-	PartialSuccessQueue string `config:"partial_success_queue"`
-
+	SuccessQueue string `config:"success_queue"`
 	InvalidQueue string `config:"invalid_queue"`
-
 	FailureQueue string `config:"failure_queue"`
-
-	InvalidStatus int `config:"invalid_status"`
-
-	FailureStatus int `config:"failure_status"`
 
 	ContinueOnError bool `config:"continue_on_error"`
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("bulk_response_validate", pipeline.FilterConfigChecked(NewBulkResponseValidate,
+	pipeline.RegisterFilterPluginWithConfigMetadata("bulk_response_process", pipeline.FilterConfigChecked(NewBulkResponseValidate,
 		pipeline.RequireFields("invalid_queue"),
 		pipeline.RequireFields("failure_queue"), ),&Config{})
 }
 
 func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 	cfg := Config{
-		InvalidStatus: 400,
-		FailureStatus: 507,
 		DocBufferSize: 256 * 1024,
 		SafetyParse:   true,
 		ContinueOnError: false,
-		SaveSuccessDocsToQueue: true,
+		SaveSuccessDocsToQueue: false,
 	}
 	if err := c.Unpack(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
-	runner := BulkResponseValidate{config: &cfg}
+	runner := BulkResponseProcess{config: &cfg}
 
 	return &runner, nil
 }

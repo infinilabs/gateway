@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"math/rand"
-	"strings"
 	"sync"
 	"time"
 
@@ -166,14 +165,6 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 			}
 
 			endpoint:=y.GetHttpPublishHost()
-			arry:=strings.Split(endpoint,":")
-			if len(arry)==2{
-				if !util.TestTCPPort(arry[0],arry[1]){
-					log.Debugf("[%v] endpoint [%v] is not available",y.Name,endpoint)
-					continue
-				}
-			}
-
 			hosts = append(hosts, endpoint)
 		}
 		log.Tracef("discovery %v nodes: [%v]", len(hosts), util.JoinArray(hosts, ", "))
@@ -186,13 +177,12 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		}
 	}
 
+	newHosts:=[]string{}
 	for _, endpoint := range hosts {
-
 		if !elastic.IsHostAvailable(endpoint){
-			log.Info(endpoint," is not available")
+			log.Debug(endpoint," is not available")
 			continue
 		}
-
 		_, ok := p.hostClients[endpoint]
 		if !ok {
 			p.hostClients[endpoint] = &fasthttp.HostClient{
@@ -246,6 +236,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 			w = 1
 		}
 		ws = append(ws, w)
+		newHosts = append(newHosts, endpoint)
 	}
 
 	if len(p.hostClients) == 0 {
@@ -253,7 +244,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		return
 	}
 
-	if util.JoinArray(hosts, ", ")==util.JoinArray(p.endpoints, ", "){
+	if util.JoinArray(newHosts, ", ")==util.JoinArray(p.endpoints, ", "){
 		log.Debug("hosts no change, skip")
 		return
 	}
@@ -261,8 +252,8 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 	//replace with new hostClients
 	//TODO add locker
 	p.bla = balancer.NewBalancer(ws)
-	log.Infof("elasticsearch [%v] hosts: [%v] => [%v]", esConfig.Name, util.JoinArray(p.endpoints, ", "), util.JoinArray(hosts, ", "))
-	p.endpoints = hosts
+	log.Infof("elasticsearch [%v] hosts: [%v] => [%v]", esConfig.Name, util.JoinArray(p.endpoints, ", "), util.JoinArray(newHosts, ", "))
+	p.endpoints = newHosts
 	log.Trace(esConfig.Name, " elasticsearch client nodes refreshed")
 
 }

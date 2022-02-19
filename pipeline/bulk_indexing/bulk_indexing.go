@@ -180,6 +180,10 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 				}()
 
 				for {
+					if c.IsCanceled() {
+						return
+					}
+
 					log.Tracef("inflight queues: %v",util.MapLength(&processor.inFlightQueueConfigs))
 
 					if global.Env().IsDebug{
