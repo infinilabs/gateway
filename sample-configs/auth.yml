@@ -1,0 +1,29 @@
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 200000
+    network:
+      binding: 0.0.0.0:8000
+
+flow:
+  - name: auth-flow
+    filter:
+      - basic_auth:
+          valid_users:
+            medcl: passwd
+  - name: hello_world
+    filter:
+      - flow:
+          flows:
+            - auth-flow
+      - echo:
+          message: "your are in."
+router:
+  - name: my_router
+    default_flow: hello_world
+
+#  curl localhost:8000 -u medcl:passwd
