@@ -276,9 +276,12 @@ flow:
           max_request_body_size: 1024
           max_response_body_size: 1024
           when:
-            not:
-              equals:
-                _ctx.response.status: 200
+            or:
+              - equals:
+                  _ctx.response.header.X-BulkRequest-Failed: "true"
+              - not:
+                  in:
+                    _ctx.response.status: [ 200,201,404 ]
 
 router:
   - name: my_router

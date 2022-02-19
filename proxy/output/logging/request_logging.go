@@ -166,6 +166,18 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 		request.Response.LocalAddr = ctx.Response.LocalAddr().String()
 	}
 
+	if request.Elastic == nil {
+		request.Elastic = map[string]interface{}{}
+	}
+
+	bulk_status := map[string]interface{}{}
+	if ctx.Has("bulk_response_status") {
+		responseStats := ctx.Get("bulk_response_status")
+		if responseStats!=nil{
+			bulk_status["status"] = responseStats
+		}
+	}
+
 	if ctx.Has("bulk_index_stats") {
 		if request.Elastic == nil {
 			request.Elastic = map[string]interface{}{}
@@ -178,7 +190,6 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 				docs += v
 			}
 
-			bulk_status := map[string]interface{}{}
 			bulk_status["indices"] = len(statsObj)
 			bulk_status["documents"] = docs
 
@@ -190,14 +201,14 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 				bulk_status["stats"] = stats
 			}
 
-			request.Elastic["bulk_stats"] = bulk_status
 		}
 	}
 
+	if len(bulk_status)>0{
+		request.Elastic["bulk_stats"] = bulk_status
+	}
+
 	if ctx.Has("elastic_cluster_name") {
-		if request.Elastic == nil {
-			request.Elastic = map[string]interface{}{}
-		}
 		stats := ctx.Get("elastic_cluster_name")
 		request.Elastic["cluster_name"] = stats
 	}

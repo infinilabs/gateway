@@ -41,7 +41,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 		retryableItems := bytebufferpool.Get()
 		successItems := bytebufferpool.Get()
 
-		containError := HandleBulkResponse(this.config.SafetyParse, requestBytes, resbody, this.config.DocBufferSize, nonRetryableItems, retryableItems,successItems)
+		containError := this.HandleBulkResponse(ctx,this.config.SafetyParse, requestBytes, resbody, this.config.DocBufferSize, nonRetryableItems, retryableItems,successItems)
 		if containError {
 			if global.Env().IsDebug {
 				log.Error("error in bulk requests,", ctx.Response.StatusCode(), util.SubString(string(resbody), 0, 256))
@@ -61,12 +61,6 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 				bytebufferpool.Put(retryableItems)
 			}
 
-			//if nonRetryableItems.Len() > 0 {
-			//	ctx.Response.SetStatusCode(this.config.InvalidStatus)
-			//} else {
-			//	ctx.Response.SetStatusCode(this.config.FailureStatus)
-			//}
-
 			if successItems.Len() > 0 && this.config.SaveSuccessDocsToQueue {
 				successItems.WriteByte('\n')
 				bytes := ctx.Request.OverrideBodyEncode(successItems.Bytes(), true)
@@ -81,7 +75,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 	}
 }
 
-func HandleBulkResponse(safetyParse bool, requestBytes, resbody []byte, docBuffSize int, nonRetryableItems, retryableItems,successItems *bytebufferpool.ByteBuffer) bool {
+func (this *BulkResponseProcess) HandleBulkResponse(ctx *fasthttp.RequestCtx,safetyParse bool, requestBytes, resbody []byte, docBuffSize int, nonRetryableItems, retryableItems,successItems *bytebufferpool.ByteBuffer) bool {
 	containError := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
 	if containError {
 		//decode response
@@ -116,6 +110,9 @@ func HandleBulkResponse(safetyParse bool, requestBytes, resbody []byte, docBuffS
 		for x, y := range statsCodeStats {
 			stats.IncrementBy("bulk_items", fmt.Sprintf("%v", x), int64(y))
 		}
+
+		ctx.Set("bulk_response_status",statsCodeStats)
+		ctx.Response.Header.Set("X-BulkRequest-Failed","true")
 
 		var offset = 0
 		var match = false
