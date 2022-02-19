@@ -15,6 +15,7 @@ type RetryLimiter struct {
 	MaxRetryTimes int    `config:"max_retry_times"`
 	SleepInterval int    `config:"retry_interval_in_ms"`
 	Queue         string `config:"queue_name"`
+	AddTags         []string `config:"add_tag"` //hit limiter then add tag
 }
 
 func (filter *RetryLimiter) Name() string {
@@ -40,6 +41,9 @@ func (filter *RetryLimiter) Filter(ctx *fasthttp.RequestCtx) {
 		ctx.Request.Header.Del(RetryKey)
 		queue.Push(queue.GetOrInitConfig(filter.Queue), ctx.Request.Encode())
 		time.Sleep(time.Duration(filter.SleepInterval) * time.Millisecond)
+		if len(filter.AddTags)>0{
+			ctx.UpdateTags(filter.AddTags,nil)
+		}
 		return
 	}
 

@@ -24,62 +24,6 @@ flow:
           - elasticsearch:
               elasticsearch: "backup"
 
-  - name: primary-flow-post-processing #主集群的请求离线回放
-    filter:
-#      - set_basic_auth: #覆盖身份信息
-#          username: elastic
-#          password: changeme
-      - if:
-          cluster_available: ["primary"]
-        then:
-          - retry_limiter:
-              queue_name: "primary-deadletter_requests"
-              retry_interval_in_ms: 1000
-              max_retry_times: 60
-          - elasticsearch:
-              elasticsearch: "primary"
-              max_connection_per_node: 1000
-          - bulk_response_process:
-              continue_on_error: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
-              success_queue: "backup" #执行成功的请求可以复制到备份集群
-              invalid_queue: "primary-deadletter_requests" #离线回放的时候的错误请求，直接进死信队列，只能人工处理
-              failure_queue: "primary-post-processing-failure" #重放还失败的请求，TODO panic，发起重试
-              when:
-                contains:
-                  _ctx.request.path: /_bulk
-          - if: #429 重试
-              in:
-                _ctx.response.status: [ 429 ]
-            then:
-              - queue:
-                  queue_name: "primary-post-processing-failure"
-              - drop:
-          - if: #不合法的请求，403,404,413,400，直接丢弃，不用入队列
-              range:
-                _ctx.response.status.gte: 400
-                _ctx.response.status.lt: 500
-            then:
-              - drop:
-          - if:
-              in:
-                _ctx.response.status: [ 200,201,404 ]
-            then:
-#              - set_basic_auth: #覆盖身份信息
-#                  username: test
-#                  password: testtest
-              - queue:
-                  queue_name: "backup"
-            else:
-              - queue:
-                  queue_name: "primary-post-processing-failure"
-        else:
-          - queue:
-              queue_name: "primary-post-processing-failure"
-          - elasticsearch_health_check:
-              elasticsearch: "primary"
-          - sleep:
-              sleep_in_million_seconds: 5000
-
   - name: primary-write-flow #正常的主写流程
     filter:
 #      - set_basic_auth: #覆盖身份信息
@@ -133,7 +77,7 @@ flow:
                 _ctx.response.status: [ 429 ]
             then:
               - queue:
-                  queue_name: "primary-failure"
+                  queue_name: "primary-429"
               - drop:
           - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
               range:
@@ -164,13 +108,13 @@ flow:
           - retry_limiter:
               queue_name: "backup-deadletter_requests"
               max_retry_times: 60
+              add_tag: ["commit_message_allowed"]
           - elasticsearch:
               elasticsearch: "backup"
               max_connection_per_node: 1000
           - bulk_response_process:
               continue_on_error: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
               invalid_queue: "backup-invalid"
-              failure_queue: "backup-failure"
               when:
                 contains:
                   _ctx.request.path: /_bulk
@@ -178,8 +122,6 @@ flow:
               in:
                 _ctx.response.status: [ 429 ]
             then:
-              - queue:
-                  queue_name: "backup-failure"
               - drop:
           - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
               range:
@@ -194,71 +136,11 @@ flow:
                 in:
                   _ctx.response.status: [ 200,201,404 ]
             then:
-              - queue:
-                  queue_name: "backup-failure"
-        else:
-          - queue:
-              queue_name: "backup-failure"
-          - elasticsearch_health_check:
-              elasticsearch: "backup"
-          - sleep:
-              sleep_in_million_seconds: 5000
-  - name: backup-flow-reshuffle-replicate-processing
-    filter:
-#      - set_basic_auth: #覆盖身份信息
-#          username: elastic
-#          password: changeme
-      - if:
-          cluster_available: ["backup"]
-        then:
-          - retry_limiter:
-              queue_name: "backup-deadletter_requests"
-              max_retry_times: 60
-          - bulk_reshuffle:
-              when:
-                contains:
-                  _ctx.request.path: /_bulk
-              elasticsearch: "backup"
-              level: partition #cluster,node,shard,partition
-              partition_size: 10
-              mode: async
-              fix_null_id: true
-          - echo:
-              message: "skip bulk reshuffle\n"
-          - elasticsearch:
-              elasticsearch: "backup"
-              max_connection_per_node: 1000
-          - bulk_response_process:
-              continue_on_error: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
-              invalid_queue: "backup-invalid"
-              failure_queue: "backup-failure"
-              when:
-                contains:
-                  _ctx.request.path: /_bulk
-          - if: #429 重试
-              in:
-                _ctx.response.status: [ 429 ]
-            then:
-              - queue:
-                  queue_name: "backup-failure"
               - drop:
-          - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
-              range:
-                _ctx.response.status.gte: 400
-                _ctx.response.status.lt: 500
-            then:
-              - queue:
-                  queue_name: "backup-invalid"
-          - if:
-              not:
-                in:
-                  _ctx.response.status: [ 200,201,404 ]
-            then:
-              - queue:
-                  queue_name: "backup-failure"
+            else:
+              - tag:
+                  add: ["commit_message_allowed"]
         else:
-          - queue:
-              queue_name: "backup-failure"
           - elasticsearch_health_check:
               elasticsearch: "backup"
           - sleep:
@@ -281,6 +163,7 @@ flow:
                   in:
                     _ctx.response.status: [ 200,201,404 ]
 
+#_delete_by_query not supported
 router:
   - name: my_router
     default_flow: primary-write-flow
@@ -329,8 +212,9 @@ elasticsearch:
     enabled: true
     endpoints:
 #    - http://localhost:9200
-    - http://192.168.3.188:9206
-    - http://192.168.3.98:9200
+    - http://192.168.3.188:9207
+#    - http://192.168.3.188:9206
+#    - http://192.168.3.98:9200
     basic_auth:
       username: test
       password: testtest
@@ -364,8 +248,8 @@ pipeline:
           when:
             cluster_available: [ "primary" ]
   - name: queue_primary-failure-consumer
-    auto_start: true
-    keep_running: true
+    auto_start: false
+    keep_running: false
     processor:
       - flow_runner:
           input_queue: "primary-failure"
@@ -374,16 +258,6 @@ pipeline:
             cluster_available: [ "primary" ]
 
 # option A - pipelines for backup cluster - safety first, each requests are replicated in order, the speed may slow
-  - name: queue_backup-failure-consumer
-    auto_start: true
-    keep_running: true
-    processor:
-      - flow_runner:
-          input_queue: "backup-failure"
-          flow: backup-flow-replicate-processing
-          when:
-            cluster_available: [ "backup" ]
-
   - name: queue_backup-consumer
     auto_start: true
     keep_running: true
@@ -391,11 +265,9 @@ pipeline:
       - flow_runner:
           input_queue: "backup"
           flow: backup-flow-replicate-processing
+          commit_on_tag: "commit_message_allowed"
           when:
             and:
-              - not:
-                  or:
-                    - queue_has_lag: [ "backup-failure"]
               - cluster_available: ["backup"]
 
 ## option B - pipelines for backup cluster

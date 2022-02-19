@@ -47,14 +47,14 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 				log.Error("error in bulk requests,", ctx.Response.StatusCode(), util.SubString(string(resbody), 0, 256))
 			}
 
-			if nonRetryableItems.Len() > 0 {
+			if nonRetryableItems.Len() > 0 && this.config.InvalidQueue!="" {
 				nonRetryableItems.WriteByte('\n')
 				bytes := ctx.Request.OverrideBodyEncode(nonRetryableItems.Bytes(), true)
 				queue.Push(queue.GetOrInitConfig(this.config.InvalidQueue), bytes)
 				bytebufferpool.Put(nonRetryableItems)
 			}
 
-			if retryableItems.Len() > 0 {
+			if retryableItems.Len() > 0&& this.config.FailureQueue!=""  {
 				retryableItems.WriteByte('\n')
 				bytes := ctx.Request.OverrideBodyEncode(retryableItems.Bytes(), true)
 				queue.Push(queue.GetOrInitConfig(this.config.FailureQueue), bytes)
@@ -284,9 +284,7 @@ type Config struct {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("bulk_response_process", pipeline.FilterConfigChecked(NewBulkResponseValidate,
-		pipeline.RequireFields("invalid_queue"),
-		pipeline.RequireFields("failure_queue"), ),&Config{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("bulk_response_process", NewBulkResponseValidate,&Config{})
 }
 
 func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {

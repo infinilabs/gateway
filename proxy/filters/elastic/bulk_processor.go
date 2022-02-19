@@ -380,6 +380,7 @@ DO:
 			nonRetryableItems := bytebufferpool.Get()
 			retryableItems := bytebufferpool.Get()
 
+			//retry failed message till dead
 			//TODO remove, use dedicated response validater filer to handle failure messages
 			containError:=HandleBulkResponse2(joint.Config.SafetyParse,data,resbody,joint.Config.DocBufferSize,buffer,nonRetryableItems,retryableItems)
 			if containError {

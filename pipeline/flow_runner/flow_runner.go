@@ -22,6 +22,10 @@ type Config struct {
 	FetchMaxBytes    int `config:"fetch_max_bytes"`
 	FetchMaxMessages int `config:"fetch_max_messages"`
 	FetchMaxWaitMs   int `config:"fetch_max_wait_ms"`
+	CommitOnTag   	 string `config:"commit_on_tag"`
+
+	ConsumerGroup   	 string `config:"consumer_group"`
+	ConsumerName   	 string `config:"consumer_name"`
 
 
 }
@@ -59,6 +63,9 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		FetchMinBytes:   	1,
 		FetchMaxMessages:   100,
 		FetchMaxWaitMs:   10000,
+		CommitOnTag:"",
+		ConsumerGroup: "group-001",
+		ConsumerName: "consumer-001",
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -103,7 +110,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 	idleDuration := time.Duration(timeOut) * time.Second
 	flowProcessor := common.GetFlowProcess(processor.config.FlowName)
 	qConfig :=queue.GetOrInitConfig(processor.config.InputQueue)
-	var consumer=queue.GetOrInitConsumerConfig(qConfig.Id,"group-001","consumer-001")
+	var consumer=queue.GetOrInitConsumerConfig(qConfig.Id,processor.config.ConsumerGroup,processor.config.ConsumerName)
 	var initOfffset string
 	var offset string
 
@@ -142,6 +149,8 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 						}
 
 						ctx := acquireCtx()
+
+
 						err = ctx.Request.Decode(pop.Data)
 						if err != nil {
 							log.Error(err)
@@ -150,18 +159,28 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 
 						flowProcessor(ctx)
 
+						if processor.config.CommitOnTag!=""{
+							tags,ok:=ctx.GetTags()
+							if !ok{
+								_,ok= tags[processor.config.CommitOnTag]
+							}
+							if !ok{
+								releaseCtx(ctx)
+								return nil
+							}
+						}
+
 						releaseCtx(ctx)
 
 						offset=pop.NextOffset
+						if offset!=""&&offset!=initOfffset{
+							ok,err:=queue.CommitOffset(qConfig,consumer,offset)
+							if !ok||err!=nil{
+								panic(err)
+							}
+						}
 					}
 				}
-				if offset!=""&&offset!=initOfffset{
-					ok,err:=queue.CommitOffset(qConfig,consumer,offset)
-					if !ok||err!=nil{
-						panic(err)
-					}
-				}
-
 			}
 		}
 
