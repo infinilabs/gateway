@@ -38,7 +38,7 @@ import (
 	"infini.sh/gateway/pipeline/dump_hash"
 	"infini.sh/gateway/pipeline/flow_runner"
 	"infini.sh/gateway/pipeline/index_diff"
-	"infini.sh/gateway/pipeline/queue_consumer"
+	"infini.sh/gateway/pipeline/replay"
 	"infini.sh/gateway/proxy"
 	"infini.sh/gateway/service/floating_ip"
 	"infini.sh/gateway/service/forcemerge"
@@ -88,9 +88,10 @@ func main() {
 		pipe.RegisterProcessorPlugin("index_diff", index_diff.New)
 		pipe.RegisterProcessorPlugin("dump_hash", scroll.New)
 		pipe.RegisterProcessorPlugin("flow_runner", flow_runner.New)
-		pipe.RegisterProcessorPlugin("queue_consumer", queue_consumer.New)
+		//pipe.RegisterProcessorPlugin("queue_consumer", queue_consumer.New)
 		pipe.RegisterProcessorPlugin("bulk_indexing", bulk_indexing.New)
 		pipe.RegisterProcessorPlugin("json_indexing", json_indexing.New)
+		pipe.RegisterProcessorPlugin("replay", replay.New)
 
 		module.RegisterSystemModule(&api.APIModule{})
 
