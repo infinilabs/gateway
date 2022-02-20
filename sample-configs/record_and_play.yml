@@ -1,0 +1,32 @@
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 10000
+    network:
+      binding: 0.0.0.0:8000
+
+flow:
+  - name: primary-write-flow
+    filter:
+      - record:
+          stdout: true
+          filename: requests.txt
+
+router:
+  - name: my_router
+    default_flow: primary-write-flow
+
+pipeline:
+  - name: play_requests
+    auto_start: true
+    keep_running: false
+    processor:
+      - replay:
+          filename: 30-requests.txt
+#          filename: requests.txt
+          schema: "http"
+          host: "192.168.3.188:9204"
