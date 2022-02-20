@@ -63,10 +63,10 @@ func (receiver *BulkBuffer) WriteMessageID(id string) {
 	}
 }
 
-func (receiver *BulkBuffer) GetMessageStatus(non200Only bool)map[string]int {
+func (receiver *BulkBuffer) GetMessageStatus(non2xxOnly bool)map[string]int {
 	status:=map[string]int{}
 	for x,id:=range receiver.MessageIDs {
-		if non200Only&& receiver.StatusCode[x]==200{
+		if non2xxOnly&& (receiver.StatusCode[x]==200||receiver.StatusCode[x]==201){
 			continue
 		}
 		status[id]=receiver.StatusCode[x]

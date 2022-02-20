@@ -407,7 +407,7 @@ DO:
 				//save message bytes, with metadata, set codec to wrapped bulk messages
 				queue.Push(queue.GetOrInitConfig("failure_messages"), util.MustToJSONBytes(util.MapStr{
 					"queue":buffer.Queue,
-					"status":buffer.StatusCode,
+					"status":buffer.GetMessageStatus(true),
 				}))
 
 				return true,400, PARTIAL,nil

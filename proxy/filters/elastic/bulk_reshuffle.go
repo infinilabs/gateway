@@ -549,11 +549,23 @@ func updateJsonWithNewIndex(action string, scannedByte []byte, index, typeName, 
 	return newBytes, err
 }
 
-func removeTypeFromAction(action string,scannedByte []byte) (newBytes []byte, err error) {
+func removeKeysFromAction(action string,scannedByte []byte,keys string) (newBytes []byte, err error) {
 	newBytes = make([]byte, len(scannedByte))
 	copy(newBytes, scannedByte)
-	newBytes = jsonparser.Delete(newBytes, action,"_type")
+	newBytes = make([]byte, len(scannedByte))
+	copy(newBytes, scannedByte)
+	newBytes = jsonparser.Delete(newBytes, action, keys)
 	return newBytes, nil
+}
+
+func updateKeysFromAction(action string,scannedByte []byte,keys string,value string) (newBytes []byte, err error) {
+	newBytes = make([]byte, len(scannedByte))
+	copy(newBytes, scannedByte)
+	newBytes, err = jsonparser.Set(newBytes, []byte("\""+value+"\""), action, keys)
+	if err != nil {
+		return newBytes, err
+	}
+	return newBytes, err
 }
 
 //performance is poor

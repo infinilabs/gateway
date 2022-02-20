@@ -18,15 +18,9 @@ type Config struct {
 	FlowName   string `config:"flow"`
 	InputQueue string `config:"input_queue"`
 
-	FetchMinBytes    int `config:"fetch_min_bytes"`
-	FetchMaxBytes    int `config:"fetch_max_bytes"`
-	FetchMaxMessages int `config:"fetch_max_messages"`
-	FetchMaxWaitMs   int `config:"fetch_max_wait_ms"`
 	CommitOnTag   	 string `config:"commit_on_tag"`
 
-	ConsumerGroup   	 string `config:"consumer_group"`
-	ConsumerName   	 string `config:"consumer_name"`
-
+	Consumer   queue.ConsumerConfig `config:"consumer"`
 
 }
 
@@ -60,12 +54,14 @@ var signalChannel = make(chan bool, 1)
 
 func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
-		FetchMinBytes:   	1,
-		FetchMaxMessages:   100,
-		FetchMaxWaitMs:   10000,
+		Consumer: queue.ConsumerConfig{
+			Group: "group-001",
+			Name: "consumer-001",
+			FetchMinBytes:   	1,
+			FetchMaxMessages:   100,
+			FetchMaxWaitMs:   10000,
+		},
 		CommitOnTag:"",
-		ConsumerGroup: "group-001",
-		ConsumerName: "consumer-001",
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -110,7 +106,8 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 	idleDuration := time.Duration(timeOut) * time.Second
 	flowProcessor := common.GetFlowProcess(processor.config.FlowName)
 	qConfig :=queue.GetOrInitConfig(processor.config.InputQueue)
-	var consumer=queue.GetOrInitConsumerConfig(qConfig.Id,processor.config.ConsumerGroup,processor.config.ConsumerName)
+
+	var consumer=queue.GetOrInitConsumerConfig(qConfig.Id,processor.config.Consumer.Group,processor.config.Consumer.Name)
 	var initOfffset string
 	var offset string
 
@@ -128,7 +125,13 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 			case <-signalChannel:
 				return nil
 			default:
-				_,messages,timeout,err:=queue.Consume(qConfig,consumer.Name,offset,processor.config.FetchMaxMessages,time.Millisecond*time.Duration(processor.config.FetchMaxWaitMs))
+
+				if global.Env().IsDebug{
+					log.Debug(qConfig.Name,",",consumer.Group,",",consumer.Name,",init offset:",offset)
+				}
+
+				_,messages,timeout,err:=queue.Consume(qConfig,consumer.Name,offset,processor.config.Consumer.FetchMaxMessages,time.Millisecond*time.Duration(processor.config.Consumer.FetchMaxWaitMs))
+
 				if len(messages) > 0 {
 					for _,pop:=range messages {
 						if err!=nil{
@@ -161,7 +164,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 
 						if processor.config.CommitOnTag!=""{
 							tags,ok:=ctx.GetTags()
-							if !ok{
+							if ok{
 								_,ok= tags[processor.config.CommitOnTag]
 							}
 							if !ok{

@@ -44,7 +44,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 		containError := this.HandleBulkResponse(ctx,this.config.SafetyParse, requestBytes, resbody, this.config.DocBufferSize, nonRetryableItems, retryableItems,successItems)
 		if containError {
 			if global.Env().IsDebug {
-				log.Error("error in bulk requests,", ctx.Response.StatusCode(), util.SubString(string(resbody), 0, 256))
+				log.Error("error in bulk requests,", ctx.Response.StatusCode(), util.SubString(string(resbody), 0, this.config.MessageTruncateSize))
 			}
 
 			if nonRetryableItems.Len() > 0 && this.config.InvalidQueue!="" {
@@ -215,7 +215,9 @@ func HandleBulkResponse2(safetyParse bool, requestBytes, resbody []byte, docBuff
 		}
 
 		if len(invalidOffset)>0{
-			log.Info("bulk status:", statsCodeStats)
+			if global.Env().IsDebug{
+				log.Debug("bulk status:", statsCodeStats)
+			}
 		}
 
 		//de-dup
@@ -282,7 +284,7 @@ type Config struct {
 	SuccessQueue string `config:"success_queue"`
 	InvalidQueue string `config:"invalid_queue"`
 	FailureQueue string `config:"failure_queue"`
-
+	MessageTruncateSize int `config:"message_truncate_size"`
 	ContinueOnError bool `config:"continue_on_error"`
 	AddTags         []string `config:"add_tag"` //hit limiter then add tag
 
@@ -296,6 +298,7 @@ func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 	cfg := Config{
 		DocBufferSize: 256 * 1024,
 		SafetyParse:   true,
+		MessageTruncateSize:   1024,
 		ContinueOnError: false,
 	}
 	if err := c.Unpack(&cfg); err != nil {

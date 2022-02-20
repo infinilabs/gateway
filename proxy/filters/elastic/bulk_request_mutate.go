@@ -18,7 +18,9 @@ type ElasticsearchBulkRequestMutate struct {
 	DefaultType      string            `config:"default_type"`
 	FixNilType       bool              `config:"fix_null_type"`
 	FixNilID         bool              `config:"fix_null_id"`
+	Pipeline         string             `config:"pipeline"`
 	RemoveTypeMeta         bool         `config:"remove_type"`
+	RemovePipeline         bool         `config:"remove_pipeline"`
 	AddTimestampToID bool              `config:"generate_enhanced_id"`
 	SafetyParse      bool              `config:"safety_parse"`
 	DocBufferSize    int               `config:"doc_buffer_size"`
@@ -128,7 +130,15 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 			}
 
 			if this.RemoveTypeMeta{
-				metaBytes, err =removeTypeFromAction(actionStr,metaBytes)
+				metaBytes, err =removeKeysFromAction(actionStr,metaBytes,"_type")
+			}
+
+			if this.RemovePipeline{
+				metaBytes, err =removeKeysFromAction(actionStr,metaBytes,"pipeline")
+			}
+
+			if this.Pipeline!=""{
+				metaBytes, err =updateKeysFromAction(actionStr,metaBytes,"pipeline",this.Pipeline)
 			}
 
 			if actionStr == "" || index == "" || id == "" {

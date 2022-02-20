@@ -10,11 +10,20 @@ entry:
     network:
       binding: 0.0.0.0:8000
     tls:
-      enabled: false
+      enabled: true
 
 flow:
+  - name: auth-flow
+    filter:
+      - basic_auth:
+          valid_users:
+            ingest: passwd
+
   - name: primary-read-flow
     filter:
+      - flow:
+          flows:
+            - auth-flow
       - if:
           cluster_available: ["primary"]
         then:
@@ -26,6 +35,9 @@ flow:
 
   - name: primary-write-flow #正常的主写流程
     filter:
+      - flow:
+          flows:
+            - auth-flow
 #      - set_basic_auth: #覆盖身份信息
 #          username: elastic
 #          password: changeme
@@ -57,6 +69,9 @@ flow:
               default_type: _doc
               type_rename:
                 "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
+#              index_rename:
+#                test: "test-backup"
+              remove_pipeline: true
               generate_enhanced_id: true
               when:
                 contains:
@@ -69,6 +84,7 @@ flow:
               success_queue: "backup" #已经写入成功的请求，发送到备份集群的队列，进行复制
               invalid_queue: "primary-invalid" #TODO 记录日志，请求和响应结果
               failure_queue: "primary-failure" # 记录完整请求到失败队列，可以根据需要重做
+              add_tag: ["commit_message_allowed"]
               when:
                 contains:
                   _ctx.request.path: /_bulk
@@ -87,7 +103,7 @@ flow:
               - drop:
           - if: #正常的请求, 复制到备份集群
               in:
-                _ctx.response.status: [200,201,404]
+                _ctx.response.status: [200,201]
             then: #仅正常处理的集群才转发给后端集群
 #              - set_basic_auth: #覆盖身份信息
 #                  username: test
@@ -97,56 +113,147 @@ flow:
             else: #集群可用的情况下但是失败了，可能存在脏写，将请求放入写入失败队列，后续可以选择两边集群都重做一次，最终确保一致性，写 translog，后续提供 UI 可以进行三方检查：主、备集群和本地日志
               - queue:
                   queue_name: "primary-failure"
+
+  - name: primary-flow-post-processing
+    filter:
+#      - dump:
+#          uri: true
+#          request: true
+#          response: true
+      - retry_limiter:
+          queue_name: "primary-deadletter_requests"
+          max_retry_times: 60
+          add_tag: ["commit_message_allowed"]
+      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
+          fix_null_id: true
+          fix_null_type: true
+          default_type: _doc
+          type_rename:
+            "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
+          #              index_rename:
+          #                test: "test-backup"
+          remove_pipeline: true
+          generate_enhanced_id: true
+          when:
+            contains:
+              _ctx.request.path: /_bulk
+      - elasticsearch:
+          elasticsearch: "primary"
+          max_connection_per_node: 1000
+      - bulk_response_process:
+          success_queue: "backup"
+          invalid_queue: "primary-invalid"
+          continue_on_error: false
+          add_tag: ["commit_message_allowed"]
+      - if: #429 重试
+          in:
+            _ctx.response.status: [ 429 ]
+        then:
+          - drop:
+      - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
+          range:
+            _ctx.response.status.gte: 400
+            _ctx.response.status.lt: 500
+        then:
+          - tag:
+              add: [ "commit_message_allowed" ]
+          - drop:
+      - if:
+          in:
+            _ctx.response.status: [ 200,201 ]
+        then:
+          - queue:
+              queue_name: "backup"
+          - tag:
+              add: [ "commit_message_allowed" ]
+
   - name: backup-flow-replicate-processing
     filter:
-#      - set_basic_auth: #覆盖身份信息
-#          username: elastic
-#          password: changeme
+#      - dump:
+#          uri: true
+#          request: true
+#          response: true
+      - retry_limiter:
+          queue_name: "backup-deadletter_requests"
+          max_retry_times: 60
+          add_tag: ["commit_message_allowed"]
+      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
+          fix_null_id: true
+          fix_null_type: true
+          default_type: _doc
+          type_rename:
+            "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
+          #              index_rename:
+          #                test: "test-backup"
+          remove_pipeline: true
+          generate_enhanced_id: true
+          when:
+            contains:
+              _ctx.request.path: /_bulk
+      - elasticsearch:
+          elasticsearch: "backup"
+          max_connection_per_node: 1000
+      - bulk_response_process:
+          continue_on_error: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
+          invalid_queue: "backup-invalid"
+          add_tag: ["commit_message_allowed"]
+          when:
+            contains:
+              _ctx.request.path: /_bulk
       - if:
-          cluster_available: ["backup"]
+          in:
+            _ctx.response.status: [ 200,201,404,400 ]
         then:
-          - retry_limiter:
-              queue_name: "backup-deadletter_requests"
-              max_retry_times: 60
-              add_tag: ["commit_message_allowed"]
-          - elasticsearch:
-              elasticsearch: "backup"
-              max_connection_per_node: 1000
-          - bulk_response_process:
-              continue_on_error: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
-              invalid_queue: "backup-invalid"
-              when:
-                contains:
-                  _ctx.request.path: /_bulk
-          - if: #429 重试
-              in:
-                _ctx.response.status: [ 429 ]
-            then:
-              - drop:
-          - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
-              range:
-                _ctx.response.status.gte: 400
-                _ctx.response.status.lt: 500
-            then:
-              - queue:
-                  queue_name: "backup-invalid"
-              - drop:
-          - if:
-              not:
-                in:
-                  _ctx.response.status: [ 200,201,404 ]
-            then:
-              - drop:
-            else:
-              - tag:
-                  add: ["commit_message_allowed"]
-        else:
-          - elasticsearch_health_check:
-              elasticsearch: "backup"
-          - sleep:
-              sleep_in_million_seconds: 5000
+          - tag:
+              add: ["commit_message_allowed"]
+
+  - name: backup-flow-reshuffle-replicate-processing
+    filter:
+      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
+          fix_null_id: true
+          fix_null_type: true
+          default_type: _doc
+          type_rename:
+          "*": "_doc" #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
+          #              index_rename:
+          #                test: "test-backup"
+          remove_pipeline: true # pipeline should be enabled manually, please ensure each cluster has the same setup
+          generate_enhanced_id: true
+          when:
+            contains:
+              _ctx.request.path: /_bulk
+#      - record:
+#          stdout: true
+      - bulk_reshuffle:
+          when:
+            contains:
+              _ctx.request.path: /_bulk
+          elasticsearch: "backup"
+          level: partition #cluster,node,shard,partition
+          partition_size: 10
+          fix_null_id: true
+      - elasticsearch:
+          elasticsearch: "backup"
+          max_connection_per_node: 1000
+      - bulk_response_process:
+          continue_on_error: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
+          invalid_queue: "backup-invalid"
+          add_tag: ["commit_message_allowed"]
+          when:
+            contains:
+              _ctx.request.path: /_bulk
+      - if:
+          in:
+            _ctx.response.status: [ 200,201,404,400 ]
+        then:
+          - tag:
+              add: ["commit_message_allowed"]
+
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
+#      - record:
+#          stdout: true
+#          filename: requests.txt
       - context_filter:
           context: _ctx.request.path
           exclude:
@@ -162,7 +269,11 @@ flow:
               - not:
                   in:
                     _ctx.response.status: [ 200,201,404 ]
-
+  - name: deny_flow # this flow is used for request logging, refer to `router`'s `tracing_flow`
+    filter:
+      - set_response:
+          body: "request not allowed"
+          status: 500
 #_delete_by_query not supported
 router:
   - name: my_router
@@ -177,44 +288,65 @@ router:
         flow:
           - primary-read-flow
       - method:
-          - "POST"
-          - "GET"
+          - "*"
         pattern:
+          - "/_cat"
+          - "/_sql"
+          - "/_cluster"
           - "/_refresh"
           - "/_count"
           - "/_search"
           - "/_msearch"
           - "/_mget"
+          - "/{any_index}/_eql/search"
           - "/{any_index}/_count"
           - "/{any_index}/_search"
           - "/{any_index}/_msearch"
           - "/{any_index}/_mget"
         flow:
           - primary-read-flow
+      - method:
+          - "*"
+        pattern:
+          - "/_reindex"
+          - "/_delete_by_query"
+          - "/_update_by_query"
+          - "/{any_index}/_reindex"
+          - "/{any_index}/_delete_by_query"
+          - "/{any_index}/_update_by_query"
+        flow:
+          - deny_flow
+      - method:
+          - "DELETE"
+        pattern:
+          - "/{any_index}"
+          - "/{any_index}/{any_type}"
+        flow:
+          - deny_flow
 
 elasticsearch:
-  - name: primary
+  - name: backup
     enabled: true
     endpoints:
-#    - http://localhost:9200
-    - http://192.168.3.188:9204
+#      - http://192.168.3.188:9204
+      - http://192.168.3.98:9200
     basic_auth:
       username: elastic
       password: changeme
-#    traffic_control:
-#      max_qps_per_node: 1000
+    #    traffic_control:
+    #      max_qps_per_node: 1000
     discovery:
       enabled: true
       refresh:
         enabled: true
         interval: 60s
-  - name: backup
+  - name: primary
     enabled: true
     endpoints:
-#    - http://localhost:9200
-    - http://192.168.3.188:9207
-#    - http://192.168.3.188:9206
-#    - http://192.168.3.98:9200
+      - http://192.168.3.98:9200
+#      - http://192.168.3.188:9207
+#      - http://192.168.3.188:9217
+#      - http://192.168.3.188:9227
     basic_auth:
       username: test
       password: testtest
@@ -223,6 +355,7 @@ elasticsearch:
       refresh:
         enabled: true
         interval: 60s
+
 
 pipeline:
   # pipelines for logging
@@ -245,58 +378,70 @@ pipeline:
       - flow_runner:
           input_queue: "primary-deadletter_requests"
           flow: primary-flow-post-processing
+          commit_on_tag: "commit_message_allowed"
           when:
             cluster_available: [ "primary" ]
   - name: queue_primary-failure-consumer
-    auto_start: false
-    keep_running: false
-    processor:
-      - flow_runner:
-          input_queue: "primary-failure"
-          flow: primary-flow-post-processing
-          when:
-            cluster_available: [ "primary" ]
-
-# option A - pipelines for backup cluster - safety first, each requests are replicated in order, the speed may slow
-  - name: queue_backup-consumer
     auto_start: true
     keep_running: true
     processor:
       - flow_runner:
-          input_queue: "backup"
-          flow: backup-flow-replicate-processing
+          input_queue: "primary-failure"
+          flow: primary-flow-post-processing
           commit_on_tag: "commit_message_allowed"
           when:
-            and:
-              - cluster_available: ["backup"]
+            cluster_available: [ "primary" ]
 
-## option B - pipelines for backup cluster
+## option A - pipelines for backup cluster - safety first, each requests are replicated in order, the speed may slow
 #  - name: queue_backup-consumer
 #    auto_start: true
 #    keep_running: true
 #    processor:
 #      - flow_runner:
 #          input_queue: "backup"
-#          flow: backup-flow-reshuffle-replicate-processing
+#          flow: backup-flow-replicate-processing
+#          commit_on_tag: "commit_message_allowed"
+#          consumer:
+#            group: "group123"
+#            name: "name133"
 #          when:
 #            and:
 #              - cluster_available: ["backup"]
-#  - name: queue_backup-failure-consumer
-#    auto_start: true
-#    keep_running: true
-#    processor:
-#      - flow_runner:
-#          input_queue: "backup-failure"
-#          flow: backup-flow-reshuffle-replicate-processing
-#          when:
-#            cluster_available: [ "backup" ]
-#  - name: queue_backup-bulk_request_ingest
-#    auto_start: true
-#    keep_running: true
-#    processor:
-#      - bulk_indexing:
-#          when:
-#            cluster_available: [ "backup" ]
-#          bulk_size_in_mb: 10
-#          queues:
-#            type: bulk_reshuffle
+
+# option B - pipelines for backup cluster, reshuffle bulk requests
+  - name: queue_backup-consumer
+    auto_start: true
+    keep_running: true
+    processor:
+      - flow_runner:
+          input_queue: "backup"
+          flow: backup-flow-reshuffle-replicate-processing
+          commit_on_tag: "commit_message_allowed"
+          when:
+            and:
+              - cluster_available: ["backup"]
+
+  - name: queue_backup-bulk_request_ingest
+    auto_start: true
+    keep_running: true
+    processor:
+      - bulk_indexing:
+          when:
+            cluster_available: [ "backup" ]
+          bulk_size_in_mb: 10
+          queues:
+            type: bulk_reshuffle
+
+## let's upload disk queue files to s3 for backup
+disk_queue:
+  upload_to_s3: true
+  s3:
+    server: my_blob_store
+    location: cn-beijing-001
+    bucket: infini-replica-blob-store
+
+s3:
+  my_blob_store:
+    endpoint: "192.168.3.188:9000"
+    access_key: "minio"
+    access_secret: "miniostorage"

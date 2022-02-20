@@ -8,12 +8,14 @@ import (
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
+	"infini.sh/framework/core/progress"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
 	"path"
 	"runtime"
 	"strings"
+	time2 "time"
 )
 
 type Config struct {
@@ -64,6 +66,9 @@ var validVerbs = []string{
 var fastHttpClient = &fasthttp.Client{
 	MaxConnsPerHost: 1000,
 	Name:                          "replay",
+	ReadTimeout: 10*time2.Second,
+	WriteTimeout: 10*time2.Second,
+	MaxConnWaitTimeout: 10*time2.Second,
 	DisableHeaderNamesNormalizing: false,
 	TLSConfig:                     &tls.Config{InsecureSkipVerify: true},
 }
@@ -88,18 +93,29 @@ func (processor *ReplayProcessor) Process(ctx *pipeline.Context) error {
 		}
 	}()
 	var  count =0
+	time:=time2.Now()
+
 	if processor.config.Filename!=""{
+
 		filename:=processor.config.Filename
 		if !util.FileExists(filename)&&!util.PrefixStr(filename,"/"){
 			filename=path.Join(global.Env().GetDataDir(),filename)
 		}
+
 		lines:=util.FileGetLines(filename)
 		req:=fasthttp.AcquireRequest()
 		var buffer=bytebufferpool.Get()
 		var res=fasthttp.AcquireResponse()
 		var requestIsSet bool
-		for _,line:=range lines{
+		var category="replay"
+		total:=len(lines)
+		progress.RegisterBar(category, filename, total)
+		progress.Start()
 
+		for _,line:=range lines{
+			count++
+			progress.IncreaseWithTotal(category,filename, 1, total)
+			//log.Error("count++:",count,",",total)
 			if ctx.IsCanceled(){
 				return nil
 			}
@@ -128,7 +144,6 @@ func (processor *ReplayProcessor) Process(ctx *pipeline.Context) error {
 						if global.Env().IsDebug{
 							log.Trace(string(res.GetRawBody()))
 						}
-						count++
 
 						req.Reset()
 						res.Reset()
@@ -168,10 +183,13 @@ func (processor *ReplayProcessor) Process(ctx *pipeline.Context) error {
 				}
 			}
 		}
+
+		progress.Stop()
 	}
 
 	if count>0{
-		log.Infof("finished replay [%v] requests",count)
+		log.Infof("finished replay [%v] requests, elapsed: %v",count,time2.Since(time).String())
 	}
+
 	return nil
 }

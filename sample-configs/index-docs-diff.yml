@@ -1,6 +1,8 @@
 path.data: data
 path.logs: log
-#progress_bar.enabled: true
+
+#show progress bar
+progress_bar.enabled: true
 
 elasticsearch:
   - name: source

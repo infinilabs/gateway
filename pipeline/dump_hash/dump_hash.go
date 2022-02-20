@@ -34,7 +34,7 @@ import (
 	"infini.sh/framework/lib/bytebufferpool"
 	fasthttp2 "infini.sh/framework/lib/fasthttp"
 	"path"
-	"src/github.com/OneOfOne/xxhash"
+	"github.com/OneOfOne/xxhash"
 	"sync"
 )
 
