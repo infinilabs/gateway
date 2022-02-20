@@ -69,6 +69,9 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 			}
 
 			if !this.config.ContinueOnError {
+				if len(this.config.AddTags)>0{
+					ctx.UpdateTags(this.config.AddTags,nil)
+				}
 				ctx.Finished()
 			}
 		}
@@ -281,6 +284,8 @@ type Config struct {
 	FailureQueue string `config:"failure_queue"`
 
 	ContinueOnError bool `config:"continue_on_error"`
+	AddTags         []string `config:"add_tag"` //hit limiter then add tag
+
 }
 
 func init() {
