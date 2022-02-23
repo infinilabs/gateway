@@ -7,12 +7,13 @@ type ProxyConfig struct {
 	Balancer            string `config:"balancer"`
 	MaxConnection       int    `config:"max_connection_per_node"`
 	MaxResponseBodySize int    `config:"max_response_size"`
-	maxRetryTimes       int    `config:"max_retry_times"`
-	retryDelayInMs      int    `config:"retry_delay_in_ms"`
+	MaxRetryTimes       int    `config:"max_retry_times"`
+	RetryDelayInMs      int    `config:"retry_delay_in_ms"`
 
 	MaxConnWaitTimeout  time.Duration `config:"max_conn_wait_timeout"`
 	MaxIdleConnDuration time.Duration `config:"max_idle_conn_duration"`
 	MaxConnDuration     time.Duration `config:"max_conn_duration"`
+	Timeout         time.Duration `config:"timeout"`
 	ReadTimeout         time.Duration `config:"read_timeout"`
 	WriteTimeout        time.Duration `config:"write_timeout"`
 

@@ -27,7 +27,7 @@ type BulkReshuffle struct {
 }
 
 func (this *BulkReshuffle) Name() string {
-	return "bulk_shuffle"
+	return "bulk_reshuffle"
 }
 
 type Level string
@@ -36,15 +36,21 @@ const ClusterLevel = "cluster"
 const NodeLevel = "node"
 const IndexLevel = "index"
 const ShardLevel = "shard"
-const PartitionLevel = "partition"
 
 type BulkReshuffleConfig struct {
+
+	TagsOnSuccess []string `config:"tag_on_success"` //hit limiter then add tag
+
 	Elasticsearch       string `config:"elasticsearch"`
+	QueuePrefix               string `config:"queue_name_prefix"`
 	Level               string `config:"level"` //cluster/node(will,change)/index/shard/partition
 	PartitionSize       int    `config:"partition_size"`
 	FixNullID           bool   `config:"fix_null_id"`
+	ContinueAfterReshuffle           bool   `config:"continue_after_reshuffle"`
 	IndexStatsAnalysis  bool   `config:"index_stats_analysis"`
 	ActionStatsAnalysis bool   `config:"action_stats_analysis"`
+
+	ContinueMetadataNotFound bool   `config:"continue_metadata_missing"`
 
 	ValidateRequest bool `config:"validate_request"`
 
@@ -56,6 +62,8 @@ type BulkReshuffleConfig struct {
 	StickToNode   bool  `config:"stick_to_node"`
 	DocBufferSize int   `config:"doc_buffer_size"`
 	EnabledShards []int `config:"shards"`
+
+
 }
 
 func init() {
@@ -68,6 +76,7 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 
 	cfg := BulkReshuffleConfig{
 		DocBufferSize:       256 * 1024,
+		QueuePrefix:      "async_bulk",
 		IndexStatsAnalysis:  true,
 		SafetyParse:         true,
 		ActionStatsAnalysis: true,
@@ -235,48 +244,52 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				return errors.Error("invalid bulk action:", actionStr, ",index:", string(index), ",id:", string(id), ",", metaStr)
 			}
 
-			//get routing table of index
-			table, err := metadata.GetIndexRoutingTable(index)
-			if err != nil {
-				if rate.GetRateLimiter("index_routing_table_not_found", index, 1, 2, time.Minute*1).Allow() {
-					log.Warn(index, ",", metaStr, ",", err)
-				}
-				return err
-			}
+			var nodeID,ShardIDStr string
 
-			//not only one shard
-			totalShards := len(table)
-			if totalShards > 1 {
-				//如果 shards=1，则直接找主分片所在节点，否则计算一下。
-				shardID = elastic.GetShardID(metadata.GetMajorVersion(), []byte(id), totalShards)
-
-				if global.Env().IsDebug {
-					log.Tracef("%s/%s => %v", index, id, shardID)
-				}
-
-				//check enabled shards
-				if len(this.config.EnabledShards) > 0 {
-					if !util.ContainsInAnyInt32Array(shardID, this.config.EnabledShards) {
-						log.Debugf("shard %s-%s not enabled, skip processing", index, shardID)
-						return errors.Errorf("shard %s-%v not enabled, skip processing", index, shardID)
+			if reshuffleType==NodeLevel||reshuffleType==ShardLevel{
+				//get routing table of index
+				table, err := metadata.GetIndexRoutingTable(index)
+				if err != nil {
+					if rate.GetRateLimiter("index_routing_table_not_found", index, 1, 2, time.Minute*1).Allow() {
+						log.Warn(index, ",", metaStr, ",", err)
 					}
+					return err
+				}else{
+					//check if it is not only one shard
+					totalShards := len(table)
+					if totalShards > 1 {
+						//如果 shards=1，则直接找主分片所在节点，否则计算一下。
+						shardID = elastic.GetShardID(metadata.GetMajorVersion(), []byte(id), totalShards)
+
+						if global.Env().IsDebug {
+							log.Tracef("%s/%s => %v", index, id, shardID)
+						}
+
+						//check enabled shards
+						if len(this.config.EnabledShards) > 0 {
+							if !util.ContainsInAnyInt32Array(shardID, this.config.EnabledShards) {
+								log.Debugf("shard %s-%s not enabled, skip processing", index, shardID)
+								return errors.Errorf("shard %s-%v not enabled, skip processing", index, shardID)
+							}
+						}
+					}
+
+					ShardIDStr=util.IntToString(shardID)
+					shardInfo, err := metadata.GetPrimaryShardInfo(index, ShardIDStr)
+					if err != nil {
+						return errors.Error("shard info was not found,", index, ",", shardID, ",", err)
+					}
+
+					if shardInfo == nil {
+						if rate.GetRateLimiter(fmt.Sprintf("shard_info_not_found_%v", index), ShardIDStr, 1, 5, time.Minute*1).Allow() {
+							log.Warn("shardInfo was not found,", index, ",", shardID)
+						}
+						return errors.Error("shard info was not found,", index, ",", shardID)
+					}
+					nodeID = shardInfo.Node
 				}
 			}
 
-			var ShardIDStr=util.IntToString(shardID)
-			shardInfo, err := metadata.GetPrimaryShardInfo(index, ShardIDStr)
-			if err != nil {
-				return errors.Error("shard info was not found,", index, ",", shardID, ",", err)
-			}
-
-			if shardInfo == nil {
-				if rate.GetRateLimiter(fmt.Sprintf("shard_info_not_found_%v", index), ShardIDStr, 1, 5, time.Minute*1).Allow() {
-					log.Warn("shardInfo was not found,", index, ",", shardID)
-				}
-				return errors.Error("shard info was not found,", index, ",", shardID)
-			}
-
-			var nodeID = shardInfo.Node
 			queueConfig = &queue.Config{}
 			queueConfig.Source = "dynamic"
 			queueConfig.Labels = map[string]interface{}{}
@@ -284,39 +297,44 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			queueConfig.Labels["level"] = reshuffleType
 			queueConfig.Labels["elasticsearch"] = esConfig.ID
 
+
+			//partition
+			var partitionSuffix=""
+			if this.config.PartitionSize>1{
+				queueConfig.Labels["partition_size"] = this.config.PartitionSize
+				partitionID := elastic.GetShardID(metadata.GetMajorVersion(), []byte(id), this.config.PartitionSize)
+				queueConfig.Labels["partition"] = partitionID
+				partitionSuffix = "##"+util.IntToString(partitionID)
+			}
+
+
 			//注册队列到元数据中，消费者自动订阅该队列列表，并根据元数据来分别进行相应的处理
 			switch reshuffleType {
 			case ClusterLevel:
-				queueConfig.Name ="async_bulk-cluster##"+ esConfig.ID
+				queueConfig.Name =this.config.QueuePrefix+"##cluster##"+ esConfig.ID+partitionSuffix
 				break
 			case NodeLevel:
-				if nodeID == "" {
-					queueConfig.Name = "async_bulk-node##"+ esConfig.ID+ "##UNASSIGNED"
-				} else {
-					queueConfig.Labels["node_id"] = nodeID
-					queueConfig.Name = "async_bulk-node##"+esConfig.ID+"##"+ nodeID
+
+				if nodeID==""{
+					nodeID="UNASSIGNED"
 				}
+
+				queueConfig.Labels["node_id"] = nodeID //need metadata
+				queueConfig.Name = this.config.QueuePrefix+"##node##"+esConfig.ID+"##"+ nodeID+partitionSuffix
 				break
 			case IndexLevel:
 				queueConfig.Labels["index"] = index
-				queueConfig.Name = "async_bulk-index##"+ esConfig.ID+"##"+ index
+				queueConfig.Name = this.config.QueuePrefix+"##index##"+ esConfig.ID+"##"+ index+partitionSuffix
 				break
 			case ShardLevel:
-				queueConfig.Labels["index"] = index
-				queueConfig.Labels["shard"] = shardID
-				queueConfig.Name = "async_bulk-shard##"+esConfig.ID+"##"+index+"##"+ShardIDStr
-				break
-			case PartitionLevel:
-				queueConfig.Labels["index"] = index
-				queueConfig.Labels["shard"] = shardID
-				if this.config.PartitionSize <= 0 {
-					this.config.PartitionSize = 1
-				}
-				queueConfig.Labels["partition_size"] = this.config.PartitionSize
 
-				partitionID := elastic.GetShardID(metadata.GetMajorVersion(), []byte(id), this.config.PartitionSize)
-				queueConfig.Labels["partition"] = partitionID
-				queueConfig.Name = "async_bulk-partition##"+esConfig.ID+"##"+index+"##"+ShardIDStr+"##"+util.IntToString(partitionID)
+				if ShardIDStr==""{
+					ShardIDStr="UNASSIGNED"
+				}
+
+				queueConfig.Labels["index"] = index
+				queueConfig.Labels["shard"] = shardID //need metadata
+				queueConfig.Name = this.config.QueuePrefix+"##shard##"+esConfig.ID+"##"+index+"##"+ShardIDStr+partitionSuffix
 				break
 			}
 
@@ -451,8 +469,14 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		ctx.Response.AppendBody(buffer.Bytes())
 		bytebufferpool.Put(buffer)
 
-		ctx.Response.SetStatusCode(200)
-		ctx.Finished()
+		if len(this.config.TagsOnSuccess)>0{
+			ctx.UpdateTags(this.config.TagsOnSuccess,nil)
+		}
+
+		if !this.config.ContinueAfterReshuffle{
+			ctx.Response.SetStatusCode(200)
+			ctx.Finished()
+		}
 	}
 
 	//排除条件，非 _ 开头的索引。
@@ -518,6 +542,25 @@ func parseActionMeta(data []byte) (action, index, typeName, id string) {
 	return safetyParseActionMeta(data)
 }
 
+func batchUpdateJson( scannedByte []byte,action string,set, del map[string]string) (newBytes []byte, err error) {
+
+	newBytes = make([]byte, len(scannedByte))
+	copy(newBytes, scannedByte)
+
+	for k,_:=range del{
+		newBytes = jsonparser.Delete(newBytes, action, k)
+	}
+
+	for k,v:=range set{
+		newBytes, err = jsonparser.Set(newBytes, []byte("\""+v+"\""), action, k)
+		if err != nil {
+			return newBytes, err
+		}
+	}
+
+	return newBytes, err
+}
+
 func updateJsonWithNewIndex(action string, scannedByte []byte, index, typeName, id string) (newBytes []byte, err error) {
 
 	if global.Env().IsDebug {
@@ -549,31 +592,30 @@ func updateJsonWithNewIndex(action string, scannedByte []byte, index, typeName, 
 	return newBytes, err
 }
 
-func removeKeysFromAction(action string,scannedByte []byte,keys string) (newBytes []byte, err error) {
-	newBytes = make([]byte, len(scannedByte))
-	copy(newBytes, scannedByte)
-	newBytes = make([]byte, len(scannedByte))
-	copy(newBytes, scannedByte)
-	newBytes = jsonparser.Delete(newBytes, action, keys)
-	return newBytes, nil
-}
-
-func updateKeysFromAction(action string,scannedByte []byte,keys string,value string) (newBytes []byte, err error) {
-	newBytes = make([]byte, len(scannedByte))
-	copy(newBytes, scannedByte)
-	newBytes, err = jsonparser.Set(newBytes, []byte("\""+value+"\""), action, keys)
-	if err != nil {
-		return newBytes, err
-	}
-	return newBytes, err
-}
+//func removeKeysFromAction(action string,scannedByte []byte,keys string) (newBytes []byte, err error) {
+//	newBytes = make([]byte, len(scannedByte))
+//	copy(newBytes, scannedByte)
+//	newBytes = make([]byte, len(scannedByte))
+//	copy(newBytes, scannedByte)
+//	newBytes = jsonparser.Delete(newBytes, action, keys)
+//	return newBytes, nil
+//}
+//
+//func updateKeysFromAction(action string,scannedByte []byte,keys string,value string) (newBytes []byte, err error) {
+//	newBytes = make([]byte, len(scannedByte))
+//	copy(newBytes, scannedByte)
+//	newBytes, err = jsonparser.Set(newBytes, []byte("\""+value+"\""), action, keys)
+//	if err != nil {
+//		return newBytes, err
+//	}
+//	return newBytes, err
+//}
 
 //performance is poor
 func safetyParseActionMeta(scannedByte []byte) (action, index, typeName, id string) {
 
 	////{ "index" : { "_index" : "test", "_id" : "1" } }
 	var meta = elastic.BulkActionMetadata{}
-	log.Error(string(scannedByte))
 	meta.UnmarshalJSON(scannedByte)
 	if meta.Index != nil {
 		index = meta.Index.Index

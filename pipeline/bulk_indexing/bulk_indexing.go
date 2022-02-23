@@ -62,10 +62,7 @@ type Config struct {
 
 	Queues          map[string]interface{} `config:"queues,omitempty"`
 
-	FetchMinBytes    int `config:"fetch_min_bytes"`
-	FetchMaxBytes    int `config:"fetch_max_bytes"`
-	FetchMaxMessages int `config:"fetch_max_messages"`
-	FetchMaxWaitMs   int `config:"fetch_max_wait_ms"`
+	Consumer   queue.ConsumerConfig `config:"consumer"`
 
 	MaxWorkers int      `config:"max_worker_size"`
 
@@ -78,6 +75,9 @@ type Config struct {
 
 	RotateConfig rotate.RotateConfig          `config:"rotate"`
 	BulkConfig   elastic2.BulkProcessorConfig `config:"bulk"`
+
+	WaitingAfter        []string `config:"waiting_after"`
+
 }
 
 func New(c *config.Config) (pipeline.Processor, error) {
@@ -90,9 +90,13 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		DetectIntervalInMs:   10000,
 		Queues: map[string]interface{}{},
 
-		FetchMinBytes:   1,
-		FetchMaxMessages:   100,
-		FetchMaxWaitMs:   10000,
+		Consumer: queue.ConsumerConfig{
+			Group: "group-001",
+			Name: "consumer-001",
+			FetchMinBytes:   	1,
+			FetchMaxMessages:   100,
+			FetchMaxWaitMs:   10000,
+		},
 
 		DetectActiveQueue:    true,
 		ValidateRequest:      false,
@@ -199,7 +203,7 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 							return
 						}
 						//if have depth and not in in flight
-						if queue.Depth(v)>0{
+						if queue.HasLag(v){
 							_,ok:=processor.inFlightQueueConfigs.Load(v.Id)
 							if !ok{
 								log.Tracef("detecting new queue: %v",v.Name)
@@ -230,7 +234,7 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 func (processor *BulkIndexingProcessor) HandleQueueConfig(v *queue.Config,c *pipeline.Context){
 
 	if processor.config.SkipEmptyQueue{
-		if queue.Depth(v)<=0{
+		if !queue.HasLag(v){
 			if global.Env().IsDebug{
 				log.Tracef("skip empty queue:[%v]",v.Name)
 			}
@@ -370,7 +374,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 	var meta *elastic.ElasticsearchMetadata
 	var initOfffset string
 	var offset string
-	var consumer=queue.GetOrInitConsumerConfig(qConfig.Id,"group-001","consumer-001")
+	var consumer=queue.GetOrInitConsumerConfig(qConfig.Id,processor.config.Consumer.Group,processor.config.Consumer.Name)
 
 	defer func() {
 		if !global.Env().IsDebug {
@@ -401,7 +405,10 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 				}
 			}
 		}else{
-			log.Errorf("error between queue:[%v] offset [%v]-[%v]",qConfig.Id,initOfffset,offset)
+			if global.Env().IsDebug{
+				log.Errorf("error between queue:[%v] offset [%v]-[%v]",qConfig.Id,initOfffset,offset)
+			}
+			return
 		}
 		log.Debugf("exit worker[%v], queue:[%v]",workerID,qConfig.Id)
 	}()
@@ -423,18 +430,11 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 	}
 
 	bulkProcessor = elastic2.BulkProcessor{
-		RotateConfig: processor.config.RotateConfig,
 		Config:       processor.config.BulkConfig,
 	}
 
-	if bulkProcessor.Config.FailureRequestsQueue == "" {
-		bulkProcessor.Config.FailureRequestsQueue = fmt.Sprintf("%v-bulk-failure-items", esClusterID) //TODO record offset instead of new queue
-	}
 	if bulkProcessor.Config.DeadletterRequestsQueue == "" {
 		bulkProcessor.Config.DeadletterRequestsQueue = fmt.Sprintf("%v-bulk-dead_letter-items", esClusterID)
-	}
-	if bulkProcessor.Config.InvalidRequestsQueue == "" {
-		bulkProcessor.Config.InvalidRequestsQueue = fmt.Sprintf("%v-bulk-invalid-items", esClusterID)
 	}
 
 	var lastCommit time.Time = time.Now()
@@ -466,12 +466,27 @@ READ_DOCS:
 			goto READ_DOCS
 		}
 
+		if len(processor.config.WaitingAfter) > 0 {
+			for _, v := range processor.config.WaitingAfter {
+				qCfg:=queue.GetOrInitConfig(v)
+				hasLag := queue.HasLag(qCfg)
+
+				log.Debugf("checking queue lag: %v %v",qConfig.Name,hasLag)
+
+				if hasLag {
+					log.Debugf("%v has pending messages to consume, cleanup it first", v)
+					time.Sleep(5 * time.Second)
+					goto READ_DOCS
+				}
+			}
+		}
+
 		//each message is complete bulk message, must be end with \n
 		//pop, timeout, err := queue.PopTimeout(qConfig, idleDuration)
 
 		log.Debugf("worker:[%v] start consume queue:[%v] offset:%v",workerID,qConfig.Id,offset)
 
-		ctx1,messages,timeout,err:=queue.Consume(qConfig,consumer.Name,offset,processor.config.FetchMaxMessages,time.Millisecond*time.Duration(processor.config.FetchMaxWaitMs))
+		ctx1,messages,timeout,err:=queue.Consume(qConfig,consumer.Name,offset,processor.config.Consumer.FetchMaxMessages,time.Millisecond*time.Duration(processor.config.Consumer.FetchMaxWaitMs))
 
 		if global.Env().IsDebug{
 			log.Debugf("[%v] consume message:%v,offset:%v,next:%v,timeout:%v,err:%v",consumer.Name,len(messages),ctx1.InitOffset,ctx1.NextOffset,timeout,err)
@@ -521,7 +536,19 @@ READ_DOCS:
 					}
 
 					//submit request
-					processor.submitBulkRequest(esClusterID,meta,host,bulkProcessor,mainBuf)
+					continueRequest:=processor.submitBulkRequest(esClusterID,meta,host,bulkProcessor,mainBuf)
+					if !continueRequest{
+							log.Errorf("error between queue:[%v] offset [%v]-[%v]",qConfig.Id,initOfffset,offset)
+							return
+					}else{
+						offset=pop.NextOffset
+						if offset!=""&&offset!=initOfffset{
+							ok,err:=queue.CommitOffset(qConfig,consumer,offset)
+							if !ok||err!=nil{
+								panic(err)
+							}
+						}
+					}
 
 					//reset buffer
 					mainBuf.Reset()
@@ -554,6 +581,7 @@ CLEAN_BUFFER:
 	}else{
 		//logging failure offset boundry
 		log.Errorf("error between offset [%v]-[%v]",initOfffset,offset)
+		return
 	}
 
 	//reset buffer
@@ -587,14 +615,14 @@ func (processor *BulkIndexingProcessor) submitBulkRequest(esClusterID string, me
 		log.Trace(meta.Config.Name, ", starting submit bulk request")
 
 		start := time.Now()
-		//data := mainBuf.Bytes()
-		contrinueRequest,status, success, err := bulkProcessor.Bulk(meta, host, mainBuf)
+		contrinueRequest:= bulkProcessor.Bulk(meta, host, mainBuf)
+
 		stats.Timing("elasticsearch."+esClusterID+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
-		log.Debug(meta.Config.Name, ", ", host, ", result:", success, ", status:", status,", count:",count, ", size:", util.ByteSize(uint64(size)), ", elapsed:", time.Since(start)," ",err)
-		stats.IncrementBy("elasticsearch."+esClusterID+".bulk", string(success+".bytes"), int64(size))
-		stats.IncrementBy("elasticsearch."+esClusterID+".bulk", string(success+".count"), int64(count))
+		//log.Debug(meta.Config.Name, ", ", host, ", result:", success, ", status:", status,", count:",count, ", size:", util.ByteSize(uint64(size)), ", elapsed:", time.Since(start)," ",err)
+		log.Debug(meta.Config.Name, ", ", host, ", count:",count, ", size:", util.ByteSize(uint64(size)), ", elapsed:", time.Since(start))
+		//stats.IncrementBy("elasticsearch."+esClusterID+".bulk", string(success+".bytes"), int64(size))
+		//stats.IncrementBy("elasticsearch."+esClusterID+".bulk", string(success+".count"), int64(count))
 		//stats.IncrementBy("elasticsearch."+esClusterID+".bulk", fmt.Sprintf("%v.bytes",status), int64(size))
-		//mainBuf.Reset()
 		return contrinueRequest
 	}
 

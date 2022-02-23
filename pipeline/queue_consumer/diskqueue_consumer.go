@@ -15,7 +15,6 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
-	es "infini.sh/gateway/proxy/filters/elastic"
 	"net/http"
 	"runtime"
 	"sync"
@@ -179,9 +178,9 @@ READ_DOCS:
 			for _, v := range waitingAfter {
 				qCfg:=queue.GetOrInitConfig(v)
 				//TODO handle consumer type
-				depth := queue.Depth(qCfg)
-				if depth > 0 {
-					log.Debugf("%v has pending %v messages, cleanup it first", v, depth)
+				hasLag := queue.HasLag(qCfg)
+				if hasLag {
+					log.Debugf("%v has pending messages, cleanup it first", v)
 					time.Sleep(5 * time.Second)
 					goto READ_DOCS
 				}
@@ -328,7 +327,7 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 			successItems := bytebufferpool.Get()
 
 			//TODO remove
-			containError:=es.HandleBulkResponse(processor.config.SafetyParse,requestBytes,resbody,processor.config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
+			containError:=processor.HandleBulkResponse(processor.config.SafetyParse,requestBytes,resbody,processor.config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
 			if containError {
 
 				log.Error("error in bulk requests,", resp.StatusCode(), util.SubString(string(resbody), 0, 256))

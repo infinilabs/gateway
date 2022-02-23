@@ -19,6 +19,7 @@ type Config struct {
 	InputQueue string `config:"input_queue"`
 
 	CommitOnTag   	 string `config:"commit_on_tag"`
+	IdleWaitTimeoutInSeconds   	 int `config:"idle_wait_timeout_in_second"`
 
 	Consumer   queue.ConsumerConfig `config:"consumer"`
 
@@ -62,6 +63,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 			FetchMaxWaitMs:   10000,
 		},
 		CommitOnTag:"",
+		IdleWaitTimeoutInSeconds:   	1,
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -102,8 +104,8 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 		}
 	}()
 
-	timeOut := 5
-	idleDuration := time.Duration(timeOut) * time.Second
+	//timeOut := 5
+	//idleDuration := time.Duration(timeOut) * time.Second
 	flowProcessor := common.GetFlowProcess(processor.config.FlowName)
 	qConfig :=queue.GetOrInitConfig(processor.config.InputQueue)
 
@@ -122,6 +124,8 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 			}
 
 			select {
+			case <-ctx.Context.Done():
+				return nil
 			case <-signalChannel:
 				return nil
 			default:
@@ -133,22 +137,11 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 				_,messages,timeout,err:=queue.Consume(qConfig,consumer.Name,offset,processor.config.Consumer.FetchMaxMessages,time.Millisecond*time.Duration(processor.config.Consumer.FetchMaxWaitMs))
 
 				if len(messages) > 0 {
+
 					for _,pop:=range messages {
 						if err!=nil{
 							log.Error(err)
 							panic(err)
-						}
-						if timeout{
-
-							if queue.Depth(qConfig)>0{
-								log.Warnf("%v %v no message but queue has lag, queue may broken",processor.config.InputQueue, idleDuration)
-							}else{
-								if global.Env().IsDebug {
-									log.Tracef("%v %v no message input",processor.config.InputQueue, idleDuration)
-								}
-							}
-
-							goto READ_DOCS
 						}
 
 						ctx := acquireCtx()
@@ -162,28 +155,36 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 
 						flowProcessor(ctx)
 
-						if processor.config.CommitOnTag!=""{
-							tags,ok:=ctx.GetTags()
-							if ok{
-								_,ok= tags[processor.config.CommitOnTag]
-							}
-							if !ok{
-								releaseCtx(ctx)
-								return nil
-							}
-						}
+						//if processor.config.CommitOnTag!=""{
+						//	tags,ok:=ctx.GetTags()
+						//	if ok{
+						//		_,ok= tags[processor.config.CommitOnTag]
+						//	}
+						//	if !ok{
+						//		releaseCtx(ctx)
+						//		return nil
+						//	}
+						//}
 
 						releaseCtx(ctx)
+
 
 						offset=pop.NextOffset
 						if offset!=""&&offset!=initOfffset{
 							ok,err:=queue.CommitOffset(qConfig,consumer,offset)
+							log.Tracef("%v,%v commit offset:%v",qConfig.Name,consumer.Name,offset)
 							if !ok||err!=nil{
 								panic(err)
 							}
 						}
 					}
 				}
+
+				if timeout||len(messages)==0{
+					time.Sleep(1*time.Second)
+					goto READ_DOCS
+				}
+
 			}
 		}
 

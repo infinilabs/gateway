@@ -73,8 +73,8 @@ func New(c *config.Config) (pipeline.Filter, error) {
 		Balancer:              "weight",
 		MaxResponseBodySize:   100 * 1024 * 1024,
 		MaxConnection:         5000,
-		maxRetryTimes:         10,
-		retryDelayInMs:        1000,
+		MaxRetryTimes:         0,
+		RetryDelayInMs:        1000,
 		TLSInsecureSkipVerify: true,
 		ReadBufferSize:        4096 * 4,
 		WriteBufferSize:       4096 * 4,
@@ -85,6 +85,7 @@ func New(c *config.Config) (pipeline.Filter, error) {
 		MaxConnDuration:       util.GetDurationOrDefault("0s", 0*time.Second),
 
 		ReadTimeout:           util.GetDurationOrDefault("0s", 0*time.Hour),
+		Timeout:           util.GetDurationOrDefault("60s", 60*time.Second),
 		WriteTimeout:          util.GetDurationOrDefault("0s", 0*time.Hour),
 		//idle alive connection will be closed
 		MaxIdleConnDuration:   util.GetDurationOrDefault("30s", 30*time.Second),

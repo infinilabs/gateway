@@ -451,7 +451,11 @@ START:
 
 	metadata.CheckNodeTrafficThrottle(host,1,req.GetRequestLength(),0)
 
-	err := pc.Do(req, res)
+	if p.proxyConfig.Timeout<=0{
+		p.proxyConfig.Timeout=60*time.Second
+	}
+
+	err := pc.DoTimeout(req, res,p.proxyConfig.Timeout)
 
 	//stats.Increment("reverse_proxy","do")
 
@@ -482,9 +486,9 @@ START:
 			//server failure flow
 		} else if res.StatusCode() == 429 {
 			retry++
-			if p.proxyConfig.maxRetryTimes > 0 && retry < p.proxyConfig.maxRetryTimes {
-				if p.proxyConfig.retryDelayInMs > 0 {
-					time.Sleep(time.Duration(p.proxyConfig.retryDelayInMs) * time.Millisecond)
+			if p.proxyConfig.MaxRetryTimes > 0 && retry < p.proxyConfig.MaxRetryTimes {
+				if p.proxyConfig.RetryDelayInMs > 0 {
+					time.Sleep(time.Duration(p.proxyConfig.RetryDelayInMs) * time.Millisecond)
 				}
 				stats.Increment("reverse_proxy","429_busy_retry")
 				goto START
@@ -492,7 +496,7 @@ START:
 				log.Debugf("reached max retries, failed to proxy request: %v, %v", err, string(req.RequestURI()))
 			}
 		}else{
-			log.Warnf("failed to proxy request: %v, %v, retried #%v", err, string(req.RequestURI()), retry)
+			log.Warnf("failed to proxy request: %v to host %v, %v, retried: #%v, error:%v", string(req.RequestURI()),host,retry, retry,err)
 		}
 
 		//TODO if backend failure and after reached max retry, should save translog and mark the elasticsearch cluster to downtime, deny any new requests

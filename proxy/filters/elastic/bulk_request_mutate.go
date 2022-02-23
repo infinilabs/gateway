@@ -38,12 +38,17 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 
 	if util.SuffixStr(pathStr, "/_bulk") {
 		body := ctx.Request.GetRawBody()
+
+		//this buffer will release after context exit
+		//var bulkBuff=ctx.AcquireBuffer()
 		var bulkBuff *bytebufferpool.ByteBuffer = bufferPool.Get()
 		actionMeta := smallSizedPool.Get()
 		defer smallSizedPool.Put(actionMeta)
 
+		//var docBuffer = p.Get(this.DocBufferSize) //doc buffer for bytes scanner
 		var docBuffer []byte
 		docBuffer = p.Get(this.DocBufferSize) //doc buffer for bytes scanner
+
 		defer p.Put(docBuffer)
 
 		docCount, err := WalkBulkRequests(this.SafetyParse, body, docBuffer, func(eachLine []byte) (skipNextLine bool) {
@@ -117,28 +122,40 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
-			//update metadata changes
-			if indexNew != "" || (typeNew != ""&&!this.RemoveTypeMeta) || idNew != "" {
-				var err error
-				metaBytes, err = updateJsonWithNewIndex(actionStr, metaBytes, indexNew, typeNew, idNew)
+
+			set:=map[string]string{}
+			remove:=map[string]string{}
+
+			if this.RemoveTypeMeta{
+				remove["_type"]="_type"
+			}
+
+			if this.Pipeline!=""{
+				set["pipeline"]=this.Pipeline
+			}else if this.RemovePipeline{
+				remove["pipeline"]="pipeline"
+			}
+
+			if indexNew!=""{
+				set["_index"]=indexNew
+			}
+
+			if typeNew != ""&&!this.RemoveTypeMeta{
+				set["_type"]=typeNew
+			}
+
+			if idNew!=""{
+				set["_id"]=idNew
+			}
+
+			if len(set)>0||len(remove)>0{
+				metaBytes, err =batchUpdateJson(metaBytes,actionStr,set,remove)
 				if err != nil {
 					panic(err)
 				}
 				if global.Env().IsDebug {
 					log.Trace("updated action meta,", id, ",", metaStr, "->", string(metaBytes))
 				}
-			}
-
-			if this.RemoveTypeMeta{
-				metaBytes, err =removeKeysFromAction(actionStr,metaBytes,"_type")
-			}
-
-			if this.RemovePipeline{
-				metaBytes, err =removeKeysFromAction(actionStr,metaBytes,"pipeline")
-			}
-
-			if this.Pipeline!=""{
-				metaBytes, err =updateKeysFromAction(actionStr,metaBytes,"pipeline",this.Pipeline)
 			}
 
 			if actionStr == "" || index == "" || id == "" {
@@ -150,6 +167,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 				log.Tracef("final path: %s/%s/%s", index, typeName, id)
 				log.Tracef("metadata:\n%v", string(metaBytes))
 			}
+
 			actionMeta.Write(metaBytes)
 
 			return nil

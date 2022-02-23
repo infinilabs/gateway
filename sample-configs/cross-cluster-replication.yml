@@ -38,9 +38,6 @@ flow:
       - flow:
           flows:
             - auth-flow
-#      - set_basic_auth: #覆盖身份信息
-#          username: elastic
-#          password: changeme
       - if:
           and:
             - queue_has_lag: [ "primary", "primary-failure"]
@@ -63,93 +60,85 @@ flow:
               - elasticsearch_health_check: #由请求触发的限速模式下的主动检查后端监控情况
                   elasticsearch: "primary"
               - drop:
-          - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
-              fix_null_id: true
-              fix_null_type: true
-              default_type: _doc
-              type_rename:
-                "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
-#              index_rename:
-#                test: "test-backup"
-              remove_pipeline: true
-              generate_enhanced_id: true
-              when:
-                contains:
-                  _ctx.request.path: /_bulk
-          - elasticsearch: #集群可用，直接处理请求
-              elasticsearch: "primary"
-              max_connection_per_node: 1000
-          - bulk_response_process: #如果是 bulk 请求，还需要进一步验证是否存在部分请求失败的错误异常
-              continue_on_error: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
-              success_queue: "backup" #已经写入成功的请求，发送到备份集群的队列，进行复制
-              invalid_queue: "primary-invalid" #TODO 记录日志，请求和响应结果
-              failure_queue: "primary-failure" # 记录完整请求到失败队列，可以根据需要重做
-              add_tag: ["commit_message_allowed"]
-              when:
-                contains:
-                  _ctx.request.path: /_bulk
-          - if: #429 重试
-              in:
-                _ctx.response.status: [ 429 ]
-            then:
-              - queue:
-                  queue_name: "primary-429"
-              - drop:
-          - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
-              range:
-                _ctx.response.status.gte: 400
-                _ctx.response.status.lt: 500
-            then:
-              - drop:
-          - if: #正常的请求, 复制到备份集群
-              in:
-                _ctx.response.status: [200,201]
-            then: #仅正常处理的集群才转发给后端集群
-#              - set_basic_auth: #覆盖身份信息
-#                  username: test
-#                  password: testtest
-              - queue:
-                  queue_name: "backup"
-            else: #集群可用的情况下但是失败了，可能存在脏写，将请求放入写入失败队列，后续可以选择两边集群都重做一次，最终确保一致性，写 translog，后续提供 UI 可以进行三方检查：主、备集群和本地日志
-              - queue:
-                  queue_name: "primary-failure"
+            else:
+              - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
+                  fix_null_id: true
+                  fix_null_type: true
+                  default_type: _doc
+                  type_rename:
+                    "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
+                  remove_pipeline: true
+                  generate_enhanced_id: true
+              - elasticsearch: #集群可用，直接处理请求
+                  elasticsearch: "primary"
+                  max_connection_per_node: 1000
+                  max_retry_times: 0
+              - bulk_response_process:
+                  success_queue: "backup"
+                  invalid_queue: "primary-invalid"
+                  continue_on_success: true
+                  continue_on_error: true
+              - flow:
+                  flows:
+                    - primary-response-check
 
-  - name: primary-flow-post-processing
+  - name: primary-response-check
     filter:
-#      - dump:
-#          uri: true
-#          request: true
-#          response: true
-      - retry_limiter:
-          queue_name: "primary-deadletter_requests"
-          max_retry_times: 60
-          add_tag: ["commit_message_allowed"]
+      - if: #429 重试
+          in:
+            _ctx.response.status: [ 429 ]
+        then:
+          - queue:
+              queue_name: "primary-429"
+          - drop:
+      - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
+          range:
+            _ctx.response.status.gte: 400
+            _ctx.response.status.lt: 500
+        then:
+          - drop:
+      - if: #正常的请求, 复制到备份集群
+          in:
+            _ctx.response.status: [200,201]
+        then: #仅正常处理的集群才转发给后端集群
+          - queue:
+              queue_name: "backup"
+          - drop:
+        else: #集群可用的情况下但是失败了，可能存在脏写，将请求放入写入失败队列，后续可以选择两边集群都重做一次，最终确保一致性，写 translog，后续提供 UI 可以进行三方检查：主、备集群和本地日志
+          - queue:
+              queue_name: "primary-failure"
+
+  - name: primary-flow-post-processing #处理通过 commit，处理失败重试，非法请求丢弃
+    filter:
+#      - retry_limiter:
+#          queue_name: "primary-deadletter_requests"
+#          max_retry_times: 60
+#          tag_on_success: ["commit_message_allowed"]
       - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
           fix_null_id: true
           fix_null_type: true
           default_type: _doc
           type_rename:
             "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
-          #              index_rename:
-          #                test: "test-backup"
           remove_pipeline: true
           generate_enhanced_id: true
-          when:
-            contains:
-              _ctx.request.path: /_bulk
       - elasticsearch:
           elasticsearch: "primary"
           max_connection_per_node: 1000
-      - bulk_response_process:
-          success_queue: "backup"
-          invalid_queue: "primary-invalid"
-          continue_on_error: false
-          add_tag: ["commit_message_allowed"]
+          max_retry_times: 0
       - if: #429 重试
           in:
-            _ctx.response.status: [ 429 ]
+            _ctx.response.status: [ 429,0,500,503 ]
         then:
           - drop:
+      - bulk_response_process:
+          success_queue: "backup"
+          failure_queue: "primary-failure"
+          invalid_queue: "primary-invalid"
+          continue_on_success: true
+          continue_on_error: true
+          tag_on_all_error: [ "commit_message_allowed" ]
+          tag_on_all_success: [ "commit_message_allowed" ]
       - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
           range:
             _ctx.response.status.gte: 400
@@ -167,6 +156,7 @@ flow:
           - tag:
               add: [ "commit_message_allowed" ]
 
+
   - name: backup-flow-replicate-processing
     filter:
 #      - dump:
@@ -176,27 +166,30 @@ flow:
       - retry_limiter:
           queue_name: "backup-deadletter_requests"
           max_retry_times: 60
-          add_tag: ["commit_message_allowed"]
-      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
-          fix_null_id: true
-          fix_null_type: true
-          default_type: _doc
-          type_rename:
-            "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
-          #              index_rename:
-          #                test: "test-backup"
-          remove_pipeline: true
-          generate_enhanced_id: true
-          when:
-            contains:
-              _ctx.request.path: /_bulk
+          tag_on_success: ["commit_message_allowed"]
+#      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
+#          fix_null_id: true
+#          fix_null_type: true
+#          default_type: _doc
+#          type_rename:
+#            "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
+#          #              index_rename:
+#          #                test: "test-backup"
+#          remove_pipeline: true
+#          generate_enhanced_id: true
+#          when:
+#            contains:
+#              _ctx.request.path: /_bulk
       - elasticsearch:
           elasticsearch: "backup"
           max_connection_per_node: 1000
+          max_retry_times: 0
       - bulk_response_process:
           continue_on_error: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
           invalid_queue: "backup-invalid"
-          add_tag: ["commit_message_allowed"]
+          failure_queue: "backup-failure"
+          tag_on_success: ["commit_message_allowed"]
+          tag_on_error: ["commit_message_allowed"]
           when:
             contains:
               _ctx.request.path: /_bulk
@@ -209,19 +202,19 @@ flow:
 
   - name: backup-flow-reshuffle-replicate-processing
     filter:
-      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
-          fix_null_id: true
-          fix_null_type: true
-          default_type: _doc
-          type_rename:
-          "*": "_doc" #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
-          #              index_rename:
-          #                test: "test-backup"
-          remove_pipeline: true # pipeline should be enabled manually, please ensure each cluster has the same setup
-          generate_enhanced_id: true
-          when:
-            contains:
-              _ctx.request.path: /_bulk
+#      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
+#          fix_null_id: true
+#          fix_null_type: true
+#          default_type: _doc
+#          type_rename:
+#          "*": "_doc" #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
+#          #              index_rename:
+#          #                test: "test-backup"
+#          remove_pipeline: true # pipeline should be enabled manually, please ensure each cluster has the same setup
+#          generate_enhanced_id: true
+#          when:
+#            contains:
+#              _ctx.request.path: /_bulk
 #      - record:
 #          stdout: true
       - bulk_reshuffle:
@@ -229,16 +222,22 @@ flow:
             contains:
               _ctx.request.path: /_bulk
           elasticsearch: "backup"
-          level: partition #cluster,node,shard,partition
-          partition_size: 10
+          queue_name_prefix: "async_bulk"
+          level: index #cluster,node,index,shard
+          partition_size: 3
           fix_null_id: true
+          tag_on_success: ["commit_message_allowed"]
       - elasticsearch:
           elasticsearch: "backup"
+          max_retry_times: 0
           max_connection_per_node: 1000
       - bulk_response_process:
+          continue_on_success: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
           continue_on_error: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
           invalid_queue: "backup-invalid"
-          add_tag: ["commit_message_allowed"]
+          failure_queue: "backup-failure"
+          tag_on_success: ["commit_message_allowed"]
+          tag_on_error: ["commit_message_allowed"]
           when:
             contains:
               _ctx.request.path: /_bulk
@@ -260,8 +259,8 @@ flow:
             - /favicon.ico
       - logging:
           queue_name: request_logging
-          max_request_body_size: 1024
-          max_response_body_size: 1024
+          max_request_body_size: 102400
+          max_response_body_size: 102400
           when:
             or:
               - equals:
@@ -328,8 +327,8 @@ elasticsearch:
   - name: backup
     enabled: true
     endpoints:
-#      - http://192.168.3.188:9204
-      - http://192.168.3.98:9200
+      - http://192.168.3.188:9204
+#      - http://192.168.3.98:9200
     basic_auth:
       username: elastic
       password: changeme
@@ -343,10 +342,10 @@ elasticsearch:
   - name: primary
     enabled: true
     endpoints:
-      - http://192.168.3.98:9200
-#      - http://192.168.3.188:9207
-#      - http://192.168.3.188:9217
-#      - http://192.168.3.188:9227
+#      - http://192.168.3.98:9200
+      - http://192.168.3.188:9207
+      - http://192.168.3.188:9217
+      - http://192.168.3.188:9227
     basic_auth:
       username: test
       password: testtest
@@ -417,6 +416,8 @@ pipeline:
           input_queue: "backup"
           flow: backup-flow-reshuffle-replicate-processing
           commit_on_tag: "commit_message_allowed"
+          consumer:
+            fetch_max_messages: 1000
           when:
             and:
               - cluster_available: ["backup"]
@@ -426,11 +427,25 @@ pipeline:
     keep_running: true
     processor:
       - bulk_indexing:
-          when:
-            cluster_available: [ "backup" ]
           bulk_size_in_mb: 10
+          fetch_max_messages: 1000
+          waiting_after:
+            - "backup-failure"
           queues:
             type: bulk_reshuffle
+          when:
+             cluster_available: [ "backup" ]
+
+  - name: queue_backup-failure-consumer
+    auto_start: true
+    keep_running: true
+    processor:
+      - flow_runner:
+          input_queue: "backup-failure"
+          flow: backup-flow-replicate-processing
+          commit_on_tag: "commit_message_allowed"
+          when:
+            cluster_available: [ "backup" ]
 
 ## let's upload disk queue files to s3 for backup
 disk_queue:
