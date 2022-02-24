@@ -69,7 +69,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 				indexNew = urlLevelIndex
 			}
 
-			if typeName == "" &&!this.RemoveTypeMeta && urlLevelType != "" {
+			if typeName!=typeNew && typeName == "" &&!this.RemoveTypeMeta && urlLevelType != "" {
 				typeName = urlLevelType
 				typeNew = urlLevelType
 			}
@@ -87,7 +87,8 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
-			if typeNew == "" &&!this.RemoveTypeMeta && this.FixNilType && this.DefaultType != "" {
+			if typeName==""&&typeNew == "" &&!this.RemoveTypeMeta && this.FixNilType && this.DefaultType != "" {
+				typeName = this.DefaultType
 				typeNew = this.DefaultType
 				if global.Env().IsDebug {
 					log.Trace("use default type: ", this.DefaultType, " for: ", metaStr)
@@ -110,12 +111,12 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 
 			if typeName != "" &&!this.RemoveTypeMeta && len(this.TypeNameRename) > 0 {
 				v, ok := this.TypeNameRename[typeName]
-				if ok {
+				if ok&& v!=typeName {
 					typeNew = v
 					typeName = v
 				} else {
 					v, ok := this.TypeNameRename["*"]
-					if ok {
+					if ok && v!=typeName {
 						typeNew = v
 						typeName = v
 					}
@@ -128,6 +129,10 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 
 			if this.RemoveTypeMeta{
 				remove["_type"]="_type"
+			}else{
+				if typeNew != ""{
+					set["_type"]=typeNew
+				}
 			}
 
 			if this.Pipeline!=""{
@@ -138,10 +143,6 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 
 			if indexNew!=""{
 				set["_index"]=indexNew
-			}
-
-			if typeNew != ""&&!this.RemoveTypeMeta{
-				set["_type"]=typeNew
 			}
 
 			if idNew!=""{
