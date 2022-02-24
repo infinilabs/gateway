@@ -23,6 +23,10 @@ func (filter *RequestClientIPFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	clientIP := ctx.RemoteIP().String()
 
+	if global.Env().IsDebug{
+		log.Trace("client_ip:",clientIP)
+	}
+
 	valid, hasRule := CheckExcludeStringRules(clientIP, filter.Exclude, ctx)
 	if hasRule && !valid {
 		if global.Env().IsDebug {
