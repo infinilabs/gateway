@@ -17,7 +17,7 @@ flow:
     filter:
       - basic_auth:
           valid_users:
-            ingest: passwd
+            ingest: managemDFSDFSDFent
 
   - name: primary-read-flow
     filter:
@@ -187,9 +187,8 @@ flow:
       - bulk_response_process:
           continue_on_error: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
           invalid_queue: "backup-invalid"
-          failure_queue: "backup-failure"
-          tag_on_success: ["commit_message_allowed"]
-          tag_on_error: ["commit_message_allowed"]
+          tag_on_all_success: ["commit_message_allowed"]
+          tag_on_all_error: ["commit_message_allowed"]
           when:
             contains:
               _ctx.request.path: /_bulk
@@ -235,9 +234,8 @@ flow:
           continue_on_success: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
           continue_on_error: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
           invalid_queue: "backup-invalid"
-          failure_queue: "backup-failure"
-          tag_on_success: ["commit_message_allowed"]
-          tag_on_error: ["commit_message_allowed"]
+          tag_on_all_success: ["commit_message_allowed"]
+          tag_on_all_error: ["commit_message_allowed"]
           when:
             contains:
               _ctx.request.path: /_bulk
