@@ -496,7 +496,10 @@ START:
 				log.Debugf("reached max retries, failed to proxy request: %v, %v", err, string(req.RequestURI()))
 			}
 		}else{
-			log.Warnf("failed to proxy request: %v to host %v, %v, retried: #%v, error:%v", string(req.RequestURI()),host,retry, retry,err)
+			if rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"backend_failure_on_error", 1).Allow() {
+				log.Warnf("failed to proxy request: %v to host %v, %v, retried: #%v, error:%v", string(req.RequestURI()),host,retry, retry,err)
+			}
+			time.Sleep(1 * time.Second)
 		}
 
 		//TODO if backend failure and after reached max retry, should save translog and mark the elasticsearch cluster to downtime, deny any new requests
