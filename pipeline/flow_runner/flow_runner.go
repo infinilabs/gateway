@@ -7,6 +7,7 @@ import (
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
 	"runtime"
@@ -17,6 +18,7 @@ import (
 type Config struct {
 	FlowName   string `config:"flow"`
 	InputQueue string `config:"input_queue"`
+	FlowMaxRunningTimeoutInSeconds int `config:"flow_max_running_timeout_in_second"`
 
 	CommitOnTag   	 string `config:"commit_on_tag"`
 	IdleWaitTimeoutInSeconds   	 int `config:"idle_wait_timeout_in_second"`
@@ -64,6 +66,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		},
 		CommitOnTag:"",
 		IdleWaitTimeoutInSeconds:   	1,
+		FlowMaxRunningTimeoutInSeconds:   	10,
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -112,79 +115,100 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 	var consumer=queue.GetOrInitConsumerConfig(qConfig.Id,processor.config.Consumer.Group,processor.config.Consumer.Name)
 	var initOfffset string
 	var offset string
-
-	READ_DOCS:
-		initOfffset,_=queue.GetOffset(qConfig,consumer)
-		offset=initOfffset
-
-		for {
+	for {
+			t1:=util.AcquireTimer(time.Duration(processor.config.FlowMaxRunningTimeoutInSeconds)*time.Second)
+			defer util.ReleaseTimer(t1)
 
 			if ctx.IsCanceled(){
 				return nil
 			}
-
 			select {
+			case <-t1.C:
+				return nil
 			case <-ctx.Context.Done():
 				return nil
 			case <-signalChannel:
 				return nil
 			default:
-
 				if global.Env().IsDebug{
 					log.Debug(qConfig.Name,",",consumer.Group,",",consumer.Name,",init offset:",offset)
 				}
-
-				_,messages,timeout,err:=queue.Consume(qConfig,consumer.Name,offset,processor.config.Consumer.FetchMaxMessages,time.Millisecond*time.Duration(processor.config.Consumer.FetchMaxWaitMs))
-
-				if len(messages) > 0 {
-
-					for _,pop:=range messages {
-						if err!=nil{
-							log.Error(err)
-							panic(err)
+				wg:=sync.WaitGroup{}
+				wg.Add(1)
+				go func() {
+					defer func() {
+						if !global.Env().IsDebug {
+							if r := recover(); r != nil {
+								var v string
+								switch r.(type) {
+								case error:
+									v = r.(error).Error()
+								case runtime.Error:
+									v = r.(runtime.Error).Error()
+								case string:
+									v = r.(string)
+								}
+								log.Error("error on run tasks,", v)
+							}
 						}
+						wg.Done()
+					}()
 
-						ctx := acquireCtx()
+					//READ_DOCS:
+					initOfffset,_=queue.GetOffset(qConfig,consumer)
+					offset=initOfffset
 
+					_,messages,timeout,err:=queue.Consume(qConfig,consumer.Name,offset,processor.config.Consumer.FetchMaxMessages,time.Millisecond*time.Duration(processor.config.Consumer.FetchMaxWaitMs))
 
-						err = ctx.Request.Decode(pop.Data)
-						if err != nil {
-							log.Error(err)
-							panic(err)
-						}
+					if len(messages) > 0 {
 
-						flowProcessor(ctx)
-
-						//if processor.config.CommitOnTag!=""{
-						//	tags,ok:=ctx.GetTags()
-						//	if ok{
-						//		_,ok= tags[processor.config.CommitOnTag]
-						//	}
-						//	if !ok{
-						//		releaseCtx(ctx)
-						//		return nil
-						//	}
-						//}
-
-						releaseCtx(ctx)
-
-
-						offset=pop.NextOffset
-						if offset!=""&&offset!=initOfffset{
-							ok,err:=queue.CommitOffset(qConfig,consumer,offset)
-							log.Tracef("%v,%v commit offset:%v",qConfig.Name,consumer.Name,offset)
-							if !ok||err!=nil{
+						for _,pop:=range messages {
+							if err!=nil{
+								log.Error(err)
 								panic(err)
+							}
+
+							ctx := acquireCtx()
+							err = ctx.Request.Decode(pop.Data)
+							if err != nil {
+								log.Error(err)
+								panic(err)
+							}
+
+							flowProcessor(ctx)
+
+							if processor.config.CommitOnTag!=""{
+								tags,ok:=ctx.GetTags()
+								if ok{
+									_,ok= tags[processor.config.CommitOnTag]
+								}
+								if !ok{
+									releaseCtx(ctx)
+									return
+								}
+							}
+
+							releaseCtx(ctx)
+
+							offset=pop.NextOffset
+							if offset!=""&&offset!=initOfffset{
+								ok,err:=queue.CommitOffset(qConfig,consumer,offset)
+								log.Tracef("%v,%v commit offset:%v",qConfig.Name,consumer.Name,offset)
+								if !ok||err!=nil{
+									panic(err)
+								}
 							}
 						}
 					}
-				}
 
-				if timeout||len(messages)==0{
-					time.Sleep(1*time.Second)
-					goto READ_DOCS
-				}
+					if timeout||len(messages)==0{
+						time.Sleep(1*time.Second)
+						//goto READ_DOCS
+					}
 
+					}()
+				wg.Wait()
+				return nil
 			}
 		}
 
