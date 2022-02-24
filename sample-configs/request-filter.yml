@@ -16,6 +16,9 @@ router:
 flow:
   - name: test
     filter:
+      - request_client_ip_filter:
+          exclude:
+            - 192.168.1.1
       - context_filter:
           context: _ctx.request.path
           message: "request not allowed."
