@@ -40,7 +40,10 @@ flow:
             - auth-flow
       - if:
           and:
-            - queue_has_lag: [ "primary", "primary-failure"]
+            - consumer_has_lag:
+                queue: "primary-failure"
+                group: primary
+                name: primary-failure
             - cluster_available: ["primary"]
         then: #集群可用但是集群有堆积的情况，不处理客户端请求，待服务恢复之后再提供服务
           - set_response:
@@ -106,7 +109,7 @@ flow:
           - queue:
               queue_name: "primary-failure"
 
-  - name: primary-flow-post-processing #处理通过 commit，处理失败重试，非法请求丢弃，失败的请求，两边集群都做，只有当请求是继续丢回 primary-failure 才不需要给 backup 队列
+  - name: primary-failure-primary-post-processing #主集群的故障处理，重试，处理通过 commit，处理失败重试，非法请求丢弃，失败的请求
     filter:
       - if:
           not:
@@ -156,8 +159,60 @@ flow:
           in:
             _ctx.response.status: [ 200,201 ]
         then:
+          - tag:
+              add: [ "commit_message_allowed" ]
+
+
+  - name: primary-failure-backup-post-processing #备集群的故障处理，重试，处理通过 commit，处理失败重试，非法请求丢弃
+    filter:
+      - if:
+          not:
+            cluster_available: ["backup"]
+        then:
+          - elasticsearch_health_check:
+              elasticsearch: "backup"
+          - sleep:
+              sleep_in_million_seconds: 5000
+          - drop:
+      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
+          fix_null_id: true
+          fix_null_type: true
+          default_type: _doc
+          type_rename:
+            "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
+          remove_pipeline: true
+          generate_enhanced_id: true
+      - elasticsearch:
+          elasticsearch: "backup"
+          max_connection_per_node: 1000
+          max_retry_times: 0
+      - if: #请求失败了，继续重试
+          in:
+            _ctx.response.status: [ 429,0,500,503 ]
+        then:
+          - drop:
+      - bulk_response_process: #bulk 成功执行了，非法消息都入队，其他消息都不用管，继续重试，只有全部成功或者失败的时候才 commit，请求丢给 backup，否则提前结束
+          invalid_queue: "backup-invalid" #保存用来查看消息日志
+          tag_on_all_invalid: [ "commit_message_allowed" ] #只有都是非法请求的情况下才 commit
+          tag_on_all_success: [ "commit_message_allowed" ] #只有都是成功的情况下才 commit
+      - if: #其他的非 bulk 请求处理，先处理不合法的请求，主集群都失败了，副集群就不用考虑了
+          and:
+            - not:
+                in:
+                  _ctx.response.status: [ 429 ] #400_500 之间但不包括 429
+            - range:
+                _ctx.response.status.gte: 400
+                _ctx.response.status.lt: 500
+        then:
+          - tag:
+              add: [ "commit_message_allowed" ]
           - queue:
-              queue_name: "backup"
+              queue_name: "backup-invalid"
+          - drop:
+      - if:
+          in:
+            _ctx.response.status: [ 200,201 ]
+        then:
           - tag:
               add: [ "commit_message_allowed" ]
 
@@ -388,7 +443,7 @@ elasticsearch:
 
 pipeline:
   # pipelines for logging
-  - name: request_logging_index
+  - name: consume-request_logging_index-to-backup
     auto_start: true
     keep_running: true
     processor:
@@ -400,26 +455,43 @@ pipeline:
             cluster_available: [ "backup" ]
 
   # pipelines for primary cluster
-  - name: queue_primary-dead_retry-consumer
+  - name: consume-queue_primary-dead_retry-to-primary
     auto_start: false
     keep_running: false
     processor:
       - flow_runner:
           input_queue: "primary-deadletter_requests"
-          flow: primary-flow-post-processing
+          flow: primary-failure-primary-post-processing
           commit_on_tag: "commit_message_allowed"
           when:
             cluster_available: [ "primary" ]
-  - name: queue_primary-failure-consumer
+  - name: consume-queue_primary-failure-to-primary
     auto_start: true
     keep_running: true
     processor:
       - flow_runner:
           input_queue: "primary-failure"
-          flow: primary-flow-post-processing
+          flow: primary-failure-primary-post-processing
           commit_on_tag: "commit_message_allowed"
+          consumer:
+            group: primary
+            name: primary-failure
           when:
             cluster_available: [ "primary" ]
+
+  - name: consume-queue_primary-failure-to-backup
+    auto_start: true
+    keep_running: true
+    processor:
+      - flow_runner:
+          input_queue: "primary-failure"
+          flow: primary-failure-backup-post-processing
+          commit_on_tag: "commit_message_allowed"
+          consumer:
+            group: backup
+            name: primary-failure
+          when:
+            cluster_available: [ "backup" ]
 
 ## option A - pipelines for backup cluster - safety first, each requests are replicated in order, the speed may slow
 #  - name: queue_backup-consumer
@@ -438,7 +510,7 @@ pipeline:
 #              - cluster_available: ["backup"]
 
 # option B - pipelines for backup cluster, reshuffle bulk requests
-  - name: queue_backup-consumer
+  - name: consume-queue_backup-to-backup
     auto_start: true
     keep_running: true
     processor:
@@ -451,8 +523,13 @@ pipeline:
           when:
             and:
               - cluster_available: ["backup"]
+              - not:
+                  consumer_has_lag:
+                    queue: "primary-failure"
+                    group: backup
+                    name: primary-failure
 
-  - name: queue_backup-bulk_request_ingest
+  - name: consume-queue_backup-bulk_request_ingestion-to-backup
     auto_start: true
     keep_running: true
     processor:
@@ -467,7 +544,7 @@ pipeline:
           when:
              cluster_available: [ "backup" ]
 
-  - name: queue_backup-failure-consumer
+  - name: consume-queue_backup-failure-to-backup
     auto_start: true
     keep_running: true
     processor:
