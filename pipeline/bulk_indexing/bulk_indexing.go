@@ -263,7 +263,7 @@ func (processor *BulkIndexingProcessor) HandleQueueConfig(v *queue.Config,c *pip
 			if nodeInfo!=nil{
 				host:=nodeInfo.GetHttpPublishHost()
 				processor.wg.Add(1)
-				go processor.NewBulkWorker("242",c, processor.bulkSizeInByte, v, host)
+				go processor.NewBulkWorker("bulk_indexing_"+host,c, processor.bulkSizeInByte, v, host)
 				return
 			}else{
 				log.Debugf("node info not found: %v",nodeID)
@@ -293,7 +293,7 @@ func (processor *BulkIndexingProcessor) HandleQueueConfig(v *queue.Config,c *pip
 								if nodeInfo!=nil{
 									nodeHost:=nodeInfo.GetHttpPublishHost()
 									processor.wg.Add(1)
-									go processor.NewBulkWorker("270",c, processor.bulkSizeInByte, v, nodeHost)
+									go processor.NewBulkWorker("bulk_indexing_"+nodeHost,c, processor.bulkSizeInByte, v, nodeHost)
 									return
 								}else{
 									log.Debugf("nodeInfo not found: %v",v)
@@ -323,7 +323,7 @@ func (processor *BulkIndexingProcessor) HandleQueueConfig(v *queue.Config,c *pip
 	host := meta.GetActiveHost()
 	log.Debugf("random choose node [%v] to consume queue [%v]",host,v.Id)
 	processor.wg.Add(1)
-	go processor.NewBulkWorker("300",c, processor.bulkSizeInByte, v, host)
+	go processor.NewBulkWorker("bulk_indexing_"+host,c, processor.bulkSizeInByte, v, host)
 }
 
 
@@ -396,7 +396,8 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 		processor.inFlightQueueConfigs.Delete(key)
 
 		//cleanup buffer before exit worker
-		continueNext :=processor.submitBulkRequest(esClusterID,meta,host,bulkProcessor,mainBuf)
+		continueNext :=processor.submitBulkRequest(tag,esClusterID,meta,host,bulkProcessor,mainBuf)
+		mainBuf.Reset()
 		if continueNext {
 			if offset!=""&&initOfffset!=offset{
 				ok,err:=queue.CommitOffset(qConfig,consumer,offset)
@@ -536,7 +537,9 @@ READ_DOCS:
 					}
 
 					//submit request
-					continueRequest:=processor.submitBulkRequest(esClusterID,meta,host,bulkProcessor,mainBuf)
+					continueRequest:=processor.submitBulkRequest(tag,esClusterID,meta,host,bulkProcessor,mainBuf)
+					//reset buffer
+					mainBuf.Reset()
 					if !continueRequest{
 							log.Errorf("error between queue:[%v] offset [%v]-[%v]",qConfig.Id,initOfffset,offset)
 							return
@@ -549,11 +552,7 @@ READ_DOCS:
 							}
 						}
 					}
-
-					//reset buffer
-					mainBuf.Reset()
 				}
-
 			}
 		}
 
@@ -570,7 +569,9 @@ CLEAN_BUFFER:
 
 	lastCommit = time.Now()
 	//TODO, check bulk result, if ok, then commit offset, or retry non-200 requests, or save failure offset
-	continueNext:=processor.submitBulkRequest(esClusterID,meta,host,bulkProcessor,mainBuf)
+	continueNext:=processor.submitBulkRequest(tag,esClusterID,meta,host,bulkProcessor,mainBuf)
+	//reset buffer
+	mainBuf.Reset()
 	if continueNext{
 		if offset!=""&&offset!=initOfffset{
 			ok,err:=queue.CommitOffset(qConfig,consumer,offset)
@@ -584,8 +585,7 @@ CLEAN_BUFFER:
 		return
 	}
 
-	//reset buffer
-	mainBuf.Reset()
+
 
 	if offset==""||ctx.IsCanceled()||ctx.IsFailed() {
 		log.Tracef("invalid offset or canceled, return on queue:[%v]",qConfig.Name)
@@ -599,9 +599,7 @@ CLEAN_BUFFER:
 
 }
 
-func (processor *BulkIndexingProcessor) submitBulkRequest(esClusterID string, meta *elastic.ElasticsearchMetadata, host string, bulkProcessor elastic2.BulkProcessor, mainBuf *common.BulkBuffer)bool {
-
-	log.Tracef("submit BulkRequest")
+func (processor *BulkIndexingProcessor) submitBulkRequest(tag,esClusterID string, meta *elastic.ElasticsearchMetadata, host string, bulkProcessor elastic2.BulkProcessor, mainBuf *common.BulkBuffer)bool {
 
 	if  mainBuf==nil||meta==nil{
 		return true
@@ -615,7 +613,9 @@ func (processor *BulkIndexingProcessor) submitBulkRequest(esClusterID string, me
 		log.Trace(meta.Config.Name, ", starting submit bulk request")
 
 		start := time.Now()
-		contrinueRequest:= bulkProcessor.Bulk(meta, host, mainBuf)
+		contrinueRequest:= bulkProcessor.Bulk(tag,meta, host, mainBuf)
+
+		stats.Increment(esClusterID+"."+tag,util.ToString(contrinueRequest))
 
 		stats.Timing("elasticsearch."+esClusterID+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
 		//log.Debug(meta.Config.Name, ", ", host, ", result:", success, ", status:", status,", count:",count, ", size:", util.ByteSize(uint64(size)), ", elapsed:", time.Since(start)," ",err)

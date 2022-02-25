@@ -233,10 +233,10 @@ type BulkProcessor struct {
 type API_STATUS string
 
 
-func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host string, buffer *common.BulkBuffer) (continueNext bool) {
+func (joint *BulkProcessor) Bulk(tag string,metadata *elastic.ElasticsearchMetadata, host string, buffer *common.BulkBuffer) (continueNext bool) {
 
 	if buffer == nil || buffer.GetMessageSize() == 0 {
-		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "empty_bulk_requests")
+		stats.Increment("elasticsearch."+tag+"."+metadata.Config.Name+".bulk", "empty_bulk_requests")
 		return true
 	}
 
@@ -309,8 +309,11 @@ func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host s
 
 	//execute
 	err := httpClient.DoTimeout(req, resp, time.Duration(joint.Config.RequestTimeoutInSecond)*time.Second)
+
+	stats.Increment("elasticsearch."+tag+"."+metadata.Config.Name+".bulk", "http_request_count")
+
 	if err != nil {
-		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "5xx_requests")
+		stats.Increment("elasticsearch."+tag+"."+metadata.Config.Name+".bulk", "5xx_requests")
 
 		if rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"5xx_on_error", 1).Allow() {
 			log.Error("status:", resp.StatusCode(), ",", host, ",", err, " ", util.SubString(string(util.EscapeNewLine(resp.GetRawBody())), 0, 256))
@@ -336,7 +339,7 @@ func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host s
 		if global.Env().IsDebug {
 			log.Error(err)
 		}
-		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "5xx_requests")
+		stats.Increment("elasticsearch."+tag+"."+metadata.Config.Name+".bulk", "5xx_requests")
 		return false
 	}
 
@@ -353,10 +356,10 @@ func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host s
 			nonRetryableItems := bytebufferpool.Get()
 			retryableItems := bytebufferpool.Get()
 
-			containError,statsCodeStats := HandleBulkResponse2(joint.Config.SafetyParse, data, resbody, joint.Config.DocBufferSize, buffer, nonRetryableItems, retryableItems)
+			containError,statsCodeStats := HandleBulkResponse2(tag,joint.Config.SafetyParse, data, resbody, joint.Config.DocBufferSize, buffer, nonRetryableItems, retryableItems)
 			if containError {
 
-				stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "200_bulk_error_requests")
+				stats.Increment("elasticsearch."+tag+"."+metadata.Config.Name+".bulk", "200_bulk_error_requests")
 
 				if retryableItems.Len()>0{
 					retryableItems.WriteByte('\n')
@@ -371,17 +374,21 @@ func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host s
 						joint.Config.MaxRejectRetryTimes = 12 //1min
 					}
 					if retryTimes >= joint.Config.MaxRejectRetryTimes {
+
+						//continue retry before is back
+						if !metadata.IsAvailable(){
+							return false
+						}
+
 						log.Errorf("bulk partial failure, retried %v times, quit retry", retryTimes)
-						//if joint.Config.SaveFailure {
-							queue.Push(queue.GetOrInitConfig("joint.Config.FailureRequestsQueue"), data)
-						//}
-						stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "200_bulk_error_requests_retry_dead")
+						queue.Push(queue.GetOrInitConfig(metadata.Config.ID+"_dead_letter_queue"), data)
+						stats.Increment("elasticsearch."+tag+"."+metadata.Config.Name+".bulk", "200_bulk_error_requests_retry_dead")
 
 						return true
 					}
 					log.Errorf("bulk partial failure, #%v retry", retryTimes)
 					retryTimes++
-					stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "200_bulk_error_requests_retry")
+					stats.Increment("elasticsearch."+tag+"."+metadata.Config.Name+".bulk", "200_bulk_error_requests_retry")
 					goto DO
 				}
 
@@ -408,21 +415,23 @@ func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host s
 
 				//skip all failure messages
 				if nonRetryableItems.Len()>0&&retryableItems.Len()==0{
-					stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "200_bulk_all_error_requests")
+					stats.Increment("elasticsearch."+tag+"."+metadata.Config.Name+".bulk", "200_bulk_all_error_requests")
 					return true
+				}else{
+					stats.Increment("elasticsearch."+tag+"."+metadata.Config.Name+".bulk", "what_else")
 				}
 
 				return false
 			}else{
-				stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "200_bulk_success_requests")
+				stats.Increment("elasticsearch."+tag+"."+metadata.Config.Name+".bulk", "200_bulk_success_requests")
 			}
 		}else{
-			stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "200_requests")
+			stats.Increment("elasticsearch."+tag+"."+metadata.Config.Name+".bulk", "200_requests")
 		}
 
 		return true
 	} else if resp.StatusCode() == 429 {
-		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "429_requests")
+		stats.Increment("elasticsearch."+tag+"."+metadata.Config.Name+".bulk", "429_requests")
 
 
 		return false
@@ -432,12 +441,12 @@ func (joint *BulkProcessor) Bulk(metadata *elastic.ElasticsearchMetadata, host s
 		//	queue.Push(queue.GetOrInitConfig(joint.Config.InvalidRequestsQueue), data)
 		//}
 
-		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "400_requests")
+		stats.Increment("elasticsearch."+tag+"."+metadata.Config.Name+".bulk", "400_requests")
 
 		return true
 	} else {
 
-		stats.Increment("elasticsearch."+metadata.Config.Name+".bulk", "5xx_requests")
+		stats.Increment("elasticsearch."+tag+"."+metadata.Config.Name+".bulk", "5xx_requests")
 
 		//if joint.Config.SaveFailure {
 		//	queue.Push(queue.GetOrInitConfig(joint.Config.FailureRequestsQueue), data)

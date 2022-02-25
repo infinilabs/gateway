@@ -136,7 +136,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 				wg:=sync.WaitGroup{}
 				wg.Add(1)
 				go func() {
-					defer func() {
+					defer func(offset string) {
 						if !global.Env().IsDebug {
 							if r := recover(); r != nil {
 								var v string
@@ -148,11 +148,11 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 								case string:
 									v = r.(string)
 								}
-								log.Error("error on run tasks,", v)
+								log.Errorf("error on flow_runner, offset: %v, %v", offset,v)
 							}
 						}
 						wg.Done()
-					}()
+					}(offset)
 
 					//READ_DOCS:
 					initOfffset,_=queue.GetOffset(qConfig,consumer)
@@ -169,11 +169,14 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 							}
 
 							ctx := acquireCtx()
+
 							err = ctx.Request.Decode(pop.Data)
 							if err != nil {
 								log.Error(err)
 								panic(err)
 							}
+
+							ctx.SetFlowID(processor.config.FlowName)
 
 							flowProcessor(ctx)
 
