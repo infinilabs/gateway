@@ -17,7 +17,6 @@ limitations under the License.
 package scroll
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/OneOfOne/xxhash"
 	xxhash1 "github.com/cespare/xxhash"
@@ -34,7 +33,7 @@ import (
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/bytebufferpool"
-	 "infini.sh/framework/lib/fasthttp"
+	"infini.sh/framework/lib/fasthttp"
 	"path"
 	"sort"
 	"sync"
@@ -247,6 +246,10 @@ func (processor *DumpHashProcessor) processingDocs(docs []*fastjson.Value, outpu
 	hashBuffer := bytebufferpool.Get()
 	defer bytebufferpool.Put(hashBuffer)
 
+	sourceBuffer := bytebufferpool.Get()
+	defer bytebufferpool.Put(sourceBuffer)
+
+
 	for _, v := range docs {
 		id := v.GetStringBytes("_id")
 
@@ -261,11 +264,11 @@ func (processor *DumpHashProcessor) processingDocs(docs []*fastjson.Value, outpu
 				keys = append(keys, k)
 			})
 			sort.Strings(keys)
-			bu:=bytes.Buffer{}
+			sourceBuffer.Reset()
 			for _,k:=range keys{
-				bu.WriteString(va[k].String())
+				sourceBuffer.WriteString(va[k].String())
 			}
-			source=bu.String()
+			source=sourceBuffer.String()
 
 		}else{
 			source=v.GetObject("_source").String()
