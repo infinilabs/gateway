@@ -17,7 +17,9 @@ limitations under the License.
 package scroll
 
 import (
+	"bytes"
 	"fmt"
+	"github.com/OneOfOne/xxhash"
 	xxhash1 "github.com/cespare/xxhash"
 	log "github.com/cihub/seelog"
 	xxhash2 "github.com/pierrec/xxHash/xxHash32"
@@ -32,9 +34,9 @@ import (
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/bytebufferpool"
-	fasthttp2 "infini.sh/framework/lib/fasthttp"
+	 "infini.sh/framework/lib/fasthttp"
 	"path"
-	"github.com/OneOfOne/xxhash"
+	"sort"
 	"sync"
 )
 
@@ -58,6 +60,7 @@ type Config struct {
 	HashFunc      string `config:"hash_func"`
 	ScrollTime    string `config:"scroll_time"`
 	Fields        string `config:"fields"`
+	SortDocumentFields    bool `config:"sort_document_fields"`
 }
 
 func New(c *config.Config) (pipeline.Processor, error) {
@@ -148,10 +151,10 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 				return
 			}
 
-			var req=fasthttp2.AcquireRequest()
-			var res=fasthttp2.AcquireResponse()
-			defer fasthttp2.ReleaseRequest(req)
-			defer fasthttp2.ReleaseResponse(res)
+			var req=fasthttp.AcquireRequest()
+			var res=fasthttp.AcquireResponse()
+			defer fasthttp.ReleaseRequest(req)
+			defer fasthttp.ReleaseResponse(res)
 			var processedSize = 0
 			for {
 
@@ -247,7 +250,26 @@ func (processor *DumpHashProcessor) processingDocs(docs []*fastjson.Value, outpu
 	for _, v := range docs {
 		id := v.GetStringBytes("_id")
 
-		source := v.GetObject("_source").String()
+		var source string
+
+		if processor.config.SortDocumentFields{
+			va:=map[string]*fastjson.Value{}
+			keys := []string{}
+			v.GetObject("_source").Visit(func(key []byte, v *fastjson.Value) {
+				k:=string(key)
+				va[k]=v
+				keys = append(keys, k)
+			})
+			sort.Strings(keys)
+			bu:=bytes.Buffer{}
+			for _,k:=range keys{
+				bu.WriteString(va[k].String())
+			}
+			source=bu.String()
+
+		}else{
+			source=v.GetObject("_source").String()
+		}
 
 		hash := processor.Hash(processor.config.HashFunc, hashBuffer, util.UnsafeStringToBytes(source))
 		//fmt.Println("hash:",string(hash),string(id))
