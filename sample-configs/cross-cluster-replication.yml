@@ -75,27 +75,27 @@ flow:
                   max_retry_times: 0
               - bulk_response_process:
                   success_queue: "backup"
+                  failure_queue: "primary-failure"
                   invalid_queue: "primary-invalid"
-                  continue_on_success: true
-                  continue_on_error: true
+                  continue_on_success: false
+                  continue_on_error: false #出错不继续执行，因为成功、失败、非法的请求都已经入队，可以直接退出
               - flow:
                   flows:
                     - primary-response-check
 
   - name: primary-response-check
     filter:
-      - if: #429 重试
-          in:
-            _ctx.response.status: [ 429 ]
+      - if: #不合法的请求
+          and:
+            - not:
+                in:
+                  _ctx.response.status: [ 429 ] #400_500 之间但不包括 429
+            - range:
+                _ctx.response.status.gte: 400
+                _ctx.response.status.lt: 500
         then:
           - queue:
-              queue_name: "primary-429"
-          - drop:
-      - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
-          range:
-            _ctx.response.status.gte: 400
-            _ctx.response.status.lt: 500
-        then:
+              queue_name: "primary-invalid"
           - drop:
       - if: #正常的请求, 复制到备份集群
           in:
@@ -110,6 +110,15 @@ flow:
 
   - name: primary-flow-post-processing #处理通过 commit，处理失败重试，非法请求丢弃
     filter:
+      - if:
+          not:
+            cluster_available: ["primary"]
+        then:
+          - elasticsearch_health_check:
+              elasticsearch: "primary"
+          - sleep:
+              sleep_in_million_seconds: 5000
+          - drop:
 #      - retry_limiter:
 #          queue_name: "primary-deadletter_requests"
 #          max_retry_times: 60
@@ -139,13 +148,19 @@ flow:
           continue_on_error: true
           tag_on_all_error: [ "commit_message_allowed" ]
           tag_on_all_success: [ "commit_message_allowed" ]
-      - if: #不合法的请求，403,404,413,400，直接返回给客户端，不用入队列
-          range:
-            _ctx.response.status.gte: 400
-            _ctx.response.status.lt: 500
+      - if: #不合法的请求
+          and:
+            - not:
+                in:
+                  _ctx.response.status: [ 429 ] #400_500 之间但不包括 429
+            - range:
+                _ctx.response.status.gte: 400
+                _ctx.response.status.lt: 500
         then:
           - tag:
               add: [ "commit_message_allowed" ]
+          - queue:
+              queue_name: "primary-invalid"
           - drop:
       - if:
           in:
@@ -159,10 +174,15 @@ flow:
 
   - name: backup-flow-replicate-processing
     filter:
-#      - dump:
-#          uri: true
-#          request: true
-#          response: true
+      - if:
+          not:
+            cluster_available: ["backup"]
+        then:
+          - elasticsearch_health_check:
+              elasticsearch: "backup"
+          - sleep:
+              sleep_in_million_seconds: 5000
+          - drop:
       - retry_limiter:
           queue_name: "backup-deadletter_requests"
           max_retry_times: 60
@@ -201,6 +221,15 @@ flow:
 
   - name: backup-flow-reshuffle-replicate-processing
     filter:
+      - if:
+          not:
+            cluster_available: ["backup"]
+        then:
+          - elasticsearch_health_check:
+              elasticsearch: "backup"
+          - sleep:
+              sleep_in_million_seconds: 5000
+          - drop:
 #      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
 #          fix_null_id: true
 #          fix_null_type: true
@@ -239,9 +268,23 @@ flow:
           when:
             contains:
               _ctx.request.path: /_bulk
+      - if: #不合法的请求
+          and:
+          - not:
+              in:
+                _ctx.response.status: [ 429 ] #400_500 之间但不包括 429
+          - range:
+              _ctx.response.status.gte: 400
+              _ctx.response.status.lt: 500
+        then:
+          - queue:
+              queue_name: "backup-invalid"
+          - tag:
+              add: [ "commit_message_allowed" ] # 非法请求不处理了，commit 继续往后处理
+          - drop:
       - if:
           in:
-            _ctx.response.status: [ 200,201,404,400 ]
+            _ctx.response.status: [ 200,201 ]
         then:
           - tag:
               add: ["commit_message_allowed"]
@@ -448,6 +491,9 @@ pipeline:
 ## let's upload disk queue files to s3 for backup
 disk_queue:
   upload_to_s3: true
+  compress_on_message_payload:
+    enabled: true
+    level: 11
   s3:
     server: my_blob_store
     location: cn-beijing-001
