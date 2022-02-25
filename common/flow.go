@@ -59,6 +59,10 @@ func MustGetFlow(flowID string) FilterFlow {
 		panic("flow id can't be nil")
 	}
 
+	flowLock.Lock()
+	defer flowLock.Unlock()
+
+
 	v, ok := flows[flowID]
 	if ok {
 		return v
@@ -86,8 +90,6 @@ func MustGetFlow(flowID string) FilterFlow {
 var flowLock sync.RWMutex
 
 func GetFlowProcess(flowID string) func(ctx *fasthttp.RequestCtx) {
-	flowLock.Lock()
-	defer flowLock.Unlock()
 	flow := MustGetFlow(flowID)
 	return flow.Process
 }
