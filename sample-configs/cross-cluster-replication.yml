@@ -73,13 +73,11 @@ flow:
                   elasticsearch: "primary"
                   max_connection_per_node: 1000
                   max_retry_times: 0
-              - bulk_response_process:
+              - bulk_response_process: #bulk 出错不继续执行后续 flow，因为成功、失败、非法的请求都已经入队，可以直接退出
                   success_queue: "backup"
-                  failure_queue: "primary-failure"
+                  failure_queue: "primary-failure" #失败的请求，两边的集群都要做一次，避免脏数据
                   invalid_queue: "primary-invalid"
-                  continue_on_success: false
-                  continue_on_error: false #出错不继续执行，因为成功、失败、非法的请求都已经入队，可以直接退出
-              - flow:
+              - flow: # 非 bulk 请求继续判断
                   flows:
                     - primary-response-check
 
@@ -108,7 +106,7 @@ flow:
           - queue:
               queue_name: "primary-failure"
 
-  - name: primary-flow-post-processing #处理通过 commit，处理失败重试，非法请求丢弃
+  - name: primary-flow-post-processing #处理通过 commit，处理失败重试，非法请求丢弃，失败的请求，两边集群都做，只有当请求是继续丢回 primary-failure 才不需要给 backup 队列
     filter:
       - if:
           not:
@@ -119,10 +117,6 @@ flow:
           - sleep:
               sleep_in_million_seconds: 5000
           - drop:
-#      - retry_limiter:
-#          queue_name: "primary-deadletter_requests"
-#          max_retry_times: 60
-#          tag_on_success: ["commit_message_allowed"]
       - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
           fix_null_id: true
           fix_null_type: true
@@ -135,20 +129,16 @@ flow:
           elasticsearch: "primary"
           max_connection_per_node: 1000
           max_retry_times: 0
-      - if: #429 重试
+      - if: #请求失败了，继续重试，不用复制给备份集群
           in:
             _ctx.response.status: [ 429,0,500,503 ]
         then:
           - drop:
-      - bulk_response_process:
-          success_queue: "backup"
-          failure_queue: "primary-failure"
-          invalid_queue: "primary-invalid"
-          continue_on_success: true
-          continue_on_error: true
-          tag_on_all_error: [ "commit_message_allowed" ]
-          tag_on_all_success: [ "commit_message_allowed" ]
-      - if: #不合法的请求
+      - bulk_response_process: #bulk 成功执行了，非法消息都入队，其他消息都不用管，继续重试，只有全部成功或者失败的时候才 commit，请求丢给 backup，否则提前结束
+          invalid_queue: "primary-invalid" #保存用来查看消息日志
+          tag_on_all_invalid: [ "commit_message_allowed" ] #只有都是非法请求的情况下才 commit
+          tag_on_all_success: [ "commit_message_allowed" ] #只有都是成功的情况下才 commit
+      - if: #其他的非 bulk 请求处理，先处理不合法的请求，主集群都失败了，副集群就不用考虑了
           and:
             - not:
                 in:
@@ -204,11 +194,12 @@ flow:
           elasticsearch: "backup"
           max_connection_per_node: 1000
           max_retry_times: 0
-      - bulk_response_process:
-          continue_on_error: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
+      - bulk_response_process: # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
           invalid_queue: "backup-invalid"
+          failure_queue: "backup-failure"
           tag_on_all_success: ["commit_message_allowed"]
-          tag_on_all_error: ["commit_message_allowed"]
+          tag_on_all_invalid: ["commit_message_allowed"]
+          tag_on_any_error: ["commit_message_allowed"]
           when:
             contains:
               _ctx.request.path: /_bulk
@@ -259,12 +250,10 @@ flow:
           elasticsearch: "backup"
           max_retry_times: 0
           max_connection_per_node: 1000
-      - bulk_response_process:
-          continue_on_success: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
-          continue_on_error: false # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
+      - bulk_response_process: # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
           invalid_queue: "backup-invalid"
+          tag_on_all_invalid: ["commit_message_allowed"]
           tag_on_all_success: ["commit_message_allowed"]
-          tag_on_all_error: ["commit_message_allowed"]
           when:
             contains:
               _ctx.request.path: /_bulk
@@ -469,6 +458,7 @@ pipeline:
     processor:
       - bulk_indexing:
           bulk_size_in_mb: 10
+          bulk_max_docs_count: 5000
           fetch_max_messages: 1000
           waiting_after:
             - "backup-failure"
