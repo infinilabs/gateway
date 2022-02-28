@@ -194,8 +194,15 @@ func RegisterFilterPlugin(filter pipeline.Filter) {
 	filterPluginTypes[filter.Name()] = filter
 }
 
+func ClearFlowCache(flow string) {
+	delete(flows,flow)
+}
+
 func RegisterFlowConfig(flow FlowConfig) {
+	flowConfigs[flow.ID] = flow
 	flowConfigs[flow.Name] = flow
+	ClearFlowCache(flow.ID)
+	ClearFlowCache(flow.Name)
 }
 
 func RegisterRouterConfig(config RouterConfig) {

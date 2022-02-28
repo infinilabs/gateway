@@ -114,7 +114,8 @@ func (this *Entrypoint) Start() error {
 	}
 
 	if this.routerConfig.DefaultFlow != "" {
-		this.router.NotFound = common.GetFlowProcess(this.routerConfig.DefaultFlow)
+		this.router.DefaultFlow = this.routerConfig.DefaultFlow
+		//this.router.NotFound = common.GetFlowProcess(this.routerConfig.DefaultFlow)
 	} else {
 		this.router.NotFound = func(ctx *fasthttp.RequestCtx) {
 			ctx.Response.SetBody([]byte("NOT FOUND"))
@@ -127,7 +128,7 @@ func (this *Entrypoint) Start() error {
 			log.Debugf("tracing flow placed: %s", this.routerConfig.TracingFlow)
 		}
 
-		this.router.TraceHandler = common.GetFlowProcess(this.routerConfig.TracingFlow)
+		this.UpdateTracingFlow(this.routerConfig.TracingFlow)
 	}
 
 	if this.config.MaxConcurrency <= 0 {
@@ -296,6 +297,10 @@ func (this *Entrypoint) Start() error {
 	return nil
 }
 
+func (this *Entrypoint) GetConfig() common.EntryConfig {
+	return this.config
+}
+
 func (this *Entrypoint) Stop() error {
 	log.Tracef("entry [%s] closed", this.Name())
 	if !this.config.Enabled {
@@ -327,4 +332,38 @@ func (this *Entrypoint) Stats() util.MapStr {
 		"open_connections": this.server.GetOpenConnectionsCount(),
 	}
 	return data
+}
+
+func (this *Entrypoint) RefreshTracingFlow(){
+
+	if this.router!=nil{
+		if this.router.TracingFlow!=""{
+			this.router.TraceHandler = common.GetFlowProcess(this.routerConfig.TracingFlow)
+			if this.server!=nil{
+				this.server.TraceHandler=this.router.TraceHandler
+			}
+		}
+	}
+}
+
+func (this *Entrypoint) UpdateTracingFlow(flow string){
+	if flow!=""{
+		if this.router!=nil{
+			this.router.TracingFlow = this.routerConfig.TracingFlow
+			this.router.TraceHandler = common.GetFlowProcess(this.routerConfig.TracingFlow)
+		}
+		if this.server!=nil{
+			this.server.TraceHandler=this.router.TraceHandler
+		}
+	}else{
+		if this.router!=nil{
+			this.router.TracingFlow=""
+			this.router.TraceHandler=nil
+		}
+
+		if this.server!=nil{
+			this.server.TraceHandler=nil
+		}
+	}
+
 }

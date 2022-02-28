@@ -33,6 +33,18 @@ type EntryConfig struct {
 	RouterConfigName   string               `config:"router" json:"router,omitempty" elastic_mapping:"router: { type: keyword }"`
 }
 
+func (this *EntryConfig)Equals(target *EntryConfig)bool{
+	if this.Enabled!=target.Enabled||
+		this.DirtyShutdown!=target.DirtyShutdown||
+		this.RouterConfigName!=target.RouterConfigName||
+		this.TLSConfig.TLSEnabled!=target.TLSConfig.TLSEnabled||
+		this.NetworkConfig.GetBindingAddr()!=target.NetworkConfig.GetBindingAddr(){
+		return false
+	}
+	return true
+}
+
+
 type RuleConfig struct {
 	Method      []string `config:"method" json:"method,omitempty"      elastic_mapping:"method: { type: keyword }"`
 	PathPattern []string `config:"pattern" json:"pattern,omitempty"      elastic_mapping:"pattern: { type: keyword }"`
