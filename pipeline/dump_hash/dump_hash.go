@@ -96,11 +96,11 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 	//start := time.Now()
 	wg := sync.WaitGroup{}
 
-	file := path.Join(global.Env().GetDataDir(), "diff", processor.config.Output)
-	if util.FileExists(file) {
-		util.FileDelete(file)
-		log.Warn("target file exists:", file, ",remove it now")
-	}
+	//file := path.Join(global.Env().GetDataDir(), "diff", processor.config.Output)
+	//if util.FileExists(file) {
+	//	util.FileDelete(file)
+	//	log.Warn("target file exists:", file, ",remove it now")
+	//}
 
 	var totalDocsNeedToScroll int64 = 0
 	for slice := 0; slice < processor.config.SliceSize; slice++ {
@@ -222,15 +222,11 @@ func getScrollHitsTotal(version int, data []byte) (int64, error) {
 
 func (processor *DumpHashProcessor) processingDocs(data []byte, outputQueueName string) int {
 
-	buffer := bytebufferpool.Get()
-
 	hashBuffer := bytebufferpool.Get()
 	defer bytebufferpool.Put(hashBuffer)
 
-	sourceBuffer := bytebufferpool.Get()
-	defer bytebufferpool.Put(sourceBuffer)
-
 	docSize := 0
+	var docs=map[int]*bytebufferpool.ByteBuffer{}
 	jsonparser.ArrayEach(data, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
 
 		id, err := jsonparser.GetString(value, "_id")
@@ -245,20 +241,27 @@ func (processor *DumpHashProcessor) processingDocs(data []byte, outputQueueName 
 
 		hash := processor.Hash(processor.config.HashFunc, hashBuffer, source)
 
+		partitionID:=elastic.GetShardID(7,util.UnsafeStringToBytes(id),processor.config.PartitionSize)
+
+		buffer,ok:=docs[partitionID]
+		if !ok{
+			buffer = bytebufferpool.Get()
+		}
 		_, err = buffer.WriteBytesArray(util.UnsafeStringToBytes(id), []byte(","), hash, []byte("\n"))
 		if err != nil {
 			panic(err)
 		}
 		docSize++
 
+		docs[partitionID]=buffer
+
 	}, "hits", "hits")
 
-
-	handler := rotate.GetFileHandler(path.Join(global.Env().GetDataDir(), "diff", outputQueueName), rotate.DefaultConfig)
-
-	handler.Write(buffer.Bytes())
-
-	bytebufferpool.Put(buffer)
+	for k,v:=range docs{
+		handler := rotate.GetFileHandler(path.Join(global.Env().GetDataDir(), "diff", outputQueueName+util.ToString(k)), rotate.DefaultConfig)
+		handler.Write(v.Bytes())
+		bytebufferpool.Put(v)
+	}
 
 	stats.IncrementBy("scrolling_processing."+outputQueueName, "docs", int64(docSize))
 
