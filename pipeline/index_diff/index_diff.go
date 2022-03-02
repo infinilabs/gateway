@@ -211,7 +211,7 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 
 		for i:=0;i<processor.config.PartitionSize;i++{
 			processor.wg.Add(1)
-			go func(q string) {
+			go func(q string,f int) {
 				defer processor.wg.Done()
 				buffer := bytebufferpool.Get()
 				//build sorted file
@@ -247,7 +247,10 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 						}
 					}
 
-					util.FileAppendContentWithByte(sortedFile, buffer.Bytes())
+					if buffer.Len()>0{
+						util.FileAppendContentWithByte(sortedFile, buffer.Bytes())
+					}
+
 					bytebufferpool.Put(buffer)
 					if err := iter.Err(); err != nil {
 						log.Error(err)
@@ -263,7 +266,7 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 						return r == ','
 					})
 					if len(arr) != 2 {
-						log.Error("invalid line:", util.UnsafeBytesToString(bytes))
+						//log.Error("invalid line:", util.UnsafeBytesToString(bytes))
 						return
 					}
 					id := arr[0]
@@ -273,14 +276,14 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 						Key:  id,
 						Hash: hash,
 					}
-					processor.testChans[i].msgChans[q+"_sorted"] <- item
+					processor.testChans[f].msgChans[q+"_sorted"] <- item
 				})
 				if err != nil {
 					log.Error(err)
 					return
 				}
 
-			}(q+util.ToString(i))
+			}(q+util.ToString(i),i)
 		}
 
 	}
