@@ -36,6 +36,7 @@ import (
 	"infini.sh/gateway/config"
 	"infini.sh/gateway/pipeline/bulk_indexing"
 	"infini.sh/gateway/pipeline/dump_hash"
+	"infini.sh/gateway/pipeline/es_scroll"
 	"infini.sh/gateway/pipeline/flow_runner"
 	"infini.sh/gateway/pipeline/index_diff"
 	"infini.sh/gateway/pipeline/replay"
@@ -86,7 +87,8 @@ func main() {
 
 		//offline pipeline processors
 		pipe.RegisterProcessorPlugin("index_diff", index_diff.New)
-		pipe.RegisterProcessorPlugin("dump_hash", scroll.New)
+		pipe.RegisterProcessorPlugin("es_scroll", es_scroll.New)
+		pipe.RegisterProcessorPlugin("dump_hash", dump_hash.New)
 		pipe.RegisterProcessorPlugin("flow_runner", flow_runner.New)
 		//pipe.RegisterProcessorPlugin("queue_consumer", queue_consumer.New)
 		pipe.RegisterProcessorPlugin("bulk_indexing", bulk_indexing.New)

@@ -14,381 +14,301 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package scroll
+package es_scroll
 
 import (
-	"crypto/tls"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"github.com/cheggaaa/pb"
+	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
+	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
-	"infini.sh/framework/core/errors"
-	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/pipeline"
+	"infini.sh/framework/core/progress"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
+	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/gateway/common"
 	"math"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
 
-type ScrollJoint struct {
-	param.Parameters
-	totalSize   int
-	successSize int
-	failureSize int
-	batchSize int
-	persist bool
-	outputQueueName string
-	esconfig elastic.ElasticsearchConfig
+type ScrollProcessor struct {
+	config Config
+	client elastic.API
 }
 
-func (joint ScrollJoint) Name() string {
+type Config struct {
+	//字段名称必须是大写
+	PartitionSize      int    `config:"partition_size"`
+	BatchSize          int    `config:"batch_size"`
+	SliceSize          int    `config:"slice_size"`
+	Elasticsearch      string `config:"elasticsearch"`
+	SortType           string `config:"sort_type"`
+	SortField          string `config:"sort_field"`
+	Indices            string `config:"indices"`
+	Query              string `config:"query"`
+	ScrollTime         string `config:"scroll_time"`
+	Fields             string `config:"fields"`
+	//SortDocumentFields bool   `config:"sort_document_fields"`
+	Output             string `config:"output_queue"`
+
+	RemoveTypeMeta         bool         `config:"remove_type"`
+	//RemovePipeline         bool         `config:"remove_pipeline"`
+	IndexNameRename  map[string]string `config:"index_rename"`
+	TypeNameRename   map[string]string `config:"type_rename"`
+}
+
+func New(c *config.Config) (pipeline.Processor, error) {
+	cfg := Config{
+		PartitionSize:  10,
+		SliceSize:  1,
+		BatchSize:  1000,
+		ScrollTime: "5m",
+		SortType:   "asc",
+	}
+
+	if err := c.Unpack(&cfg); err != nil {
+		log.Error(err)
+		return nil, fmt.Errorf("failed to unpack the configuration of dump_hash processor: %s", err)
+	}
+
+	client := elastic.GetClient(cfg.Elasticsearch)
+	if cfg.SliceSize < 1 || client.GetMajorVersion() < 5 {
+		cfg.SliceSize = 1
+	}
+
+	return &ScrollProcessor{
+		config: cfg,
+		client: client,
+	}, nil
+
+}
+
+func (processor *ScrollProcessor) Name() string {
 	return "es_scroll"
 }
 
-func (joint ScrollJoint) Open() error{
-	sliceSizeVal, _ := joint.GetInt("slice_size", 10)
-	joint.batchSize, _ = joint.GetInt("batch_size", 5000)
-	fieldsVal, _ := joint.GetString("fields")
-	scrollTimeVal := joint.GetStringOrDefault("scroll_time", "5m")
-	queryVal := joint.GetStringOrDefault("query", "")
-	indexNameVal := joint.GetStringOrDefault("indices", "filebeat-*")
-	esNameVal := joint.GetStringOrDefault("elasticsearch", "default")
-	joint.outputQueueName = joint.GetStringOrDefault("output_queue", "default")
-	//dumpFile := joint.GetStringOrDefault("dump_file", "/tmp/translog.bin")
-	joint.persist=joint.GetBool("persist",true)
+func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 
 	start := time.Now()
-	//pipelines.Open(dumpFile)
-
-	//TODO, 如果索引包含*，则自动展开成单独的索引任务，方便排错
-
-	joint.esconfig=elastic.GetConfig(esNameVal)
-
-	client := elastic.GetClient(esNameVal)
-
 	wg := sync.WaitGroup{}
 
-	if sliceSizeVal < 1 || client.GetMajorVersion() < 5 {
-		log.Warnf("invalid slice config(%v) or not supported by elasticsearch(v%v)", sliceSizeVal, client.ClusterVersion())
-		sliceSizeVal = 1
-	}
-
-	bars := []*pb.ProgressBar{}
-
-	for slice := 0; slice < sliceSizeVal; slice++ {
-
-		//log.Trace("slice, ", slice)
+	var totalDocsNeedToScroll int64 = 0
+	for slice := 0; slice < processor.config.SliceSize; slice++ {
 
 		tempSlice := slice
-
-		scrollID, totalDocs, err := joint.NewScroll(indexNameVal, scrollTimeVal, joint.batchSize, queryVal, tempSlice, sliceSizeVal, fieldsVal)
-
-		if err != nil {
-			log.Debug(err)
-			continue
-		}
-
-		log.Debugf("slice %v docs: %v", tempSlice, totalDocs)
-
-		joint.totalSize += totalDocs
-
-		//joint.ProcessScrollResult(result)
-
-		if totalDocs == 0 {
-			log.Tracef("slice %v is empty", tempSlice)
-			continue
-		}
-
-		bar := pb.New(totalDocs).Prefix(fmt.Sprintf("Scroll#%v", slice))
-		bars = append(bars, bar)
+		progress.RegisterBar(processor.config.Output, "scroll-"+util.ToString(tempSlice), 100)
 
 		wg.Add(1)
+		go func(slice int, ctx *pipeline.Context) {
+			defer wg.Done()
 
-		go func() {
-			var done bool
-			// loop scrolling until done
-			for scrollID = scrollID; done == false; done, scrollID, joint.batchSize = joint.Next(client, scrollID, scrollTimeVal) {
-				bar.Add(joint.batchSize)
+			scrollResponse1, err := processor.client.NewScroll(processor.config.Indices, processor.config.ScrollTime, processor.config.BatchSize, processor.config.Query, tempSlice, processor.config.SliceSize, processor.config.Fields, processor.config.SortField, processor.config.SortType)
+			if err != nil {
+				log.Errorf("%v-%v", processor.config.Output, err)
+				return
 			}
-			log.Tracef("slice %v is done", tempSlice)
-			wg.Done()
-			bar.Finish()
-		}()
 
+			initScrollID, err := jsonparser.GetString(scrollResponse1, "_scroll_id")
+			if err != nil {
+				log.Errorf("cannot get _scroll_id from json: %v, %v", string(scrollResponse1), err)
+				return
+			}
+
+			version := processor.client.GetMajorVersion()
+			totalHits, err := common.GetScrollHitsTotal(version, scrollResponse1)
+			if err != nil {
+				panic(err)
+			}
+
+			totalDocsNeedToScroll += totalHits
+
+			docSize := processor.processingDocs(scrollResponse1, processor.config.Output)
+
+			progress.IncreaseWithTotal(processor.config.Output, "scroll-"+util.ToString(tempSlice), docSize, int(totalHits))
+
+			log.Debugf("slice [%v] docs: %v / %v", tempSlice, docSize, totalHits)
+
+			if totalHits == 0 {
+				log.Tracef("slice %v is empty", tempSlice)
+				return
+			}
+
+			var req = fasthttp.AcquireRequest()
+			var res = fasthttp.AcquireResponse()
+			defer fasthttp.ReleaseRequest(req)
+			defer fasthttp.ReleaseResponse(res)
+
+			apiCtx:=&elastic.APIContext{
+				Client: elastic.GetMetadata(processor.config.Elasticsearch).GetActivePreferredHost(""),
+				Request: req,
+				Response: res,
+			}
+
+			var processedSize = 0
+			for {
+
+				if ctx.IsCanceled() {
+					return
+				}
+
+				if initScrollID == "" {
+					log.Errorf("[%v] scroll_id: [%v]", slice, initScrollID)
+				}
+
+				apiCtx.Request.Reset()
+				apiCtx.Response.Reset()
+
+				data, err := processor.client.NextScroll(apiCtx, processor.config.ScrollTime, initScrollID)
+
+				if err != nil || len(data) == 0 {
+					log.Error("failed to scroll,", processor.config.Elasticsearch, processor.config.Indices, string(data), err)
+					return
+				}
+
+				if data != nil && len(data) > 0 {
+
+					scrollID, err := jsonparser.GetString(data, "_scroll_id")
+					if err != nil {
+						log.Errorf("cannot get _scroll_id from json: %v, %v", string(scrollResponse1), err)
+						return
+					}
+
+					var totalHits int64
+					totalHits, err = common.GetScrollHitsTotal(version, data)
+					if err != nil {
+						panic(err)
+					}
+
+					docSize := processor.processingDocs(data, processor.config.Output)
+
+					processedSize += docSize
+					log.Debugf("[%v] slice[%v]:%v,%v-%v", processor.config.Elasticsearch, slice, docSize, processedSize, totalHits)
+
+					initScrollID = scrollID
+
+					progress.IncreaseWithTotal(processor.config.Output, "scroll-"+util.ToString(tempSlice), docSize, int(totalHits))
+
+					if docSize == 0 {
+						log.Debugf("[%v] empty doc returned, break", slice)
+						break
+					}
+
+				}
+
+			}
+			log.Debugf("%v - %v, slice %v is done", processor.config.Elasticsearch, processor.config.Indices, tempSlice)
+		}(tempSlice, c)
 	}
 
-	log.Debug("total docs: ", joint.totalSize)
-
-	pool, err := pb.StartPool(bars...)
-	if err != nil {
-		panic(err)
-	}
+	progress.Start()
 	wg.Wait()
-	pool.Stop()
+	progress.Stop()
 
-	duration := time.Now().Sub(start).Seconds()
-
-	log.Infof("scroll finished, docs: %v, duration: %vs, qps: %v ", joint.totalSize, duration, math.Ceil(float64(joint.totalSize)/math.Ceil((duration))))
-
-	return nil
-}
-
-func (joint ScrollJoint) Close() error{
-
-	//pipelines.Flush()
-	//pipelines.Sync()
-	//pipelines.Close()
+	duration:=time.Since(start).Seconds()
+	log.Infof("dump finished, es: %v, index: %v, docs: %v, duration: %vs, qps: %v ", processor.config.Elasticsearch, processor.config.Indices, totalDocsNeedToScroll, duration, math.Ceil(float64(totalDocsNeedToScroll)/math.Ceil((duration))))
 
 	return nil
 }
 
-func (joint ScrollJoint) Read() ([]byte, error){
+func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName string) int {
 
-	return nil,nil
-}
+	hashBuffer := bytebufferpool.Get()
+	defer bytebufferpool.Put(hashBuffer)
 
+	docSize := 0
+	var docs=map[int]*bytebufferpool.ByteBuffer{}
+	jsonparser.ArrayEach(data, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
 
-func (joint ScrollJoint) Process(c *pipeline.Context) error {
+		id, err := jsonparser.GetString(value, "_id")
+		if err != nil {
+			panic(err)
+		}
 
+		index, err := jsonparser.GetString(value, "_index")
+		if err != nil {
+			panic(err)
+		}
 
-	return nil
-}
+		typeStr, err := jsonparser.GetString(value, "_type")
+		if err != nil {
+			panic(err)
+		}
 
-func BasicAuth(req *fasthttp.Request, user, pass string) {
-	msg := fmt.Sprintf("%s:%s", user, pass)
-	encoded := base64.StdEncoding.EncodeToString([]byte(msg))
-	req.Header.Add("Authorization", "Basic "+encoded)
-}
-
-func (joint ScrollJoint) NewScroll(indexNames string, scrollTime string, docBufferCount int, query string, slicedId, maxSlicedCount int, fields string) (scrollID string, totalDocs int, err error) {
-
-	url := fmt.Sprintf("%s/%s/_search?scroll=%s&size=%d", joint.esconfig.Endpoint, indexNames, scrollTime, docBufferCount)
-	var jsonBody []byte
-	if len(query) > 0 || maxSlicedCount > 0 || len(fields) > 0 {
-		queryBody := map[string]interface{}{}
-
-		if len(fields) > 0 {
-			if !strings.Contains(fields, ",") {
-				log.Error("The fields shoud be seraprated by ,")
-				return "", 0, errors.New("")
+		if index != "" && len(processor.config.IndexNameRename) > 0 {
+			v, ok := processor.config.IndexNameRename[index]
+			if ok {
+				index = v
 			} else {
-				queryBody["_source"] = strings.Split(fields, ",")
+				v, ok := processor.config.IndexNameRename["*"]
+				if ok {
+					index = v
+				}
 			}
 		}
 
-		if len(query) > 0 {
-			queryBody["query"] = map[string]interface{}{}
-			queryBody["query"].(map[string]interface{})["query_string"] = map[string]interface{}{}
-			queryBody["query"].(map[string]interface{})["query_string"].(map[string]interface{})["query"] = query
+		if typeStr != "" &&!processor.config.RemoveTypeMeta && len(processor.config.TypeNameRename) > 0 {
+			v, ok := processor.config.TypeNameRename[typeStr]
+			if ok&& v!=typeStr {
+				typeStr = v
+			} else {
+				v, ok := processor.config.TypeNameRename["*"]
+				if ok && v!=typeStr {
+					typeStr = v
+				}
+			}
 		}
 
-		if maxSlicedCount > 1 {
-			log.Tracef("sliced scroll, %d of %d", slicedId, maxSlicedCount)
-			queryBody["slice"] = map[string]interface{}{}
-			queryBody["slice"].(map[string]interface{})["id"] = slicedId
-			queryBody["slice"].(map[string]interface{})["max"] = maxSlicedCount
-		}
-
-		jsonArray, err := json.Marshal(queryBody)
+		source, _, _, err := jsonparser.Get(value, "_source")
 		if err != nil {
-			log.Error(err)
-
-		} else {
-			jsonBody = jsonArray
+			panic(err)
 		}
+		stats.Increment("scrolling_docs","docs")
+		//stats.IncrementBy("scrolling_docs","size", int64(len(source)))
+
+		//hash := processor.Hash(processor.config.HashFunc, hashBuffer, source)
+
+		partitionID:=elastic.GetShardID(7,util.UnsafeStringToBytes(id),processor.config.PartitionSize)
+
+		buffer,ok:=docs[partitionID]
+		if !ok{
+			buffer = bytebufferpool.Get()
+		}
+
+		buffer.WriteString(fmt.Sprintf("{ \"index\" : { \"_index\" : \"%s\", \"_type\" : \"%s\", \"_id\" : \"%s\" } }\n", index, typeStr,id))
+		buffer.Write(source)
+		buffer.WriteString("\n")
+
+		//_, err = buffer.WriteBytesArray(util.UnsafeStringToBytes(id), []byte(","), hash, []byte("\n"))
+		//if err != nil {
+		//	panic(err)
+		//}
+
+		docSize++
+
+		docs[partitionID]=buffer
+
+	}, "hits", "hits")
+
+	for k,v:=range docs{
+		queueConfig := &queue.Config{}
+		queueConfig.Source = "dynamic"
+		queueConfig.Labels = map[string]interface{}{}
+		queueConfig.Labels["type"] = "scroll_docs"
+		queueConfig.Name=outputQueueName+util.ToString(k)
+		queue.RegisterConfig(queueConfig.Name, queueConfig)
+
+		queue.Push(queue.GetOrInitConfig(outputQueueName+util.ToString(k)),v.Bytes())
+
+		//handler := rotate.GetFileHandler(path.Join(global.Env().GetDataDir(), "diff", outputQueueName+util.ToString(k)), rotate.DefaultConfig)
+		//handler.Write(v.Bytes())
+		bytebufferpool.Put(v)
 	}
 
-	if jsonBody == nil {
-		panic("scroll request is nil")
-	}
+	stats.IncrementBy("scrolling_processing."+outputQueueName, "docs", int64(docSize))
 
-	client := &fasthttp.Client{
-		MaxConnsPerHost: 1000,
-		TLSConfig:       &tls.Config{InsecureSkipVerify: true},
-	}
-
-	req := fasthttp.AcquireRequest()
-	res := fasthttp.AcquireResponse()
-	defer fasthttp.ReleaseRequest(req)
-	defer fasthttp.ReleaseResponse(res)
-
-	BasicAuth(req, joint.esconfig.BasicAuth.Username, joint.esconfig.BasicAuth.Password)
-
-	req.Header.SetContentType("application/json")
-	req.Header.SetMethod(fasthttp.MethodGet)
-
-	req.SetRequestURI(url)
-	req.SetBody(jsonBody)
-
-	err = client.Do(req, res)
-	if err != nil {
-		panic(err)
-	}
-
-	data := res.Body()
-
-	hit, str1 := util.ExtractFieldFromJson(&data, []byte("\"_scroll_id\":\""), []byte("\","), []byte("_scroll_id"))
-
-	scrollId := string(str1)
-	if !hit {
-		panic(errors.New("scroll_id parsed failed " + string(data)))
-	}
-
-	//check if scroll is over
-	if util.IsBytesEndingWith(&data, []byte("\"hits\":[]}}")) {
-		return scrollId, 0, errors.New("no docs returned")
-	}
-
-	hit, totalDocsStr := util.ExtractFieldFromJson(&data, []byte("hits\":{\"total\":{\"value\":"), []byte(",\"relation\":\""), []byte("\"total\":{\"value\""))
-	i, err := strconv.Atoi(string(totalDocsStr))
-	if err != nil {
-		panic(errors.New("invalid total size, parsed faile"))
-	}
-
-	if joint.persist{
-		joint.WriteContent(data)
-		//queue.Push("scroll_results",data)
-	}
-
-	return scrollId, i, nil
-
-}
-
-func (joint ScrollJoint) NextScroll(scrollTime string, scrollId string) (string, error) {
-	url := fmt.Sprintf("%s/_search/scroll?scroll=%s&scroll_id=%s", joint.esconfig.Endpoint, scrollTime, scrollId)
-
-	client := &fasthttp.Client{
-		MaxConnsPerHost: 1000,
-		TLSConfig:       &tls.Config{InsecureSkipVerify: true},
-	}
-	req := fasthttp.AcquireRequest()
-	res := fasthttp.AcquireResponse()
-	defer fasthttp.ReleaseRequest(req)
-	defer fasthttp.ReleaseResponse(res)
-
-	BasicAuth(req, joint.esconfig.BasicAuth.Username, joint.esconfig.BasicAuth.Password)
-
-	req.Header.SetMethod(fasthttp.MethodGet)
-
-	req.SetRequestURI(url)
-
-	err := client.Do(req, res)
-	if err != nil {
-		panic(err)
-	}
-
-	data := res.Body()
-
-	//fmt.Println(string(data))
-
-	//check if scroll is over
-	if util.IsBytesEndingWith(&data, []byte("\"hits\":[]}}")) {
-		return scrollId, errors.New("no docs returned")
-	}
-
-	hit, str1 := util.ExtractFieldFromJson(&data, []byte("\"_scroll_id\":\""), []byte("\","), []byte("_scroll_id"))
-
-	scrollId = string(str1)
-	if !hit {
-		panic(errors.New("scroll_id parsed failed " + string(data)))
-	}
-
-	if joint.persist{
-		joint.WriteContent(data)
-		//queue.Push("scroll_results",data)
-	}
-
-	return scrollId, nil
-}
-
-func (joint ScrollJoint) WriteContent(data []byte) {
-	stats.Increment("translog","write")
-	stats.IncrementBy("translog","bytes_write", int64(len(data)))
-
-	//qName := "item-queue"
-	//qDir := "/tmp"
-	//segmentSize := 50
-
-	//// Create a new queue with segment size of 50
-	//q, err := dque.NewOrOpen(qName, qDir, segmentSize, ItemBuilder)
-	//if err != nil {
-	//	log.Fatal("Error creating new dque ", err)
-	//}
-	//
-	//// Add an item to the queue
-	//if err := q.Enqueue(&Item{"Joe", 1}); err != nil {
-	//	log.Fatal("Error enqueueing item ", err)
-	//}
-	//log.Println("Size should be 1:", q.Size())
-	//
-	//// Properly close a queue
-	//q.Close()
-
-
-	queue.Push("scroll_results",data)
-
-	return
-}
-
-func (joint ScrollJoint) Next(client elastic.API, scrollId string, scrollTime string) (bool, string, int) {
-
-	nextScrollID, err := joint.NextScroll(scrollTime, scrollId)
-
-	if err != nil {
-		log.Debug(err)
-		return true, nextScrollID, joint.batchSize
-	}
-
-	stats.IncrementBy("scroll", "total", int64(joint.batchSize))
-
-	//joint.ProcessScrollResult(result)
-
-	return false, nextScrollID, joint.batchSize
-}
-
-func (joint ScrollJoint) ProcessScrollResult(result elastic.ScrollResponseAPI) {
-
-	stats.IncrementBy("scroll", "total", int64(len(result.GetDocs())))
-
-	return
-
-	//fmt.Println("hits total:",len(result.GetDocs()))
-
-	//bar.Add(len(s.Hits.Docs))
-	// show any failures
-	//return
-
-	for _, failure := range result.GetShardResponse().Failures {
-		reason, _ := json.Marshal(failure.Reason)
-		log.Errorf(string(reason))
-		joint.failureSize++
-
-		stats.Increment("scroll", "failure")
-	}
-
-	//successSize += len(result.GetDocs())
-
-	// show any failures
-	for _, failure := range result.GetShardResponse().Failures {
-		reason, _ := json.Marshal(failure.Reason)
-		log.Errorf(string(reason))
-	}
-
-	//data:=util.MustToJSONBytes(result.GetDocs())
-	//WriteContent(&data)
-	//outputQueueName := joint.GetStringOrDefault("output_queue", "es_queue")
-	//
-	//// write all the docs into a channel
-	//for _, docI := range result.GetDocs() {
-	//	queue.Push(outputQueueName, util.MustToJSONBytes(docI))
-	//	//	joint.DocChan <- docI.(map[string]interface{})
-	//}
+	return docSize
 }

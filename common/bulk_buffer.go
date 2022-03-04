@@ -73,6 +73,7 @@ func (receiver *BulkBuffer) GetMessageStatus(non2xxOnly bool)map[string]int {
 	}
 	return status
 }
+
 func (receiver *BulkBuffer) Reset() {
 	receiver.Buffer.Reset()
 	receiver.Queue=""

@@ -1,0 +1,56 @@
+path.data: data
+path.logs: log
+progress_bar.enabled: true
+
+elasticsearch:
+  - name: source
+    enabled: true
+    endpoint: http://192.168.3.188:9207
+  - name: target
+    enabled: true
+    endpoints:
+      - http://192.168.3.188:9206
+
+pipeline:
+  - name: source_scroll
+    auto_start: true
+    processor:
+      - es_scroll:
+          slice_size: 10
+          batch_size: 1000
+          indices: "filebeat*"
+          elasticsearch: source
+          output_queue: source_index_dump
+          partition_size: 10
+          sort_type: ""
+          sort_field: "asc" #desc,asc
+          scroll_time: "5m"
+          query: ""
+#          index_rename:
+#            "*": "new-index"
+#          type_rename:
+#            "*": "_doc"
+
+  - name: target_indexing
+    auto_start: true
+    keep_running: true
+    processor:
+      - bulk_indexing:
+          elasticsearch: target
+          bulk_size_in_mb: 20
+          bulk_max_docs_count: 5000
+          fetch_max_messages: 1000
+          bulk:
+            invalid_queue: bulk_indexing_400
+          queues:
+            type: scroll_docs
+          when:
+            cluster_available: [ "target" ]
+
+disk_queue:
+  compress_on_message_payload:
+    enabled: true
+    level: 11
+
+
+

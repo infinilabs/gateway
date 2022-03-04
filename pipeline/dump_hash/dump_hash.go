@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package scroll
+package dump_hash
 
 import (
 	"fmt"
@@ -34,6 +34,7 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/gateway/common"
 	"path"
 	"sync"
 )
@@ -106,8 +107,8 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 	for slice := 0; slice < processor.config.SliceSize; slice++ {
 
 		tempSlice := slice
+		progress.RegisterBar(processor.config.Output, "dump-hash-"+util.ToString(tempSlice), 100)
 
-		ctx := pipeline.AcquireContext()
 		wg.Add(1)
 		go func(slice int, ctx *pipeline.Context) {
 			defer wg.Done()
@@ -125,7 +126,7 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 			}
 
 			version := processor.client.GetMajorVersion()
-			totalHits, err := getScrollHitsTotal(version, scrollResponse1)
+			totalHits, err := common.GetScrollHitsTotal(version, scrollResponse1)
 			if err != nil {
 				panic(err)
 			}
@@ -147,6 +148,13 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 			var res = fasthttp.AcquireResponse()
 			defer fasthttp.ReleaseRequest(req)
 			defer fasthttp.ReleaseResponse(res)
+
+			apiCtx:=&elastic.APIContext{
+				Client: elastic.GetMetadata(processor.config.Elasticsearch).GetActivePreferredHost(""),
+				Request: req,
+				Response: res,
+			}
+
 			var processedSize = 0
 			for {
 
@@ -158,10 +166,10 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 					log.Errorf("[%v] scroll_id: [%v]", slice, initScrollID)
 				}
 
-				req.Reset()
-				res.Reset()
+				apiCtx.Request.Reset()
+				apiCtx.Response.Reset()
 
-				data, err := processor.client.NextScroll(req, res, processor.config.ScrollTime, initScrollID)
+				data, err := processor.client.NextScroll(apiCtx, processor.config.ScrollTime, initScrollID)
 
 				if err != nil || len(data) == 0 {
 					log.Error("failed to scroll,", processor.config.Elasticsearch, processor.config.Indices, string(data), err)
@@ -177,7 +185,7 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 					}
 
 					var totalHits int64
-					totalHits, err = getScrollHitsTotal(version, data)
+					totalHits, err = common.GetScrollHitsTotal(version, data)
 					if err != nil {
 						panic(err)
 					}
@@ -200,7 +208,7 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 
 			}
 			log.Debugf("%v - %v, slice %v is done", processor.config.Elasticsearch, processor.config.Indices, tempSlice)
-		}(tempSlice, ctx)
+		}(tempSlice, c)
 	}
 
 	progress.Start()
@@ -210,14 +218,6 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 	//log.Infof("dump finished, es: %v, index: %v, docs: %v, duration: %vs, qps: %v ", processor.config.Elasticsearch, processor.config.Indices, stats, duration, math.Ceil(float64(stats)/math.Ceil((duration))))
 
 	return nil
-}
-
-func getScrollHitsTotal(version int, data []byte) (int64, error) {
-	if version >= 7 {
-		return jsonparser.GetInt(data, "hits", "total", "value")
-	} else {
-		return jsonparser.GetInt(data, "hits", "total")
-	}
 }
 
 func (processor *DumpHashProcessor) processingDocs(data []byte, outputQueueName string) int {

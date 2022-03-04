@@ -16,7 +16,7 @@ elasticsearch:
       password: testtest
   - name: target
     enabled: true
-    endpoint: http://192.168.3.188:9206
+    endpoint: http://192.168.3.188:9207
     request_compress: true
     request_timeout: 30
 #    max_bps_per_node: 52428800 #max total bytes send to es per node, 50MB/s
@@ -31,29 +31,29 @@ pipeline:
     - dag:
         parallel:
           - dump_hash: #dump es1's doc
-              indices: "test"
+              indices: "filebeat-7.8.0"
               scroll_time: "10m"
               elasticsearch: "source"
 #              query: "field1:elastic"
 #              fields: "doc_hash"
               output_queue: "source_docs"
-              batch_size: 500
-              slice_size: 3
+              batch_size: 5000
+              slice_size: 10
 #              hash_func: "xxhash64"
           - dump_hash: #dump es2's doc
-              indices: "test"
+              indices: "filebeat-7.8.0"
               scroll_time: "10m"
 #              fields: "doc_hash"
 #              query: "field1:elastic"
-              batch_size: 500
-              slice_size: 3
+              batch_size: 5000
+              slice_size: 10
 #              hash_func: "xxhash64"
               elasticsearch: "target"
               output_queue: "target_docs"
         end:
           - index_diff:
               diff_queue: "diff_result"
-              buffer_size: 1
+              buffer_size: 10
               text_report: true #如果要存 es，这个开关关闭，开启 pipeline 的 diff_result_ingest 任务
               source_queue: 'source_docs'
               target_queue: 'target_docs'

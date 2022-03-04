@@ -76,6 +76,8 @@ type Config struct {
 	RotateConfig rotate.RotateConfig          `config:"rotate"`
 	BulkConfig   elastic2.BulkProcessorConfig `config:"bulk"`
 
+	Elasticsearch     string    `config:"elasticsearch,omitempty"`
+
 	WaitingAfter        []string `config:"waiting_after"`
 
 }
@@ -244,8 +246,12 @@ func (processor *BulkIndexingProcessor) HandleQueueConfig(v *queue.Config,c *pip
 
 	elasticsearch,ok:=v.Labels["elasticsearch"]
 	if !ok{
-		log.Errorf("label [elasticsearch] was not found in: %v",v)
-		return
+		if processor.config.Elasticsearch==""{
+			log.Errorf("label [elasticsearch] was not found in: %v",v)
+			return
+		}else{
+			elasticsearch=processor.config.Elasticsearch
+		}
 	}
 
 	meta := elastic.GetMetadata(util.ToString(elasticsearch))
@@ -418,7 +424,12 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 	idleDuration := time.Duration(processor.config.IdleTimeoutInSecond) * time.Second
 	elasticsearch,ok:=qConfig.Labels["elasticsearch"]
 	if !ok{
-		panic(errors.Errorf("label [elasticsearch] was not found: %v", qConfig))
+		if processor.config.Elasticsearch==""{
+			log.Errorf("label [elasticsearch] was not found in: %v",qConfig)
+			return
+		}else{
+			elasticsearch=processor.config.Elasticsearch
+		}
 	}
 	esClusterID=util.ToString(elasticsearch)
 	meta = elastic.GetMetadata(esClusterID)

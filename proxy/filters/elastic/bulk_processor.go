@@ -209,6 +209,7 @@ type BulkProcessorConfig struct {
 	MaxRejectRetryTimes       int  `config:"max_reject_retry_times"`
 	MaxRetryTimes             int  `config:"max_retry_times"`
 	RequestTimeoutInSecond          int   `config:"request_timeout_in_second"`
+	InvalidRequestsQueue    string `config:"invalid_queue"`
 	DeadletterRequestsQueue string `config:"dead_letter_queue"`
 	SafetyParse bool `config:"safety_parse"`
 	DocBufferSize        int    `config:"doc_buffer_size"`
@@ -415,6 +416,12 @@ func (joint *BulkProcessor) Bulk(tag string,metadata *elastic.ElasticsearchMetad
 
 				//skip all failure messages
 				if nonRetryableItems.Len()>0&&retryableItems.Len()==0{
+
+					////handle 400 error
+					if joint.Config.InvalidRequestsQueue!="" {
+						queue.Push(queue.GetOrInitConfig(joint.Config.InvalidRequestsQueue), data)
+					}
+
 					stats.Increment("elasticsearch."+tag+"."+metadata.Config.Name+".bulk", "200_bulk_all_error_requests")
 					return true
 				}else{
@@ -436,10 +443,11 @@ func (joint *BulkProcessor) Bulk(tag string,metadata *elastic.ElasticsearchMetad
 
 		return false
 	} else if resp.StatusCode() >= 400 && resp.StatusCode()<500{
+
 		////handle 400 error
-		//if joint.Config.SaveFailure {
-		//	queue.Push(queue.GetOrInitConfig(joint.Config.InvalidRequestsQueue), data)
-		//}
+		if joint.Config.InvalidRequestsQueue!="" {
+			queue.Push(queue.GetOrInitConfig(joint.Config.InvalidRequestsQueue), data)
+		}
 
 		stats.Increment("elasticsearch."+tag+"."+metadata.Config.Name+".bulk", "400_requests")
 
