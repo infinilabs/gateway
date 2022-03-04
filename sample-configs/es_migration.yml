@@ -22,10 +22,10 @@ pipeline:
           elasticsearch: source
           output_queue: source_index_dump
           partition_size: 10
-          sort_type: ""
-          sort_field: "asc" #desc,asc
-          scroll_time: "5m"
-          query: ""
+#          sort_type: "asc"#desc,asc
+#          sort_field: "timestamp"
+#          scroll_time: "5m"
+#          query_string: ""
 #          index_rename:
 #            "*": "new-index"
 #          type_rename:

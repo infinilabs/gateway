@@ -49,7 +49,8 @@ type Config struct {
 	SortType           string `config:"sort_type"`
 	SortField          string `config:"sort_field"`
 	Indices            string `config:"indices"`
-	Query              string `config:"query"`
+	QueryString              string `config:"query_string"`
+	QueryDSL              string `config:"query_dsl"`
 	ScrollTime         string `config:"scroll_time"`
 	Fields             string `config:"fields"`
 	//SortDocumentFields bool   `config:"sort_document_fields"`
@@ -106,7 +107,7 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 		go func(slice int, ctx *pipeline.Context) {
 			defer wg.Done()
 
-			scrollResponse1, err := processor.client.NewScroll(processor.config.Indices, processor.config.ScrollTime, processor.config.BatchSize, processor.config.Query, tempSlice, processor.config.SliceSize, processor.config.Fields, processor.config.SortField, processor.config.SortType)
+			scrollResponse1, err := processor.client.NewScroll(processor.config.Indices, processor.config.ScrollTime, processor.config.BatchSize, processor.config.QueryString, tempSlice, processor.config.SliceSize, processor.config.Fields, processor.config.SortField, processor.config.SortType)
 			if err != nil {
 				log.Errorf("%v-%v", processor.config.Output, err)
 				return
