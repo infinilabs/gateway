@@ -219,6 +219,10 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 				file := path.Join(global.Env().GetDataDir(), "diff", q)
 				sortedFile := path.Join(global.Env().GetDataDir(), "diff", q+"_sorted")
 
+				if !util.FileExists(file){
+					return
+				}
+
 				if !util.FileExists(sortedFile) {
 					err := util.FileLinesWalk(file, func(bytes []byte) {
 						_ = sorter.Append(bytes)

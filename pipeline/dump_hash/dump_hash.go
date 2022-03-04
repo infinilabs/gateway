@@ -36,6 +36,7 @@ import (
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
 	"path"
+	"runtime"
 	"sync"
 )
 
@@ -54,7 +55,9 @@ type Config struct {
 	SortType           string `config:"sort_type"`
 	SortField          string `config:"sort_field"`
 	Indices            string `config:"indices"`
-	Query              string `config:"query"`
+
+	QueryString              string `config:"query_string"`
+
 	HashFunc           string `config:"hash_func"`
 	ScrollTime         string `config:"scroll_time"`
 	Fields             string `config:"fields"`
@@ -111,18 +114,35 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 
 		wg.Add(1)
 		go func(slice int, ctx *pipeline.Context) {
-			defer wg.Done()
+			defer func() {
+				if !global.Env().IsDebug {
+					if r := recover(); r != nil {
+						var v string
+						switch r.(type) {
+						case error:
+							v = r.(error).Error()
+						case runtime.Error:
+							v = r.(runtime.Error).Error()
+						case string:
+							v = r.(string)
+						}
+						log.Error("error in processor,", v)
+					}
+				}
+				log.Debug("exit detector for active queue")
+				wg.Done()
+			}()
 
-			scrollResponse1, err := processor.client.NewScroll(processor.config.Indices, processor.config.ScrollTime, processor.config.BatchSize, processor.config.Query, tempSlice, processor.config.SliceSize, processor.config.Fields, processor.config.SortField, processor.config.SortType)
+			scrollResponse1, err := processor.client.NewScroll(processor.config.Indices, processor.config.ScrollTime, processor.config.BatchSize, processor.config.QueryString, tempSlice, processor.config.SliceSize, processor.config.Fields, processor.config.SortField, processor.config.SortType)
 			if err != nil {
 				log.Errorf("%v-%v", processor.config.Output, err)
-				return
+				panic(err)
 			}
 
 			initScrollID, err := jsonparser.GetString(scrollResponse1, "_scroll_id")
 			if err != nil {
 				log.Errorf("cannot get _scroll_id from json: %v, %v", string(scrollResponse1), err)
-				return
+				panic(err)
 			}
 
 			version := processor.client.GetMajorVersion()
@@ -139,7 +159,8 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 
 			log.Debugf("slice [%v] docs: %v / %v", tempSlice, docSize, totalHits)
 
-			if totalHits == 0 {
+			if totalHits == 0 ||docSize==0{
+
 				log.Tracef("slice %v is empty", tempSlice)
 				return
 			}
@@ -173,7 +194,7 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 
 				if err != nil || len(data) == 0 {
 					log.Error("failed to scroll,", processor.config.Elasticsearch, processor.config.Indices, string(data), err)
-					return
+					panic(err)
 				}
 
 				if data != nil && len(data) > 0 {
@@ -181,7 +202,7 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 					scrollID, err := jsonparser.GetString(data, "_scroll_id")
 					if err != nil {
 						log.Errorf("cannot get _scroll_id from json: %v, %v", string(scrollResponse1), err)
-						return
+						panic(err)
 					}
 
 					var totalHits int64

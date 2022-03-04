@@ -22,6 +22,7 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
+	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/progress"
 	"infini.sh/framework/core/queue"
@@ -31,6 +32,7 @@ import (
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
 	"math"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -105,18 +107,35 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 
 		wg.Add(1)
 		go func(slice int, ctx *pipeline.Context) {
-			defer wg.Done()
+			defer func() {
+				if !global.Env().IsDebug {
+					if r := recover(); r != nil {
+						var v string
+						switch r.(type) {
+						case error:
+							v = r.(error).Error()
+						case runtime.Error:
+							v = r.(runtime.Error).Error()
+						case string:
+							v = r.(string)
+						}
+						log.Error("error in processor,", v)
+					}
+				}
+				log.Debug("exit detector for active queue")
+				wg.Done()
+			}()
 
 			scrollResponse1, err := processor.client.NewScroll(processor.config.Indices, processor.config.ScrollTime, processor.config.BatchSize, processor.config.QueryString, tempSlice, processor.config.SliceSize, processor.config.Fields, processor.config.SortField, processor.config.SortType)
 			if err != nil {
 				log.Errorf("%v-%v", processor.config.Output, err)
-				return
+				panic(err)
 			}
 
 			initScrollID, err := jsonparser.GetString(scrollResponse1, "_scroll_id")
 			if err != nil {
 				log.Errorf("cannot get _scroll_id from json: %v, %v", string(scrollResponse1), err)
-				return
+				panic(err)
 			}
 
 			version := processor.client.GetMajorVersion()
@@ -166,8 +185,8 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 				data, err := processor.client.NextScroll(apiCtx, processor.config.ScrollTime, initScrollID)
 
 				if err != nil || len(data) == 0 {
-					log.Error("failed to scroll,", processor.config.Elasticsearch, processor.config.Indices, string(data), err)
-					return
+					log.Error("failed to scroll,slice:",slice,",", processor.config.Elasticsearch,",", processor.config.Indices,",", string(data),",", err)
+					panic(err)
 				}
 
 				if data != nil && len(data) > 0 {
@@ -175,7 +194,7 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 					scrollID, err := jsonparser.GetString(data, "_scroll_id")
 					if err != nil {
 						log.Errorf("cannot get _scroll_id from json: %v, %v", string(scrollResponse1), err)
-						return
+						panic(err)
 					}
 
 					var totalHits int64

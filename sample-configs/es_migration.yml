@@ -5,7 +5,7 @@ progress_bar.enabled: true
 elasticsearch:
   - name: source
     enabled: true
-    endpoint: http://192.168.3.188:9207
+    endpoint: http://192.168.3.188:9206
   - name: target
     enabled: true
     endpoints:
@@ -16,20 +16,20 @@ pipeline:
     auto_start: true
     processor:
       - es_scroll:
-          slice_size: 10
-          batch_size: 1000
+          slice_size: 20
+          batch_size: 5000
           indices: "filebeat*"
           elasticsearch: source
           output_queue: source_index_dump
-          partition_size: 10
-#          sort_type: "asc"#desc,asc
-#          sort_field: "timestamp"
-#          scroll_time: "5m"
-#          query_string: ""
-#          index_rename:
-#            "*": "new-index"
-#          type_rename:
-#            "*": "_doc"
+          partition_size: 20
+          sort_type: "asc"#desc,asc
+          sort_field: "@timestamp"
+          scroll_time: "5m"
+#          query_string: "service.type:nginx"
+          index_rename:
+            "*": "new-index"
+          type_rename:
+            "*": "_doc"
 
   - name: target_indexing
     auto_start: true
@@ -48,9 +48,11 @@ pipeline:
             cluster_available: [ "target" ]
 
 disk_queue:
-  compress_on_message_payload:
-    enabled: true
-    level: 11
+  sync_timeout_in_ms: 10000
+  sync_every_records: 10000
+#  compress_on_message_payload:
+#    enabled: true
+#    level: 11
 
 
 

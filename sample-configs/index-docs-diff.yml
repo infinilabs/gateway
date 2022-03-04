@@ -7,22 +7,12 @@ progress_bar.enabled: true
 elasticsearch:
   - name: source
     enabled: true
-    endpoint: http://192.168.3.188:9204
-    request_compress: true
-    request_timeout: 30
-#    max_bps_per_node: 52428800 #max total bytes send to es per node, 50MB/s
-    basic_auth:
-      username: test
-      password: testtest
+    endpoint: http://192.168.3.188:9206
   - name: target
     enabled: true
-    endpoint: http://192.168.3.188:9207
-    request_compress: true
-    request_timeout: 30
-#    max_bps_per_node: 52428800 #max total bytes send to es per node, 50MB/s
-    basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
-      username: test
-      password: testtest
+    endpoints:
+      - http://192.168.3.188:9206
+
 
 pipeline:
   - name: index_diff_service
@@ -31,22 +21,22 @@ pipeline:
     - dag:
         parallel:
           - dump_hash: #dump es1's doc
-              indices: "filebeat-7.8.0"
+              indices: "filebeat-7.8.0-2022.02.25-000001"
               scroll_time: "10m"
               elasticsearch: "source"
-#              query: "field1:elastic"
+              query_string: "_id:c8es70pu46lgfdgmja9g-1646117763293610802-2"
 #              fields: "doc_hash"
               output_queue: "source_docs"
               batch_size: 5000
-              slice_size: 10
+              slice_size: 5
 #              hash_func: "xxhash64"
           - dump_hash: #dump es2's doc
-              indices: "filebeat-7.8.0"
+              indices: "new-index"
               scroll_time: "10m"
 #              fields: "doc_hash"
-#              query: "field1:elastic"
+              query_string: "_id:c8es70pu46lgfdgmja9g-1646117763293610802-2"
               batch_size: 5000
-              slice_size: 10
+              slice_size: 5
 #              hash_func: "xxhash64"
               elasticsearch: "target"
               output_queue: "target_docs"

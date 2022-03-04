@@ -164,7 +164,6 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 			processor.detectorRunning=true
 			processor.wg.Add(1)
 			go func(c *pipeline.Context) {
-				defer processor.wg.Done()
 				log.Tracef("[%v] init detector for active queue",processor.id)
 				defer func() {
 					if !global.Env().IsDebug {
@@ -183,6 +182,7 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 					}
 					processor.detectorRunning=false
 					log.Debug("exit detector for active queue")
+					processor.wg.Done()
 				}()
 
 				for {
