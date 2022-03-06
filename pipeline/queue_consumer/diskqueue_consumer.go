@@ -13,7 +13,6 @@ import (
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/util"
-	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
 	"net/http"
 	"runtime"
@@ -323,49 +322,49 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated || resp.StatusCode() == http.StatusNotFound {
 		if util.ContainStr(string(req.RequestURI()), "_bulk") {
 
-			var resbody = resp.GetRawBody()
-			requestBytes := req.GetRawBody()
-
-			nonRetryableItems := bytebufferpool.Get()
-			retryableItems := bytebufferpool.Get()
-			successItems := bytebufferpool.Get()
-
-			//TODO remove
-			containError:=processor.HandleBulkResponse(processor.config.SafetyParse,requestBytes,resbody,processor.config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
-			if containError {
-
-				log.Error("error in bulk requests,", resp.StatusCode(), util.SubString(string(resbody), 0, 256))
-
-				if nonRetryableItems.Len() > 0 {
-					nonRetryableItems.WriteByte('\n')
-					bytes := req.OverrideBodyEncode(nonRetryableItems.Bytes(), true)
-					queue.Push(queue.GetOrInitConfig(processor.config.InvalidQueue), bytes)
-					bytebufferpool.Put(nonRetryableItems)
-				}
-
-				if retryableItems.Len() > 0 {
-					retryableItems.WriteByte('\n')
-					bytes := req.OverrideBodyEncode(retryableItems.Bytes(), true)
-					queue.Push(queue.GetOrInitConfig(processor.config.FailureQueue), bytes)
-					bytebufferpool.Put(retryableItems)
-				}
-
-
-				if successItems.Len() > 0 && processor.config.SaveSuccessDocsToQueue {
-					successItems.WriteByte('\n')
-					bytes := req.OverrideBodyEncode(successItems.Bytes(), true)
-					queue.Push(queue.GetOrInitConfig(processor.config.PartialSuccessQueue), bytes)
-					bytebufferpool.Put(successItems)
-				}
-
-				//save message bytes, with metadata, set codec to wrapped bulk messages
-				queue.Push(queue.GetOrInitConfig("failure_messages"), util.MustToJSONBytes(util.MapStr{
-					"offset":msg.Offset,
-					"response":string(resbody),
-				}))
-
-
-			}
+			//var resbody = resp.GetRawBody()
+			//requestBytes := req.GetRawBody()
+			//
+			//nonRetryableItems := bytebufferpool.Get()
+			//retryableItems := bytebufferpool.Get()
+			//successItems := bytebufferpool.Get()
+			//
+			////TODO remove
+			//containError:=processor.HandleBulkResponse(processor.config.SafetyParse,requestBytes,resbody,processor.config.DocBufferSize,nonRetryableItems,retryableItems,successItems)
+			//if containError {
+			//
+			//	log.Error("error in bulk requests,", resp.StatusCode(), util.SubString(string(resbody), 0, 256))
+			//
+			//	if nonRetryableItems.Len() > 0 {
+			//		nonRetryableItems.WriteByte('\n')
+			//		bytes := req.OverrideBodyEncode(nonRetryableItems.Bytes(), true)
+			//		queue.Push(queue.GetOrInitConfig(processor.config.InvalidQueue), bytes)
+			//		bytebufferpool.Put(nonRetryableItems)
+			//	}
+			//
+			//	if retryableItems.Len() > 0 {
+			//		retryableItems.WriteByte('\n')
+			//		bytes := req.OverrideBodyEncode(retryableItems.Bytes(), true)
+			//		queue.Push(queue.GetOrInitConfig(processor.config.FailureQueue), bytes)
+			//		bytebufferpool.Put(retryableItems)
+			//	}
+			//
+			//
+			//	if successItems.Len() > 0 && processor.config.SaveSuccessDocsToQueue {
+			//		successItems.WriteByte('\n')
+			//		bytes := req.OverrideBodyEncode(successItems.Bytes(), true)
+			//		queue.Push(queue.GetOrInitConfig(processor.config.PartialSuccessQueue), bytes)
+			//		bytebufferpool.Put(successItems)
+			//	}
+			//
+			//	//save message bytes, with metadata, set codec to wrapped bulk messages
+			//	queue.Push(queue.GetOrInitConfig("failure_messages"), util.MustToJSONBytes(util.MapStr{
+			//		"offset":msg.Offset,
+			//		"response":string(resbody),
+			//	}))
+			//
+			//
+			//}
 		}
 		return true, resp.StatusCode(), nil
 	} else {

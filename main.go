@@ -29,6 +29,7 @@ import (
 	"infini.sh/framework/modules/redis"
 	"infini.sh/framework/modules/s3"
 	_"infini.sh/framework/plugins"
+	_"infini.sh/gateway/pipeline"
 	stats2 "infini.sh/framework/modules/stats"
 	"infini.sh/framework/modules/task"
 	stats "infini.sh/framework/plugins/stats_statsd"
