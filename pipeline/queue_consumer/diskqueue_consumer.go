@@ -53,6 +53,10 @@ type Config struct {
 	DocBufferSize int `config:"doc_buffer_size"`
 }
 
+func init()  {
+	//pipe.RegisterProcessorPlugin("queue_consumer", queue_consumer.New)
+}
+
 func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
 		NumOfWorkers:        1,

@@ -64,6 +64,10 @@ type Config struct {
 	SortDocumentFields bool   `config:"sort_document_fields"`
 }
 
+func init()  {
+	pipeline.RegisterProcessorPlugin("dump_hash", New)
+}
+
 func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
 		PartitionSize:  10,

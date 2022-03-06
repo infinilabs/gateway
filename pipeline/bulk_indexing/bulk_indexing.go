@@ -82,6 +82,10 @@ type Config struct {
 
 }
 
+func init()  {
+	pipeline.RegisterProcessorPlugin("bulk_indexing", New)
+}
+
 func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
 		NumOfWorkers:         1,

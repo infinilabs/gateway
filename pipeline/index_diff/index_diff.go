@@ -40,6 +40,10 @@ func (a *CompareItem) CompareHash(b *CompareItem) int {
 	return strings.Compare(a.Hash, b.Hash)
 }
 
+func init()  {
+	pipeline.RegisterProcessorPlugin("index_diff", New)
+}
+
 func NewCompareItem(key, hash string) CompareItem {
 	item := CompareItem{Key: key, Hash: hash}
 	return item

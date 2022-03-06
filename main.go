@@ -20,7 +20,6 @@ import (
 	_ "expvar"
 	"infini.sh/framework"
 	"infini.sh/framework/core/module"
-	pipe "infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/modules/api"
 	queue2 "infini.sh/framework/modules/disk_queue"
@@ -29,17 +28,11 @@ import (
 	"infini.sh/framework/modules/pipeline"
 	"infini.sh/framework/modules/redis"
 	"infini.sh/framework/modules/s3"
+	_"infini.sh/framework/plugins"
 	stats2 "infini.sh/framework/modules/stats"
 	"infini.sh/framework/modules/task"
-	"infini.sh/framework/plugins/elastic/json_indexing"
 	stats "infini.sh/framework/plugins/stats_statsd"
 	"infini.sh/gateway/config"
-	"infini.sh/gateway/pipeline/bulk_indexing"
-	"infini.sh/gateway/pipeline/dump_hash"
-	"infini.sh/gateway/pipeline/es_scroll"
-	"infini.sh/gateway/pipeline/flow_runner"
-	"infini.sh/gateway/pipeline/index_diff"
-	"infini.sh/gateway/pipeline/replay"
 	"infini.sh/gateway/proxy"
 	"infini.sh/gateway/service/floating_ip"
 	"infini.sh/gateway/service/forcemerge"
@@ -84,17 +77,6 @@ func main() {
 		module.RegisterUserPlugin(forcemerge.ForceMergeModule{})
 		module.RegisterSystemModule(&pipeline.PipeModule{})
 		module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
-
-		//offline pipeline processors
-		pipe.RegisterProcessorPlugin("index_diff", index_diff.New)
-		pipe.RegisterProcessorPlugin("es_scroll", es_scroll.New)
-		pipe.RegisterProcessorPlugin("dump_hash", dump_hash.New)
-		pipe.RegisterProcessorPlugin("flow_runner", flow_runner.New)
-		//pipe.RegisterProcessorPlugin("queue_consumer", queue_consumer.New)
-		pipe.RegisterProcessorPlugin("bulk_indexing", bulk_indexing.New)
-		pipe.RegisterProcessorPlugin("json_indexing", json_indexing.New)
-		pipe.RegisterProcessorPlugin("replay", replay.New)
-
 		module.RegisterSystemModule(&api.APIModule{})
 
 	}, func() {

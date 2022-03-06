@@ -8,6 +8,6 @@ APP_EOLDate := "2023-12-31 10:10:10"
 APP_STATIC_FOLDER := .public
 APP_STATIC_PACKAGE := public
 APP_UI_FOLDER := ui
-APP_PLUGIN_FOLDER := proxy
+APP_PLUGIN_FOLDER := pipeline proxy
 
 include ../framework/Makefile

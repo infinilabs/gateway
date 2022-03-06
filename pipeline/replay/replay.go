@@ -32,6 +32,10 @@ type ReplayProcessor struct {
 
 var signalChannel = make(chan bool, 1)
 
+func init()  {
+	pipeline.RegisterProcessorPlugin("replay", New)
+}
+
 func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
 		Schema: "http",

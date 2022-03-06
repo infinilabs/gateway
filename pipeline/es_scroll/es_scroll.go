@@ -64,6 +64,10 @@ type Config struct {
 	TypeNameRename   map[string]string `config:"type_rename"`
 }
 
+func init() {
+	pipeline.RegisterProcessorPlugin("es_scroll", New)
+}
+
 func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
 		PartitionSize:  10,
