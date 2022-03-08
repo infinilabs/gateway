@@ -162,17 +162,14 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 					offset=initOfffset
 
 					_,messages,timeout,err:=queue.Consume(qConfig,consumer.Name,offset,processor.config.Consumer.FetchMaxMessages,time.Millisecond*time.Duration(processor.config.Consumer.FetchMaxWaitMs))
+					if err!=nil&&err.Error()!="EOF"{
+						log.Error(err)
+						panic(err)
+					}
 
 					if len(messages) > 0 {
-
 						for _,pop:=range messages {
-							if err!=nil{
-								log.Error(err)
-								panic(err)
-							}
-
 							ctx := acquireCtx()
-
 							err = ctx.Request.Decode(pop.Data)
 							if err != nil {
 								log.Error(err)
