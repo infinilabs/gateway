@@ -141,6 +141,7 @@ flow:
           invalid_queue: "primary-invalid" #保存用来查看消息日志
           tag_on_all_invalid: [ "commit_message_allowed" ] #只有都是非法请求的情况下才 commit
           tag_on_all_success: [ "commit_message_allowed" ] #只有都是成功的情况下才 commit
+          continue_on_all_error: true #bulk 请求整体响应不是200，继续交由后面的 filter 进行处理
       - if: #其他的非 bulk 请求处理，先处理不合法的请求，主集群都失败了，副集群就不用考虑了
           and:
             - not:
@@ -195,6 +196,7 @@ flow:
           invalid_queue: "backup-invalid" #保存用来查看消息日志
           tag_on_all_invalid: [ "commit_message_allowed" ] #只有都是非法请求的情况下才 commit
           tag_on_all_success: [ "commit_message_allowed" ] #只有都是成功的情况下才 commit
+          continue_on_all_error: true #bulk 请求整体响应不是200，继续交由后面的 filter 进行处理
       - if: #其他的非 bulk 请求处理，先处理不合法的请求，主集群都失败了，副集群就不用考虑了
           and:
             - not:
@@ -255,6 +257,7 @@ flow:
           tag_on_all_success: ["commit_message_allowed"]
           tag_on_all_invalid: ["commit_message_allowed"]
           tag_on_any_error: ["commit_message_allowed"]
+          continue_on_all_error: true #bulk 请求整体响应不是200，继续交由后面的 filter 进行处理
           when:
             contains:
               _ctx.request.path: /_bulk
@@ -309,6 +312,7 @@ flow:
           invalid_queue: "backup-invalid"
           tag_on_all_invalid: ["commit_message_allowed"]
           tag_on_all_success: ["commit_message_allowed"]
+          continue_on_all_error: true #bulk 请求整体响应不是200，继续交由后面的 filter 进行处理
           when:
             contains:
               _ctx.request.path: /_bulk
@@ -560,7 +564,6 @@ disk_queue:
   upload_to_s3: true
   compress_on_message_payload:
     enabled: true
-    level: 11
   s3:
     server: my_blob_store
     location: cn-beijing-001

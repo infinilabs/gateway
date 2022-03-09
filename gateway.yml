@@ -101,10 +101,11 @@ pipeline:
   processor:
     - bulk_indexing:
         elasticsearch: "dev"
+        max_worker_size: 10
         bulk.compress: true
         bulk_size_in_mb: 50  #in MB
         retry_delay_in_seconds: 5
-        queues:
+        queues: #filter by labels
           type: bulk_reshuffle
         when:
           cluster_available: [ "dev" ]
