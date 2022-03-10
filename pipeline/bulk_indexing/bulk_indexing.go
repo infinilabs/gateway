@@ -163,12 +163,12 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 
 	//handle updates
 	if processor.config.DetectActiveQueue{
-		log.Tracef("detectorRunning [%v]",processor.detectorRunning)
+		log.Tracef("detector running [%v]",processor.detectorRunning)
 		if !processor.detectorRunning{
 			processor.detectorRunning=true
 			processor.wg.Add(1)
 			go func(c *pipeline.Context) {
-				log.Tracef("[%v] init detector for active queue",processor.id)
+				log.Tracef("init detector for active queue [%v] ",processor.id)
 				defer func() {
 					if !global.Env().IsDebug {
 						if r := recover(); r != nil {
@@ -382,7 +382,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 	var bulkProcessor elastic2.BulkProcessor
 	var esClusterID string
 	var meta *elastic.ElasticsearchMetadata
-	var initOfffset string
+	var initOffset string
 	var offset string
 	var consumer=queue.GetOrInitConsumerConfig(qConfig.Id,processor.config.Consumer.Group,processor.config.Consumer.Name)
 
@@ -398,7 +398,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 				case string:
 					v = r.(string)
 				}
-				log.Errorf("error in bulk_indexing worker[%v],queue:[%v], offset:[%v]->[%v],%v", workerID,qConfig.Id,initOfffset,offset,v)
+				log.Errorf("error in bulk_indexing worker[%v],queue:[%v], offset:[%v]->[%v],%v", workerID,qConfig.Id, initOffset,offset,v)
 				ctx.Failed()
 			}
 		}
@@ -409,7 +409,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 		continueNext :=processor.submitBulkRequest(tag,esClusterID,meta,host,bulkProcessor,mainBuf)
 		mainBuf.Reset()
 		if continueNext {
-			if offset!=""&&initOfffset!=offset{
+			if offset!=""&& initOffset !=offset{
 				ok,err:=queue.CommitOffset(qConfig,consumer,offset)
 				if !ok||err!=nil{
 					panic(err)
@@ -417,7 +417,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 			}
 		}else{
 			if global.Env().IsDebug{
-				log.Errorf("error between queue:[%v] offset [%v]-[%v]",qConfig.Id,initOfffset,offset)
+				log.Errorf("error between queue:[%v] offset [%v]-[%v]",qConfig.Id, initOffset,offset)
 			}
 			return
 		}
@@ -458,8 +458,8 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 
 READ_DOCS:
 
-	initOfffset,_=queue.GetOffset(qConfig,consumer)
-	offset=initOfffset
+	initOffset,_=queue.GetOffset(qConfig,consumer)
+	offset= initOffset
 
 	for {
 		if ctx.IsCanceled() {
@@ -501,6 +501,8 @@ READ_DOCS:
 		//pop, timeout, err := queue.PopTimeout(qConfig, idleDuration)
 
 		log.Debugf("worker:[%v] start consume queue:[%v] offset:%v",workerID,qConfig.Id,offset)
+
+		//runnintCtx:=pipeline.AcquireContext()
 
 		ctx1,messages,timeout,err:=queue.Consume(qConfig,consumer.Name,offset,processor.config.Consumer.FetchMaxMessages,time.Millisecond*time.Duration(processor.config.Consumer.FetchMaxWaitMs))
 
@@ -556,11 +558,11 @@ READ_DOCS:
 					//reset buffer
 					mainBuf.Reset()
 					if !continueRequest{
-							log.Errorf("error between queue:[%v] offset [%v]-[%v]",qConfig.Id,initOfffset,offset)
+							log.Errorf("error between queue:[%v] offset [%v]-[%v]",qConfig.Id, initOffset,offset)
 							return
 					}else{
 						offset=pop.NextOffset
-						if offset!=""&&offset!=initOfffset{
+						if offset!=""&&offset!= initOffset {
 							ok,err:=queue.CommitOffset(qConfig,consumer,offset)
 							if !ok||err!=nil{
 								panic(err)
@@ -588,7 +590,7 @@ CLEAN_BUFFER:
 	//reset buffer
 	mainBuf.Reset()
 	if continueNext{
-		if offset!=""&&offset!=initOfffset{
+		if offset!=""&&offset!= initOffset {
 			ok,err:=queue.CommitOffset(qConfig,consumer,offset)
 			if !ok||err!=nil{
 				panic(err)
@@ -596,7 +598,7 @@ CLEAN_BUFFER:
 		}
 	}else{
 		//logging failure offset boundry
-		log.Errorf("error between offset [%v]-[%v]",initOfffset,offset)
+		log.Errorf("error between offset [%v]-[%v]", initOffset,offset)
 		return
 	}
 
