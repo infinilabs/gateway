@@ -139,9 +139,7 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 		m[string(key)] = string(value)
 	})
 
-	if len(m) > 0 {
-		request.Request.QueryArgs = m
-	}
+	request.Request.QueryArgs = m
 
 	request.Request.Host = string(ctx.Request.Host())
 
@@ -162,13 +160,9 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 
 	request.Response.ElapsedTimeInMs = float32(float64(ctx.GetElapsedTime().Microseconds()) * 0.001)
 
-	if ctx.Response.LocalAddr() != nil {
-		request.Response.LocalAddr = ctx.Response.LocalAddr().String()
-	}
+	request.Response.LocalAddr = ctx.Response.LocalAddr().String()
 
-	if request.Elastic == nil {
-		request.Elastic = map[string]interface{}{}
-	}
+	request.Elastic = map[string]interface{}{}
 
 	bulk_status := map[string]interface{}{}
 	if ctx.Has("bulk_response_status") {
@@ -266,9 +260,7 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 		}
 	})
 
-	if len(m) > 0 {
-		request.Request.Header = m
-	}
+	request.Request.Header = m
 
 	exists, user, _ := ctx.Request.ParseBasicAuth()
 	if exists {
@@ -284,9 +276,7 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 		}
 	})
 
-	if len(m) > 0 {
-		request.Response.Header = m
-	}
+	request.Response.Header = m
 
 	bytes, err := request.MarshalJSON()
 	if err != nil {
