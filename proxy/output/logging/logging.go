@@ -143,11 +143,20 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 
 	request.Request.Host = string(ctx.Request.Host())
 
-	request.LocalIP = ctx.LocalIP().String()
-	request.RemoteIP = ctx.RemoteIP().String()
+	if ctx.LocalIP()!=nil{
+		request.LocalIP = ctx.LocalIP().String()
+	}
+	if ctx.RemoteIP()!=nil{
+		request.RemoteIP = ctx.RemoteIP().String()
+	}
 
-	request.Request.RemoteAddr = ctx.RemoteAddr().String()
-	request.Request.LocalAddr = ctx.LocalAddr().String()
+	if ctx.RemoteAddr()!=nil{
+		request.Request.RemoteAddr = ctx.RemoteAddr().String()
+	}
+
+	if ctx.LocalAddr()!=nil{
+		request.Request.LocalAddr = ctx.LocalAddr().String()
+	}
 
 	reqBody := util.UnsafeBytesToString(ctx.Request.GetRawBody())
 
@@ -160,7 +169,11 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 
 	request.Response.ElapsedTimeInMs = float32(float64(ctx.GetElapsedTime().Microseconds()) * 0.001)
 
-	request.Response.LocalAddr = ctx.Response.LocalAddr().String()
+	if ctx.Response.LocalAddr()!=nil{
+		request.Response.LocalAddr = ctx.Response.LocalAddr().String()
+	}else{
+		request.Response.LocalAddr=""
+	}
 
 	request.Elastic = map[string]interface{}{}
 
