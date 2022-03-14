@@ -405,7 +405,7 @@ func (joint *BulkProcessor) Bulk(tag string,metadata *elastic.ElasticsearchMetad
 							"body":util.SubString(string(req.GetRawBody()), 0, 1024*4),
 						},
 						"response": util.MapStr{
-							"status": failureStatus,
+							"status": util.JoinMapInt(failureStatus,":"),
 							"body":util.SubString(string(resbody), 0, 1024*4),
 						},
 					}))
