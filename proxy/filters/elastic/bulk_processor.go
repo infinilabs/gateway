@@ -203,6 +203,12 @@ var itemPart = []byte("{\"index\":{\"_index\":\"fake-index\",\"_type\":\"doc\",\
 var endPart = []byte("]}")
 
 type BulkProcessorConfig struct {
+	bulkSizeInByte int
+
+	BulkSizeInKb         int    `config:"batch_size_in_kb,omitempty"`
+	BulkSizeInMb         int    `config:"batch_size_in_mb,omitempty"`
+	BulkMaxDocsCount     int    `config:"batch_size_in_docs,omitempty"`
+
 	Compress                  bool `config:"compress"`
 	RetryDelayInSeconds       int  `config:"retry_delay_in_seconds"`
 	RejectDelayInSeconds      int  `config:"reject_retry_delay_in_seconds"`
@@ -215,7 +221,20 @@ type BulkProcessorConfig struct {
 	DocBufferSize        int    `config:"doc_buffer_size"`
 }
 
+func (this *BulkProcessorConfig) GetBulkSizeInBytes() int  {
+
+	this.bulkSizeInByte= 1048576 * this.BulkSizeInMb
+	if this.BulkSizeInKb > 0 {
+		this.bulkSizeInByte = 1024 * this.BulkSizeInKb
+	}
+	if this.bulkSizeInByte<=0{
+		this.bulkSizeInByte=10*1024*1024
+	}
+	return this.bulkSizeInByte
+}
+
 var DefaultBulkProcessorConfig = BulkProcessorConfig{
+		BulkSizeInMb:         10,
 		Compress:                  false,
 		RetryDelayInSeconds:  1,
 		RejectDelayInSeconds: 1,
@@ -356,6 +375,8 @@ func (joint *BulkProcessor) Bulk(tag string,metadata *elastic.ElasticsearchMetad
 		if util.ContainStr(string(req.RequestURI()), "_bulk") {
 			nonRetryableItems := bytebufferpool.Get()
 			retryableItems := bytebufferpool.Get()
+			nonRetryableItems.Reset()
+			retryableItems.Reset()
 
 			containError,statsCodeStats := HandleBulkResponse2(tag,joint.Config.SafetyParse, data, resbody, joint.Config.DocBufferSize, buffer, nonRetryableItems, retryableItems)
 			if containError {
