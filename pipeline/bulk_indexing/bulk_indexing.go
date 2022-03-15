@@ -488,10 +488,14 @@ READ_DOCS:
 		}
 
 		//each message is complete bulk message, must be end with \n
-		log.Debugf("worker:[%v] start consume queue:[%v] offset:%v",workerID,qConfig.Id,offset)
+		if global.Env().IsDebug{
+			log.Debugf("worker:[%v] start consume queue:[%v] offset:%v",workerID,qConfig.Id,offset)
+		}
 
 		//runnintCtx:=pipeline.AcquireContext()
 		ctx1,messages,timeout,err:=queue.Consume(qConfig,consumer.Name,offset,processor.config.Consumer.FetchMaxMessages,time.Millisecond*time.Duration(processor.config.Consumer.FetchMaxWaitMs))
+
+		//log.Errorf("max fetch messages:%v, fetched:%v",processor.config.Consumer.FetchMaxMessages,len(messages))
 
 		if global.Env().IsDebug{
 			log.Debugf("[%v] consume message:%v,offset:%v,next:%v,timeout:%v,err:%v",consumer.Name,len(messages),ctx1.InitOffset,ctx1.NextOffset,timeout,err)
@@ -533,9 +537,13 @@ READ_DOCS:
 					log.Tracef("message count: %v, size: %v", mainBuf.GetMessageCount(),util.ByteSize(uint64(mainBuf.GetMessageSize())))
 				}
 				msgSize:=mainBuf.GetMessageSize()
-				if msgSize > (bulkSizeInByte) ||(processor.config.BulkConfig.BulkMaxDocsCount>0&&msgSize>processor.config.BulkConfig.BulkMaxDocsCount) {
+				msgCount:=mainBuf.GetMessageCount()
+
+				//log.Errorf("msgSize:%v, bulkSizeInByte:%v, maxDoCount:%v",msgSize,bulkSizeInByte,processor.config.BulkConfig.BulkMaxDocsCount)
+
+				if msgSize > (bulkSizeInByte) ||(processor.config.BulkConfig.BulkMaxDocsCount>0&&msgCount>processor.config.BulkConfig.BulkMaxDocsCount) {
 					if global.Env().IsDebug {
-						log.Tracef("consuming [%v], hit buffer limit, size:%v, count:%v, submit now", qConfig.Name, msgSize, mainBuf.GetMessageCount())
+						log.Tracef("consuming [%v], hit buffer limit, size:%v, count:%v, submit now", qConfig.Name, msgSize, msgCount)
 					}
 
 					//submit request

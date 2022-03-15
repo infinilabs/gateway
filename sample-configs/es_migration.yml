@@ -37,13 +37,15 @@ pipeline:
     processor:
       - bulk_indexing:
           elasticsearch: target
-          bulk_size_in_mb: 20
-          bulk_max_docs_count: 5000
-          fetch_max_messages: 1000
           bulk:
+            compress: true
+            batch_size_in_mb: 20
+            batch_size_in_docs: 5000
             invalid_queue: bulk_indexing_400
           queues:
             type: scroll_docs
+          consumer:
+            fetch_max_messages: 1000
           when:
             cluster_available: [ "target" ]
 

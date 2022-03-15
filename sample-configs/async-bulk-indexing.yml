@@ -8,8 +8,6 @@ entry:
     max_concurrency: 200000
     network:
       binding: 0.0.0.0:8000
-#    tls:
-#      enabled: true
 
 flow:
   - name: async_bulk
@@ -19,7 +17,8 @@ flow:
             contains:
               _ctx.request.path: /_bulk
           elasticsearch: dev
-          level: node #cluster,node,shard,partition
+          level: cluster
+          partition_size: 3
           fix_null_id: true
       - elasticsearch:
           elasticsearch: dev  #elasticsearch configure reference name
@@ -33,28 +32,27 @@ flow:
             roles:
               exclude:
                 - master
-
+  - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
+    filter:
+      - context_filter:
+          context: _ctx.request.path
+          exclude:
+            - /favicon.ico
+      - logging:
+          queue_name: request_logging
+          max_request_body_size: 102400
+          max_response_body_size: 102400
 router:
   - name: my_router
     default_flow: async_bulk
-
+#    tracing_flow: request_logging
 
 elasticsearch:
   - name: dev
     enabled: true
-    endpoint: http://192.168.3.188:9206 # if your elasticsearch is using https, your gateway should be listen on as https as well
-#    endpoint: http://localhost:9200 # if your elasticsearch is using https, your gateway should be listen on as https as well
-#    traffic_control: #global traffic control
-#      max_bps_per_node: 20971520 #max total bytes send to es per node, 20MB/s
-#      max_qps_per_node: 50000 #max total requests send to es per node, 20k/s
-#    basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
-#      username: test
-#      password: testtest
-#    discovery: # auto discovery elasticsearch cluster nodes
-#      enabled: true
-#      refresh:
-#        enabled: true
-#        interval: 60s
+    endpoints:
+     - http://192.168.3.188:9206
+     - http://192.168.3.188:9216
 
 pipeline:
   - name: bulk_request_ingest
@@ -63,32 +61,28 @@ pipeline:
     retry_delay_in_ms: 1000
     processor:
       - bulk_indexing:
-          when:
-            cluster_available: [ "dev" ]
-          bulk_size_in_mb: 10
-          bulk.compress: true
-#          skip_info_missing: true
-          fetch_max_messages: 1000
+          max_connection_per_node: 100
+          bulk:
+            compress: false
+            batch_size_in_mb: 10
+            batch_size_in_docs: 10000
+          consumer:
+            fetch_max_messages: 1000
           queues:
             type: bulk_reshuffle
+#  - name: consume-request_logging
+#    auto_start: true
+#    keep_running: true
+#    processor:
+#      - json_indexing:
+#          index_name: "gateway_requests"
+#          elasticsearch: "dev"
+#          input_queue: "request_logging"
+#          worker_size: 10
 
 #disk_queue:
-#  upload_to_s3: true
-#  s3:
-#    server: my_blob_store
-#    location: cn-beijing-001
-#    bucket: infini-store
-#  max_msg_size: 209715200 #200MB
-#  max_used_bytes: 102400
-#  warning_free_bytes: 322122547200
-#  reserved_free_bytes: 322122547200
-#  max_bytes_per_file: 10576
+#  max_bytes_per_file: 1048576
 
-
-#s3:
-#  my_blob_store:
-#    endpoint: "192.168.3.63:9000"
-#    access_key: "minio"
-#    access_secret: "gogoaminio"
-    #  token:
-#    ssl: false
+#stats:
+#  enabled: false
+#  buffer_size: 10000

@@ -234,8 +234,9 @@ func (this *BulkProcessorConfig) GetBulkSizeInBytes() int  {
 }
 
 var DefaultBulkProcessorConfig = BulkProcessorConfig{
+		BulkMaxDocsCount:         1000,
 		BulkSizeInMb:         10,
-		Compress:                  false,
+		Compress:  false,
 		RetryDelayInSeconds:  1,
 		RejectDelayInSeconds: 1,
 		MaxRejectRetryTimes:  60,

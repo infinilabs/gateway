@@ -538,9 +538,12 @@ pipeline:
     keep_running: true
     processor:
       - bulk_indexing:
-          bulk_size_in_mb: 10
-          bulk_max_docs_count: 5000
-          fetch_max_messages: 1000
+          bulk:
+            compress: true
+            batch_size_in_mb: 20
+            batch_size_in_docs: 5000
+          consumer:
+            fetch_max_messages: 100
           waiting_after:
             - "backup-failure"
           queues:
