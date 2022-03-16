@@ -238,12 +238,8 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 	request.Response.Cached = ctx.Response.Cached
 	request.Response.StatusCode = ctx.Response.StatusCode()
 
-	//ce = string(ctx.Response.Header.PeekAny([]string{fasthttp.HeaderContentEncoding,"Content-Encoding"}))
-
-	//log.Error(request.Request.URI,",",ce,",",string(util.EscapeNewLine(ctx.Response.Header.Header())))
-	//log.Error(ctx.Response.Header.String())
-
 	respBody := string(ctx.Response.GetRawBody())
+
 	if global.Env().IsDebug {
 		log.Debug("logging request body:", string(reqBody))
 		log.Debug("logging response body:", string(respBody))
