@@ -21,7 +21,7 @@ type EntryConfig struct {
 	TCPKeepaliveSeconds int    `config:"tcp_keepalive_in_seconds" json:"tcp_keepalive_in_seconds,omitempty" elastic_mapping:"tcp_keepalive_in_seconds: { type: integer }"`
 	IdleTimeout         int    `config:"idle_timeout" json:"idle_timeout,omitempty" elastic_mapping:"idle_timeout: { type: integer }"`
 
-	MaxIdleWorkerDurationSeconds int    `config:"max_idle_worker_duration_in_seconds" json:"max_idle_worker_duration_in_seconds,omitempty" elastic_mapping:"max_idle_worker_duration_in_seconds: { type: integer }"`
+	MaxIdleWorkerDurationSeconds int `config:"max_idle_worker_duration_in_seconds" json:"max_idle_worker_duration_in_seconds,omitempty" elastic_mapping:"max_idle_worker_duration_in_seconds: { type: integer }"`
 
 	ReadBufferSize  int `config:"read_buffer_size" json:"read_buffer_size,omitempty" elastic_mapping:"read_buffer_size: { type: integer }"`
 	WriteBufferSize int `config:"write_buffer_size" json:"write_buffer_size,omitempty" elastic_mapping:"write_buffer_size: { type: integer }"`
@@ -33,17 +33,16 @@ type EntryConfig struct {
 	RouterConfigName   string               `config:"router" json:"router,omitempty" elastic_mapping:"router: { type: keyword }"`
 }
 
-func (this *EntryConfig)Equals(target *EntryConfig)bool{
-	if this.Enabled!=target.Enabled||
-		this.DirtyShutdown!=target.DirtyShutdown||
-		this.RouterConfigName!=target.RouterConfigName||
-		this.TLSConfig.TLSEnabled!=target.TLSConfig.TLSEnabled||
-		this.NetworkConfig.GetBindingAddr()!=target.NetworkConfig.GetBindingAddr(){
+func (this *EntryConfig) Equals(target *EntryConfig) bool {
+	if this.Enabled != target.Enabled ||
+		this.DirtyShutdown != target.DirtyShutdown ||
+		this.RouterConfigName != target.RouterConfigName ||
+		this.TLSConfig.TLSEnabled != target.TLSConfig.TLSEnabled ||
+		this.NetworkConfig.GetBindingAddr() != target.NetworkConfig.GetBindingAddr() {
 		return false
 	}
 	return true
 }
-
 
 type RuleConfig struct {
 	Method      []string `config:"method" json:"method,omitempty"      elastic_mapping:"method: { type: keyword }"`
@@ -65,7 +64,8 @@ type RouterConfig struct {
 	DefaultFlow string `config:"default_flow" json:"default_flow,omitempty" elastic_mapping:"default_flow: { type: keyword }"`
 	TracingFlow string `config:"tracing_flow" json:"tracing_flow,omitempty" elastic_mapping:"tracing_flow: { type: keyword }"`
 
-	Rules []RuleConfig `config:"rules" json:"rules,omitempty" elastic_mapping:"rules: { type: object }"`
+	Rules              []RuleConfig `config:"rules" json:"rules,omitempty" elastic_mapping:"rules: { type: object }"`
+	DeniedClientIPList []string     `config:"denied_client_ip_list" json:"denied_client_ip_list,omitempty" elastic_mapping:"denied_client_ip_list: { type: keyword }"`
 }
 
 type FlowConfig struct {

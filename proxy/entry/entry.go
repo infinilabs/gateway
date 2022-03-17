@@ -175,12 +175,19 @@ func (this *Entrypoint) Start() error {
 		ReduceMemoryUsage:             this.config.ReduceMemoryUsage,
 		TCPKeepalive:                  this.config.TCPKeepalive,
 		TCPKeepalivePeriod:            time.Duration(this.config.TCPKeepaliveSeconds) * time.Second,
-		MaxIdleWorkerDuration:            time.Duration(this.config.MaxIdleWorkerDurationSeconds) * time.Second,
+		MaxIdleWorkerDuration:         time.Duration(this.config.MaxIdleWorkerDurationSeconds) * time.Second,
 		IdleTimeout:                   time.Duration(this.config.IdleTimeout) * time.Second,
 		ReadTimeout:                   time.Duration(this.config.ReadTimeout) * time.Second,
 		WriteTimeout:                  time.Duration(this.config.WriteTimeout) * time.Second,
 		ReadBufferSize:                this.config.ReadBufferSize, //16 * 1024,
 		WriteBufferSize:               this.config.WriteBufferSize,
+	}
+
+	if len(this.routerConfig.DeniedClientIPList) > 0 {
+		log.Tracef("adding %v client ip to denied list", len(this.routerConfig.DeniedClientIPList))
+		for _, ip := range this.routerConfig.DeniedClientIPList {
+			this.server.AddBlackIPList(ip)
+		}
 	}
 
 	schema := "http://"
@@ -334,35 +341,35 @@ func (this *Entrypoint) Stats() util.MapStr {
 	return data
 }
 
-func (this *Entrypoint) RefreshTracingFlow(){
+func (this *Entrypoint) RefreshTracingFlow() {
 
-	if this.router!=nil{
-		if this.router.TracingFlow!=""{
+	if this.router != nil {
+		if this.router.TracingFlow != "" {
 			this.router.TraceHandler = common.GetFlowProcess(this.routerConfig.TracingFlow)
-			if this.server!=nil{
-				this.server.TraceHandler=this.router.TraceHandler
+			if this.server != nil {
+				this.server.TraceHandler = this.router.TraceHandler
 			}
 		}
 	}
 }
 
-func (this *Entrypoint) UpdateTracingFlow(flow string){
-	if flow!=""{
-		if this.router!=nil{
+func (this *Entrypoint) UpdateTracingFlow(flow string) {
+	if flow != "" {
+		if this.router != nil {
 			this.router.TracingFlow = this.routerConfig.TracingFlow
 			this.router.TraceHandler = common.GetFlowProcess(this.routerConfig.TracingFlow)
 		}
-		if this.server!=nil{
-			this.server.TraceHandler=this.router.TraceHandler
+		if this.server != nil {
+			this.server.TraceHandler = this.router.TraceHandler
 		}
-	}else{
-		if this.router!=nil{
-			this.router.TracingFlow=""
-			this.router.TraceHandler=nil
+	} else {
+		if this.router != nil {
+			this.router.TracingFlow = ""
+			this.router.TraceHandler = nil
 		}
 
-		if this.server!=nil{
-			this.server.TraceHandler=nil
+		if this.server != nil {
+			this.server.TraceHandler = nil
 		}
 	}
 
