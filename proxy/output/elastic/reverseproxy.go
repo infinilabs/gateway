@@ -25,9 +25,9 @@ type ReverseProxy struct {
 	endpoints                []string
 	lastNodesTopologyVersion int
 
-	 hostClients  map[string]*fasthttp.HostClient
-	 clients  map[string]*fasthttp.Client
-	 locker  sync.RWMutex
+	hostClients map[string]*fasthttp.HostClient
+	clients     map[string]*fasthttp.Client
+	locker      sync.RWMutex
 }
 
 func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
@@ -36,7 +36,7 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 	var hasInclude = false
 	endpoint := node.GetHttpPublishHost()
 
-	if global.Env().IsDebug{
+	if global.Env().IsDebug {
 		log.Tracef("validate endpoint %v", endpoint)
 	}
 
@@ -138,15 +138,14 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		return
 	}
 
-	if !esConfig.Discovery.Enabled && !force{
+	if !esConfig.Discovery.Enabled && !force {
 		log.Trace("discovery is not enabled, skip nodes refresh")
 		return
 	}
 
-
 	hosts := []string{}
 	checkMetadata := false
-	if metadata != nil &&metadata.Nodes!=nil && len(*metadata.Nodes) > 0 {
+	if metadata != nil && metadata.Nodes != nil && len(*metadata.Nodes) > 0 {
 
 		oldV := p.lastNodesTopologyVersion
 		p.lastNodesTopologyVersion = metadata.NodesTopologyVersion
@@ -164,7 +163,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 				continue
 			}
 
-			endpoint:=y.GetHttpPublishHost()
+			endpoint := y.GetHttpPublishHost()
 			hosts = append(hosts, endpoint)
 		}
 		log.Tracef("discovery %v nodes: [%v]", len(hosts), util.JoinArray(hosts, ", "))
@@ -177,10 +176,10 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		}
 	}
 
-	newHosts:=[]string{}
+	newHosts := []string{}
 	for _, endpoint := range hosts {
-		if !elastic.IsHostAvailable(endpoint){
-			log.Debug(endpoint," is not available")
+		if !elastic.IsHostAvailable(endpoint) {
+			log.Debug(endpoint, " is not available")
 			continue
 		}
 		_, ok := p.hostClients[endpoint]
@@ -192,13 +191,13 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 				DisablePathNormalizing:        true,
 				MaxConns:                      cfg.MaxConnection,
 				MaxResponseBodySize:           cfg.MaxResponseBodySize,
-				MaxConnWaitTimeout:  cfg.MaxConnWaitTimeout,
-				MaxConnDuration:     cfg.MaxConnDuration,
-				MaxIdleConnDuration: cfg.MaxIdleConnDuration,
-				ReadTimeout:         cfg.ReadTimeout,
-				WriteTimeout:        cfg.WriteTimeout,
-				ReadBufferSize:      cfg.ReadBufferSize,
-				WriteBufferSize:     cfg.WriteBufferSize,
+				MaxConnWaitTimeout:            cfg.MaxConnWaitTimeout,
+				MaxConnDuration:               cfg.MaxConnDuration,
+				MaxIdleConnDuration:           cfg.MaxIdleConnDuration,
+				ReadTimeout:                   cfg.ReadTimeout,
+				WriteTimeout:                  cfg.WriteTimeout,
+				ReadBufferSize:                cfg.ReadBufferSize,
+				WriteBufferSize:               cfg.WriteBufferSize,
 				//RetryIf: func(request *fasthttp.Request) bool {
 				//
 				//},
@@ -215,15 +214,15 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 				Name:                          "reverse_proxy",
 				DisableHeaderNamesNormalizing: true,
 				DisablePathNormalizing:        true,
-				MaxConnsPerHost:                      cfg.MaxConnection,
+				MaxConnsPerHost:               cfg.MaxConnection,
 				MaxResponseBodySize:           cfg.MaxResponseBodySize,
-				MaxConnWaitTimeout:  cfg.MaxConnWaitTimeout,
-				MaxConnDuration:     cfg.MaxConnDuration,
-				MaxIdleConnDuration: cfg.MaxIdleConnDuration,
-				ReadTimeout:         cfg.ReadTimeout,
-				WriteTimeout:        cfg.WriteTimeout,
-				ReadBufferSize:      cfg.ReadBufferSize,
-				WriteBufferSize:     cfg.WriteBufferSize,
+				MaxConnWaitTimeout:            cfg.MaxConnWaitTimeout,
+				MaxConnDuration:               cfg.MaxConnDuration,
+				MaxIdleConnDuration:           cfg.MaxIdleConnDuration,
+				ReadTimeout:                   cfg.ReadTimeout,
+				WriteTimeout:                  cfg.WriteTimeout,
+				ReadBufferSize:                cfg.ReadBufferSize,
+				WriteBufferSize:               cfg.WriteBufferSize,
 				TLSConfig: &tls.Config{
 					InsecureSkipVerify: cfg.TLSInsecureSkipVerify,
 				},
@@ -239,12 +238,12 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		newHosts = append(newHosts, endpoint)
 	}
 
-	if len(p.hostClients) == 0 {
+	if len(newHosts) == 0 {
 		log.Error("proxy upstream is empty")
 		return
 	}
 
-	if util.JoinArray(newHosts, ", ")==util.JoinArray(p.endpoints, ", "){
+	if util.JoinArray(newHosts, ", ") == util.JoinArray(p.endpoints, ", ") {
 		log.Debug("hosts no change, skip")
 		return
 	}
@@ -263,9 +262,9 @@ func NewReverseProxy(cfg *ProxyConfig) *ReverseProxy {
 	p := ReverseProxy{
 		oldAddr:     "",
 		proxyConfig: cfg,
-		 hostClients : map[string]*fasthttp.HostClient{},
-		 clients : map[string]*fasthttp.Client{},
-		 locker : sync.RWMutex{},
+		hostClients: map[string]*fasthttp.HostClient{},
+		clients:     map[string]*fasthttp.Client{},
+		locker:      sync.RWMutex{},
 	}
 
 	p.refreshNodes(true)
@@ -291,7 +290,7 @@ func (p *ReverseProxy) getHostClient() (clientAvailable bool, client *fasthttp.H
 		panic("ReverseProxy has been closed")
 	}
 
-	if len(p.hostClients) == 0 ||len(p.endpoints)==0{
+	if len(p.hostClients) == 0 || len(p.endpoints) == 0 {
 		log.Error("no upstream found")
 		return false, nil, ""
 	}
@@ -323,7 +322,7 @@ RANDOM:
 	//or go random way
 	max := len(p.hostClients)
 	seed := rand.Intn(max)
-	if seed >= len(p.hostClients)||seed >= len(p.endpoints) {
+	if seed >= len(p.hostClients) || seed >= len(p.endpoints) {
 		log.Warn("invalid upstream offset, reset to 0")
 		seed = 0
 	}
@@ -341,7 +340,7 @@ func (p *ReverseProxy) getClient() (clientAvailable bool, client *fasthttp.Clien
 		panic("ReverseProxy has been closed")
 	}
 
-	if len(p.clients) == 0 ||len(p.endpoints)==0{
+	if len(p.clients) == 0 || len(p.endpoints) == 0 {
 		log.Error("no upstream found")
 		return false, nil, ""
 	}
@@ -368,7 +367,7 @@ RANDOM:
 	//or go random way
 	max := len(p.clients)
 	seed := rand.Intn(max)
-	if seed >= len(p.clients)||seed >= len(p.endpoints) {
+	if seed >= len(p.clients) || seed >= len(p.endpoints) {
 		log.Warn("invalid upstream offset, reset to 0")
 		seed = 0
 	}
@@ -377,14 +376,11 @@ RANDOM:
 	return true, c, e
 }
 
-
-
 var failureMessage = []string{"connection refused", "connection reset", "no such host", "timed out", "Connection: close"}
 
 func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.ElasticsearchMetadata, myctx *fasthttp.RequestCtx) {
 
 	stats.Increment("cache", "strike")
-
 
 	//update context
 	if myctx.Has("elastic_cluster_name") {
@@ -393,7 +389,6 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 	} else {
 		myctx.Set("elastic_cluster_name", []string{elasticsearch})
 	}
-
 
 	retry := 0
 START:
@@ -407,7 +402,7 @@ START:
 	var ok bool
 	var host string
 	//使用算法来获取合适的 client
-	switch metadata.Config.ClientMode{
+	switch metadata.Config.ClientMode {
 	case "client":
 		ok, pc, host = p.getClient()
 		break
@@ -415,8 +410,8 @@ START:
 		ok, pc, host = p.getHostClient()
 		break
 	//case "pipeline":
-		//ok, pc, host = p.getHostClient()
-		//break
+	//ok, pc, host = p.getHostClient()
+	//break
 	default:
 		ok, pc, host = p.getClient()
 	}
@@ -428,20 +423,20 @@ START:
 	}
 
 	// modify schema，align with elasticsearch's schema
-	orignalHost:=string(req.URI().Host())
-	orignalSchema:=string(req.URI().Scheme())
-	useClient:=false
-	if metadata.GetSchema()!=orignalSchema{
-		req.Header.Add("X-Forwarded-Proto",orignalSchema)
+	orignalHost := string(req.URI().Host())
+	orignalSchema := string(req.URI().Scheme())
+	useClient := false
+	if metadata.GetSchema() != orignalSchema {
+		req.Header.Add("X-Forwarded-Proto", orignalSchema)
 		req.URI().SetScheme(metadata.GetSchema())
 		ok, pc, host = p.getClient()
 		res = fasthttp.AcquireResponse()
-		useClient=true
+		useClient = true
 	}
 
-	req.Header.Add("X-Forwarded-For",myctx.RemoteAddr().String())
-	req.Header.Add("X-Real-IP",myctx.RemoteAddr().String())
-	req.Header.Add("X-Forwarded-Host",orignalHost)
+	req.Header.Add("X-Forwarded-For", myctx.RemoteAddr().String())
+	req.Header.Add("X-Real-IP", myctx.RemoteAddr().String())
+	req.Header.Add("X-Forwarded-Host", orignalHost)
 
 	if global.Env().IsDebug {
 		log.Tracef("send request [%v] to upstream [%v]", req.URI().String(), host)
@@ -449,36 +444,34 @@ START:
 
 	req.SetHost(host)
 
-	metadata.CheckNodeTrafficThrottle(host,1,req.GetRequestLength(),0)
+	metadata.CheckNodeTrafficThrottle(host, 1, req.GetRequestLength(), 0)
 
-	if p.proxyConfig.Timeout<=0{
-		p.proxyConfig.Timeout=60*time.Second
+	if p.proxyConfig.Timeout <= 0 {
+		p.proxyConfig.Timeout = 60 * time.Second
 	}
 
-	err := pc.DoTimeout(req, res,p.proxyConfig.Timeout)
+	err := pc.DoTimeout(req, res, p.proxyConfig.Timeout)
 
 	//stats.Increment("reverse_proxy","do")
 
 	//metadata.CheckNodeTrafficThrottle(util.UnsafeBytesToString(req.Header.Host()),0,res.GetResponseLength(),0)
 
-
 	// restore schema
 	req.URI().SetScheme(orignalSchema)
 	req.SetHost(orignalHost)
-
 
 	//update
 	myctx.Response.Header.Set("X-Backend-Cluster", p.proxyConfig.Elasticsearch)
 	myctx.Response.Header.Set("X-Backend-Server", host)
 	myctx.SetDestination(host)
 
-	if  err != nil {
+	if err != nil {
 		if util.ContainsAnyInArray(err.Error(), failureMessage) {
-			stats.Increment("reverse_proxy","backend_failure")
+			stats.Increment("reverse_proxy", "backend_failure")
 			//record translog, update failure ticket
 			if global.Env().IsDebug {
 				if rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"backend_failure_on_error", 1).Allow() {
-					log.Errorf("elasticsearch [%v][%v] is on fire now, %v", p.proxyConfig.Elasticsearch, host,err)
+					log.Errorf("elasticsearch [%v][%v] is on fire now, %v", p.proxyConfig.Elasticsearch, host, err)
 					time.Sleep(1 * time.Second)
 				}
 			}
@@ -490,14 +483,14 @@ START:
 				if p.proxyConfig.RetryDelayInMs > 0 {
 					time.Sleep(time.Duration(p.proxyConfig.RetryDelayInMs) * time.Millisecond)
 				}
-				stats.Increment("reverse_proxy","429_busy_retry")
+				stats.Increment("reverse_proxy", "429_busy_retry")
 				goto START
 			} else {
 				log.Debugf("reached max retries, failed to proxy request: %v, %v", err, string(req.RequestURI()))
 			}
-		}else{
+		} else {
 			if rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"backend_failure_on_error", 1).Allow() {
-				log.Warnf("failed to proxy request: %v to host %v, %v, retried: #%v, error:%v", string(req.RequestURI()),host,retry, retry,err)
+				log.Warnf("failed to proxy request: %v to host %v, %v, retried: #%v, error:%v", string(req.RequestURI()), host, retry, retry, err)
 			}
 			time.Sleep(1 * time.Second)
 		}
@@ -506,7 +499,7 @@ START:
 		// the translog file should consider to contain dirty writes, could be used to do cross cluster check or manually operations recovery.
 
 		myctx.SetContentType(util.ContentTypeJson)
-		myctx.Response.SwapBody([]byte(fmt.Sprintf("{\"error\":true,\"message\":\"%v\"}",err.Error())))
+		myctx.Response.SwapBody([]byte(fmt.Sprintf("{\"error\":true,\"message\":\"%v\"}", err.Error())))
 		myctx.SetStatusCode(500)
 	} else {
 		if global.Env().IsDebug {
@@ -514,20 +507,18 @@ START:
 		}
 	}
 
-	if useClient{
+	if useClient {
 		myctx.Response.SetStatusCode(res.StatusCode())
 		myctx.Response.Header.SetContentTypeBytes(res.Header.ContentType())
 		myctx.Response.SetBody(res.Body())
 
-		compress,compressType:= res.IsCompressed()
-		if compress{
-			myctx.Response.Header.Set(fasthttp.HeaderContentEncoding,string(compressType))
+		compress, compressType := res.IsCompressed()
+		if compress {
+			myctx.Response.Header.Set(fasthttp.HeaderContentEncoding, string(compressType))
 		}
 
 		fasthttp.ReleaseResponse(res)
 	}
-
-
 
 }
 

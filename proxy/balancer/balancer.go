@@ -13,7 +13,7 @@ type IBalancer interface {
 func NewBalancer(ws []int) IBalancer {
 
 	if len(ws) == 0 {
-		panic(errors.New("weight is invalid"))
+		panic(errors.Errorf("weight %v is invalid", ws))
 	}
 
 	rrb := roundrobinBalancer{
