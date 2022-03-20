@@ -10,7 +10,7 @@ entry:
       binding: 0.0.0.0:8000
 
 flow:
-  - name: fast_bulk
+  - name: async_bulk
     filter:
       - bulk_reshuffle:
           when:
@@ -34,21 +34,14 @@ flow:
                 - master
 router:
   - name: my_router
-    default_flow: fast_bulk
+    default_flow: async_bulk
 
 elasticsearch:
   - name: dev
     enabled: true
     endpoints:
-#     - http://localhost:9200
-     - http://192.168.3.98:9200
-#     - http://192.168.3.188:9206
-#     - http://192.168.3.188:9216
-    discovery:
-      enabled: true
-      refresh:
-        enabled: true
-        interval: 60s
+      - http://192.168.3.188:9206
+      - http://192.168.3.188:9216
 
 pipeline:
   - name: bulk_request_ingest
@@ -57,21 +50,24 @@ pipeline:
     retry_delay_in_ms: 1000
     processor:
       - unsafe_bulk_indexing:
-          max_connection_per_node: 100
+          idle_timeout_in_seconds: 10
+          max_connection_per_node: 1000
+          worker_size: 3
           bulk:
             compress: false
             batch_size_in_mb: 10
-            batch_size_in_docs: 10000
-          consumer:
-            fetch_max_messages: 1000
+            batch_size_in_docs: 50000
           queues:
             type: bulk_reshuffle
 
-memory_queue:
-  capacity: 500000
-
 stats:
-  enabled: true
+  enabled: false
+
+disk_queue:
+  sync_every_records: 10000
+  sync_timeout_in_ms: 10000
+memory_queue:
+  capacity: 100000
 
 queue:
   - name: async_bulk##cluster##dev
