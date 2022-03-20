@@ -40,8 +40,14 @@ elasticsearch:
   - name: dev
     enabled: true
     endpoints:
+      - http://192.168.3.98:9200
       - http://192.168.3.188:9206
       - http://192.168.3.188:9216
+    discovery:
+      enabled: true
+      refresh:
+        enabled: true
+        interval: 60s
 
 pipeline:
   - name: bulk_request_ingest
