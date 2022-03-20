@@ -1,0 +1,81 @@
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 1000
+    network:
+      binding: 0.0.0.0:8000
+
+flow:
+  - name: fast_bulk
+    filter:
+      - bulk_reshuffle:
+          when:
+            contains:
+              _ctx.request.path: /_bulk
+          elasticsearch: dev
+          level: cluster
+          partition_size: 1
+          fix_null_id: true
+      - elasticsearch:
+          elasticsearch: dev  #elasticsearch configure reference name
+          max_connection_per_node: 1000 #max tcp connection to upstream, default for all nodes
+          max_response_size: -1 #default for all nodes
+          balancer: weight
+          refresh: # refresh upstream nodes list, need to enable this feature to use elasticsearch nodes auto discovery
+            enabled: true
+            interval: 60s
+          filter:
+            roles:
+              exclude:
+                - master
+router:
+  - name: my_router
+    default_flow: fast_bulk
+
+elasticsearch:
+  - name: dev
+    enabled: true
+    endpoints:
+#     - http://localhost:9200
+     - http://192.168.3.98:9200
+#     - http://192.168.3.188:9206
+#     - http://192.168.3.188:9216
+    discovery:
+      enabled: true
+      refresh:
+        enabled: true
+        interval: 60s
+
+pipeline:
+  - name: bulk_request_ingest
+    auto_start: true
+    keep_running: true
+    retry_delay_in_ms: 1000
+    processor:
+      - unsafe_bulk_indexing:
+          max_connection_per_node: 100
+          bulk:
+            compress: false
+            batch_size_in_mb: 10
+            batch_size_in_docs: 10000
+          consumer:
+            fetch_max_messages: 1000
+          queues:
+            type: bulk_reshuffle
+
+memory_queue:
+  capacity: 500000
+
+stats:
+  enabled: true
+
+queue:
+  - name: async_bulk##cluster##dev
+    type: memory
+    label:
+      type: bulk_reshuffle
+      elasticsearch: dev

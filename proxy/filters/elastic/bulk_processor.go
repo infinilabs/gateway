@@ -41,10 +41,12 @@ func WalkBulkRequests(safetyParse bool,data []byte, docBuff []byte, eachLineFunc
 		nextIsMeta = true
 		skipNextLineProcessing = false
 		docCount = 0
-		for _, line := range lines {
+		for i, line := range lines {
 			bytesCount := len(line)
 			if line == nil || bytesCount <= 0 {
-				log.Tracef("invalid line, continue, [%v]",string(line))
+				if global.Env().IsDebug{
+					log.Tracef("invalid line, continue, [%v/%v] [%v]\n%v",i,len(lines),string(line),util.PrintStringByteLines(lines))
+				}
 				continue
 			}
 
@@ -367,7 +369,7 @@ func (joint *BulkProcessor) Bulk(tag string,metadata *elastic.ElasticsearchMetad
 	// Do we need to decompress the response?
 	var resbody = resp.GetRawBody()
 	if global.Env().IsDebug {
-		log.Trace(resp.StatusCode(), string(util.EscapeNewLine(resbody)))
+		log.Trace(resp.StatusCode(),string(util.EscapeNewLine(data)), string(util.EscapeNewLine(resbody)))
 	}
 
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated {

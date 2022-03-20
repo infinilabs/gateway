@@ -40,13 +40,13 @@ func (flow *FilterFlow) Process(ctx *fasthttp.RequestCtx) {
 	for _, v := range flow.Filters {
 		if !ctx.ShouldContinue() {
 			if global.Env().IsDebug {
-				log.Debugf("filter [%v] not continued", v.Name())
+				log.Tracef("filter [%v] not continued", v.Name())
 			}
 			ctx.AddFlowProcess("skipped")
 			break
 		}
 		if global.Env().IsDebug {
-			log.Debugf("processing filter [%v] [%v]", v.Name(), v)
+			log.Tracef("processing filter [%v] [%v]", v.Name(), v)
 		}
 		ctx.AddFlowProcess(v.Name())
 		v.Filter(ctx)

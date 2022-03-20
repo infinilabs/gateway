@@ -339,7 +339,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			}
 
 			if global.Env().IsDebug {
-				log.Debugf("final queue name: %v", queueConfig)
 				log.Tracef("%s/%s/%s => %v , %v", index, typeName, id, shardID, queueConfig)
 			}
 
