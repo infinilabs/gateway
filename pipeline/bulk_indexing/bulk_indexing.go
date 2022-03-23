@@ -498,7 +498,7 @@ READ_DOCS:
 		//log.Errorf("max fetch messages:%v, fetched:%v",processor.config.Consumer.FetchMaxMessages,len(messages))
 
 		if global.Env().IsDebug{
-			log.Debugf("[%v] consume message:%v,offset:%v,next:%v,timeout:%v,err:%v",consumer.Name,len(messages),ctx1.InitOffset,ctx1.NextOffset,timeout,err)
+			log.Debugf("[%v] consume message:%v,ctx:%v,timeout:%v,err:%v",consumer.Name,len(messages),ctx1,timeout,err)
 		}
 
 		if timeout{
@@ -521,6 +521,9 @@ READ_DOCS:
 		HANDLE_MESSAGE:
 
 		//update temp offset, not committed, continued reading
+		if ctx1==nil{
+			goto CLEAN_BUFFER
+		}
 		offset=ctx1.NextOffset
 		if len(messages) > 0 {
 			for _,pop:=range messages{
