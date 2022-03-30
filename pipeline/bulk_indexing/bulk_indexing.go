@@ -326,7 +326,6 @@ func (processor *BulkIndexingProcessor) HandleQueueConfig(v *queue.Config,c *pip
 	go processor.NewBulkWorker("bulk_indexing_"+host,c, processor.config.BulkConfig.GetBulkSizeInBytes(), v, host)
 }
 
-
 func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.Context, bulkSizeInByte int, qConfig *queue.Config, host string) {
 
 	defer func() {
@@ -348,10 +347,15 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 		log.Trace("exit bulk indexing processor")
 	}()
 
+	if !queue.HasLag(qConfig){
+		return
+	}
+
 	key:=fmt.Sprintf("%v",qConfig.Id)
 
 	if processor.config.MaxWorkers>0&&util.MapLength(&processor.inFlightQueueConfigs)>processor.config.MaxWorkers{
 		log.Debugf("reached max num of workers, skip init [%v]",qConfig.Name)
+		time.Sleep(500*time.Millisecond)
 		return
 	}
 
@@ -477,7 +481,7 @@ READ_DOCS:
 				qCfg:=queue.GetOrInitConfig(v)
 				hasLag := queue.HasLag(qCfg)
 
-				log.Debugf("checking queue lag: %v %v",qConfig.Name,hasLag)
+				log.Debugf("check queue lag: [%v] for [%v], %v",qCfg.Name,qConfig.Name,hasLag)
 
 				if hasLag {
 					log.Debugf("%v has pending messages to consume, cleanup it first", v)
@@ -493,7 +497,9 @@ READ_DOCS:
 		}
 
 		//runnintCtx:=pipeline.AcquireContext()
+		log.Debugf("star to consume queue:%v",qConfig.Name)
 		ctx1,messages,timeout,err:=queue.Consume(qConfig,consumer.Name,offset,processor.config.Consumer.FetchMaxMessages,time.Millisecond*time.Duration(processor.config.Consumer.FetchMaxWaitMs))
+		log.Debugf("get %v messages from queue:%v",len(messages),qConfig.Name)
 
 		//log.Errorf("max fetch messages:%v, fetched:%v",processor.config.Consumer.FetchMaxMessages,len(messages))
 
@@ -509,7 +515,7 @@ READ_DOCS:
 
 		if err != nil {
 			log.Tracef("error on queue:[%v]",qConfig.Name)
-			if err.Error()=="EOF" {
+			if err.Error()=="EOF" ||err.Error()=="unexpected EOF"{
 				if len(messages)>0{
 					goto HANDLE_MESSAGE
 				}
@@ -557,10 +563,8 @@ READ_DOCS:
 							log.Errorf("error between queue:[%v] offset [%v]-[%v]",qConfig.Id, initOffset,offset)
 							return
 					}else{
-
 						if offset!=""&&offset!= initOffset {
 							ok,err:=queue.CommitOffset(qConfig,consumer,offset)
-							time.Sleep(1*time.Second)
 							if !ok||err!=nil{
 								panic(err)
 							}
@@ -624,18 +628,10 @@ func (processor *BulkIndexingProcessor) submitBulkRequest(tag,esClusterID string
 	if mainBuf.GetMessageCount() > 0 {
 
 		log.Trace(meta.Config.Name, ", starting submit bulk request")
-
 		start := time.Now()
 		contrinueRequest:= bulkProcessor.Bulk(tag,meta, host, mainBuf)
-
-		stats.Increment(esClusterID+"."+tag,util.ToString(contrinueRequest))
-
 		stats.Timing("elasticsearch."+esClusterID+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
-		//log.Debug(meta.Config.Name, ", ", host, ", result:", success, ", status:", status,", count:",count, ", size:", util.ByteSize(uint64(size)), ", elapsed:", time.Since(start)," ",err)
-		log.Debug(meta.Config.Name, ", ", host, ", count:",count, ", size:", util.ByteSize(uint64(size)), ", elapsed:", time.Since(start))
-		//stats.IncrementBy("elasticsearch."+esClusterID+".bulk", string(success+".bytes"), int64(size))
-		//stats.IncrementBy("elasticsearch."+esClusterID+".bulk", string(success+".count"), int64(count))
-		//stats.IncrementBy("elasticsearch."+esClusterID+".bulk", fmt.Sprintf("%v.bytes",status), int64(size))
+		log.Debug(meta.Config.Name, ", ", host, ", count:",count, ", size:", util.ByteSize(uint64(size)),", elapsed:", time.Since(start))
 		return contrinueRequest
 	}
 

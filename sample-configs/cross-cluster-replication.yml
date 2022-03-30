@@ -300,7 +300,7 @@ flow:
               _ctx.request.path: /_bulk
           elasticsearch: "backup"
           queue_name_prefix: "async_bulk"
-          level: index #cluster,node,index,shard
+          level: cluster #cluster,node,index,shard
           partition_size: 3
           fix_null_id: true
           tag_on_success: ["commit_message_allowed"]

@@ -16,12 +16,12 @@ flow:
           when:
             contains:
               _ctx.request.path: /_bulk
-          elasticsearch: dev
+          elasticsearch: prod
           level: cluster
           partition_size: 1
           fix_null_id: true
       - elasticsearch:
-          elasticsearch: dev  #elasticsearch configure reference name
+          elasticsearch: prod  #elasticsearch configure reference name
           max_connection_per_node: 1000 #max tcp connection to upstream, default for all nodes
           max_response_size: -1 #default for all nodes
           balancer: weight
@@ -35,14 +35,18 @@ flow:
 router:
   - name: my_router
     default_flow: async_bulk
+#    denied_client_ip_list:
+#      - 133.37.54.23
 
 elasticsearch:
-  - name: dev
+  - name: prod
     enabled: true
-    endpoints:
-      - http://192.168.3.98:9200
-      - http://192.168.3.188:9206
-      - http://192.168.3.188:9216
+    schema: http
+    hosts:
+      - 192.168.3.188:9206
+    basic_auth:
+      username: elastic
+      password: password
     discovery:
       enabled: true
       refresh:
@@ -65,6 +69,8 @@ pipeline:
             batch_size_in_docs: 50000
           queues:
             type: bulk_reshuffle
+          when:
+            cluster_available: [ "prod" ]
 
 stats:
   enabled: false
@@ -76,8 +82,14 @@ memory_queue:
   capacity: 100000
 
 queue:
-  - name: async_bulk##cluster##dev
+  - name: async_bulk##cluster##prod
     type: memory
     label:
       type: bulk_reshuffle
-      elasticsearch: dev
+      elasticsearch: prod
+
+#floating_ip:
+#  enabled: true
+#  ip: 10.xxx.xxx.xxx
+#  netmask: 255.255.255.0
+#  interface: bond0

@@ -17,6 +17,7 @@ limitations under the License.
 package forcemerge
 
 import (
+	"context"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
@@ -238,7 +239,7 @@ func (module ForceMergeModule) Start() error {
 			Description: "discovery indices for force_merge",
 			Type:        "interval",
 			Interval:    "60m",
-			Task: func() {
+			Task: func(ctx context.Context) {
 				client := elastic.GetClient(mergeConfig.Elasticsearch)
 				for _,v:=range mergeConfig.Discovery.Rules{
 					log.Trace("processing index_pattern: ",v.IndexPattern)

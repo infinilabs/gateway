@@ -420,6 +420,8 @@ func (joint *BulkProcessor) Bulk(tag string,metadata *elastic.ElasticsearchMetad
 				failureStatus:=buffer.GetMessageStatus(true)
 
 				if len(failureStatus)>0{
+					failureStatusStr:=util.JoinMapInt(failureStatus,":")
+					log.Debugf("documents in failure: %v",failureStatusStr)
 					//save message bytes, with metadata, set codec to wrapped bulk messages
 					queue.Push(queue.GetOrInitConfig("failure_messages"), util.MustToJSONBytes(util.MapStr{
 						"cluster_id":  metadata.Config.ID,
@@ -429,7 +431,7 @@ func (joint *BulkProcessor) Bulk(tag string,metadata *elastic.ElasticsearchMetad
 							"body":util.SubString(string(req.GetRawBody()), 0, 1024*4),
 						},
 						"response": util.MapStr{
-							"status": util.JoinMapInt(failureStatus,":"),
+							"status": failureStatusStr,
 							"body":util.SubString(string(resbody), 0, 1024*4),
 						},
 					}))

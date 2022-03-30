@@ -19,6 +19,7 @@ type Config struct {
 	FlowName   string `config:"flow"`
 	InputQueue string `config:"input_queue"`
 	FlowMaxRunningTimeoutInSeconds int `config:"flow_max_running_timeout_in_second"`
+	CommitTimeoutInSeconds int `config:"commit_timeout_in_second"`
 
 	CommitOnTag   	 string `config:"commit_on_tag"`
 	IdleWaitTimeoutInSeconds   	 int `config:"idle_wait_timeout_in_second"`
@@ -64,12 +65,13 @@ func New(c *config.Config) (pipeline.Processor, error) {
 			Group: "group-001",
 			Name: "consumer-001",
 			FetchMinBytes:   	1,
-			FetchMaxMessages:   100,
+			FetchMaxMessages:   1000,
 			FetchMaxWaitMs:   10000,
 		},
 		CommitOnTag:"",
 		IdleWaitTimeoutInSeconds:   	1,
-		FlowMaxRunningTimeoutInSeconds:   	10,
+		FlowMaxRunningTimeoutInSeconds:   	60,
+		CommitTimeoutInSeconds:   	1,
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -92,6 +94,17 @@ func (processor *FlowRunnerProcessor) Name() string {
 }
 
 func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
+	var initOfffset string
+	var offset string
+	qConfig :=queue.GetOrInitConfig(processor.config.InputQueue)
+	flowProcessor := common.GetFlowProcess(processor.config.FlowName)
+
+	if !queue.HasLag(qConfig){
+		return nil
+	}
+
+	var consumer=queue.GetOrInitConsumerConfig(qConfig.Id,processor.config.Consumer.Group,processor.config.Consumer.Name)
+
 	defer func() {
 		if !global.Env().IsDebug {
 			if r := recover(); r != nil {
@@ -108,20 +121,24 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 				ctx.Failed()
 			}
 		}
+
+		if offset!=""&&offset!=initOfffset{
+			ok,err:=queue.CommitOffset(qConfig,consumer,offset)
+			log.Tracef("%v,%v commit offset:%v",qConfig.Name,consumer.Name,offset)
+			if !ok||err!=nil{
+				ctx.Failed()
+			}
+		}
 	}()
 
-	//timeOut := 5
-	//idleDuration := time.Duration(timeOut) * time.Second
-	flowProcessor := common.GetFlowProcess(processor.config.FlowName)
-	qConfig :=queue.GetOrInitConfig(processor.config.InputQueue)
+	t1:=util.AcquireTimer(time.Duration(processor.config.FlowMaxRunningTimeoutInSeconds)*time.Second)
+	defer util.ReleaseTimer(t1)
 
-	var consumer=queue.GetOrInitConsumerConfig(qConfig.Id,processor.config.Consumer.Group,processor.config.Consumer.Name)
-	var initOfffset string
-	var offset string
+	initOfffset,_=queue.GetOffset(qConfig,consumer)
+	offset=initOfffset
+	lastCommitTime:=time.Now()
+	var commitIdle=time.Duration(processor.config.CommitTimeoutInSeconds)*time.Second
 	for {
-			t1:=util.AcquireTimer(time.Duration(processor.config.FlowMaxRunningTimeoutInSeconds)*time.Second)
-			defer util.ReleaseTimer(t1)
-
 			if ctx.IsCanceled(){
 				return nil
 			}
@@ -136,82 +153,66 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 				if global.Env().IsDebug{
 					log.Debug(qConfig.Name,",",consumer.Group,",",consumer.Name,",init offset:",offset)
 				}
-				wg:=sync.WaitGroup{}
-				wg.Add(1)
-				go func() {
-					defer func(offset string) {
-						if !global.Env().IsDebug {
-							if r := recover(); r != nil {
-								var v string
-								switch r.(type) {
-								case error:
-									v = r.(error).Error()
-								case runtime.Error:
-									v = r.(runtime.Error).Error()
-								case string:
-									v = r.(string)
-								}
-								log.Errorf("error on flow_runner, offset: %v, %v", offset,v)
+
+				log.Debugf("star to consume queue:%v",qConfig.Name)
+				_,messages,timeout,err:=queue.Consume(qConfig,consumer.Name,offset,processor.config.Consumer.FetchMaxMessages,time.Millisecond*time.Duration(processor.config.Consumer.FetchMaxWaitMs))
+				log.Debugf("get %v messages from queue:%v",len(messages),qConfig.Name)
+
+				if err!=nil&&err.Error()!="EOF"{
+					log.Error(err)
+					panic(err)
+				}
+
+				if len(messages) > 0 {
+					for _,pop:=range messages {
+						ctx := acquireCtx()
+						err = ctx.Request.Decode(pop.Data)
+						if err != nil {
+							log.Error(err)
+							panic(err)
+						}
+
+						ctx.SetFlowID(processor.config.FlowName)
+
+						flowProcessor(ctx)
+
+						if processor.config.CommitOnTag!=""{
+							tags,ok:=ctx.GetTags()
+							if ok{
+								_,ok= tags[processor.config.CommitOnTag]
+							}
+							if !ok{
+								releaseCtx(ctx)
+								return nil
 							}
 						}
-						wg.Done()
-					}(offset)
 
-					//READ_DOCS:
-					initOfffset,_=queue.GetOffset(qConfig,consumer)
-					offset=initOfffset
+						releaseCtx(ctx)
 
-					_,messages,timeout,err:=queue.Consume(qConfig,consumer.Name,offset,processor.config.Consumer.FetchMaxMessages,time.Millisecond*time.Duration(processor.config.Consumer.FetchMaxWaitMs))
-					if err!=nil&&err.Error()!="EOF"{
-						log.Error(err)
-						panic(err)
+						offset=pop.NextOffset
+
 					}
 
-					if len(messages) > 0 {
-						for _,pop:=range messages {
-							ctx := acquireCtx()
-							err = ctx.Request.Decode(pop.Data)
-							if err != nil {
-								log.Error(err)
-								panic(err)
-							}
-
-							ctx.SetFlowID(processor.config.FlowName)
-
-							flowProcessor(ctx)
-
-							if processor.config.CommitOnTag!=""{
-								tags,ok:=ctx.GetTags()
-								if ok{
-									_,ok= tags[processor.config.CommitOnTag]
-								}
-								if !ok{
-									releaseCtx(ctx)
-									return
-								}
-							}
-
-							releaseCtx(ctx)
-
-							offset=pop.NextOffset
-							if offset!=""&&offset!=initOfffset{
-								ok,err:=queue.CommitOffset(qConfig,consumer,offset)
-								log.Tracef("%v,%v commit offset:%v",qConfig.Name,consumer.Name,offset)
-								if !ok||err!=nil{
-									panic(err)
-								}
+					if time.Since(lastCommitTime)>commitIdle{
+						//commit on idle timeout
+						if offset!=""&&offset!=initOfffset{
+							ok,err:=queue.CommitOffset(qConfig,consumer,offset)
+							lastCommitTime=time.Now()
+							log.Tracef("%v,%v commit offset:%v",qConfig.Name,consumer.Name,offset)
+							if !ok||err!=nil{
+								return err
 							}
 						}
 					}
 
-					if timeout||len(messages)==0{
-						time.Sleep(1*time.Second)
-						//goto READ_DOCS
-					}
 
-					}()
-				wg.Wait()
-				return nil
+				}
+
+				if timeout||len(messages)==0{
+					log.Debugf("%v messages, timeout:%v, sleep 1s",len(messages),timeout)
+					return nil
+				}
+
 			}
 		}
 

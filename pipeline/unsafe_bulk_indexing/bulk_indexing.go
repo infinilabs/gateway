@@ -332,7 +332,6 @@ func (processor *BulkIndexingProcessor) HandleQueueConfig(v *queue.Config,c *pip
 	}
 }
 
-
 func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.Context, bulkSizeInByte int, qConfig *queue.Config, host string) {
 
 	defer func() {
@@ -358,6 +357,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 
 	if processor.config.MaxWorkers>0&&util.MapLength(&processor.inFlightQueueConfigs)>processor.config.MaxWorkers{
 		log.Debugf("reached max num of workers, skip init [%v]",qConfig.Name)
+		time.Sleep(500*time.Millisecond)
 		return
 	}
 

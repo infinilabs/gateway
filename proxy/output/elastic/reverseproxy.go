@@ -1,6 +1,7 @@
 package elastic
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"math/rand"
@@ -275,7 +276,7 @@ func NewReverseProxy(cfg *ProxyConfig) *ReverseProxy {
 			Description: fmt.Sprintf("refresh nodes for elasticsearch [%v]", cfg.Elasticsearch),
 			Type:        "interval",
 			Interval:    cfg.Refresh.Interval,
-			Task: func() {
+			Task: func(ctx context.Context) {
 				p.refreshNodes(false)
 			},
 		}

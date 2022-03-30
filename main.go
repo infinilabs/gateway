@@ -41,6 +41,28 @@ import (
 	"infini.sh/gateway/service/translog"
 )
 
+func setup()  {
+	module.RegisterSystemModule(&stats2.SimpleStatsModule{})
+	module.RegisterUserPlugin(&stats.StatsDModule{})
+	module.RegisterUserPlugin(translog.TranslogModule{})
+	module.RegisterSystemModule(&filter.FilterModule{})
+	module.RegisterSystemModule(&s3.S3Module{})
+	module.RegisterSystemModule(&mem_queue.MemoryQueue{})
+	module.RegisterSystemModule(&queue2.DiskQueue{})
+	module.RegisterSystemModule(&redis.RedisModule{})
+	module.RegisterSystemModule(&elastic.ElasticModule{})
+	module.RegisterSystemModule(&task.TaskModule{})
+	module.RegisterUserPlugin(&proxy.GatewayModule{})
+	module.RegisterUserPlugin(forcemerge.ForceMergeModule{})
+	module.RegisterSystemModule(&pipeline.PipeModule{})
+	module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
+	module.RegisterSystemModule(&api.APIModule{})
+}
+
+func start()  {
+	module.Start()
+}
+
 func main() {
 
 	terminalHeader := ("\n   ___   _   _____  __  __    __  _       \n")
@@ -58,36 +80,7 @@ func main() {
 
 	defer app.Shutdown()
 
-	if app.Setup(func() {
-
-		//load core modules first
-
-		module.RegisterSystemModule(&stats2.SimpleStatsModule{})
-		module.RegisterUserPlugin(&stats.StatsDModule{})
-
-		module.RegisterUserPlugin(translog.TranslogModule{})
-		module.RegisterSystemModule(&filter.FilterModule{})
-
-		module.RegisterSystemModule(&s3.S3Module{})
-
-		module.RegisterSystemModule(&mem_queue.MemoryQueue{})
-		module.RegisterSystemModule(&queue2.DiskQueue{})
-
-		module.RegisterSystemModule(&redis.RedisModule{})
-		module.RegisterSystemModule(&elastic.ElasticModule{})
-
-		module.RegisterSystemModule(&task.TaskModule{})
-		module.RegisterUserPlugin(&proxy.GatewayModule{})
-		module.RegisterUserPlugin(forcemerge.ForceMergeModule{})
-		module.RegisterSystemModule(&pipeline.PipeModule{})
-		module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
-		module.RegisterSystemModule(&api.APIModule{})
-
-	}, func() {
-		//start each module, with enabled provider
-		module.Start()
-
-	},nil){
+	if app.Setup(setup, start,nil){
 		app.Run()
 	}
 
