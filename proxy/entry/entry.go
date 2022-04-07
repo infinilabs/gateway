@@ -151,6 +151,10 @@ func (this *Entrypoint) Start() error {
 		this.config.WriteTimeout = 30
 	}
 
+	if this.config.SleepWhenConcurrencyLimitsExceeded <= 0 {
+		this.config.SleepWhenConcurrencyLimitsExceeded = 10
+	}
+
 	if this.config.ReadBufferSize <= 0 {
 		this.config.ReadBufferSize = 4 * 4096
 	}
@@ -164,23 +168,29 @@ func (this *Entrypoint) Start() error {
 	}
 
 	this.server = &fasthttp.Server{
-		Name:                          "INFINI",
-		DisableHeaderNamesNormalizing: true,
-		Handler:                       this.router.Handler,
-		TraceHandler:                  this.router.TraceHandler,
-		Concurrency:                   this.config.MaxConcurrency,
-		LogAllErrors:                  false,
-		MaxRequestBodySize:            this.config.MaxRequestBodySize, //200 * 1024 * 1024,
-		GetOnly:                       false,
-		ReduceMemoryUsage:             this.config.ReduceMemoryUsage,
-		TCPKeepalive:                  this.config.TCPKeepalive,
-		TCPKeepalivePeriod:            time.Duration(this.config.TCPKeepaliveSeconds) * time.Second,
-		MaxIdleWorkerDuration:         time.Duration(this.config.MaxIdleWorkerDurationSeconds) * time.Second,
-		IdleTimeout:                   time.Duration(this.config.IdleTimeout) * time.Second,
-		ReadTimeout:                   time.Duration(this.config.ReadTimeout) * time.Second,
-		WriteTimeout:                  time.Duration(this.config.WriteTimeout) * time.Second,
-		ReadBufferSize:                this.config.ReadBufferSize, //16 * 1024,
-		WriteBufferSize:               this.config.WriteBufferSize,
+		Name:                               "INFINI",
+		NoDefaultServerHeader:              true,
+		NoDefaultDate:                      true,
+		NoDefaultContentType:               true,
+		DisableHeaderNamesNormalizing:      true,
+		DisablePreParseMultipartForm:       true,
+		Handler:                            this.router.Handler,
+		TraceHandler:                       this.router.TraceHandler,
+		Concurrency:                        this.config.MaxConcurrency,
+		LogAllErrors:                       false,
+		MaxRequestBodySize:                 this.config.MaxRequestBodySize, //200 * 1024 * 1024,
+		GetOnly:                            false,
+		ReduceMemoryUsage:                  this.config.ReduceMemoryUsage,
+		TCPKeepalive:                       this.config.TCPKeepalive,
+		TCPKeepalivePeriod:                 time.Duration(this.config.TCPKeepaliveSeconds) * time.Second,
+		MaxIdleWorkerDuration:              time.Duration(this.config.MaxIdleWorkerDurationSeconds) * time.Second,
+		IdleTimeout:                        time.Duration(this.config.IdleTimeout) * time.Second,
+		ReadTimeout:                        time.Duration(this.config.ReadTimeout) * time.Second,
+		WriteTimeout:                       time.Duration(this.config.WriteTimeout) * time.Second,
+		ReadBufferSize:                     this.config.ReadBufferSize, //16 * 1024,
+		WriteBufferSize:                    this.config.WriteBufferSize,
+		SleepWhenConcurrencyLimitsExceeded: time.Duration(this.config.SleepWhenConcurrencyLimitsExceeded) * time.Second,
+		MaxConnsPerIP:                      this.config.MaxConnsPerIP,
 	}
 
 	if len(this.routerConfig.DeniedClientIPList) > 0 {
