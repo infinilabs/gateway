@@ -378,6 +378,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string, ctx *pipeline.
 	var initOffset string
 	var offset string
 	var consumer = queue.GetOrInitConsumerConfig(qConfig.Id, processor.config.Consumer.Group, processor.config.Consumer.Name)
+	var skipFinalDocsProcess bool
 
 	defer func() {
 		if !global.Env().IsDebug {
@@ -393,10 +394,15 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string, ctx *pipeline.
 				}
 				log.Errorf("error in bulk_indexing worker[%v],queue:[%v], offset:[%v]->[%v],%v", workerID, qConfig.Id, initOffset, offset, v)
 				ctx.Failed()
+				skipFinalDocsProcess = true
 			}
 		}
 
 		processor.inFlightQueueConfigs.Delete(key)
+
+		if skipFinalDocsProcess {
+			return
+		}
 
 		//cleanup buffer before exit worker
 		continueNext := processor.submitBulkRequest(tag, esClusterID, meta, host, bulkProcessor, mainBuf)
@@ -412,7 +418,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string, ctx *pipeline.
 			if global.Env().IsDebug {
 				log.Errorf("error between queue:[%v] offset [%v]-[%v]", qConfig.Id, initOffset, offset)
 			}
-			return
+			panic(errors.Errorf("error between queue:[%v] offset [%v]-[%v]", qConfig.Id, initOffset, offset))
 		}
 		log.Debugf("exit worker[%v], queue:[%v]", workerID, qConfig.Id)
 	}()
@@ -557,7 +563,7 @@ READ_DOCS:
 					mainBuf.Reset()
 					if !continueRequest {
 						log.Errorf("error between queue:[%v] offset [%v]-[%v]", qConfig.Id, initOffset, offset)
-						return
+						panic(errors.Errorf("error between queue:[%v] offset [%v]-[%v]", qConfig.Id, initOffset, offset))
 					} else {
 						if pop.NextOffset != "" && pop.NextOffset != initOffset {
 							ok, err := queue.CommitOffset(qConfig, consumer, pop.NextOffset)
@@ -597,7 +603,7 @@ CLEAN_BUFFER:
 	} else {
 		//logging failure offset boundry
 		log.Errorf("error between offset [%v]-[%v]", initOffset, offset)
-		return
+		panic(errors.Errorf("error between offset [%v]-[%v]", initOffset, offset))
 	}
 
 	if offset == "" || ctx.IsCanceled() || ctx.IsFailed() {
