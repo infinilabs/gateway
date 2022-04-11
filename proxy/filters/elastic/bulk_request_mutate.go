@@ -18,9 +18,9 @@ type ElasticsearchBulkRequestMutate struct {
 	DefaultType      string            `config:"default_type"`
 	FixNilType       bool              `config:"fix_null_type"`
 	FixNilID         bool              `config:"fix_null_id"`
-	Pipeline         string             `config:"pipeline"`
-	RemoveTypeMeta         bool         `config:"remove_type"`
-	RemovePipeline         bool         `config:"remove_pipeline"`
+	Pipeline         string            `config:"pipeline"`
+	RemoveTypeMeta   bool              `config:"remove_type"`
+	RemovePipeline   bool              `config:"remove_pipeline"`
 	AddTimestampToID bool              `config:"generate_enhanced_id"`
 	SafetyParse      bool              `config:"safety_parse"`
 	DocBufferSize    int               `config:"doc_buffer_size"`
@@ -69,12 +69,11 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 				indexNew = urlLevelIndex
 			}
 
-			if typeName!=typeNew && typeName == "" &&!this.RemoveTypeMeta && urlLevelType != "" {
+			if typeName != typeNew && typeName == "" && !this.RemoveTypeMeta && urlLevelType != "" {
 				typeName = urlLevelType
 				typeNew = urlLevelType
 			}
-
-			if (actionStr == actionIndex || actionStr == actionCreate) && len(id) == 0 && this.FixNilID {
+			if (actionStr == actionIndex || actionStr == actionCreate) && (len(id) == 0 || id == "null") && this.FixNilID {
 				randID := util.GetUUID()
 				if this.AddTimestampToID {
 					idNew = fmt.Sprintf("%v-%v-%v", randID, time.Now().UnixNano(), util.PickRandomNumber(10))
@@ -87,7 +86,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
-			if typeName==""&&typeNew == "" &&!this.RemoveTypeMeta && this.FixNilType && this.DefaultType != "" {
+			if typeName == "" && typeNew == "" && !this.RemoveTypeMeta && this.FixNilType && this.DefaultType != "" {
 				typeName = this.DefaultType
 				typeNew = this.DefaultType
 				if global.Env().IsDebug {
@@ -109,48 +108,47 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
-			if typeName != "" &&!this.RemoveTypeMeta && len(this.TypeNameRename) > 0 {
+			if typeName != "" && !this.RemoveTypeMeta && len(this.TypeNameRename) > 0 {
 				v, ok := this.TypeNameRename[typeName]
-				if ok&& v!=typeName {
+				if ok && v != typeName {
 					typeNew = v
 					typeName = v
 				} else {
 					v, ok := this.TypeNameRename["*"]
-					if ok && v!=typeName {
+					if ok && v != typeName {
 						typeNew = v
 						typeName = v
 					}
 				}
 			}
 
+			set := map[string]string{}
+			remove := map[string]string{}
 
-			set:=map[string]string{}
-			remove:=map[string]string{}
-
-			if this.RemoveTypeMeta{
-				remove["_type"]="_type"
-			}else{
-				if typeNew != ""{
-					set["_type"]=typeNew
+			if this.RemoveTypeMeta {
+				remove["_type"] = "_type"
+			} else {
+				if typeNew != "" {
+					set["_type"] = typeNew
 				}
 			}
 
-			if this.Pipeline!=""{
-				set["pipeline"]=this.Pipeline
-			}else if this.RemovePipeline{
-				remove["pipeline"]="pipeline"
+			if this.Pipeline != "" {
+				set["pipeline"] = this.Pipeline
+			} else if this.RemovePipeline {
+				remove["pipeline"] = "pipeline"
 			}
 
-			if indexNew!=""{
-				set["_index"]=indexNew
+			if indexNew != "" {
+				set["_index"] = indexNew
 			}
 
-			if idNew!=""{
-				set["_id"]=idNew
+			if idNew != "" {
+				set["_id"] = idNew
 			}
 
-			if len(set)>0||len(remove)>0{
-				metaBytes, err =batchUpdateJson(metaBytes,actionStr,set,remove)
+			if len(set) > 0 || len(remove) > 0 {
+				metaBytes, err = batchUpdateJson(metaBytes, actionStr, set, remove)
 				if err != nil {
 					panic(err)
 				}
@@ -208,7 +206,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("bulk_request_mutate",NewElasticsearchBulkRequestMutateFilter,&ElasticsearchBulkRequestMutate{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("bulk_request_mutate", NewElasticsearchBulkRequestMutateFilter, &ElasticsearchBulkRequestMutate{})
 }
 
 func NewElasticsearchBulkRequestMutateFilter(c *config.Config) (pipeline.Filter, error) {
