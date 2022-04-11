@@ -102,6 +102,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 	}
 
 	var consumer = queue.GetOrInitConsumerConfig(qConfig.Id, processor.config.Consumer.Group, processor.config.Consumer.Name)
+	var skipFinalDocsProcess bool
 
 	defer func() {
 		if !global.Env().IsDebug {
@@ -117,7 +118,12 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 				}
 				log.Errorf("error in flow_runner [%v], [%v]", processor.config.FlowName, v)
 				ctx.Failed()
+				skipFinalDocsProcess = true
 			}
+		}
+
+		if skipFinalDocsProcess {
+			return
 		}
 
 		if offset != "" && offset != initOfffset {
