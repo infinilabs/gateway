@@ -19,6 +19,7 @@ pipeline:
     auto_start: true
     processor:
     - dag:
+        mode: wait_all
         parallel:
           - dump_hash: #dump es1's doc
               indices: "filebeat-7.8.0-2022.02.25-000001"
