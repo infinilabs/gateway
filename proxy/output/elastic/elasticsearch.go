@@ -54,7 +54,6 @@ func (filter *Elasticsearch) Filter(ctx *fasthttp.RequestCtx) {
 		ctx.Response.SwapBody([]byte(fmt.Sprintf("{\"error\":true,\"message\":\"Elasticsearch [%v] Service Unavailable\"}", filter.config.Elasticsearch)))
 		ctx.SetStatusCode(503)
 		ctx.Finished()
-		time.Sleep(100 * time.Millisecond)
 		return
 	}
 
