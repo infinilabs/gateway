@@ -113,6 +113,7 @@ func ServerHandler(conn net.Conn) {
 func ServerWHandler(conn net.Conn, C *CS) {
 	// read data written Wch of business ClientWork
 	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
 	for {
 		select {
 		case d := <-C.Wch:
