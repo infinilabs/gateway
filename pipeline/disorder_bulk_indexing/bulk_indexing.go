@@ -78,7 +78,7 @@ type Config struct {
 }
 
 func init()  {
-	pipeline.RegisterProcessorPlugin("unsafe_bulk_indexing", New)
+	pipeline.RegisterProcessorPlugin("disorder_bulk_indexing", New)
 }
 
 func New(c *config.Config) (pipeline.Processor, error) {
