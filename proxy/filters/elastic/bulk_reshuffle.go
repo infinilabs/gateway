@@ -177,7 +177,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				typeNew = urlLevelType
 			}
 
-			if (actionStr == actionIndex || actionStr == actionCreate) && len(id) == 0 && fixNullID {
+			if (actionStr == actionIndex || actionStr == actionCreate) && (len(id) == 0 || id == "null") && fixNullID {
 				id = util.GetUUID()
 				idNew = id
 				if global.Env().IsDebug {
