@@ -1,0 +1,78 @@
+path.data: data
+path.logs: log
+
+entry:
+  - name: test_entry
+    enabled: true
+    router: default
+    max_concurrency: 20000
+    network:
+      binding: 0.0.0.0:8000
+
+router:
+  - name: default
+    default_flow: test
+    rules:
+      - method:
+          - "*"
+        pattern:
+          - "/{any_index}/_search"
+        flow:
+          - test
+
+flow:
+  - name: test
+    filter:
+      - dump:
+          context:
+            - _ctx.request.path
+      - javascript:
+          params:
+            clusterNames: ["cluster01", "cluster02", "cluster03"]
+          source: >
+            var console = require('console');
+            var params = {clusterNames: []};
+            function register(scriptParams) {
+                params = scriptParams;
+            }
+            function process(event) {
+              var originalPath = event.Get("_ctx.request.path");
+              // console.info("Original Request Path [%s]", originalPath);
+
+              var matches = originalPath.match(/\/?(.*?)\/_search/)
+              var indexNames = [];
+              if(matches && matches.length > 1) {
+                  indexNames = matches[1].split(",")
+              }
+              var resultNames = []
+              if(indexNames.length > 0) {
+                  for(var i=0; i<indexNames.length; i++){
+                      if(indexNames[i].length > 0) {
+                          for(var j=0; j<params.clusterNames.length; j++){
+                              resultNames.push(params.clusterNames[j]+":"+indexNames[i])
+                          }
+                      }
+                  }
+              }
+
+              if (resultNames.length>0){
+                  var newPath="/"+resultNames.join(",")+"/_search";
+                  // console.info("New Request Path [%s]", newPath);
+                  event.Put("_ctx.request.path",newPath);
+                  // event.Put("index.rewritten", originalPath+" -> "+newPath);
+                  // event.Tag("js");
+              }
+            }
+      - dump:
+          context:
+            - _ctx.request.path
+
+# Purpose of this example:
+#  forward requests to multi clusters by adding prefix to each index:
+#  POST /app,news/_search   =>  POST cluster01:app,cluster02:app,cluster01:news,cluster02:news/_search
+
+# TESTING
+#  curl localhost:8000/_search
+#  curl localhost:8000/abc/_search
+#  curl localhost:8000/abc,efg/_search
+#  curl localhost:8000/efg,hij,xyz/_search

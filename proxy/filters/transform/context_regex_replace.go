@@ -37,7 +37,7 @@ func (filter *ContextRegexReplace) Filter(ctx *fasthttp.RequestCtx) {
 		valueStr := util.ToString(value)
 		if len(valueStr) > 0 {
 			newBody := filter.p.ReplaceAll([]byte(valueStr), util.UnsafeStringToBytes(filter.To))
-			err := ctx.SetValue(filter.Context, string(newBody))
+			_,err := ctx.PutValue(filter.Context, string(newBody))
 			if err != nil {
 				log.Error(err)
 				return
