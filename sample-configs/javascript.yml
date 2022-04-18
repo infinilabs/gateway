@@ -1,0 +1,21 @@
+entry:
+ - name: test_entry
+   enabled: true
+   router: default
+   max_concurrency: 20000
+   network:
+    binding: 0.0.0.0:8000
+
+router:
+ - name: default
+   default_flow: test
+
+flow:
+ - name: test
+   filter:
+    - javascript:
+        source: >
+          function process(ctx) {
+            var console = require('console');
+            console.log("hello from javascript");
+          }
