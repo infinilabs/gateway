@@ -190,24 +190,26 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 			request.Elastic = map[string]interface{}{}
 		}
 		indexStats := ctx.Get("bulk_index_stats")
-		statsObj, ok := indexStats.(map[string]int)
-		if ok {
-			docs := 0
-			for _, v := range statsObj {
-				docs += v
+		if indexStats!=nil{
+			statsObj, ok := indexStats.(map[string]int)
+			if ok {
+				docs := 0
+				for _, v := range statsObj {
+					docs += v
+				}
+
+				bulk_status["indices"] = len(statsObj)
+				bulk_status["documents"] = docs
+
+				if this.config.SaveBulkDetails {
+					actionStats := ctx.Get("bulk_action_stats")
+					stats := map[string]interface{}{}
+					stats["index"] = indexStats
+					stats["action"] = actionStats
+					bulk_status["stats"] = stats
+				}
+
 			}
-
-			bulk_status["indices"] = len(statsObj)
-			bulk_status["documents"] = docs
-
-			if this.config.SaveBulkDetails {
-				actionStats := ctx.Get("bulk_action_stats")
-				stats := map[string]interface{}{}
-				stats["index"] = indexStats
-				stats["action"] = actionStats
-				bulk_status["stats"] = stats
-			}
-
 		}
 	}
 
@@ -217,7 +219,9 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 
 	if ctx.Has("elastic_cluster_name") {
 		stats := ctx.Get("elastic_cluster_name")
-		request.Elastic["cluster_name"] = stats
+		if stats!=nil{
+			request.Elastic["cluster_name"] = stats
+		}
 	}
 
 	//request.DataFlow = &model.DataFlow{}
