@@ -30,7 +30,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	log "src/github.com/cihub/seelog"
+	log "github.com/cihub/seelog"
 	"strings"
 )
 
