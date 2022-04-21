@@ -1,0 +1,57 @@
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 200000
+    network:
+      binding: 0.0.0.0:8000
+
+flow:
+  - name: default_flow
+    filter:
+      - echo:
+          message: "hello world"
+  - name: mall_flow
+    filter:
+      - echo:
+          message: "hello mall indices"
+  - name: apm_flow
+    filter:
+      - echo:
+          message: "hello apm indices"
+  - name: erp_flow
+    filter:
+      - echo:
+          message: "hello erp indices"
+router:
+  - name: my_router
+    default_flow: default_flow
+    rules:
+      - method:
+          - "*"
+        pattern:
+          - "/apm-{suffix:.*}/"
+          - "/apm-{suffix:.*}/{any:.*}"
+        flow:
+          - apm_flow
+      - method:
+          - "*"
+        pattern:
+          - "/erp-{suffix:.*}/"
+          - "/erp-{suffix:.*}/{any:.*}"
+        flow:
+          - erp_flow
+      - method:
+          - "*"
+        pattern:
+          - "/mall-{suffix:.*}/"
+          - "/mall-{suffix:.*}/{any:.*}"
+        flow:
+          - mall_flow
+
+#  curl http://localhost:8000/apm-2022/
+#  curl http://localhost:8000/apm-2022/_search
+#  curl http://localhost:8000/erp-2022/
+#  curl http://localhost:8000/erp-2022/_search
+#  curl http://localhost:8000/mall-2022/
+#  curl http://localhost:8000/mall-2022/_search
