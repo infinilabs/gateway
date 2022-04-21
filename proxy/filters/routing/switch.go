@@ -39,19 +39,21 @@ func (filter *SwitchFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 	indexPart := paths[1]
 
 	for _, item := range filter.PathRules {
+
 		if strings.HasPrefix(indexPart, item.Prefix) {
 			if filter.RemovePrefix {
 				nexIndex := strings.TrimLeft(indexPart, item.Prefix)
 				paths[1] = nexIndex
 				ctx.Request.SetRequestURI(strings.Join(paths, "/"))
-				flow := common.MustGetFlow(item.Flow)
-				if global.Env().IsDebug {
-					log.Debugf("request [%v] go on flow: [%s]", ctx.URI().String(), flow.ToString())
-				}
-				flow.Process(ctx)
-				if !filter.ContinueAfterMatch {
-					ctx.Finished()
-				}
+			}
+
+			flow := common.MustGetFlow(item.Flow)
+			if global.Env().IsDebug {
+				log.Debugf("request [%v] go on flow: [%s]", ctx.URI().String(), flow.ToString())
+			}
+			flow.Process(ctx)
+			if !filter.ContinueAfterMatch {
+				ctx.Finished()
 			}
 		}
 	}
