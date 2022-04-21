@@ -128,7 +128,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 }
 
 func (processor *BulkIndexingProcessor) Name() string {
-	return "unsafe_bulk_indexing"
+	return "disorder_bulk_indexing"
 }
 
 func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
