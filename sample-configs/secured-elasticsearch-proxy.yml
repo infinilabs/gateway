@@ -1,0 +1,34 @@
+elasticsearch:
+- name: prod
+  enabled: true
+  endpoint: http://192.168.3.201:9200
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 10000
+    network:
+      binding: 0.0.0.0:8000
+    tls:
+      enabled: true
+  - name: my_unsecure_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 10000
+    network:
+      binding: 0.0.0.0:8001
+    tls:
+      enabled: false
+
+flow:
+  - name: default_flow
+    filter:
+      - basic_auth:
+          valid_users:
+            medcl: passwd
+      - elasticsearch:
+          elasticsearch: prod  
+router:
+  - name: my_router
+    default_flow: default_flow

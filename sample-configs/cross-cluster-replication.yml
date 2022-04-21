@@ -18,7 +18,11 @@ flow:
       - basic_auth:
           valid_users:
             ingest: managemDFSDFSDFent
-
+  - name: set-auth-for-backup-flow
+    filter:
+      - set_basic_auth: #覆盖备集群的身份信息用于备集群正常处理请求
+          username: elastic
+          password: changeme
   - name: primary-read-flow
     filter:
       - flow:
@@ -102,6 +106,9 @@ flow:
           in:
             _ctx.response.status: [200,201]
         then: #仅正常处理的集群才转发给后端集群
+          - flow:
+              flows:
+                - set-auth-for-backup-flow
           - queue:
               queue_name: "backup"
           - drop:
@@ -175,6 +182,9 @@ flow:
           - sleep:
               sleep_in_million_seconds: 5000
           - drop:
+      - flow:
+          flows:
+            - set-auth-for-backup-flow
       - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
           fix_null_id: true
           fix_null_type: true
@@ -234,6 +244,9 @@ flow:
           queue_name: "backup-deadletter_requests"
           max_retry_times: 60
           tag_on_success: ["commit_message_allowed"]
+      - flow:
+          flows:
+            - set-auth-for-backup-flow
 #      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
 #          fix_null_id: true
 #          fix_null_type: true
@@ -294,6 +307,9 @@ flow:
 #              _ctx.request.path: /_bulk
 #      - record:
 #          stdout: true
+      - flow:
+          flows:
+            - set-auth-for-backup-flow
       - bulk_reshuffle:
           when:
             contains:
