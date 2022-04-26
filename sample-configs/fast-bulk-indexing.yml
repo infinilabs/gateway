@@ -12,18 +12,23 @@ entry:
 flow:
   - name: async_bulk
     filter:
+      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
+          default_type: _doc
+          type_rename:
+            "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
       - bulk_reshuffle:
           when:
             contains:
               _ctx.request.path: /_bulk
           elasticsearch: prod
           level: cluster
-          partition_size: 1
+          partition_size: 3
           fix_null_id: true
       - elasticsearch:
           elasticsearch: prod  #elasticsearch configure reference name
           max_connection_per_node: 1000 #max tcp connection to upstream, default for all nodes
           max_response_size: -1 #default for all nodes
+          timeout: 10
           balancer: weight
           refresh: # refresh upstream nodes list, need to enable this feature to use elasticsearch nodes auto discovery
             enabled: true
@@ -81,12 +86,10 @@ disk_queue:
 memory_queue:
   capacity: 100000
 
-queue:
-  - name: async_bulk##cluster##prod
-    type: memory
-    label:
-      type: bulk_reshuffle
-      elasticsearch: prod
+disk_queue.enabled: false
+disk_queue.default: false
+memory_queue.default: true
+
 
 #floating_ip:
 #  enabled: true
