@@ -23,6 +23,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"strings"
 	"time"
 )
 
@@ -41,6 +42,7 @@ type Entrypoint struct {
 	rootCert      *x509.Certificate
 	rootKey       *rsa.PrivateKey
 	rootCertPEM   []byte
+	schema string
 	listenAddress string
 	router        *r.Router
 	server        *fasthttp.Server
@@ -204,9 +206,9 @@ func (this *Entrypoint) Start() error {
 		}
 	}
 
-	schema := "http://"
+	this.schema = "http://"
 	if this.config.TLSConfig.TLSEnabled {
-		schema = "https://"
+		this.schema = "https://"
 		cfg := &tls.Config{
 			MinVersion: tls.VersionTLS12,
 			CurvePreferences: []tls.CurveID{
@@ -313,7 +315,7 @@ func (this *Entrypoint) Start() error {
 		panic(err)
 	}
 
-	log.Infof("entry [%s] listen at: %s%s", this.String(), schema, this.listenAddress)
+	log.Infof("entry [%s] listen at: %s%s", this.String(), this.schema, this.listenAddress)
 
 	return nil
 }
@@ -342,7 +344,20 @@ func (this *Entrypoint) Stop() error {
 			log.Debug("entry shutdown 5s timeout")
 		}
 	} else {
-		this.server.Shutdown()
+		go func() {
+			if r := recover(); r != nil {}
+			for {
+				time.Sleep(3*time.Second)
+				if util.ContainStr(this.listenAddress,"0.0.0.0"){
+					this.listenAddress=strings.Replace(this.listenAddress,"0.0.0.0","127.0.0.1",-1)
+				}
+				util.HttpGet(this.schema+this.listenAddress+"/favicon.ico")
+			}
+		}()
+
+		if this.server!=nil{
+			this.server.Shutdown()
+		}
 	}
 
 	return nil
