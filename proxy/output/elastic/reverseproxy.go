@@ -29,6 +29,10 @@ type ReverseProxy struct {
 	hostClients map[string]*fasthttp.HostClient
 	clients     map[string]*fasthttp.Client
 	locker      sync.RWMutex
+
+	fixedClient bool
+	client fasthttp.ClientAPI
+	host string
 }
 
 func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
@@ -270,17 +274,25 @@ func NewReverseProxy(cfg *ProxyConfig) *ReverseProxy {
 
 	p.refreshNodes(true)
 
-	if cfg.Refresh.Enabled {
-		log.Debugf("refresh enabled for elasticsearch: [%v]", cfg.Elasticsearch)
-		task := task2.ScheduleTask{
-			Description: fmt.Sprintf("refresh nodes for elasticsearch [%v]", cfg.Elasticsearch),
-			Type:        "interval",
-			Interval:    cfg.Refresh.Interval,
-			Task: func(ctx context.Context) {
-				p.refreshNodes(false)
-			},
+	if p.proxyConfig.FixedClient{
+		if p.proxyConfig.ClientMode=="client"{
+			_,p.client,p.host=p.getClient()
+		}else{
+			_,p.client,p.host=p.getHostClient()
 		}
-		task2.RegisterScheduleTask(task)
+	}else {
+		if cfg.Refresh.Enabled {
+			log.Debugf("refresh enabled for elasticsearch: [%v]", cfg.Elasticsearch)
+			task := task2.ScheduleTask{
+				Description: fmt.Sprintf("refresh nodes for elasticsearch [%v]", cfg.Elasticsearch),
+				Type:        "interval",
+				Interval:    cfg.Refresh.Interval,
+				Task: func(ctx context.Context) {
+					p.refreshNodes(false)
+				},
+			}
+			task2.RegisterScheduleTask(task)
+		}
 	}
 
 	return &p
@@ -381,14 +393,14 @@ var failureMessage = []string{"connection refused", "connection reset", "no such
 
 func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.ElasticsearchMetadata, myctx *fasthttp.RequestCtx) {
 
-	stats.Increment("cache", "strike")
-
-	//update context
-	if myctx.Has("elastic_cluster_name") {
-		es1 := myctx.MustGetStringArray("elastic_cluster_name")
-		myctx.Set("elastic_cluster_name", append(es1, elasticsearch))
-	} else {
-		myctx.Set("elastic_cluster_name", []string{elasticsearch})
+	if p.proxyConfig.SkipEnrichMetadata {
+		//update context
+		if myctx.Has("elastic_cluster_name") {
+			es1 := myctx.MustGetStringArray("elastic_cluster_name")
+			myctx.Set("elastic_cluster_name", append(es1, elasticsearch))
+		} else {
+			myctx.Set("elastic_cluster_name", []string{elasticsearch})
+		}
 	}
 
 	retry := 0
@@ -397,74 +409,100 @@ START:
 	req := &myctx.Request
 	res := &myctx.Response
 
-	cleanHopHeaders(req)
-
-	var pc fasthttp.ClientAPI
-	var ok bool
-	var host string
-	//使用算法来获取合适的 client
-	switch metadata.Config.ClientMode {
-	case "client":
-		ok, pc, host = p.getClient()
-		break
-	case "host":
-		ok, pc, host = p.getHostClient()
-		break
-	//case "pipeline":
-	//ok, pc, host = p.getHostClient()
-	//break
-	default:
-		ok, pc, host = p.getClient()
+	if !p.proxyConfig.SkipCleanupHopHeaders{
+		cleanHopHeaders(req)
 	}
 
-	if !ok {
-		//TODO no client available, throw error directly
-		log.Error("no client available")
-		return
+	var pc fasthttp.ClientAPI
+	var host string
+
+	if p.proxyConfig.FixedClient{
+		pc=p.client
+		host=p.host
+	}else{
+		var ok bool
+		//使用算法来获取合适的 client
+		switch metadata.Config.ClientMode {
+		case "client":
+			ok, pc, host = p.getClient()
+			break
+		case "host":
+			ok, pc, host = p.getHostClient()
+			break
+		//case "pipeline":
+		//ok, pc, host = p.getHostClient()
+		//break
+		default:
+			ok, pc, host = p.getClient()
+		}
+
+		if !ok {
+			//TODO no client available, throw error directly
+			log.Error("no client available")
+			return
+		}
 	}
 
 	// modify schema，align with elasticsearch's schema
-	orignalHost := string(req.URI().Host())
-	orignalSchema := string(req.URI().Scheme())
+	orignalHost := util.UnsafeBytesToString(req.Header.Host())
+	orignalSchema := req.GetSchema()
 	useClient := false
+	schemaChanged := false
 	if metadata.GetSchema() != orignalSchema {
-		req.Header.Add("X-Forwarded-Proto", orignalSchema)
+		if !p.proxyConfig.SkipEnrichMetadata {
+			req.Header.Add("X-Forwarded-Proto", orignalSchema)
+		}
+
 		req.URI().SetScheme(metadata.GetSchema())
-		ok, pc, host = p.getClient()
+		_, pc, host = p.getClient()
 		res = fasthttp.AcquireResponse()
 		useClient = true
+		schemaChanged = true
 	}
 
-	req.Header.Add("X-Forwarded-For", myctx.RemoteAddr().String())
-	req.Header.Add("X-Real-IP", myctx.RemoteAddr().String())
-	req.Header.Add("X-Forwarded-Host", orignalHost)
-
+	if !p.proxyConfig.SkipEnrichMetadata {
+		req.Header.Add("X-Forwarded-For", myctx.RemoteAddr().String())
+		req.Header.Add("X-Real-IP", myctx.RemoteAddr().String())
+		req.Header.Add("X-Forwarded-Host", orignalHost)
+	}
 	if global.Env().IsDebug {
 		log.Tracef("send request [%v] to upstream [%v]", req.URI().String(), host)
 	}
 
-	req.SetHost(host)
+	if host!=orignalHost{
+		req.SetHostBytes(util.UnsafeStringToBytes(host))
+	}
 
 	metadata.CheckNodeTrafficThrottle(host, 1, req.GetRequestLength(), 0)
 
-	if p.proxyConfig.Timeout <= 0 {
-		p.proxyConfig.Timeout = 60 * time.Second
+	//if p.proxyConfig.Timeout <= 0 {
+	//	p.proxyConfig.Timeout = 60 * time.Second
+	//}
+
+	var err error
+	if p.proxyConfig.Timeout>0{
+		err = pc.DoTimeout(req, res, p.proxyConfig.Timeout)
+	}else{
+		err = pc.Do(req, res)
 	}
 
-	err := pc.DoTimeout(req, res, p.proxyConfig.Timeout)
+	if !p.proxyConfig.SkipKeepOriginalURI{
+		// restore schema
+		if schemaChanged{
+			req.URI().SetScheme(orignalSchema)
+		}
 
-	//stats.Increment("reverse_proxy","do")
-
-	//metadata.CheckNodeTrafficThrottle(util.UnsafeBytesToString(req.Header.Host()),0,res.GetResponseLength(),0)
-
-	// restore schema
-	req.URI().SetScheme(orignalSchema)
-	req.SetHost(orignalHost)
+		if host!=orignalHost {
+			req.SetHost(orignalHost)
+		}
+	}
 
 	//update
-	myctx.Response.Header.Set("X-Backend-Cluster", p.proxyConfig.Elasticsearch)
-	myctx.Response.Header.Set("X-Backend-Server", host)
-	myctx.SetDestination(host)
+	if !p.proxyConfig.SkipEnrichMetadata {
+		myctx.Response.Header.Set("X-Backend-Cluster", p.proxyConfig.Elasticsearch)
+		myctx.Response.Header.Set("X-Backend-Server", host)
+		myctx.SetDestination(host)
+	}
 
 	if err != nil {
 		if util.ContainsAnyInArray(err.Error(), failureMessage) {

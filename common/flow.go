@@ -59,16 +59,12 @@ func MustGetFlow(flowID string) FilterFlow {
 		panic("flow id can't be nil")
 	}
 
-	flowLock.Lock()
-	defer flowLock.Unlock()
-
-
-	v, ok := flows[flowID]
-	if ok {
-		return v
+	v1,ok:=flows.Load(flowID)
+	if ok{
+		return v1.(FilterFlow)
 	}
 
-	v = FilterFlow{}
+	v := FilterFlow{}
 	cfg := GetFlowConfig(flowID)
 
 	if global.Env().IsDebug {
@@ -83,11 +79,10 @@ func MustGetFlow(flowID string) FilterFlow {
 		v.JoinFilter(flow1)
 	}
 
-	flows[flowID] = v
+	flows.Store(flowID,v)
 	return v
 }
 
-var flowLock sync.RWMutex
 
 func GetFlowProcess(flowID string) func(ctx *fasthttp.RequestCtx) {
 	flow := MustGetFlow(flowID)
@@ -183,7 +178,7 @@ func GetFilterInstanceWithConfigV2(filterName string, cfg *config.Config) pipeli
 var filterPluginTypes map[string]pipeline.Filter = make(map[string]pipeline.Filter)
 
 var filterInstances map[string]pipeline.Filter = make(map[string]pipeline.Filter)
-var flows map[string]FilterFlow = make(map[string]FilterFlow)
+var flows  = &sync.Map{}
 
 var routingRules map[string]RuleConfig = make(map[string]RuleConfig)
 var flowConfigs map[string]FlowConfig = make(map[string]FlowConfig)
@@ -195,7 +190,7 @@ func RegisterFilterPlugin(filter pipeline.Filter) {
 }
 
 func ClearFlowCache(flow string) {
-	delete(flows,flow)
+	flows.Delete(flow)
 }
 
 func RegisterFlowConfig(flow FlowConfig) {

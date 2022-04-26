@@ -10,6 +10,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
@@ -45,8 +46,8 @@ type Entrypoint struct {
 	server        *fasthttp.Server
 }
 
-func (this *Entrypoint) Name() string {
-	return this.config.Name
+func (this *Entrypoint) String() string {
+	return fmt.Sprintf("%v/%v",this.config.Name,this.config.ID)
 }
 
 func (this *Entrypoint) Start() error {
@@ -115,7 +116,10 @@ func (this *Entrypoint) Start() error {
 
 	if this.routerConfig.DefaultFlow != "" {
 		this.router.DefaultFlow = this.routerConfig.DefaultFlow
-		//this.router.NotFound = common.GetFlowProcess(this.routerConfig.DefaultFlow)
+		if this.router.DefaultFlow!=""{
+			//init func
+			this.router.NotFound=common.GetFlowProcess(this.router.DefaultFlow)
+		}
 	} else {
 		this.router.NotFound = func(ctx *fasthttp.RequestCtx) {
 			ctx.Response.SetBody([]byte("NOT FOUND"))
@@ -309,7 +313,7 @@ func (this *Entrypoint) Start() error {
 		panic(err)
 	}
 
-	log.Infof("entry [%s] listen at: %s%s", this.Name(), schema, this.listenAddress)
+	log.Infof("entry [%s] listen at: %s%s", this.String(), schema, this.listenAddress)
 
 	return nil
 }
@@ -319,7 +323,7 @@ func (this *Entrypoint) GetConfig() common.EntryConfig {
 }
 
 func (this *Entrypoint) Stop() error {
-	log.Tracef("entry [%s] closed", this.Name())
+	log.Tracef("entry [%s] closed", this.String())
 	if !this.config.Enabled {
 		return nil
 	}

@@ -13,9 +13,16 @@ type ProxyConfig struct {
 	MaxConnWaitTimeout  time.Duration `config:"max_conn_wait_timeout"`
 	MaxIdleConnDuration time.Duration `config:"max_idle_conn_duration"`
 	MaxConnDuration     time.Duration `config:"max_conn_duration"`
-	Timeout         time.Duration `config:"timeout"`
+	Timeout         	time.Duration `config:"timeout"`
 	ReadTimeout         time.Duration `config:"read_timeout"`
 	WriteTimeout        time.Duration `config:"write_timeout"`
+
+	FixedClient        bool   `config:"fixed_client"`
+	ClientMode         string `config:"client_mode"`
+
+	SkipKeepOriginalURI    bool   `config:"skip_keep_original_uri"`
+	SkipCleanupHopHeaders  bool `config:"skip_cleanup_hop_headers"`
+	SkipEnrichMetadata bool   `config:"skip_metadata_enrich"`
 
 	ReadBufferSize        int            `config:"read_buffer_size"`
 	WriteBufferSize       int            `config:"write_buffer_size"`

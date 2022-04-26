@@ -19,6 +19,7 @@ type Elasticsearch struct {
 	param.Parameters
 	config   *ProxyConfig
 	instance *ReverseProxy
+	metadata *elastic.ElasticsearchMetadata
 }
 
 func (filter *Elasticsearch) Name() string {
@@ -27,11 +28,9 @@ func (filter *Elasticsearch) Name() string {
 
 var faviconPath = []byte("/favicon.ico")
 
-//var singleSetCache singleflight.Group
-
 func (filter *Elasticsearch) Filter(ctx *fasthttp.RequestCtx) {
 
-	if bytes.Equal(faviconPath, ctx.Request.URI().Path()) {
+	if bytes.Equal(faviconPath, ctx.Request.Header.RequestURI()) {
 		if global.Env().IsDebug {
 			log.Tracef("skip to delegate favicon.io")
 		}
@@ -39,14 +38,12 @@ func (filter *Elasticsearch) Filter(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	metadata := elastic.GetMetadata(filter.config.Elasticsearch)
-
-	if metadata != nil && !metadata.IsAvailable() {
-		if rate.GetRateLimiter("cluster_check_health", metadata.Config.ID, 1, 1, time.Second*1).Allow() {
+	if filter.metadata != nil && !filter.metadata.IsAvailable() {
+		if rate.GetRateLimiter("cluster_check_health", filter.metadata.Config.ID, 1, 1, time.Second*1).Allow() {
 			log.Debugf("Elasticsearch [%v] not available", filter.config.Elasticsearch)
-			result, err := elastic.GetClient(metadata.Config.Name).ClusterHealth()
+			result, err := elastic.GetClient(filter.metadata.Config.Name).ClusterHealth()
 			if err != nil && result.StatusCode == 200 {
-				metadata.ReportSuccess()
+				filter.metadata.ReportSuccess()
 			}
 		}
 
@@ -58,8 +55,7 @@ func (filter *Elasticsearch) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 	//TODO move clients selection async
-
-	filter.instance.DelegateRequest(filter.config.Elasticsearch, metadata, ctx)
+	filter.instance.DelegateRequest(filter.config.Elasticsearch, filter.metadata, ctx)
 }
 
 func init() {
@@ -95,6 +91,7 @@ func New(c *config.Config) (pipeline.Filter, error) {
 	}
 
 	runner := Elasticsearch{config: &cfg}
+	runner.metadata = elastic.GetMetadata(cfg.Elasticsearch)
 
 	runner.instance = NewReverseProxy(&cfg)
 

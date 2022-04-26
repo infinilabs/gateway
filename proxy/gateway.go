@@ -172,7 +172,7 @@ func (module *GatewayModule) handleConfigureChange(){
 
 			keys:=map[string]string{}
 			for _, v := range newConfig {
-				keys[v.Name]=v.ID
+				keys[v.ID]=v.ID
 				common.RegisterRouterConfig(v)
 			}
 
@@ -219,7 +219,7 @@ func (module *GatewayModule) handleConfigureChange(){
 			skipKeys:=map[string]string{}
 			entryPoints := map[string]*entry.Entrypoint{}
 			for _, v := range newConfig {
-				oldC,ok:=old[v.Name]
+				oldC,ok:=old[v.ID]
 				if ok{
 					config := oldC.GetConfig()
 					if config.Equals(&v){
@@ -232,7 +232,7 @@ func (module *GatewayModule) handleConfigureChange(){
 					v.NetworkConfig.ReusePort=true
 				}
 				e := entry.NewEntrypoint(v)
-				entryPoints[v.Name] = e
+				entryPoints[v.ID] = e
 			}
 
 			if len(entryPoints)==0{
@@ -246,9 +246,9 @@ func (module *GatewayModule) handleConfigureChange(){
 
 			log.Debug("stopping old entry points")
 			for _,v:=range old{
-				_,ok:=skipKeys[v.Name()]
+				_,ok:=skipKeys[v.GetConfig().ID]
 				if ok{
-					entryPoints[v.Name()]=v
+					entryPoints[v.GetConfig().ID]=v
 					continue
 				}
 				v.Stop()
@@ -304,7 +304,7 @@ func (module *GatewayModule) loadEntryPoints()map[string]*entry.Entrypoint {
 			v.NetworkConfig.ReusePort=true
 		}
 		e := entry.NewEntrypoint(v)
-		entryPoints[v.Name] = e
+		entryPoints[v.ID] = e
 	}
 	return entryPoints
 }
@@ -313,7 +313,7 @@ func (module *GatewayModule) loadEntryPoints()map[string]*entry.Entrypoint {
 func (module *GatewayModule) Start() error {
 
 	for _, v := range module.entryPoints {
-		log.Trace("start entry:", v.Name())
+		log.Trace("start entry:", v.String())
 		err := v.Start()
 		if err != nil {
 			panic(err)
