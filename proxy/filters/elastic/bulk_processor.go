@@ -435,9 +435,7 @@ func (joint *BulkProcessor) Bulk(tag string,metadata *elastic.ElasticsearchMetad
 							"body":util.SubString(string(resbody), 0, 1024*4),
 						},
 					}))
-					if global.Env().IsDebug{
-						log.Errorf("bulk requests failure,host:%v,status:%v,invalid:%v,failure:%v,res:%v", host, statsCodeStats, nonRetryableItems.Len(), retryableItems.Len(), util.SubString(string(resbody), 0, 1024))
-					}
+					log.Errorf("bulk requests failure,host:%v,status:%v,invalid:%v,failure:%v,res:%v", host, statsCodeStats, nonRetryableItems.Len(), retryableItems.Len(), util.SubString(string(resbody), 0, 1024))
 				}
 
 				//skip all failure messages
