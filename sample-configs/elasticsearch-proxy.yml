@@ -1,6 +1,9 @@
 path.data: data
 path.logs: log
 
+stats:
+  enabled: false
+
 entry:
   - name: my_es_entry
     enabled: true
@@ -14,6 +17,12 @@ flow:
     filter:
       - elasticsearch:
           elasticsearch: es-server
+          fixed_client: true
+          client_mode: host
+          timeout: -1
+          skip_cleanup_hop_headers: true
+          skip_keep_original_uri: true
+          skip_metadata_enrich: true
 
 router:
   - name: my_router
