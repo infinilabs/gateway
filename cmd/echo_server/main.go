@@ -39,5 +39,6 @@ func requestHandler(ctx *fasthttp.RequestCtx) {
 		fmt.Println(util.ToJson(ctx.Request.Header,true))
 	}
 	ctx.Response.Header.Set("SERVER",name)
+	ctx.Response.SetStatusCode(200)
 	fmt.Fprintf(ctx, ".")
 }
