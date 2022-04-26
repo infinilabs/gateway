@@ -41,12 +41,16 @@ func (filter *HTTPFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 }
 
-func (filter *HTTPFilter)forward(host string,ctx *fasthttp.RequestCtx)error{
+func (filter *HTTPFilter)forward(host string,ctx *fasthttp.RequestCtx)(err error){
 	orignalHost:=string(ctx.Request.URI().Host())
 	orignalSchema:=string(ctx.Request.URI().Scheme())
 	ctx.Request.SetHost(host)
 	ctx.Request.URI().SetScheme(filter.Schema)
-	err:=filter.client.DoTimeout(&ctx.Request,&ctx.Response,filter.requestTimeout)
+	if filter.requestTimeout>0{
+		err=filter.client.DoTimeout(&ctx.Request,&ctx.Response,filter.requestTimeout)
+	}else{
+		err=filter.client.Do(&ctx.Request,&ctx.Response)
+	}
 	ctx.Request.URI().SetScheme(orignalSchema)
 	ctx.Request.SetHost(orignalHost)
 	return err
@@ -67,7 +71,8 @@ func NewHTTPFilter(c *config.Config) (pipeline.Filter, error) {
 	}
 
 	runner.client=&fasthttp.Client{
-	Name: "http_proxy",
+		MaxConnsPerHost: 10000,
+		Name: "http_proxy",
 		TLSConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
