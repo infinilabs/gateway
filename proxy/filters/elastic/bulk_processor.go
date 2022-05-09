@@ -263,7 +263,7 @@ func (joint *BulkProcessor) Bulk(tag string,metadata *elastic.ElasticsearchMetad
 		return true
 	}
 
-	httpClient := metadata.GetActivePreferredHost(host)
+	httpClient := metadata.GetHttpClient(metadata.GetActivePreferredHost(host))
 
 	if metadata.IsTLS() {
 		host = "https://" + host

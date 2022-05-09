@@ -174,8 +174,9 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 			defer fasthttp.ReleaseRequest(req)
 			defer fasthttp.ReleaseResponse(res)
 
+			meta:=elastic.GetMetadata(processor.config.Elasticsearch)
 			apiCtx:=&elastic.APIContext{
-				Client: elastic.GetMetadata(processor.config.Elasticsearch).GetActivePreferredHost(""),
+				Client: meta.GetHttpClient(meta.GetActivePreferredHost("")),
 				Request: req,
 				Response: res,
 			}
