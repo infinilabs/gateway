@@ -46,9 +46,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 		containError := this.HandleBulkResponse(ctx,this.config.SafetyParse, requestBytes, resbody, this.config.DocBufferSize, nonRetryableItems, retryableItems,successItems)
 		if containError {
 
-			if global.Env().IsDebug {
-				log.Error("error in bulk requests,", ctx.Response.StatusCode(), util.SubString(string(resbody), 0, this.config.MessageTruncateSize))
-			}
+			log.Error("error in bulk requests,", ctx.Response.StatusCode(), util.SubString(string(resbody), 0, this.config.MessageTruncateSize))
 
 			if len(this.config.TagsOnAnyError)>0{
 				ctx.UpdateTags(this.config.TagsOnAnyError,nil)
