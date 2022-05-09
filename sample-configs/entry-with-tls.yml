@@ -1,0 +1,24 @@
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 200000
+    network:
+      binding: 0.0.0.0:8000
+    tls:
+      enabled: true
+      cert_file: /Users/medcl/Downloads/elasticsearch-7.9.0/config/certs/ca.crt
+      key_file: /Users/medcl/Downloads/elasticsearch-7.9.0/config/certs/ca.key
+      skip_insecure_verify: false
+
+flow:
+  - name: hello_world
+    filter:
+      - echo:
+          message: "hello TLS\n"
+router:
+  - name: my_router
+    default_flow: hello_world
