@@ -40,11 +40,15 @@ func acquireCtx() (ctx *fasthttp.RequestCtx) {
 	x1 := ctxPool.Get().(*fasthttp.RequestCtx)
 	//x1.SequenceID = util.GetIncrementID("ctx")
 	x1.Reset()
+	x1.Request.Reset()
+	x1.Response.Reset()
 	return x1
 }
 
 func releaseCtx(ctx *fasthttp.RequestCtx) {
 	ctx.Reset()
+	ctx.Request.Reset()
+	ctx.Response.Reset()
 	ctxPool.Put(ctx)
 }
 
