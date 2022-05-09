@@ -230,10 +230,14 @@ func (this *Entrypoint) Start() error {
 		}
 
 		var ca, cert, key string
-		log.Trace("using tls connection")
+		cert=this.config.TLSConfig.TLSCertFile
+		key=this.config.TLSConfig.TLSKeyFile
 
+		log.Trace("using tls connection")
+		
 		if cert != "" && key != "" {
 			log.Debug("using pre-defined cert files")
+
 
 		} else {
 			ca = path.Join(global.Env().GetDataDir(), "certs", "root.cert")
