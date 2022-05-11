@@ -33,9 +33,15 @@ flow:
         then:
           - elasticsearch:
               elasticsearch: "primary"
+              refresh:
+                enabled: true
+                interval: 30s
         else:
           - elasticsearch:
               elasticsearch: "backup"
+              refresh:
+                enabled: true
+                interval: 30s
 
   - name: primary-write-flow #正常的主写流程
     filter:
@@ -80,6 +86,9 @@ flow:
                   elasticsearch: "primary"
                   max_connection_per_node: 1000
                   max_retry_times: 0
+                  refresh:
+                    enabled: true
+                    interval: 30s
               - bulk_response_process: #bulk 出错不继续执行后续 flow，因为成功、失败、非法的请求都已经入队，可以直接退出
                   success_queue: "backup"
                   failure_queue: "primary-failure" #失败的请求，两边的集群都要做一次，避免脏数据
@@ -139,6 +148,9 @@ flow:
           elasticsearch: "primary"
           max_connection_per_node: 1000
           max_retry_times: 0
+          refresh:
+            enabled: true
+            interval: 30s
       - if: #请求失败了，继续重试，不用复制给备份集群
           in:
             _ctx.response.status: [ 429,0,500,503 ]
@@ -197,6 +209,9 @@ flow:
           elasticsearch: "backup"
           max_connection_per_node: 1000
           max_retry_times: 0
+          refresh:
+            enabled: true
+            interval: 30s
       - if: #请求失败了，继续重试
           in:
             _ctx.response.status: [ 429,0,500,503 ]
@@ -264,6 +279,9 @@ flow:
           elasticsearch: "backup"
           max_connection_per_node: 1000
           max_retry_times: 0
+          refresh:
+            enabled: true
+            interval: 30s
       - bulk_response_process: # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
           invalid_queue: "backup-invalid"
           failure_queue: "backup-failure"
@@ -324,6 +342,9 @@ flow:
           elasticsearch: "backup"
           max_retry_times: 0
           max_connection_per_node: 1000
+          refresh:
+            enabled: true
+            interval: 30s
       - bulk_response_process: # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
           invalid_queue: "backup-invalid"
           tag_on_all_invalid: ["commit_message_allowed"]

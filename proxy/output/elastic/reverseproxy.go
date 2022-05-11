@@ -168,8 +168,10 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 				continue
 			}
 
-			endpoint := y.GetHttpPublishHost()
-			hosts = append(hosts, endpoint)
+			host := y.GetHttpPublishHost()
+			if elastic.IsHostAvailable(host) {
+				hosts = append(hosts, host)
+			}
 		}
 		log.Tracef("discovery %v nodes: [%v]", len(hosts), util.JoinArray(hosts, ", "))
 	}
@@ -346,17 +348,20 @@ RANDOM:
 
 func (p *ReverseProxy) getClient() (clientAvailable bool, client *fasthttp.Client, endpoint string) {
 
-	p.locker.RLock()
-	defer p.locker.RUnlock()
-
 	if p.clients == nil {
 		panic("ReverseProxy has been closed")
 	}
 
 	if len(p.clients) == 0 || len(p.endpoints) == 0 {
-		log.Error("no upstream found")
-		return false, nil, ""
+		p.refreshNodes(true)
+		if p.clients == nil || len(p.clients) == 0 || len(p.endpoints) == 0 {
+			log.Error("no upstream found")
+			panic("no upstream found")
+		}
 	}
+
+	p.locker.RLock()
+	defer p.locker.RUnlock()
 
 	if p.bla != nil {
 		// bla has been opened
@@ -420,26 +425,24 @@ START:
 		pc=p.client
 		host=p.host
 	}else{
-		var ok bool
+		//var ok bool
 		//使用算法来获取合适的 client
 		switch metadata.Config.ClientMode {
 		case "client":
-			ok, pc, host = p.getClient()
+			_, pc, host = p.getClient()
 			break
 		case "host":
-			ok, pc, host = p.getHostClient()
+			_, pc, host = p.getHostClient()
 			break
-		//case "pipeline":
-		//ok, pc, host = p.getHostClient()
-		//break
 		default:
-			ok, pc, host = p.getClient()
+			_, pc, host = p.getClient()
 		}
 
-		if !ok {
-			//TODO no client available, throw error directly
-			log.Error("no client available")
-			return
+		if !elastic.IsHostAvailable(host) {
+			old := host
+			host = metadata.GetActiveHost()
+			log.Infof("host [%v] is not available, re-choose one: [%v]", old, host)
+			pc = metadata.GetHttpClient(host)
 		}
 	}
 
@@ -455,6 +458,14 @@ START:
 
 		req.URI().SetScheme(metadata.GetSchema())
 		_, pc, host = p.getClient()
+
+		if !elastic.IsHostAvailable(host) {
+			old := host
+			host = metadata.GetActiveHost()
+			log.Infof("host [%v] is not available, re-choose one: [%v]", old, host)
+			pc = metadata.GetHttpClient(host)
+		}
+
 		res = fasthttp.AcquireResponse()
 		useClient = true
 		schemaChanged = true
