@@ -13,6 +13,7 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
+	"infini.sh/gateway/lib/guardian/auth"
 	"infini.sh/gateway/lib/guardian/auth/strategies/ldap"
 	"net/http"
 )
@@ -30,6 +31,9 @@ type LDAPFilter struct {
 	GroupAttribute string   `config:"group_attribute"`
 	Attributes     []string `config:"attributes"`
 	RequireGroup   bool     `config:"require_group"`
+
+	BypassAPIKey bool `config:"bypass_api_key"`
+	ldapQuery    auth.Strategy
 }
 
 func (filter *LDAPFilter) Name() string {
@@ -38,33 +42,18 @@ func (filter *LDAPFilter) Name() string {
 
 func (filter *LDAPFilter) Filter(ctx *fasthttp.RequestCtx) {
 
-	cfg := ldap.Config{
-		Host:           filter.Host,
-		Port:           filter.Port,
-		BindDN:         filter.BindDn,
-		BindPassword:   filter.BindPassword,
-		BaseDN:         filter.BaseDn,
-		UserFilter:     filter.UserFilter,
-		GroupFilter:    filter.GroupFilter,
-		UIDAttribute:   filter.UidAttribute,
-		GroupAttribute: filter.GroupAttribute,
+	t := ctx.Request.ParseAuthorization()
+	if t == "ApiKey" && filter.BypassAPIKey {
+		log.Error("apiKEY")
+		return
 	}
 
-	if len(filter.Attributes) > 0 {
-		cfg.Attributes = filter.Attributes
-	}
-
-	if filter.Tls {
-		cfg.TLS = &tls.Config{InsecureSkipVerify: true}
-	}
-
-	user, err := ldap.New(&cfg).Authenticate(ctx.Context(), &ctx.Request)
+	user, err := filter.ldapQuery.Authenticate(ctx.Context(), &ctx.Request)
 
 	if err != nil {
 		log.Debug("invalid credentials, ", err)
-		code := http.StatusUnauthorized
-		ctx.SetStatusCode(code)
-		ctx.SetBody([]byte(http.StatusText(code)))
+		ctx.Error(fasthttp.StatusMessage(fasthttp.StatusUnauthorized), fasthttp.StatusUnauthorized)
+		ctx.Response.Header.Set("WWW-Authenticate", "Basic realm=Restricted")
 		ctx.Finished()
 		return
 	}
@@ -114,5 +103,25 @@ func NewLDAPFilter(c *config.Config) (pipeline.Filter, error) {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
+	cfg := ldap.Config{
+		Host:           runner.Host,
+		Port:           runner.Port,
+		BindDN:         runner.BindDn,
+		BindPassword:   runner.BindPassword,
+		BaseDN:         runner.BaseDn,
+		UserFilter:     runner.UserFilter,
+		GroupFilter:    runner.GroupFilter,
+		UIDAttribute:   runner.UidAttribute,
+		GroupAttribute: runner.GroupAttribute,
+	}
+
+	if len(runner.Attributes) > 0 {
+		cfg.Attributes = runner.Attributes
+	}
+
+	if runner.Tls {
+		cfg.TLS = &tls.Config{InsecureSkipVerify: true}
+	}
+	runner.ldapQuery = ldap.New(&cfg)
 	return &runner, nil
 }
