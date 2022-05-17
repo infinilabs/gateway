@@ -4,6 +4,7 @@ import (
 	"fmt"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
+	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
@@ -47,11 +48,11 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 
 		//var docBuffer = p.Get(this.DocBufferSize) //doc buffer for bytes scanner
 		var docBuffer []byte
-		docBuffer = p.Get(this.DocBufferSize) //doc buffer for bytes scanner
+		docBuffer = elastic.BulkDocBuffer.Get(this.DocBufferSize) //doc buffer for bytes scanner
 
-		defer p.Put(docBuffer)
+		defer elastic.BulkDocBuffer.Put(docBuffer)
 
-		docCount, err := WalkBulkRequests(this.SafetyParse, body, docBuffer, func(eachLine []byte) (skipNextLine bool) {
+		docCount, err := elastic.WalkBulkRequests(this.SafetyParse, body, docBuffer, func(eachLine []byte) (skipNextLine bool) {
 			return false
 		}, func(metaBytes []byte, actionStr, index, typeName, id string) (err error) {
 
@@ -61,7 +62,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 			var urlLevelIndex string
 			var urlLevelType string
 
-			urlLevelIndex, urlLevelType = getUrlLevelBulkMeta(pathStr)
+			urlLevelIndex, urlLevelType = elastic.ParseUrlLevelBulkMeta(pathStr)
 
 			var indexNew, typeNew, idNew string
 			if index == "" && urlLevelIndex != "" {
@@ -73,7 +74,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 				typeName = urlLevelType
 				typeNew = urlLevelType
 			}
-			if (actionStr == actionIndex || actionStr == actionCreate) && (len(id) == 0 || id == "null") && this.FixNilID {
+			if (actionStr == elastic.ActionIndex || actionStr == elastic.ActionCreate) && (len(id) == 0 || id == "null") && this.FixNilID {
 				randID := util.GetUUID()
 				if this.AddTimestampToID {
 					idNew = fmt.Sprintf("%v-%v-%v", randID, time.Now().UnixNano(), util.PickRandomNumber(10))
@@ -179,12 +180,12 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 				}
 
 				if bulkBuff.Len() > 0 {
-					bulkBuff.Write(NEWLINEBYTES)
+					bulkBuff.Write(elastic.NEWLINEBYTES)
 				}
 
 				bulkBuff.Write(actionMeta.Bytes())
 				if payloadBytes != nil && len(payloadBytes) > 0 {
-					bulkBuff.Write(NEWLINEBYTES)
+					bulkBuff.Write(elastic.NEWLINEBYTES)
 					bulkBuff.Write(payloadBytes)
 				}
 
@@ -198,7 +199,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 		}
 
 		if bulkBuff.Len() > 0 {
-			bulkBuff.Write(NEWLINEBYTES)
+			bulkBuff.Write(elastic.NEWLINEBYTES)
 			ctx.Request.SetRawBody(bulkBuff.Bytes())
 		}
 	}

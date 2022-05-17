@@ -55,7 +55,6 @@ type Config struct {
 	QueryDSL              string `config:"query_dsl"`
 	ScrollTime         string `config:"scroll_time"`
 	Fields             string `config:"fields"`
-	//SortDocumentFields bool   `config:"sort_document_fields"`
 	Output             string `config:"output_queue"`
 
 	RemoveTypeMeta         bool         `config:"remove_type"`

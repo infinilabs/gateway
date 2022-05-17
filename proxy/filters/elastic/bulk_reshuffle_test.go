@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/buger/jsonparser"
 	"github.com/magiconair/properties/assert"
+	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/util"
 	"strings"
 	"testing"
@@ -35,7 +36,7 @@ import (
 func TestParseActionMeta1(t *testing.T) {
 
 	data := []byte("{\"index\":{\"_index\":\"medcl1\",\"_type\":\"_doc\",\"_id\":\"GZq-bnYBC53QmW9Kk2ve\"}}")
-	action := util.ExtractFieldFromBytes(&data, actionStart, actionEnd, nil)
+	action := util.ExtractFieldFromBytes(&data, elastic.ActionStart, elastic.ActionEnd, nil)
 	fmt.Println(string(action))
 	indexb,_,_,_:=jsonparser.Get(data,util.UnsafeBytesToString(action),"_index")
 	fmt.Println(string(indexb))
@@ -54,8 +55,8 @@ func TestParseActionMeta2(t *testing.T) {
 
 	data := []byte("{\"index\":{\"_index\":\"medcl1\",\"_type\":\"_doc\",\"_id\":\"GZq-bnYBC53QmW9Kk2ve\"}}")
 
-	action, indexb,typeb, idb := parseActionMeta(data)
-	fmt.Println(string(action), string(indexb), string(idb), )
+	action, indexb, typeb, idb := elastic.ParseActionMeta(data)
+	fmt.Println(string(action), string(indexb), string(idb))
 	assert.Equal(t,string(action),"index")
 	assert.Equal(t,string(indexb),"medcl1")
 	assert.Equal(t,string(typeb),"_doc")
@@ -64,7 +65,7 @@ func TestParseActionMeta2(t *testing.T) {
 
 	data = []byte("{\"index\":{\"_type\":\"_doc\",\"_id\":\"GZq-bnYBC53QmW9Kk2ve\",\"_index\":\"medcl1\"}}")
 
-	action, indexb,typeb, idb = parseActionMeta(data)
+	action, indexb, typeb, idb = elastic.ParseActionMeta(data)
 
 	fmt.Println(string(action), string(indexb), string(idb), )
 	assert.Equal(t,string(action),"index")
@@ -75,7 +76,7 @@ func TestParseActionMeta2(t *testing.T) {
 
 	data = []byte("{\"index\":{\"_id\":\"GZq-bnYBC53QmW9Kk2ve\",\"_type\":\"_doc\",\"_index\":\"medcl1\"}}")
 
-	action, indexb,typeb, idb = parseActionMeta(data)
+	action, indexb, typeb, idb = elastic.ParseActionMeta(data)
 
 	fmt.Println(string(action), string(indexb), string(idb), )
 	assert.Equal(t,string(action),"index")
@@ -83,11 +84,8 @@ func TestParseActionMeta2(t *testing.T) {
 	assert.Equal(t,string(typeb),"_doc")
 	assert.Equal(t,string(idb),"GZq-bnYBC53QmW9Kk2ve")
 
-
-
-
-	data=[]byte("{\"index\":{\"_index\":\"test\",\"_type\":\"doc\"}}")
-	action, indexb,typeb, idb = parseActionMeta(data)
+	data = []byte("{\"index\":{\"_index\":\"test\",\"_type\":\"doc\"}}")
+	action, indexb, typeb, idb = elastic.ParseActionMeta(data)
 
 	fmt.Println(string(action), string(indexb), string(idb), )
 	assert.Equal(t,string(action),"index")
@@ -95,10 +93,8 @@ func TestParseActionMeta2(t *testing.T) {
 	assert.Equal(t,string(typeb),"doc")
 	assert.Equal(t,string(idb),"")
 
-
-
-	data=[]byte("{\"delete\":{\"_index\":\"test\",\"_type\":\"_doc\"}}")
-	action, indexb,typeb, idb = parseActionMeta(data)
+	data = []byte("{\"delete\":{\"_index\":\"test\",\"_type\":\"_doc\"}}")
+	action, indexb, typeb, idb = elastic.ParseActionMeta(data)
 
 	fmt.Println(string(action), string(indexb), string(idb), )
 	assert.Equal(t,string(action),"delete")
@@ -106,9 +102,8 @@ func TestParseActionMeta2(t *testing.T) {
 	assert.Equal(t,string(typeb),"_doc")
 	assert.Equal(t,string(idb),"")
 
-
-	data=[]byte("{\"create\":{\"_index\":\"test\",\"_type\":\"_doc\"}}")
-	action, indexb,typeb, idb = parseActionMeta(data)
+	data = []byte("{\"create\":{\"_index\":\"test\",\"_type\":\"_doc\"}}")
+	action, indexb, typeb, idb = elastic.ParseActionMeta(data)
 
 	fmt.Println(string(action), string(indexb), string(idb), )
 	assert.Equal(t,string(action),"create")
@@ -116,9 +111,8 @@ func TestParseActionMeta2(t *testing.T) {
 	assert.Equal(t,string(typeb),"_doc")
 	assert.Equal(t,string(idb),"")
 
-
-	data=[]byte("{ \"update\" : {\"_id\" : \"1\", \"_index\" : \"test\"} }")
-	action, indexb,typeb, idb = parseActionMeta(data)
+	data = []byte("{ \"update\" : {\"_id\" : \"1\", \"_index\" : \"test\"} }")
+	action, indexb, typeb, idb = elastic.ParseActionMeta(data)
 
 	fmt.Println(string(action), string(indexb), string(idb), )
 	assert.Equal(t,string(action),"update")
@@ -126,9 +120,8 @@ func TestParseActionMeta2(t *testing.T) {
 	assert.Equal(t,string(typeb),"")
 	assert.Equal(t,string(idb),"1")
 
-
-	data=[]byte("{ \"update\" : {\"_index\" : \"test\"} }")
-	action, indexb,typeb, idb = parseActionMeta(data)
+	data = []byte("{ \"update\" : {\"_index\" : \"test\"} }")
+	action, indexb, typeb, idb = elastic.ParseActionMeta(data)
 
 	fmt.Println(string(action), string(indexb), string(idb), )
 	assert.Equal(t,string(action),"update")
@@ -176,49 +169,49 @@ func TestGetUrlLevelMeta(t *testing.T) {
 	pathArray=strings.Split(pathStr,"/")
 	fmt.Println(pathArray,len(pathArray))
 
-	tindex,ttype:= getUrlLevelBulkMeta(pathStr)
-	fmt.Println(tindex,ttype)
+	tindex, ttype := elastic.getUrlLevelBulkMeta(pathStr)
+	fmt.Println(tindex, ttype)
 	assert.Equal(t,tindex,"index")
 	assert.Equal(t,ttype,"")
 
-	pathStr="/_bulk"
-	tindex,ttype= getUrlLevelBulkMeta(pathStr)
+	pathStr = "/_bulk"
+	tindex, ttype = elastic.getUrlLevelBulkMeta(pathStr)
 	fmt.Println(tindex,ttype)
 	assert.Equal(t,tindex,"")
 	assert.Equal(t,ttype,"")
 
-	pathStr="//_bulk"
-	tindex,ttype= getUrlLevelBulkMeta(pathStr)
+	pathStr = "//_bulk"
+	tindex, ttype = elastic.getUrlLevelBulkMeta(pathStr)
 	fmt.Println(tindex,ttype)
 	assert.Equal(t,tindex,"")
 	assert.Equal(t,ttype,"")
 
-	pathStr="/index/_bulk"
-	tindex,ttype= getUrlLevelBulkMeta(pathStr)
+	pathStr = "/index/_bulk"
+	tindex, ttype = elastic.getUrlLevelBulkMeta(pathStr)
 	fmt.Println(tindex,ttype)
 	assert.Equal(t,tindex,"index")
 	assert.Equal(t,ttype,"")
 
-	pathStr="//index/_bulk"
-	tindex,ttype= getUrlLevelBulkMeta(pathStr)
+	pathStr = "//index/_bulk"
+	tindex, ttype = elastic.getUrlLevelBulkMeta(pathStr)
 	fmt.Println(tindex,ttype)
 	assert.Equal(t,tindex,"index")
 	assert.Equal(t,ttype,"")
 
-	pathStr="//index//_bulk"
-	tindex,ttype= getUrlLevelBulkMeta(pathStr)
+	pathStr = "//index//_bulk"
+	tindex, ttype = elastic.getUrlLevelBulkMeta(pathStr)
 	fmt.Println(tindex,ttype)
 	assert.Equal(t,tindex,"index")
 	assert.Equal(t,ttype,"")
 
-	pathStr="/index/doc/_bulk"
-	tindex,ttype= getUrlLevelBulkMeta(pathStr)
+	pathStr = "/index/doc/_bulk"
+	tindex, ttype = elastic.getUrlLevelBulkMeta(pathStr)
 	fmt.Println(tindex,ttype)
 	assert.Equal(t,tindex,"index")
 	assert.Equal(t,ttype,"doc")
 
-	pathStr="//index/doc/_bulk"
-	tindex,ttype= getUrlLevelBulkMeta(pathStr)
+	pathStr = "//index/doc/_bulk"
+	tindex, ttype = elastic.getUrlLevelBulkMeta(pathStr)
 	fmt.Println(tindex,ttype)
 	assert.Equal(t,tindex,"index")
 	assert.Equal(t,ttype,"doc")

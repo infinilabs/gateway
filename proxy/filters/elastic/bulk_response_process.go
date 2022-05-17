@@ -8,7 +8,6 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
-	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/stats"
@@ -223,18 +222,18 @@ func (this *BulkResponseProcess) HandleBulkResponse(ctx *fasthttp.RequestCtx,saf
 			stats.IncrementBy(path.Join("request_flow",ctx.GetFlowIDOrDefault("flow")), fmt.Sprintf("bulk_items_response.%v", x), int64(y))
 		}
 
-		ctx.Set("bulk_response_status",statsCodeStats)
-		ctx.Response.Header.Set("X-BulkRequest-Failed","true")
+		ctx.Set("bulk_response_status", statsCodeStats)
+		ctx.Response.Header.Set("X-BulkRequest-Failed", "true")
 
 		var offset = 0
 		var match = false
 		var retryable = false
 		var actionMetadata elastic.BulkActionMetadata
 		var docBuffer []byte
-		docBuffer = p.Get(docBuffSize)
-		defer p.Put(docBuffer)
+		docBuffer = elastic.BulkDocBuffer.Get(docBuffSize)
+		defer elastic.BulkDocBuffer.Put(docBuffer)
 
-		WalkBulkRequests(safetyParse, requestBytes, docBuffer, func(eachLine []byte) (skipNextLine bool) {
+		elastic.WalkBulkRequests(safetyParse, requestBytes, docBuffer, func(eachLine []byte) (skipNextLine bool) {
 			return false
 		}, func(metaBytes []byte, actionStr, index, typeName, id string) (err error) {
 			actionMetadata, match = invalidOffset[offset]
@@ -291,108 +290,6 @@ func (this *BulkResponseProcess) HandleBulkResponse(ctx *fasthttp.RequestCtx,saf
 	return containError
 }
 
-//TODO remove
-func HandleBulkResponse2(tag string,safetyParse bool, requestBytes, resbody []byte, docBuffSize int, reqBuffer *common.BulkBuffer,nonRetryableItems,retryableItems *bytebufferpool.ByteBuffer) (bool,map[int]int) {
-	containError := util.LimitedBytesSearch(resbody, []byte("\"errors\":true"), 64)
-	var statsCodeStats = map[int]int{}
-	if containError {
-		//decode response
-		response := elastic.BulkResponse{}
-		err := response.UnmarshalJSON(resbody)
-		if err != nil {
-			panic(err)
-		}
-		//var contains400Error = false
-		invalidOffset := map[int]elastic.BulkActionMetadata{}
-		var validCount = 0
-		for i, v := range response.Items {
-			item := v.GetItem()
-			reqBuffer.SetResponseStatus(i,item.Status)
-
-			x, ok := statsCodeStats[item.Status]
-			if !ok {
-				x = 0
-			}
-			x++
-			statsCodeStats[item.Status] = x
-
-			if item.Error != nil {
-				invalidOffset[i] = v
-			} else {
-				validCount++
-			}
-		}
-
-		if len(invalidOffset)>0{
-			if global.Env().IsDebug{
-				log.Debug("bulk status:", statsCodeStats)
-			}
-		}
-
-		//de-dup
-		var has409 bool
-		for x, y := range statsCodeStats {
-			if x==409{
-				has409=true
-			}
-			stats.IncrementBy(path.Join("request_flow",tag,"offline"), fmt.Sprintf("bulk_items_response.%v", x), int64(y))
-		}
-		stats.Increment(path.Join("request_flow",tag,"offline"), fmt.Sprintf("HandleBulkResponse2.total-requests"))
-		if has409{
-			stats.Increment(path.Join("request_flow",tag,"offline"), fmt.Sprintf("HandleBulkResponse2.409-requests"))
-		}
-
-		var offset = 0
-		var match = false
-		var retryable = false
-		var actionMetadata elastic.BulkActionMetadata
-		var docBuffer []byte
-		docBuffer = p.Get(docBuffSize)
-		defer p.Put(docBuffer)
-
-		WalkBulkRequests(safetyParse, requestBytes, docBuffer, func(eachLine []byte) (skipNextLine bool) {
-			return false
-		}, func(metaBytes []byte, actionStr, index, typeName, id string) (err error) {
-			actionMetadata, match = invalidOffset[offset]
-			if match {
-				//find invalid request
-				if actionMetadata.GetItem().Status >= 400 && actionMetadata.GetItem().Status < 500 && actionMetadata.GetItem().Status != 429 {
-					retryable = false
-					if nonRetryableItems.Len() > 0 {
-						nonRetryableItems.WriteByte('\n')
-					}
-					nonRetryableItems.Write(metaBytes)
-				} else {
-					retryable = true
-					if retryableItems.Len() > 0 {
-						retryableItems.WriteByte('\n')
-					}
-					retryableItems.Write(metaBytes)
-				}
-			}
-			offset++
-			return nil
-		}, func(payloadBytes []byte) {
-			if match {
-				if payloadBytes != nil && len(payloadBytes) > 0 {
-					if retryable {
-						if retryableItems.Len() > 0 {
-							retryableItems.WriteByte('\n')
-						}
-						retryableItems.Write(payloadBytes)
-					} else {
-						if nonRetryableItems.Len() > 0 {
-							nonRetryableItems.WriteByte('\n')
-						}
-						nonRetryableItems.Write(payloadBytes)
-					}
-				}
-			}
-		})
-
-	}
-	return containError,statsCodeStats
-}
 
 type Config struct {
 	SafetyParse bool `config:"safety_parse"`

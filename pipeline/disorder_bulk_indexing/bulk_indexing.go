@@ -6,8 +6,6 @@ import (
 	"infini.sh/framework/core/rate"
 	"infini.sh/framework/core/rotate"
 	"infini.sh/framework/lib/bytebufferpool"
-	"infini.sh/gateway/common"
-	elastic2 "infini.sh/gateway/proxy/filters/elastic"
 	"runtime"
 	"sync"
 	"time"
@@ -69,7 +67,7 @@ type Config struct {
 
 	RotateConfig rotate.RotateConfig          `config:"rotate"`
 
-	BulkConfig   elastic2.BulkProcessorConfig `config:"bulk"`
+	BulkConfig elastic.BulkProcessorConfig `config:"bulk"`
 
 	Elasticsearch     string    `config:"elasticsearch,omitempty"`
 
@@ -88,22 +86,22 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		MaxConnectionPerHost: 1,
 		IdleTimeoutInSecond:  5,
 		DetectIntervalInMs:   10000,
-		Queues: map[string]interface{}{},
+		Queues:               map[string]interface{}{},
 
 		Consumer: queue.ConsumerConfig{
-			Group: "group-001",
-			Name: "consumer-001",
-			FetchMinBytes:   	1,
-			FetchMaxMessages:   100,
+			Group:            "group-001",
+			Name:             "consumer-001",
+			FetchMinBytes:    1,
+			FetchMaxMessages: 100,
 			FetchMaxWaitMs:   10000,
 		},
 
-		DetectActiveQueue:    true,
-		ValidateRequest:      false,
-		SkipEmptyQueue:      true,
-		SkipOnMissingInfo:   false,
-		RotateConfig:         rotate.DefaultConfig,
-		BulkConfig:           elastic2.DefaultBulkProcessorConfig,
+		DetectActiveQueue: true,
+		ValidateRequest:   false,
+		SkipEmptyQueue:    true,
+		SkipOnMissingInfo: false,
+		RotateConfig:      rotate.DefaultConfig,
+		BulkConfig:        elastic.DefaultBulkProcessorConfig,
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -366,11 +364,11 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 	processor.inFlightQueueConfigs.Store(key,workerID)
 	log.Debugf("starting worker:[%v], queue:[%v], host:[%v]",workerID, qConfig.Name, host)
 
-	mainBuf := common.AcquireBulkBuffer()
+	mainBuf := elastic.AcquireBulkBuffer()
 	mainBuf.Queue=qConfig.Id
-	defer common.ReturnBulkBuffer(mainBuf)
+	defer elastic.ReturnBulkBuffer(mainBuf)
 
-	var bulkProcessor elastic2.BulkProcessor
+	var bulkProcessor elastic.BulkProcessor
 	var esClusterID string
 	var meta *elastic.ElasticsearchMetadata
 
@@ -426,8 +424,8 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 		host=meta.GetActiveHost()
 	}
 
-	bulkProcessor = elastic2.BulkProcessor{
-		Config:       processor.config.BulkConfig,
+	bulkProcessor = elastic.BulkProcessor{
+		Config: processor.config.BulkConfig,
 	}
 
 	if bulkProcessor.Config.DeadletterRequestsQueue == "" {
@@ -538,16 +536,16 @@ CLEAN_BUFFER:
 	}
 }
 
-func (processor *BulkIndexingProcessor) submitBulkRequest(tag,esClusterID string, meta *elastic.ElasticsearchMetadata, host string, bulkProcessor elastic2.BulkProcessor, mainBuf *common.BulkBuffer)bool {
+func (processor *BulkIndexingProcessor) submitBulkRequest(tag, esClusterID string, meta *elastic.ElasticsearchMetadata, host string, bulkProcessor elastic.BulkProcessor, mainBuf *elastic.BulkBuffer) bool {
 
-	if  mainBuf==nil||meta==nil{
+	if mainBuf == nil || meta == nil {
 		return true
 	}
 
-	count:=mainBuf.GetMessageCount()
-	size:=mainBuf.GetMessageSize()
+	count := mainBuf.GetMessageCount()
+	size := mainBuf.GetMessageSize()
 
-	if mainBuf.GetMessageCount() > 0 &&mainBuf.GetMessageSize()>0 {
+	if mainBuf.GetMessageCount() > 0 && mainBuf.GetMessageSize() > 0 {
 		log.Trace(meta.Config.Name, ", starting submit bulk request")
 		start := time.Now()
 		contrinueRequest:= bulkProcessor.Bulk(tag,meta, host, mainBuf)

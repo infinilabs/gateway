@@ -23,12 +23,14 @@ var JSON_CONTENT_TYPE = "application/json"
 
 type BulkReshuffle struct {
 	config *BulkReshuffleConfig
-	//bulkProcessor *BulkProcessor
 }
 
 func (this *BulkReshuffle) Name() string {
 	return "bulk_reshuffle"
 }
+
+var bufferPool = bytebufferpool.NewPool(65536, 655360)
+var smallSizedPool = bytebufferpool.NewPool(512, 655360)
 
 type Level string
 
@@ -37,20 +39,23 @@ const NodeLevel = "node"
 const IndexLevel = "index"
 const ShardLevel = "shard"
 
-type BulkReshuffleConfig struct {
+var startPart = []byte("{\"took\":0,\"errors\":false,\"items\":[")
+var itemPart = []byte("{\"index\":{\"_index\":\"fake-index\",\"_type\":\"doc\",\"_id\":\"1\",\"_version\":1,\"result\":\"created\",\"_shards\":{\"total\":1,\"successful\":1,\"failed\":0},\"_seq_no\":1,\"_primary_term\":1,\"status\":200}}")
+var endPart = []byte("]}")
 
+type BulkReshuffleConfig struct {
 	TagsOnSuccess []string `config:"tag_on_success"` //hit limiter then add tag
 
-	Elasticsearch       string `config:"elasticsearch"`
-	QueuePrefix               string `config:"queue_name_prefix"`
-	Level               string `config:"level"` //cluster/node(will,change)/index/shard/partition
-	PartitionSize       int    `config:"partition_size"`
-	FixNullID           bool   `config:"fix_null_id"`
-	ContinueAfterReshuffle           bool   `config:"continue_after_reshuffle"`
-	IndexStatsAnalysis  bool   `config:"index_stats_analysis"`
-	ActionStatsAnalysis bool   `config:"action_stats_analysis"`
+	Elasticsearch          string `config:"elasticsearch"`
+	QueuePrefix            string `config:"queue_name_prefix"`
+	Level                  string `config:"level"` //cluster/node(will,change)/index/shard/partition
+	PartitionSize          int    `config:"partition_size"`
+	FixNullID              bool   `config:"fix_null_id"`
+	ContinueAfterReshuffle bool   `config:"continue_after_reshuffle"`
+	IndexStatsAnalysis     bool   `config:"index_stats_analysis"`
+	ActionStatsAnalysis    bool   `config:"action_stats_analysis"`
 
-	ContinueMetadataNotFound bool   `config:"continue_metadata_missing"`
+	ContinueMetadataNotFound bool `config:"continue_metadata_missing"`
 
 	ValidateRequest bool `config:"validate_request"`
 
@@ -62,8 +67,6 @@ type BulkReshuffleConfig struct {
 	StickToNode   bool  `config:"stick_to_node"`
 	DocBufferSize int   `config:"doc_buffer_size"`
 	EnabledShards []int `config:"shards"`
-
-
 }
 
 func init() {
@@ -76,7 +79,7 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 
 	cfg := BulkReshuffleConfig{
 		DocBufferSize:       256 * 1024,
-		QueuePrefix:      "async_bulk",
+		QueuePrefix:         "async_bulk",
 		IndexStatsAnalysis:  true,
 		SafetyParse:         true,
 		ActionStatsAnalysis: true,
@@ -141,10 +144,10 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		defer smallSizedPool.Put(actionMeta)
 
 		var docBuffer []byte
-		docBuffer = p.Get(this.config.DocBufferSize) //doc buffer for bytes scanner
-		defer p.Put(docBuffer)
+		docBuffer = elastic.BulkDocBuffer.Get(this.config.DocBufferSize) //doc buffer for bytes scanner
+		defer elastic.BulkDocBuffer.Put(docBuffer)
 
-		docCount, err := WalkBulkRequests(this.config.SafetyParse, body, docBuffer, func(eachLine []byte) (skipNextLine bool) {
+		docCount, err := elastic.WalkBulkRequests(this.config.SafetyParse, body, docBuffer, func(eachLine []byte) (skipNextLine bool) {
 			if validEachLine {
 				obj := map[string]interface{}{}
 				err := util.FromJSONBytes(eachLine, &obj)
@@ -164,7 +167,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			var urlLevelIndex string
 			var urlLevelType string
 
-			urlLevelIndex, urlLevelType = getUrlLevelBulkMeta(pathStr)
+			urlLevelIndex, urlLevelType = elastic.ParseUrlLevelBulkMeta(pathStr)
 
 			var indexNew, typeNew, idNew string
 			if index == "" && urlLevelIndex != "" {
@@ -177,7 +180,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				typeNew = urlLevelType
 			}
 
-			if (actionStr == actionIndex || actionStr == actionCreate) && (len(id) == 0 || id == "null") && fixNullID {
+			if (actionStr == elastic.ActionIndex || actionStr == elastic.ActionCreate) && (len(id) == 0 || id == "null") && fixNullID {
 				id = util.GetUUID()
 				idNew = id
 				if global.Env().IsDebug {
@@ -244,9 +247,9 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				return errors.Error("invalid bulk action:", actionStr, ",index:", string(index), ",id:", string(id), ",", metaStr)
 			}
 
-			var nodeID,ShardIDStr string
+			var nodeID, ShardIDStr string
 
-			if reshuffleType==NodeLevel||reshuffleType==ShardLevel{
+			if reshuffleType == NodeLevel || reshuffleType == ShardLevel {
 				//get routing table of index
 				table, err := metadata.GetIndexRoutingTable(index)
 				if err != nil {
@@ -254,7 +257,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 						log.Warn(index, ",", metaStr, ",", err)
 					}
 					return err
-				}else{
+				} else {
 					//check if it is not only one shard
 					totalShards := len(table)
 					if totalShards > 1 {
@@ -274,7 +277,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 						}
 					}
 
-					ShardIDStr=util.IntToString(shardID)
+					ShardIDStr = util.IntToString(shardID)
 					shardInfo, err := metadata.GetPrimaryShardInfo(index, ShardIDStr)
 					if err != nil {
 						return errors.Error("shard info was not found,", index, ",", shardID, ",", err)
@@ -297,44 +300,42 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			queueConfig.Labels["level"] = reshuffleType
 			queueConfig.Labels["elasticsearch"] = esConfig.ID
 
-
 			//partition
-			var partitionSuffix=""
-			if this.config.PartitionSize>1{
+			var partitionSuffix = ""
+			if this.config.PartitionSize > 1 {
 				queueConfig.Labels["partition_size"] = this.config.PartitionSize
 				partitionID := elastic.GetShardID(metadata.GetMajorVersion(), []byte(id), this.config.PartitionSize)
 				queueConfig.Labels["partition"] = partitionID
-				partitionSuffix = "##"+util.IntToString(partitionID)
+				partitionSuffix = "##" + util.IntToString(partitionID)
 			}
-
 
 			//注册队列到元数据中，消费者自动订阅该队列列表，并根据元数据来分别进行相应的处理
 			switch reshuffleType {
 			case ClusterLevel:
-				queueConfig.Name =this.config.QueuePrefix+"##cluster##"+ esConfig.ID+partitionSuffix
+				queueConfig.Name = this.config.QueuePrefix + "##cluster##" + esConfig.ID + partitionSuffix
 				break
 			case NodeLevel:
 
-				if nodeID==""{
-					nodeID="UNASSIGNED"
+				if nodeID == "" {
+					nodeID = "UNASSIGNED"
 				}
 
 				queueConfig.Labels["node_id"] = nodeID //need metadata
-				queueConfig.Name = this.config.QueuePrefix+"##node##"+esConfig.ID+"##"+ nodeID+partitionSuffix
+				queueConfig.Name = this.config.QueuePrefix + "##node##" + esConfig.ID + "##" + nodeID + partitionSuffix
 				break
 			case IndexLevel:
 				queueConfig.Labels["index"] = index
-				queueConfig.Name = this.config.QueuePrefix+"##index##"+ esConfig.ID+"##"+ index+partitionSuffix
+				queueConfig.Name = this.config.QueuePrefix + "##index##" + esConfig.ID + "##" + index + partitionSuffix
 				break
 			case ShardLevel:
 
-				if ShardIDStr==""{
-					ShardIDStr="UNASSIGNED"
+				if ShardIDStr == "" {
+					ShardIDStr = "UNASSIGNED"
 				}
 
 				queueConfig.Labels["index"] = index
 				queueConfig.Labels["shard"] = shardID //need metadata
-				queueConfig.Name = this.config.QueuePrefix+"##shard##"+esConfig.ID+"##"+index+"##"+ShardIDStr+partitionSuffix
+				queueConfig.Name = this.config.QueuePrefix + "##shard##" + esConfig.ID + "##" + index + "##" + ShardIDStr + partitionSuffix
 				break
 			}
 
@@ -372,12 +373,12 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				}
 
 				if buff.Len() > 0 {
-					buff.Write(NEWLINEBYTES)
+					buff.Write(elastic.NEWLINEBYTES)
 				}
 
 				buff.Write(actionMeta.Bytes())
 				if payloadBytes != nil && len(payloadBytes) > 0 {
-					buff.Write(NEWLINEBYTES)
+					buff.Write(elastic.NEWLINEBYTES)
 					buff.Write(payloadBytes)
 
 					if validPayload {
@@ -404,11 +405,11 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 		//send to queue
 		for x, y := range docBuf {
-			y.Write(NEWLINEBYTES)
+			y.Write(elastic.NEWLINEBYTES)
 			data := y.Bytes()
 
 			if validateRequest {
-				common.ValidateBulkRequest("aync-bulk", string(data))
+				elastic.ValidateBulkRequest("aync-bulk", string(data))
 			}
 
 			if len(data) > 0 {
@@ -468,11 +469,11 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		ctx.Response.AppendBody(buffer.Bytes())
 		bytebufferpool.Put(buffer)
 
-		if len(this.config.TagsOnSuccess)>0{
-			ctx.UpdateTags(this.config.TagsOnSuccess,nil)
+		if len(this.config.TagsOnSuccess) > 0 {
+			ctx.UpdateTags(this.config.TagsOnSuccess, nil)
 		}
 
-		if !this.config.ContinueAfterReshuffle{
+		if !this.config.ContinueAfterReshuffle {
 			ctx.Response.SetStatusCode(200)
 			ctx.Finished()
 		}
@@ -491,66 +492,16 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 }
 
-var actionIndex = "index"
-var actionDelete = "delete"
-var actionCreate = "create"
-var actionUpdate = "update"
-
-var actionStart = []byte("\"")
-var actionEnd = []byte("\"")
-
-var actions = []string{"index", "delete", "create", "update"}
-
-func parseActionMeta(data []byte) (action, index, typeName, id string) {
-
-	match := false
-	for _, v := range actions {
-		jsonparser.ObjectEach(data, func(key []byte, value []byte, dataType jsonparser.ValueType, offset int) error {
-			switch util.UnsafeBytesToString(key) {
-			case "_index":
-				index = string(value)
-				break
-			case "_type":
-				typeName = string(value)
-				break
-			case "_id":
-				id = string(value)
-				break
-			}
-			match = true
-			return nil
-		}, v)
-		action = v
-		if match {
-			return action, index, typeName, id
-		}
-	}
-
-	log.Warn("fallback to unsafe parse:", util.UnsafeBytesToString(data))
-
-	action = string(util.ExtractFieldFromBytes(&data, actionStart, actionEnd, nil))
-	index, _ = jsonparser.GetString(data, action, "_index")
-	typeName, _ = jsonparser.GetString(data, action, "_type")
-	id, _ = jsonparser.GetString(data, action, "_id")
-
-	if index != "" {
-		return action, index, typeName, id
-	}
-
-	log.Warn("fallback to safety parse:", util.UnsafeBytesToString(data))
-	return safetyParseActionMeta(data)
-}
-
-func batchUpdateJson( scannedByte []byte,action string,set, del map[string]string) (newBytes []byte, err error) {
+func batchUpdateJson(scannedByte []byte, action string, set, del map[string]string) (newBytes []byte, err error) {
 
 	newBytes = make([]byte, len(scannedByte))
 	copy(newBytes, scannedByte)
 
-	for k,_:=range del{
+	for k, _ := range del {
 		newBytes = jsonparser.Delete(newBytes, action, k)
 	}
 
-	for k,v:=range set{
+	for k, v := range set {
 		newBytes, err = jsonparser.Set(newBytes, []byte("\""+v+"\""), action, k)
 		if err != nil {
 			return newBytes, err
@@ -589,54 +540,4 @@ func updateJsonWithNewIndex(action string, scannedByte []byte, index, typeName, 
 	}
 
 	return newBytes, err
-}
-
-//func removeKeysFromAction(action string,scannedByte []byte,keys string) (newBytes []byte, err error) {
-//	newBytes = make([]byte, len(scannedByte))
-//	copy(newBytes, scannedByte)
-//	newBytes = make([]byte, len(scannedByte))
-//	copy(newBytes, scannedByte)
-//	newBytes = jsonparser.Delete(newBytes, action, keys)
-//	return newBytes, nil
-//}
-//
-//func updateKeysFromAction(action string,scannedByte []byte,keys string,value string) (newBytes []byte, err error) {
-//	newBytes = make([]byte, len(scannedByte))
-//	copy(newBytes, scannedByte)
-//	newBytes, err = jsonparser.Set(newBytes, []byte("\""+value+"\""), action, keys)
-//	if err != nil {
-//		return newBytes, err
-//	}
-//	return newBytes, err
-//}
-
-//performance is poor
-func safetyParseActionMeta(scannedByte []byte) (action, index, typeName, id string) {
-
-	////{ "index" : { "_index" : "test", "_id" : "1" } }
-	var meta = elastic.BulkActionMetadata{}
-	meta.UnmarshalJSON(scannedByte)
-	if meta.Index != nil {
-		index = meta.Index.Index
-		typeName = meta.Index.Type
-		id = meta.Index.ID
-		action = actionIndex
-	} else if meta.Create != nil {
-		index = meta.Create.Index
-		typeName = meta.Create.Type
-		id = meta.Create.ID
-		action = actionCreate
-	} else if meta.Update != nil {
-		index = meta.Update.Index
-		typeName = meta.Update.Type
-		id = meta.Update.ID
-		action = actionUpdate
-	} else if meta.Delete != nil {
-		index = meta.Delete.Index
-		typeName = meta.Delete.Type
-		action = actionDelete
-		id = meta.Delete.ID
-	}
-
-	return action, index, typeName, id
 }
