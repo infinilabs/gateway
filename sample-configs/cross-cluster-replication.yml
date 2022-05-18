@@ -10,7 +10,7 @@ entry:
     network:
       binding: 0.0.0.0:8000
     tls:
-      enabled: true
+      enabled: false
 
 flow:
   - name: auth-flow
@@ -18,6 +18,9 @@ flow:
       - basic_auth:
           valid_users:
             ingest: managemDFSDFSDFent
+      - set_basic_auth:
+          username: test
+          password: testtest
   - name: set-auth-for-backup-flow
     filter:
       - set_basic_auth: #覆盖备集群的身份信息用于备集群正常处理请求
@@ -599,7 +602,9 @@ pipeline:
 
 ## let's upload disk queue files to s3 for backup
 disk_queue:
-  upload_to_s3: true
+  retention:
+    max_num_of_local_files: 3
+  upload_to_s3: false
   compress_on_message_payload:
     enabled: true
   s3:
