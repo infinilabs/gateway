@@ -1,0 +1,86 @@
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 10000
+    network:
+      binding: 0.0.0.0:8000
+#    tls:
+#      enabled: true
+#      cert_file: /etc/elasticsearch/certs/es7.crt
+#      key_file: /etc/elasticsearch/certs/es7-key.pem
+#      skip_insecure_verify: false
+flow:
+  - name: primary-write-flow
+    filter:
+      - elasticsearch:
+          elasticsearch: es-server
+          refresh:
+            enabled: true
+            interval: 10s
+  - name: request_logging
+    filter:
+      - record:
+          stdout: true
+          filename: requests.txt
+      - context_filter:
+          context: _ctx.request.path
+          exclude:
+            - /favicon.ico
+      - logging:
+          queue_name: request_logging
+          max_request_body_size: 102400
+          max_response_body_size: 102400
+
+router:
+  - name: my_router
+    default_flow: primary-write-flow
+    tracing_flow: request_logging
+
+elasticsearch:
+  - name: es-server
+    enabled: true
+    endpoints:
+      - https://10.1.1.1:9200
+    basic_auth:
+      username: admin
+      password: admin
+    discovery:
+      enabled: true
+      refresh:
+        enabled: true
+        interval: 60s
+
+pipeline:
+  - name: indexing_merge
+    auto_start: true
+    keep_running: true
+    processor:
+      - indexing_merge:
+          input_queue: "request_logging"
+          elasticsearch: "es-server"
+          index_name: ".infini_gateway_requests"
+          output_queue:
+            name: "gateway_requests"
+            label:
+              tag: "request_logging"
+          worker_size: 1
+          bulk_size_in_mb: 10
+  - name: logging_requests
+    auto_start: true
+    keep_running: true
+    processor:
+      - bulk_indexing:
+          bulk:
+            compress: true
+            batch_size_in_mb: 10
+            batch_size_in_docs: 5000
+          consumer:
+            fetch_max_messages: 100
+          queues:
+            type: indexing_merge
+          when:
+            cluster_available: [ "es-server" ]
