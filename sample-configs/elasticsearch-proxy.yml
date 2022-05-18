@@ -17,6 +17,9 @@ flow:
     filter:
       - elasticsearch:
           elasticsearch: es-server
+          refresh:
+            enabled: true
+            interval: 10s
           fixed_client: true
           client_mode: host
           timeout: -1
@@ -32,6 +35,12 @@ elasticsearch:
   - name: es-server
     enabled: true
     endpoints:
-     - http://192.168.3.188:9206
-     - http://192.168.3.188:9226
-     - http://192.168.3.188:9246
+     - http://192.168.3.188:9211
+    basic_auth:
+      username: elastic
+      password: Bp2HyArQDd+5PdgEJ4QH
+    discovery:
+      enabled: true
+      refresh:
+        enabled: true
+        interval: 60s
