@@ -10,6 +10,7 @@ import (
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
+	"infini.sh/framework/core/rate"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/bytebufferpool"
@@ -17,6 +18,7 @@ import (
 	"infini.sh/gateway/common"
 	"net/http"
 	"path"
+	"time"
 )
 
 type BulkResponseProcess struct {
@@ -45,16 +47,18 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 		containError := this.HandleBulkResponse(ctx,this.config.SafetyParse, requestBytes, resbody, this.config.DocBufferSize, nonRetryableItems, retryableItems,successItems)
 		if containError {
 
-			log.Error("error in bulk requests,", ctx.Response.StatusCode(), util.SubString(string(resbody), 0, this.config.MessageTruncateSize))
-
-			if len(this.config.TagsOnAnyError)>0{
-				ctx.UpdateTags(this.config.TagsOnAnyError,nil)
+			url := ctx.Request.URI().String()
+			if rate.GetRateLimiter("bulk_error", url, 1, 1, 5*time.Second).Allow() {
+				log.Error("error in bulk requests,", url, ctx.Response.StatusCode(), util.SubString(string(resbody), 0, this.config.MessageTruncateSize))
 			}
 
+			if len(this.config.TagsOnAnyError) > 0 {
+				ctx.UpdateTags(this.config.TagsOnAnyError, nil)
+			}
 
 			if nonRetryableItems.Len() > 0 {
 
-				if this.config.InvalidQueue!=""{
+				if this.config.InvalidQueue != "" {
 					nonRetryableItems.WriteByte('\n')
 					bytes := ctx.Request.OverrideBodyEncode(nonRetryableItems.Bytes(), true)
 					queue.Push(queue.GetOrInitConfig(this.config.InvalidQueue), bytes)
