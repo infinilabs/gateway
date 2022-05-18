@@ -217,7 +217,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 			offset = ctx1.NextOffset
 
 			if timeout || len(messages) == 0 {
-				log.Debugf("%v messages, timeout:%v, sleep 1s", len(messages), timeout)
+				log.Debugf("[%v][%v] %v messages, timeout:%v, sleep 1s", qConfig.Name, consumer.Name, len(messages), timeout)
 				return nil
 			}
 
