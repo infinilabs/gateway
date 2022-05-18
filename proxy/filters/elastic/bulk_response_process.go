@@ -49,7 +49,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 
 			url := ctx.Request.URI().String()
 			if rate.GetRateLimiter("bulk_error", url, 1, 1, 5*time.Second).Allow() {
-				log.Error("error in bulk requests,", url, ctx.Response.StatusCode(), util.SubString(string(resbody), 0, this.config.MessageTruncateSize))
+				log.Error("error in bulk requests,", url, ",", ctx.Response.StatusCode(), ",", util.SubString(string(resbody), 0, this.config.MessageTruncateSize))
 			}
 
 			if len(this.config.TagsOnAnyError) > 0 {
