@@ -38,12 +38,12 @@ func (filter *Elasticsearch) Filter(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	if filter.metadata != nil && !filter.metadata.IsAvailable() {
-		if rate.GetRateLimiter("cluster_check_health", filter.metadata.Config.ID, 1, 1, time.Second*1).Allow() {
+	if filter.getMetadata() != nil && !filter.getMetadata().IsAvailable() {
+		if rate.GetRateLimiter("cluster_check_health", filter.getMetadata().Config.ID, 1, 1, time.Second*1).Allow() {
 			log.Debugf("Elasticsearch [%v] not available", filter.config.Elasticsearch)
-			result, err := elastic.GetClient(filter.metadata.Config.Name).ClusterHealth()
+			result, err := elastic.GetClient(filter.getMetadata().Config.Name).ClusterHealth()
 			if err != nil && result.StatusCode == 200 {
-				filter.metadata.ReportSuccess()
+				filter.getMetadata().ReportSuccess()
 			}
 		}
 
@@ -55,7 +55,7 @@ func (filter *Elasticsearch) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 	//TODO move clients selection async
-	filter.instance.DelegateRequest(filter.config.Elasticsearch, filter.metadata, ctx)
+	filter.instance.DelegateRequest(filter.config.Elasticsearch, filter.getMetadata(), ctx)
 }
 
 func init() {
@@ -74,16 +74,16 @@ func New(c *config.Config) (pipeline.Filter, error) {
 		ReadBufferSize:        4096 * 4,
 		WriteBufferSize:       4096 * 4,
 		//maxt wait timeout for free connection
-		MaxConnWaitTimeout:    util.GetDurationOrDefault("30s", 30*time.Second),
+		MaxConnWaitTimeout: util.GetDurationOrDefault("30s", 30*time.Second),
 
 		//keep alived connection
-		MaxConnDuration:       util.GetDurationOrDefault("0s", 0*time.Second),
+		MaxConnDuration: util.GetDurationOrDefault("0s", 0*time.Second),
 
-		ReadTimeout:           util.GetDurationOrDefault("0s", 0*time.Hour),
-		Timeout:           util.GetDurationOrDefault("60s", 60*time.Second),
-		WriteTimeout:          util.GetDurationOrDefault("0s", 0*time.Hour),
+		ReadTimeout:  util.GetDurationOrDefault("0s", 0*time.Hour),
+		Timeout:      util.GetDurationOrDefault("30s", 30*time.Second),
+		WriteTimeout: util.GetDurationOrDefault("0s", 0*time.Hour),
 		//idle alive connection will be closed
-		MaxIdleConnDuration:   util.GetDurationOrDefault("30s", 30*time.Second),
+		MaxIdleConnDuration: util.GetDurationOrDefault("30s", 30*time.Second),
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -98,4 +98,11 @@ func New(c *config.Config) (pipeline.Filter, error) {
 	log.Debugf("init elasticsearch proxy instance: %v", cfg.Elasticsearch)
 
 	return &runner, nil
+}
+
+func (filter *Elasticsearch) getMetadata() *elastic.ElasticsearchMetadata {
+	if filter.metadata == nil {
+		filter.metadata = elastic.GetMetadata(filter.config.Elasticsearch)
+	}
+	return filter.metadata
 }

@@ -1,0 +1,26 @@
+entry:
+  - name: my_es_entry1
+    enabled: true
+    router: my_router1
+    max_concurrency: 200000
+    network:
+      binding: 0.0.0.0:8002
+
+flow:
+  - name: echo1
+    filter:
+      - echo:
+          message: "echo testing"
+      - elasticsearch:
+          elasticsearch: server4
+#      - elasticsearch:
+#          elasticsearch: server
+
+router:
+  - name: my_router1
+    default_flow: echo1
+
+elasticsearch:
+  - name: server4
+    enabled: true
+    endpoint: http://192.168.3.188:9299

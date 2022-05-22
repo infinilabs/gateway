@@ -2,13 +2,11 @@ package common
 
 import (
 	log "github.com/cihub/seelog"
-	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/orm"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/lib/fasthttp"
-	"reflect"
 	"strings"
 	"sync"
 )
@@ -79,114 +77,117 @@ func MustGetFlow(flowID string) FilterFlow {
 		v.JoinFilter(flow1)
 	}
 
-	flows.Store(flowID,v)
+	flows.Store(flowID, v)
 	return v
 }
-
 
 func GetFlowProcess(flowID string) func(ctx *fasthttp.RequestCtx) {
 	flow := MustGetFlow(flowID)
 	return flow.Process
 }
 
-//get filter plugins
-func GetFilter(name string) pipeline.Filter {
-	v, ok := filterPluginTypes[name]
-	if !ok {
-		panic(errors.Errorf("filter [%s] not found", name))
-	}
-	return v
-}
+////get filter plugins
+//func GetFilter(name string) pipeline.Filter {
+//	v, ok := filterPluginTypes[name]
+//	if !ok {
+//		panic(errors.Errorf("filter [%s] not found", name))
+//	}
+//	return v
+//}
+//func GetFilterInstanceWithConfig(cfg *FilterConfig) pipeline.Filter {
+//	if global.Env().IsDebug {
+//		log.Tracef("get filter instance [%v] [%v]", cfg.Name, cfg.ID)
+//	}
+//
+//	if cfg.ID == "" {
+//		panic(errors.Errorf("invalid filter config [%v] [%v] is not set", cfg.Name, cfg.ID))
+//	}
+//
+//	v1, ok := filterInstances[cfg.ID]
+//	if ok {
+//		if global.Env().IsDebug {
+//			log.Debugf("hit filter instance [%v] [%v], return", cfg.Name, cfg.ID)
+//		}
+//		return v1
+//	}
+//
+//	if cfg.Name == "" {
+//		panic(errors.Errorf("the type of filter [%v] [%v] is not set", cfg.Name, cfg.ID))
+//	}
+//
+//	filter := GetFilter(cfg.Name)
+//	t := reflect.ValueOf(filter).Type()
+//	v := reflect.New(t).Elem()
+//
+//	f := v.FieldByName("Data")
+//	if f.IsValid() && f.CanSet() && f.Kind() == reflect.Map {
+//		f.Set(reflect.ValueOf(cfg.Parameters))
+//	}
+//	x := v.Interface().(pipeline.Filter)
+//	filterInstances[cfg.ID] = x
+//	return x
+//}
+//
+//func GetFilterInstanceWithConfigV2(filterName string, cfg *config.Config) pipeline.Filter {
+//	if global.Env().IsDebug {
+//		log.Debugf("get filter [%v]", filterName)
+//	}
+//
+//	if !cfg.HasField("_meta:config_id") {
+//		panic(errors.Errorf("invalid filter config [%v] [%v] is not set", filterName, cfg))
+//	}
+//	id, err := cfg.String("_meta:config_id", -1)
+//	if err != nil {
+//		panic(err)
+//	}
+//
+//	v1, ok := filterInstances[id]
+//	if ok {
+//		if global.Env().IsDebug {
+//			log.Debugf("hit filter instance [%v] [%v], return", filterName, id)
+//		}
+//		return v1
+//	}
+//
+//	////check contional
+//	//if cfg.HasField("when"){
+//	//
+//	//}
+//
+//	parameters := map[string]interface{}{}
+//	cfg.Unpack(&parameters)
+//
+//	filter := GetFilter(filterName)
+//	t := reflect.ValueOf(filter).Type()
+//	v := reflect.New(t).Elem()
+//
+//	f := v.FieldByName("Data")
+//	if f.IsValid() && f.CanSet() && f.Kind() == reflect.Map {
+//		f.Set(reflect.ValueOf(parameters))
+//	}
+//	x := v.Interface().(pipeline.Filter)
+//
+//	filterInstances[id] = x
+//	return x
+//}
+//var filterInstances map[string]pipeline.Filter = make(map[string]pipeline.Filter)
+//func RegisterFilterPlugin(filter pipeline.Filter) {
+//	log.Debug("register filter: ", filter.Name())
+//	filterPluginTypes[filter.Name()] = filter
+//}
+//var filterPluginTypes map[string]pipeline.Filter = make(map[string]pipeline.Filter)
 
-func GetFilterInstanceWithConfig(cfg *FilterConfig) pipeline.Filter {
-	if global.Env().IsDebug {
-		log.Tracef("get filter instance [%v] [%v]", cfg.Name, cfg.ID)
-	}
-
-	if cfg.ID == "" {
-		panic(errors.Errorf("invalid filter config [%v] [%v] is not set", cfg.Name, cfg.ID))
-	}
-
-	v1, ok := filterInstances[cfg.ID]
-	if ok {
-		if global.Env().IsDebug {
-			log.Debugf("hit filter instance [%v] [%v], return", cfg.Name, cfg.ID)
-		}
-		return v1
-	}
-
-	if cfg.Name == "" {
-		panic(errors.Errorf("the type of filter [%v] [%v] is not set", cfg.Name, cfg.ID))
-	}
-
-	filter := GetFilter(cfg.Name)
-	t := reflect.ValueOf(filter).Type()
-	v := reflect.New(t).Elem()
-
-	f := v.FieldByName("Data")
-	if f.IsValid() && f.CanSet() && f.Kind() == reflect.Map {
-		f.Set(reflect.ValueOf(cfg.Parameters))
-	}
-	x := v.Interface().(pipeline.Filter)
-	filterInstances[cfg.ID] = x
-	return x
-}
-
-func GetFilterInstanceWithConfigV2(filterName string, cfg *config.Config) pipeline.Filter {
-	if global.Env().IsDebug {
-		log.Debugf("get filter [%v]", filterName)
-	}
-
-	if !cfg.HasField("_meta:config_id") {
-		panic(errors.Errorf("invalid filter config [%v] [%v] is not set", filterName, cfg))
-	}
-	id, err := cfg.String("_meta:config_id", -1)
-	if err != nil {
-		panic(err)
-	}
-
-	v1, ok := filterInstances[id]
-	if ok {
-		if global.Env().IsDebug {
-			log.Debugf("hit filter instance [%v] [%v], return", filterName, id)
-		}
-		return v1
-	}
-
-	////check contional
-	//if cfg.HasField("when"){
-	//
-	//}
-
-	parameters := map[string]interface{}{}
-	cfg.Unpack(&parameters)
-
-	filter := GetFilter(filterName)
-	t := reflect.ValueOf(filter).Type()
-	v := reflect.New(t).Elem()
-
-	f := v.FieldByName("Data")
-	if f.IsValid() && f.CanSet() && f.Kind() == reflect.Map {
-		f.Set(reflect.ValueOf(parameters))
-	}
-	x := v.Interface().(pipeline.Filter)
-
-	filterInstances[id] = x
-	return x
-}
-
-var filterPluginTypes map[string]pipeline.Filter = make(map[string]pipeline.Filter)
-
-var filterInstances map[string]pipeline.Filter = make(map[string]pipeline.Filter)
-var flows  = &sync.Map{}
+var flows = &sync.Map{}
 
 var routingRules map[string]RuleConfig = make(map[string]RuleConfig)
 var flowConfigs map[string]FlowConfig = make(map[string]FlowConfig)
 var routerConfigs map[string]RouterConfig = make(map[string]RouterConfig)
 
-func RegisterFilterPlugin(filter pipeline.Filter) {
-	log.Debug("register filter: ", filter.Name())
-	filterPluginTypes[filter.Name()] = filter
+func init() {
+	//api.HandleAPIMethod("GET","entry", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+	//
+	//})
+
 }
 
 func ClearFlowCache(flow string) {
@@ -201,7 +202,10 @@ func RegisterFlowConfig(flow FlowConfig) {
 }
 
 func RegisterRouterConfig(config RouterConfig) {
-	routerConfigs[config.Name] = config
+	if config.ID == "" && config.Name != "" {
+		config.ID = config.Name
+	}
+	routerConfigs[config.ID] = config
 }
 
 func GetRouter(name string) RouterConfig {

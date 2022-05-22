@@ -414,17 +414,17 @@ START:
 	req := &myctx.Request
 	res := &myctx.Response
 
-	if !p.proxyConfig.SkipCleanupHopHeaders{
+	if !p.proxyConfig.SkipCleanupHopHeaders {
 		cleanHopHeaders(req)
 	}
 
 	var pc fasthttp.ClientAPI
 	var host string
 
-	if p.proxyConfig.FixedClient{
-		pc=p.client
-		host=p.host
-	}else{
+	if p.proxyConfig.FixedClient {
+		pc = p.client
+		host = p.host
+	} else {
 		//var ok bool
 		//使用算法来获取合适的 client
 		switch metadata.Config.ClientMode {
@@ -480,7 +480,7 @@ START:
 		log.Tracef("send request [%v] to upstream [%v]", req.URI().String(), host)
 	}
 
-	if host!=orignalHost{
+	if host != orignalHost {
 		req.SetHostBytes(util.UnsafeStringToBytes(host))
 	}
 
@@ -491,19 +491,19 @@ START:
 	//}
 
 	var err error
-	if p.proxyConfig.Timeout>0{
+	if p.proxyConfig.Timeout > 0 {
 		err = pc.DoTimeout(req, res, p.proxyConfig.Timeout)
-	}else{
+	} else {
 		err = pc.Do(req, res)
 	}
 
-	if !p.proxyConfig.SkipKeepOriginalURI{
+	if !p.proxyConfig.SkipKeepOriginalURI {
 		// restore schema
-		if schemaChanged{
+		if schemaChanged {
 			req.URI().SetScheme(orignalSchema)
 		}
 
-		if host!=orignalHost {
+		if host != orignalHost {
 			req.SetHost(orignalHost)
 		}
 	}

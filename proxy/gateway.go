@@ -101,7 +101,6 @@ func (module *GatewayModule) Setup(cfg *Config) {
 
 	module.registerAPI("")
 
-	module.handleConfigureChange()
 }
 
 func (module *GatewayModule) handleConfigureChange(){
@@ -127,9 +126,9 @@ func (module *GatewayModule) handleConfigureChange(){
 
 		if cCfg!=nil{
 			//TODO diff previous and current config
-			newConfig:= []common.FlowConfig{}
-			err:=cCfg.Unpack(&newConfig)
-			if err!=nil{
+			newConfig := []common.FlowConfig{}
+			err := cCfg.Unpack(&newConfig)
+			if err != nil {
 				log.Error(err)
 				return
 			}
@@ -138,10 +137,11 @@ func (module *GatewayModule) handleConfigureChange(){
 				common.RegisterFlowConfig(v)
 			}
 
-			////just in case
-			//for _,v:=range module.entryPoints{
-			//	v.RefreshTracingFlow()
-			//}
+			//just in case
+			for _, v := range module.entryPoints {
+				v.RefreshDefaultFlow()
+				v.RefreshTracingFlow()
+			}
 		}
 	})
 
@@ -223,6 +223,11 @@ func (module *GatewayModule) handleConfigureChange(){
 			entryPoints := map[string]*entry.Entrypoint{}
 
 			for _, v := range newConfig {
+
+				if v.ID == "" && v.Name != "" {
+					v.ID = v.Name
+				}
+
 				oldC, ok := old[v.ID]
 				if ok {
 					existKeys[v.ID] = v.ID
@@ -333,6 +338,8 @@ func (module *GatewayModule) Start() error {
 			panic(err)
 		}
 	}
+
+	module.handleConfigureChange()
 
 	return nil
 }

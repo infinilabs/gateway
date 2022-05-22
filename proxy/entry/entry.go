@@ -153,6 +153,10 @@ func (this *Entrypoint) Start() error {
 		this.config.MaxIdleWorkerDurationSeconds = 10
 	}
 
+	//if this.config.TCPKeepaliveSeconds <= 0 {
+	//	this.config.TCPKeepaliveSeconds = 10
+	//}
+
 	if this.config.WriteTimeout <= 0 {
 		this.config.WriteTimeout = 30
 	}
@@ -220,6 +224,11 @@ func (this *Entrypoint) Start() error {
 			SessionTicketsDisabled:   false,
 			ClientSessionCache:       tls.NewLRUClientSessionCache(128),
 			CipherSuites: []uint16{
+				//tls.TLS_AES_128_GCM_SHA256,
+				//tls.TLS_AES_256_GCM_SHA384,
+				//tls.TLS_RSA_WITH_AES_128_CBC_SHA,
+				//tls.TLS_RSA_WITH_AES_128_CBC_SHA256,
+				//tls.TLS_RSA_WITH_AES_256_CBC_SHA,
 				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
 				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 				tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305, // Go 1.8 only
@@ -234,7 +243,7 @@ func (this *Entrypoint) Start() error {
 		key=this.config.TLSConfig.TLSKeyFile
 
 		log.Trace("using tls connection")
-		
+
 		if cert != "" && key != "" {
 			log.Debug("using pre-defined cert files")
 
@@ -381,6 +390,18 @@ func (this *Entrypoint) RefreshTracingFlow() {
 			this.router.TraceHandler = common.GetFlowProcess(this.routerConfig.TracingFlow)
 			if this.server != nil {
 				this.server.TraceHandler = this.router.TraceHandler
+			}
+		}
+	}
+}
+
+func (this *Entrypoint) RefreshDefaultFlow() {
+
+	if this.router != nil {
+		if this.router.DefaultFlow != "" {
+			this.router.NotFound = common.GetFlowProcess(this.routerConfig.DefaultFlow)
+			if this.server != nil {
+				this.server.Handler = this.router.NotFound
 			}
 		}
 	}
