@@ -7,6 +7,7 @@ import (
 	"infini.sh/framework/core/env"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/stats"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	api2 "infini.sh/gateway/api"
 	"infini.sh/gateway/common"
@@ -206,30 +207,34 @@ func (module *GatewayModule) handleConfigureChange(){
 			}
 		}()
 
-		if cCfg!=nil{
-			newConfig:=[]common.EntryConfig{}
-			err:=cCfg.Unpack(&newConfig)
-			if err!=nil{
+		if cCfg != nil {
+			newConfig := []common.EntryConfig{}
+			err := cCfg.Unpack(&newConfig)
+			if err != nil {
 				log.Error(err)
 				return
 			}
 
 			//each entry should reuse port
-			old:=module.entryPoints
-			skipKeys:=map[string]string{}
+			//collect old entry with same id and same port
+			old := module.entryPoints
+			existKeys := map[string]string{}
+			skipKeys := map[string]string{}
 			entryPoints := map[string]*entry.Entrypoint{}
+
 			for _, v := range newConfig {
-				oldC,ok:=old[v.ID]
-				if ok{
+				oldC, ok := old[v.ID]
+				if ok {
+					existKeys[v.ID] = v.ID
 					config := oldC.GetConfig()
-					if config.Equals(&v){
-						skipKeys[v.RouterConfigName]=v.RouterConfigName
+					if config.Equals(&v) {
+						skipKeys[v.ID] = v.ID
 						continue
 					}
 				}
 
-				if !module.DisableReusePortByDefault{
-					v.NetworkConfig.ReusePort=true
+				if !module.DisableReusePortByDefault {
+					v.NetworkConfig.ReusePort = true
 				}
 				e := entry.NewEntrypoint(v)
 				entryPoints[v.ID] = e
@@ -276,6 +281,8 @@ func (module *GatewayModule) loadEntryPoints()map[string]*entry.Entrypoint {
 		panic(err)
 	}
 
+	log.Trace(util.ToJson(entryConfigs, true))
+
 	ok, err = env.ParseConfig("flow", &flowConfigs)
 	if ok && err != nil {
 		panic(err)
@@ -298,12 +305,16 @@ func (module *GatewayModule) loadEntryPoints()map[string]*entry.Entrypoint {
 		}
 	}
 
+	log.Trace("num of entry configs:", len(entryConfigs))
 	entryPoints := map[string]*entry.Entrypoint{}
 	for _, v := range entryConfigs {
-		if !module.DisableReusePortByDefault{
-			v.NetworkConfig.ReusePort=true
+		if !module.DisableReusePortByDefault {
+			v.NetworkConfig.ReusePort = true
 		}
 		e := entry.NewEntrypoint(v)
+		if v.ID == "" && v.Name != "" {
+			v.ID = v.Name
+		}
 		entryPoints[v.ID] = e
 	}
 	return entryPoints
@@ -312,9 +323,12 @@ func (module *GatewayModule) loadEntryPoints()map[string]*entry.Entrypoint {
 
 func (module *GatewayModule) Start() error {
 
+	log.Trace("num of entry_points:", len(module.entryPoints))
 	for _, v := range module.entryPoints {
 		log.Trace("start entry:", v.String())
 		err := v.Start()
+		log.Trace("finished start entry:", v.String(), ",err:", err)
+
 		if err != nil {
 			panic(err)
 		}
