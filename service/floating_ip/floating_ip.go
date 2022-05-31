@@ -64,6 +64,7 @@ func (module FloatingIPPlugin) Setup(cfg *config.Config) {
 
 	if !util.IsRootUser(){
 		log.Error("floating_ip need to run with root user")
+		floatingIPConfig.Enabled = false
 		return
 	}
 
