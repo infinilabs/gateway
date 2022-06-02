@@ -8,11 +8,11 @@ entry:
     max_concurrency: 10000
     network:
       binding: 0.0.0.0:8000
-#    tls:
-#      enabled: true
-#      cert_file: /etc/elasticsearch/certs/es7.crt
-#      key_file: /etc/elasticsearch/certs/es7-key.pem
-#      skip_insecure_verify: false
+    tls:
+      enabled: true
+      cert_file: /etc/elasticsearch/certs/es7.crt
+      key_file: /etc/elasticsearch/certs/es7-key.pem
+      skip_insecure_verify: false
 flow:
   - name: primary-write-flow
     filter:
@@ -23,28 +23,35 @@ flow:
             interval: 10s
   - name: request_logging
     filter:
-      - record:
-          stdout: true
-          filename: requests.txt
-      - context_filter:
-          context: _ctx.request.path
-          exclude:
-            - /favicon.ico
+#      - record:
+#          stdout: true
+#          filename: requests.txt
       - logging:
           queue_name: request_logging
           max_request_body_size: 102400
           max_response_body_size: 102400
-
+#          when: #>1s or none-200 requests will be logged
+#            or:
+#              - not:
+#                  or:
+#                    - equals:
+#                        _ctx.request.path: "/favicon.ico"
+#                    - equals:
+#                        _ctx.response.status: 200
+#                    - in:
+#                        _ctx.request.path: ["/sw.js"]
+#              - range:
+#                  _ctx.elapsed.gte: 1000
 router:
   - name: my_router
     default_flow: primary-write-flow
     tracing_flow: request_logging
 
 elasticsearch:
-  - name: es-server
+  - name: es-server #the business server
     enabled: true
     endpoints:
-      - https://10.1.1.1:9200
+      - https://10.129.1.1:9200
     basic_auth:
       username: admin
       password: admin
@@ -53,6 +60,15 @@ elasticsearch:
       refresh:
         enabled: true
         interval: 60s
+  - name: logging-server #the logging server
+    enabled: true
+    endpoints:
+      - https://10.129.1.1:9200
+    basic_auth:
+      username: admin
+      password: admin
+    discovery:
+      enabled: false
 
 pipeline:
   - name: indexing_merge
@@ -61,8 +77,8 @@ pipeline:
     processor:
       - indexing_merge:
           input_queue: "request_logging"
-          elasticsearch: "es-server"
-          index_name: ".infini_gateway_requests"
+          elasticsearch: "logging-server"
+          index_name: "gateway_requests"
           output_queue:
             name: "gateway_requests"
             label:
@@ -83,4 +99,4 @@ pipeline:
           queues:
             type: indexing_merge
           when:
-            cluster_available: [ "es-server" ]
+            cluster_available: [ "logging-server" ]
