@@ -507,7 +507,7 @@ READ_DOCS:
 		}
 		if time.Since(lastCommit) > idleDuration && mainBuf.GetMessageSize() > 0 {
 			if global.Env().IsDebug {
-				log.Debug("hit idle timeout:",time.Since(lastCommit),",msg size:", mainBuf.GetMessageSize(),",msg count:", mainBuf.GetMessageCount())
+				log.Trace("hit idle timeout:", time.Since(lastCommit), ",msg size:", mainBuf.GetMessageSize(), ",msg count:", mainBuf.GetMessageCount())
 			}
 			goto CLEAN_BUFFER
 		}
