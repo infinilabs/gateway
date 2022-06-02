@@ -1,0 +1,87 @@
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 10000
+    network:
+      binding: 0.0.0.0:8000
+flow:
+  - name: primary-write-flow
+    filter:
+      - http:
+#          schema: "https" #https or http
+          schema: "http" #https or http
+          hosts:
+            - "localhost:8080"
+#            - "192.168.200.209:9243"
+#            - "192.168.200.210:9243"
+#            - "192.168.200.211:9243"
+  - name: request_logging
+    filter:
+      - logging:
+          queue_name: request_logging
+          max_request_body_size: 10240
+          max_response_body_size: 10240
+          when: #>1s or none-200 requests will be logged
+            or:
+              - not:
+                  or:
+                    - equals:
+                        _ctx.request.path: "/favicon.ico"
+                    - equals:
+                        _ctx.response.status: 200
+                    - in:
+                        _ctx.request.path: ["/sw.js"]
+              - range:
+                  _ctx.elapsed.gte: 1000
+router:
+  - name: my_router
+    default_flow: primary-write-flow
+    tracing_flow: request_logging
+
+elasticsearch:
+  - name: logging-server
+    enabled: true
+    endpoints:
+      - http://192.168.3.188:9206
+#      - https://d6794e84d46e4b7db21d364de10620c4.192.168.200.209.ip.es.io:9243
+    basic_auth:
+      username: elastic
+      password: ZhthfiDoKsi0sRnUSSFVbqPE
+    discovery:
+      enabled: false
+
+pipeline:
+  - name: indexing_merge
+    auto_start: true
+    keep_running: true
+    processor:
+      - indexing_merge:
+          input_queue: "request_logging"
+          elasticsearch: "logging-server"
+          index_name: "infini_gateway_requests"
+          output_queue:
+            name: "gateway_requests"
+            label:
+              tag: "request_logging"
+          worker_size: 1
+          bulk_size_in_mb: 10
+  - name: logging_requests
+    auto_start: true
+    keep_running: true
+    processor:
+      - bulk_indexing:
+          bulk:
+            compress: true
+            batch_size_in_mb: 10
+            batch_size_in_docs: 5000
+          consumer:
+            fetch_max_messages: 100
+          queues:
+            type: indexing_merge
+          when:
+            cluster_available: [ "logging-server" ]
+
