@@ -173,7 +173,11 @@ func (module *GatewayModule) handleConfigureChange(){
 
 			keys:=map[string]string{}
 			for _, v := range newConfig {
-				keys[v.ID]=v.ID
+				if v.ID == "" && v.Name != "" {
+					v.ID = v.Name
+				}
+
+				keys[v.ID] = v.ID
 				common.RegisterRouterConfig(v)
 			}
 

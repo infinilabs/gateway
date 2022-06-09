@@ -86,97 +86,6 @@ func GetFlowProcess(flowID string) func(ctx *fasthttp.RequestCtx) {
 	return flow.Process
 }
 
-////get filter plugins
-//func GetFilter(name string) pipeline.Filter {
-//	v, ok := filterPluginTypes[name]
-//	if !ok {
-//		panic(errors.Errorf("filter [%s] not found", name))
-//	}
-//	return v
-//}
-//func GetFilterInstanceWithConfig(cfg *FilterConfig) pipeline.Filter {
-//	if global.Env().IsDebug {
-//		log.Tracef("get filter instance [%v] [%v]", cfg.Name, cfg.ID)
-//	}
-//
-//	if cfg.ID == "" {
-//		panic(errors.Errorf("invalid filter config [%v] [%v] is not set", cfg.Name, cfg.ID))
-//	}
-//
-//	v1, ok := filterInstances[cfg.ID]
-//	if ok {
-//		if global.Env().IsDebug {
-//			log.Debugf("hit filter instance [%v] [%v], return", cfg.Name, cfg.ID)
-//		}
-//		return v1
-//	}
-//
-//	if cfg.Name == "" {
-//		panic(errors.Errorf("the type of filter [%v] [%v] is not set", cfg.Name, cfg.ID))
-//	}
-//
-//	filter := GetFilter(cfg.Name)
-//	t := reflect.ValueOf(filter).Type()
-//	v := reflect.New(t).Elem()
-//
-//	f := v.FieldByName("Data")
-//	if f.IsValid() && f.CanSet() && f.Kind() == reflect.Map {
-//		f.Set(reflect.ValueOf(cfg.Parameters))
-//	}
-//	x := v.Interface().(pipeline.Filter)
-//	filterInstances[cfg.ID] = x
-//	return x
-//}
-//
-//func GetFilterInstanceWithConfigV2(filterName string, cfg *config.Config) pipeline.Filter {
-//	if global.Env().IsDebug {
-//		log.Debugf("get filter [%v]", filterName)
-//	}
-//
-//	if !cfg.HasField("_meta:config_id") {
-//		panic(errors.Errorf("invalid filter config [%v] [%v] is not set", filterName, cfg))
-//	}
-//	id, err := cfg.String("_meta:config_id", -1)
-//	if err != nil {
-//		panic(err)
-//	}
-//
-//	v1, ok := filterInstances[id]
-//	if ok {
-//		if global.Env().IsDebug {
-//			log.Debugf("hit filter instance [%v] [%v], return", filterName, id)
-//		}
-//		return v1
-//	}
-//
-//	////check contional
-//	//if cfg.HasField("when"){
-//	//
-//	//}
-//
-//	parameters := map[string]interface{}{}
-//	cfg.Unpack(&parameters)
-//
-//	filter := GetFilter(filterName)
-//	t := reflect.ValueOf(filter).Type()
-//	v := reflect.New(t).Elem()
-//
-//	f := v.FieldByName("Data")
-//	if f.IsValid() && f.CanSet() && f.Kind() == reflect.Map {
-//		f.Set(reflect.ValueOf(parameters))
-//	}
-//	x := v.Interface().(pipeline.Filter)
-//
-//	filterInstances[id] = x
-//	return x
-//}
-//var filterInstances map[string]pipeline.Filter = make(map[string]pipeline.Filter)
-//func RegisterFilterPlugin(filter pipeline.Filter) {
-//	log.Debug("register filter: ", filter.Name())
-//	filterPluginTypes[filter.Name()] = filter
-//}
-//var filterPluginTypes map[string]pipeline.Filter = make(map[string]pipeline.Filter)
-
 var flows = &sync.Map{}
 
 var routingRules map[string]RuleConfig = make(map[string]RuleConfig)
@@ -195,6 +104,11 @@ func ClearFlowCache(flow string) {
 }
 
 func RegisterFlowConfig(flow FlowConfig) {
+
+	if flow.ID == "" && flow.Name != "" {
+		flow.ID = flow.Name
+	}
+
 	flowConfigs[flow.ID] = flow
 	flowConfigs[flow.Name] = flow
 	ClearFlowCache(flow.ID)
