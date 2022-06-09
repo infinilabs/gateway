@@ -49,7 +49,7 @@ type Entrypoint struct {
 }
 
 func (this *Entrypoint) String() string {
-	return fmt.Sprintf("%v/%v",this.config.Name,this.config.ID)
+	return fmt.Sprintf("%v", this.config.Name)
 }
 
 func (this *Entrypoint) Start() error {
