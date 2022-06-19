@@ -37,6 +37,7 @@ pipeline:
     processor:
       - bulk_indexing:
           elasticsearch: target
+          max_worker_size: 500
           bulk:
             compress: true
             batch_size_in_mb: 20
