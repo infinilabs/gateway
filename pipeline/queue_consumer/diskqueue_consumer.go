@@ -53,7 +53,7 @@ type Config struct {
 }
 
 func init()  {
-	//pipe.RegisterProcessorPlugin("queue_consumer", queue_consumer.New)
+	pipeline.RegisterProcessorPlugin("queue_consumer", New)
 }
 
 func New(c *config.Config) (pipeline.Processor, error) {
