@@ -72,14 +72,40 @@ func (module ForceMergeModule) Setup(cfg *config.Config) {
 
 type ForceMergeTaskItem struct {
 	Elasticsearch string
-	Index string
+	Index         string
+}
+
+func mustGetV() {
+
 }
 
 func forceMerge(client elastic.API, index string) {
 
 	retry := 0
-	GET_STATS:
+GET_STATS:
 	stats, err := client.GetIndexStats(index)
+
+	currentMergeV, err := stats.GetValue("_all.primaries.merges.current")
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	currentMerge := util.InterfaceToInt(currentMergeV)
+
+	segmentsCountV, err := stats.GetValue("_all.primaries.segments.count")
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	segmentsCount := util.InterfaceToInt(segmentsCountV)
+
+	storeSizeV, err := stats.GetValue("_all.primaries.store.size_in_bytes")
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	storeSize := util.InterfaceToInt(storeSizeV)
+
 	log.Debug(stats)
 	if err != nil {
 		log.Errorf("index [%v] error on get index stats, retry, %v", index, err)
@@ -93,8 +119,8 @@ func forceMerge(client elastic.API, index string) {
 	}
 
 FORCE_MERGE:
-	if (stats.All.Primary.Segments.Count) > mergeConfig.MinSegmentCount && stats.All.Primary.Merges.Current == 0 {
-		log.Infof("index [%v] has [%v] segments, going to do force_merge", index, stats.All.Primary.Segments.Count)
+	if (segmentsCount) > mergeConfig.MinSegmentCount && currentMerge == 0 {
+		log.Infof("index [%v] has [%v] segments, going to do force_merge", index, segmentsCount)
 		err := client.Forcemerge(index, mergeConfig.MaxSegmentCount)
 		if err != nil {
 			log.Error(err)
@@ -107,7 +133,7 @@ FORCE_MERGE:
 			}
 			goto GET_STATS
 		}
-	} else if stats.All.Primary.Segments.Count == 0 && stats.All.Primary.Store.SizeInBytes == 0 {
+	} else if segmentsCount == 0 && storeSize == 0 {
 		log.Infof("error on get stats, index [%v] only has 0 segments, retry, %v", index, stats)
 		ok, err := client.IndexExists(index)
 		if err != nil {
@@ -125,12 +151,12 @@ FORCE_MERGE:
 			return
 		}
 		goto GET_STATS
-	} else if stats.All.Primary.Merges.Current > 0 {
-		log.Infof("index [%v] has [%v] segments, are still merging", index, stats.All.Primary.Segments.Count)
-	} else if stats.All.Primary.Segments.Count > mergeConfig.MinSegmentCount {
-		log.Infof("index [%v] has [%v] segments, are still merging", index, stats.All.Primary.Segments.Count)
+	} else if currentMerge > 0 {
+		log.Infof("index [%v] has [%v] segments, are still merging", index, segmentsCount)
+	} else if segmentsCount > mergeConfig.MinSegmentCount {
+		log.Infof("index [%v] has [%v] segments, are still merging", index, segmentsCount)
 	} else {
-		log.Infof("index [%v] only has [%v] segments, skip force_merge", index, stats.All.Primary.Segments.Count)
+		log.Infof("index [%v] only has [%v] segments, skip force_merge", index, segmentsCount)
 		return
 	}
 
@@ -163,7 +189,7 @@ WAIT_MERGE:
 		//TODO
 	}
 
-	if stats.All.Primary.Segments.Count > mergeConfig.MaxSegmentCount+50 {
+	if segmentsCount > mergeConfig.MaxSegmentCount+50 {
 		//TODO, merge is not started
 		time.Sleep(60 * time.Second)
 		retry++
@@ -173,9 +199,9 @@ WAIT_MERGE:
 		goto FORCE_MERGE
 	}
 
-	if stats.All.Primary.Merges.Current > 0 {
-		log.Infof("index %v still have %v merges are running.", index, stats.All.Primary.Merges.Current)
-		if stats.All.Primary.Merges.Current > 10 {
+	if currentMerge > 0 {
+		log.Infof("index %v still have %v merges are running.", index, currentMerge)
+		if currentMerge > 10 {
 			time.Sleep(60 * time.Second)
 		} else {
 			time.Sleep(10 * time.Second)

@@ -320,7 +320,7 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 	for k,v:=range docs{
 		queueConfig := &queue.Config{}
 		queueConfig.Source = "dynamic"
-		queueConfig.Labels = map[string]interface{}{}
+		queueConfig.Labels = util.MapStr{}
 		queueConfig.Labels["type"] = "scroll_docs"
 		queueConfig.Name=outputQueueName+util.ToString(k)
 		queue.RegisterConfig(queueConfig.Name, queueConfig)

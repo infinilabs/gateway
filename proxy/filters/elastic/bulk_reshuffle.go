@@ -295,7 +295,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 			queueConfig = &queue.Config{}
 			queueConfig.Source = "dynamic"
-			queueConfig.Labels = map[string]interface{}{}
+			queueConfig.Labels = util.MapStr{}
 			queueConfig.Labels["type"] = "bulk_reshuffle"
 			queueConfig.Labels["level"] = reshuffleType
 			queueConfig.Labels["elasticsearch"] = esConfig.ID

@@ -1,0 +1,71 @@
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 200000
+    network:
+      binding: 0.0.0.0:8000
+
+flow:
+  - name: async_bulk
+    filter:
+      - bulk_reshuffle:
+          when:
+            contains:
+              _ctx.request.path: /_bulk
+          elasticsearch: dev
+          level: index
+          partition_size: 3
+          fix_null_id: true
+      - elasticsearch:
+          elasticsearch: dev  #elasticsearch configure reference name
+          max_connection_per_node: 1000 #max tcp connection to upstream, default for all nodes
+          max_response_size: -1 #default for all nodes
+          balancer: weight
+          refresh: # refresh upstream nodes list, need to enable this feature to use elasticsearch nodes auto discovery
+            enabled: true
+            interval: 60s
+          filter:
+            roles:
+              exclude:
+                - master
+router:
+  - name: my_router
+    default_flow: async_bulk
+
+elasticsearch:
+  - name: dev
+    enabled: true
+    endpoints:
+#     - http://192.168.3.98:9200
+     - http://192.168.3.188:9216
+
+pipeline:
+  - name: bulk_request_ingest
+    auto_start: true
+    keep_running: true
+    retry_delay_in_ms: 1000
+    processor:
+      - disorder_bulk_indexing:
+          idle_timeout_in_seconds: 10
+          max_connection_per_node: 1000
+          worker_size: 3
+          bulk:
+            compress: true
+            batch_size_in_mb: 10
+            batch_size_in_docs: 50000
+          queues:
+            type: bulk_reshuffle
+          pause_when:
+            and:
+              - in:
+                  _meta.elasticsearch.$[[labels.elasticsearch]].index.$[[labels.index]].settings.index.routing.allocation.require.box_type: ["warm","cold"]
+              - range:
+                  _meta.elasticsearch.$[[labels.elasticsearch]].index.$[[labels.index]].stats._all.primaries.merges.current.gt: 3
+#              - equals:
+#                  _meta.elasticsearch.$[[labels.elasticsearch]].index.$[[labels.index]].settings.index.blocks.write: true
+          when:
+            cluster_available: [ "dev" ]
