@@ -5,11 +5,11 @@ progress_bar.enabled: true
 elasticsearch:
   - name: source
     enabled: true
-    endpoint: http://192.168.3.188:9206
+    endpoint: http://localhost:9200
   - name: target
     enabled: true
     endpoints:
-      - http://192.168.3.188:9206
+      - http://localhost:9200
 
 pipeline:
   - name: source_scroll
@@ -18,12 +18,12 @@ pipeline:
       - es_scroll:
           slice_size: 20
           batch_size: 5000
-          indices: "filebeat*"
+          indices: "test*"
           elasticsearch: source
           output_queue: source_index_dump
           partition_size: 20
-          sort_type: "asc"#desc,asc
-          sort_field: "@timestamp"
+#          sort_type: "asc"#desc,asc
+#          sort_field: "@timestamp"
           scroll_time: "5m"
 #          query_string: "service.type:nginx"
           index_rename:
@@ -35,9 +35,10 @@ pipeline:
     auto_start: true
     keep_running: true
     processor:
-      - bulk_indexing:
+      - disorder_bulk_indexing:
           elasticsearch: target
-          max_worker_size: 500
+          max_worker_size: 10
+          detect_interval: 100
           bulk:
             compress: true
             batch_size_in_mb: 20
