@@ -77,14 +77,14 @@ flow:
                   elasticsearch: "primary"
               - drop:
             else:
-              - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
-                  fix_null_id: true
-                  fix_null_type: true
-                  default_type: _doc
-                  type_rename:
-                    "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
-                  remove_pipeline: true
-                  generate_enhanced_id: true
+#              - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
+#                  fix_null_id: true
+#                  fix_null_type: true
+#                  default_type: _doc
+#                  type_rename:
+#                    "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
+#                  remove_pipeline: true
+#                  generate_enhanced_id: true
               - elasticsearch: #集群可用，直接处理请求
                   elasticsearch: "primary"
                   max_connection_per_node: 1000
@@ -139,14 +139,14 @@ flow:
           - sleep:
               sleep_in_million_seconds: 5000
           - drop:
-      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
-          fix_null_id: true
-          fix_null_type: true
-          default_type: _doc
-          type_rename:
-            "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
-          remove_pipeline: true
-          generate_enhanced_id: true
+#      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
+#          fix_null_id: true
+#          fix_null_type: true
+#          default_type: _doc
+#          type_rename:
+#            "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
+#          remove_pipeline: true
+#          generate_enhanced_id: true
       - elasticsearch:
           elasticsearch: "primary"
           max_connection_per_node: 1000
@@ -200,14 +200,14 @@ flow:
       - flow:
           flows:
             - set-auth-for-backup-flow
-      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
-          fix_null_id: true
-          fix_null_type: true
-          default_type: _doc
-          type_rename:
-            "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
-          remove_pipeline: true
-          generate_enhanced_id: true
+#      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
+#          fix_null_id: true
+#          fix_null_type: true
+#          default_type: _doc
+#          type_rename:
+#            "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
+#          remove_pipeline: true
+#          generate_enhanced_id: true
       - elasticsearch:
           elasticsearch: "backup"
           max_connection_per_node: 1000
@@ -271,8 +271,8 @@ flow:
 #          default_type: _doc
 #          type_rename:
 #            "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
-#          #              index_rename:
-#          #                test: "test-backup"
+#          index_rename:
+#            test-10: "test-backup"
 #          remove_pipeline: true
 #          generate_enhanced_id: true
 #          when:
@@ -319,8 +319,8 @@ flow:
 #          default_type: _doc
 #          type_rename:
 #          "*": "_doc" #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
-#          #              index_rename:
-#          #                test: "test-backup"
+#          index_rename:
+#            test-10: "test-backup"
 #          remove_pipeline: true # pipeline should be enabled manually, please ensure each cluster has the same setup
 #          generate_enhanced_id: true
 #          when:
@@ -338,7 +338,7 @@ flow:
           elasticsearch: "backup"
           queue_name_prefix: "async_bulk"
           level: cluster #cluster,node,index,shard
-          partition_size: 3
+#          partition_size: 3
           fix_null_id: true
           tag_on_success: ["commit_message_allowed"]
       - elasticsearch:
@@ -456,7 +456,7 @@ elasticsearch:
   - name: backup
     enabled: true
     endpoints:
-      - http://192.168.3.188:9206
+      - http://localhost:9200
 #      - http://192.168.3.98:9200
     basic_auth:
       username: elastic
@@ -472,7 +472,7 @@ elasticsearch:
     enabled: true
     endpoints:
 #      - http://192.168.3.98:9200
-      - http://192.168.3.188:9211
+      - http://localhost:9200
     basic_auth:
       username: test
       password: testtest
@@ -582,6 +582,9 @@ pipeline:
             batch_size_in_docs: 5000
           consumer:
             fetch_max_messages: 100
+          max_worker_size: 200
+          num_of_slices: 20
+#          slices: [0]
           waiting_after:
             - "backup-failure"
           queues:
@@ -605,8 +608,8 @@ disk_queue:
   retention:
     max_num_of_local_files: 3
   upload_to_s3: false
-  compress_on_message_payload:
-    enabled: true
+#  compress_on_message_payload:
+#    enabled: true
   s3:
     server: my_blob_store
     location: cn-beijing-001

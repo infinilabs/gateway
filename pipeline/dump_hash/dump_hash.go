@@ -61,7 +61,7 @@ type Config struct {
 	HashFunc           string `config:"hash_func"`
 	ScrollTime         string `config:"scroll_time"`
 	Fields             string `config:"fields"`
-	SortDocumentFields bool   `config:"sort_document_fields"`
+	//SortDocumentFields bool   `config:"sort_document_fields"`
 }
 
 func init()  {

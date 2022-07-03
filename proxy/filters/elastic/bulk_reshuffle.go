@@ -414,7 +414,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 			if len(data) > 0 {
 
-				cfg, ok := queue.GetConfig(x)
+				cfg, ok := queue.GetConfigByKey(x)
 				if !ok {
 					panic(errors.Errorf("queue config [%v] not exists", x))
 				}
@@ -494,21 +494,21 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 func batchUpdateJson(scannedByte []byte, action string, set, del map[string]string) (newBytes []byte, err error) {
 
-	newBytes = make([]byte, len(scannedByte))
-	copy(newBytes, scannedByte)
+	//newBytes = make([]byte, len(scannedByte))
+	//copy(newBytes, scannedByte)
 
 	for k, _ := range del {
-		newBytes = jsonparser.Delete(newBytes, action, k)
+		scannedByte = jsonparser.Delete(scannedByte, action, k)
 	}
 
 	for k, v := range set {
-		newBytes, err = jsonparser.Set(newBytes, []byte("\""+v+"\""), action, k)
+		scannedByte, err = jsonparser.Set(scannedByte, []byte("\""+v+"\""), action, k)
 		if err != nil {
-			return newBytes, err
+			return scannedByte, err
 		}
 	}
 
-	return newBytes, err
+	return scannedByte, err
 }
 
 func updateJsonWithNewIndex(action string, scannedByte []byte, index, typeName, id string) (newBytes []byte, err error) {

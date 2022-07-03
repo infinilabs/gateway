@@ -12,10 +12,10 @@ entry:
 flow:
   - name: async_bulk
     filter:
-      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
-          default_type: _doc
-          type_rename:
-            "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
+#      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
+#          default_type: _doc
+#          type_rename:
+#            "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
       - bulk_reshuffle:
           when:
             contains:

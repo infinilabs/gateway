@@ -63,12 +63,12 @@ flow:
                   elasticsearch: "primary"
               - drop:
             else:
-              #- bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
-              #    fix_null_id: true
-              #    fix_null_type: true
-              #    default_type: _doc
-              #    type_rename:
-              #      "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
+#              - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
+#                  fix_null_id: true
+#                  fix_null_type: true
+#                  default_type: _doc
+#                  type_rename:
+#                    "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
               #    remove_pipeline: true
               #    generate_enhanced_id: true
               - elasticsearch: #集群可用，直接处理请求
@@ -125,12 +125,12 @@ flow:
           - sleep:
               sleep_in_million_seconds: 5000
           - drop:
-      #- bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
-      #    fix_null_id: true
-      #    fix_null_type: true
-      #    default_type: _doc
-      #    type_rename:
-      #      "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
+#      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
+#          fix_null_id: true
+#          fix_null_type: true
+#          default_type: _doc
+#          type_rename:
+#            "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
       #    remove_pipeline: true
       #    generate_enhanced_id: true
       - elasticsearch:
@@ -186,14 +186,16 @@ flow:
       - flow:
           flows:
             - set-auth-for-backup-flow
-      #- bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
-      #    fix_null_id: true
-      #    fix_null_type: true
-      #    default_type: _doc
-      #    type_rename:
-      #      "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
-      #    remove_pipeline: true
-      #    generate_enhanced_id: true
+#      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
+#          fix_null_id: true
+#          fix_null_type: true
+#          default_type: _doc
+#          type_rename:
+#            "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
+#          index_rename:
+#            test-10: "test-backup"
+#      #    remove_pipeline: true
+#      #    generate_enhanced_id: true
       - elasticsearch:
           elasticsearch: "backup"
           max_connection_per_node: 1000
@@ -257,13 +259,13 @@ flow:
 #          default_type: _doc
 #          type_rename:
 #            "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
-#          #              index_rename:
-#          #                test: "test-backup"
-#          remove_pipeline: true
-#          generate_enhanced_id: true
-#          when:
-#            contains:
-#              _ctx.request.path: /_bulk
+#          index_rename:
+#            test-10: "test-backup"
+##          remove_pipeline: true
+##          generate_enhanced_id: true
+##          when:
+##            contains:
+##              _ctx.request.path: /_bulk
       - elasticsearch:
           elasticsearch: "backup"
           max_connection_per_node: 1000
@@ -305,13 +307,13 @@ flow:
 #          default_type: _doc
 #          type_rename:
 #          "*": "_doc" #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
-#          #              index_rename:
-#          #                test: "test-backup"
-#          remove_pipeline: true # pipeline should be enabled manually, please ensure each cluster has the same setup
-#          generate_enhanced_id: true
-#          when:
-#            contains:
-#              _ctx.request.path: /_bulk
+#          index_rename:
+#            test-10: "test-backup"
+##          remove_pipeline: true # pipeline should be enabled manually, please ensure each cluster has the same setup
+##          generate_enhanced_id: true
+##          when:
+##            contains:
+##              _ctx.request.path: /_bulk
 #      - record:
 #          stdout: true
       - flow:
@@ -323,9 +325,9 @@ flow:
               _ctx.request.path: /_bulk
           elasticsearch: "backup"
           queue_name_prefix: "async_bulk"
-          skip_info_missing: true
-          level: node #cluster,node,index,shard
-          #partition_size: 3
+          skip_info_missing: false
+          level: cluster #cluster,node,index,shard
+          partition_size: 3
           fix_null_id: true
           tag_on_success: ["commit_message_allowed"]
       - elasticsearch:
@@ -444,6 +446,8 @@ elasticsearch:
     basic_auth:
       username: elastic
       password: xxx
+    #    traffic_control:
+    #      max_qps_per_node: 1000
     discovery:
       enabled: true
       refresh:
@@ -558,9 +562,9 @@ pipeline:
             cluster_available: [ "backup" ]
 
 disk_queue:
-  sync_every_records: 10000
-  sync_timeout_in_ms: 10000
+#  sync_every_records: 10000
+#  sync_timeout_in_ms: 10000
   retention:
     max_num_of_local_files: 3
-  compress_on_message_payload:
-    enabled: true
+#  compress_on_message_payload:
+#    enabled: true

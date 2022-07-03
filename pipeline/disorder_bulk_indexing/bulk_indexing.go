@@ -197,41 +197,41 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 						return
 					}
 
-					log.Tracef("inflight queues: %v",util.MapLength(&processor.inFlightQueueConfigs))
+					log.Tracef("inflight queues: %v", util.MapLength(&processor.inFlightQueueConfigs))
 
-					if global.Env().IsDebug{
+					if global.Env().IsDebug {
 						processor.inFlightQueueConfigs.Range(func(key, value interface{}) bool {
-							log.Tracef("inflight queue:%v",key)
+							log.Tracef("inflight queue:%v", key)
 							return true
 						})
 					}
 
-					cfgs:=queue.GetQueuesFilterByLabel(processor.config.Queues)
-					for _,v:=range cfgs{
+					cfgs := queue.GetConfigByLabels(processor.config.Queues)
+					for _, v := range cfgs {
 						if c.IsCanceled() {
 							return
 						}
 						//if have depth and not in flight
-						if queue.HasLag(v){
-							_,ok:=processor.inFlightQueueConfigs.Load(v.Id)
-							if !ok{
-								log.Tracef("detecting new queue: %v",v.Name)
-								processor.HandleQueueConfig(v,c)
+						if queue.HasLag(v) {
+							_, ok := processor.inFlightQueueConfigs.Load(v.Id)
+							if !ok {
+								log.Tracef("detecting new queue: %v", v.Name)
+								processor.HandleQueueConfig(v, c)
 							}
 						}
 					}
-					if processor.config.DetectIntervalInMs>0{
-						time.Sleep(time.Millisecond*time.Duration(processor.config.DetectIntervalInMs))
+					if processor.config.DetectIntervalInMs > 0 {
+						time.Sleep(time.Millisecond * time.Duration(processor.config.DetectIntervalInMs))
 					}
 				}
 			}(c)
 		}
-	}else{
-		cfgs:=queue.GetQueuesFilterByLabel(processor.config.Queues)
-		log.Debugf("filter queue by:%v, num of queues:%v",processor.config.Queues,len(cfgs))
-		for _,v:=range cfgs{
-			log.Tracef("checking queue: %v",v)
-			processor.HandleQueueConfig(v,c)
+	} else {
+		cfgs := queue.GetConfigByLabels(processor.config.Queues)
+		log.Debugf("filter queue by:%v, num of queues:%v", processor.config.Queues, len(cfgs))
+		for _, v := range cfgs {
+			log.Tracef("checking queue: %v", v)
+			processor.HandleQueueConfig(v, c)
 		}
 	}
 
@@ -418,12 +418,9 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.
 		processor.inFlightQueueConfigs.Delete(key)
 
 		//cleanup buffer before exit worker
-		continueNext :=processor.submitBulkRequest(tag,esClusterID,meta,host,bulkProcessor,mainBuf)
+		continueNext, err := processor.submitBulkRequest(tag, esClusterID, meta, host, bulkProcessor, mainBuf)
 		if !continueNext {
-			if global.Env().IsDebug {
-				log.Errorf("error between queue:[%v]", qConfig.Id)
-			}
-			log.Errorf("error in queue:[%v]", qConfig.Id)
+			log.Errorf("error in queue:[%v], err:%v", qConfig.Id, err)
 			if mainBuf.Buffer.Len() > 0 {
 				queue.Push(qConfig, mainBuf.Buffer.Bytes())
 			}
@@ -521,6 +518,14 @@ READ_DOCS:
 			panic(err)
 		}
 
+		log.Tracef("messages:%v, timeout:%v, err:%v", len(msg), timeout, err)
+
+		if len(msg) == 0 {
+			log.Tracef("0 messages found in queue:[%v]", qConfig.Name)
+			ctx.Failed()
+			return
+		}
+
 		if !timeout && len(msg) > 0 {
 
 			mainBuf.WriteMessageID("id")
@@ -538,9 +543,9 @@ READ_DOCS:
 				}
 
 				//submit request
-				continueRequest := processor.submitBulkRequest(tag, esClusterID, meta, host, bulkProcessor, mainBuf)
+				continueRequest, err := processor.submitBulkRequest(tag, esClusterID, meta, host, bulkProcessor, mainBuf)
 				if !continueRequest {
-					log.Errorf("error in queue:[%v]", qConfig.Id)
+					log.Errorf("error in queue:[%v], err:%v", qConfig.Id, err)
 					if mainBuf.Buffer.Len() > 0 {
 						queue.Push(qConfig, mainBuf.Buffer.Bytes())
 					}
@@ -550,11 +555,6 @@ READ_DOCS:
 				mainBuf.Reset()
 			}
 
-		} else if timeout {
-			//exit after timeout
-			if mainBuf.GetMessageCount() == 0 {
-				return
-			}
 		}
 
 		if time.Since(lastCommit) > idleDuration && mainBuf.GetMessageSize() > 0 {
@@ -570,9 +570,9 @@ CLEAN_BUFFER:
 	if mainBuf.GetMessageSize()>0 {
 		lastCommit = time.Now()
 		// check bulk result, if ok, then commit offset, or retry non-200 requests, or save failure offset
-		continueNext := processor.submitBulkRequest(tag, esClusterID, meta, host, bulkProcessor, mainBuf)
+		continueNext, err := processor.submitBulkRequest(tag, esClusterID, meta, host, bulkProcessor, mainBuf)
 		if !continueNext {
-			log.Errorf("error in queue:[%v]", qConfig.Id)
+			log.Errorf("error in queue:[%v], err:%v", qConfig.Id, err)
 			if mainBuf.Buffer.Len() > 0 {
 				queue.Push(qConfig, mainBuf.Buffer.Bytes())
 			}
@@ -587,10 +587,10 @@ CLEAN_BUFFER:
 	}
 }
 
-func (processor *BulkIndexingProcessor) submitBulkRequest(tag, esClusterID string, meta *elastic.ElasticsearchMetadata, host string, bulkProcessor elastic.BulkProcessor, mainBuf *elastic.BulkBuffer) bool {
+func (processor *BulkIndexingProcessor) submitBulkRequest(tag, esClusterID string, meta *elastic.ElasticsearchMetadata, host string, bulkProcessor elastic.BulkProcessor, mainBuf *elastic.BulkBuffer) (bool, error) {
 
 	if mainBuf == nil || meta == nil {
-		return true
+		return true, errors.New("invalid buffer or meta")
 	}
 
 	count := mainBuf.GetMessageCount()
@@ -599,12 +599,12 @@ func (processor *BulkIndexingProcessor) submitBulkRequest(tag, esClusterID strin
 	if mainBuf.GetMessageCount() > 0 && mainBuf.GetMessageSize() > 0 {
 		log.Trace(meta.Config.Name, ", starting submit bulk request")
 		start := time.Now()
-		contrinueRequest:= bulkProcessor.Bulk(tag,meta, host, mainBuf)
-		stats.Increment(esClusterID+"."+tag,util.ToString(contrinueRequest))
+		contrinueRequest, err := bulkProcessor.Bulk(tag, meta, host, mainBuf)
+		stats.Increment(esClusterID+"."+tag, util.ToString(contrinueRequest))
 		stats.Timing("elasticsearch."+esClusterID+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
-		log.Debug(meta.Config.Name, ", ", host,", success:",contrinueRequest, ", count:",count, ", size:", util.ByteSize(uint64(size)), ", elapsed:", time.Since(start))
-		return contrinueRequest
+		log.Debug(meta.Config.Name, ", ", host, ", success:", contrinueRequest, ", count:", count, ", size:", util.ByteSize(uint64(size)), ", elapsed:", time.Since(start))
+		return contrinueRequest, err
 	}
 
-	return true
+	return true, nil
 }
