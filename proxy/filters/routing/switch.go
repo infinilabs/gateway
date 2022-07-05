@@ -42,7 +42,8 @@ func (filter *SwitchFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 		if strings.HasPrefix(indexPart, item.Prefix) {
 			if filter.RemovePrefix {
-				nexIndex := strings.TrimLeft(indexPart, item.Prefix)
+				nexIndex := strings.TrimPrefix(indexPart, item.Prefix)
+				//log.Debugf("index:%v, prefix:%v, new index: %v", indexPart, item.Prefix, nexIndex)
 				paths[1] = nexIndex
 				ctx.Request.SetRequestURI(strings.Join(paths, "/"))
 			}
