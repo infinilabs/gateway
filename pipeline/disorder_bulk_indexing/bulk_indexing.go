@@ -41,7 +41,7 @@ import (
 type BulkIndexingProcessor struct {
 	bufferPool           *bytebufferpool.Pool
 	config               *Config
-	runningConfigs       map[string]*queue.Config
+	runningConfigs       map[string]*queue.QueueConfig
 	wg                   sync.WaitGroup
 	inFlightQueueConfigs sync.Map
 	detectorRunning      bool
@@ -95,8 +95,9 @@ func New(c *config.Config) (pipeline.Processor, error) {
 			Group:            "group-001",
 			Name:             "consumer-001",
 			FetchMinBytes:    1,
-			FetchMaxMessages: 100,
-			FetchMaxWaitMs:   10000,
+			FetchMaxBytes:    20 * 1024 * 1024,
+			FetchMaxMessages: 10,
+			FetchMaxWaitMs:   1000,
 		},
 
 		DetectActiveQueue: true,
@@ -115,7 +116,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 	runner := BulkIndexingProcessor{
 		id:                   util.GetUUID(),
 		config:               &cfg,
-		runningConfigs:       map[string]*queue.Config{},
+		runningConfigs:       map[string]*queue.QueueConfig{},
 		inFlightQueueConfigs: sync.Map{},
 	}
 
@@ -240,7 +241,7 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 	return nil
 }
 
-func (processor *BulkIndexingProcessor) HandleQueueConfig(v *queue.Config, c *pipeline.Context) {
+func (processor *BulkIndexingProcessor) HandleQueueConfig(v *queue.QueueConfig, c *pipeline.Context) {
 
 	if processor.config.SkipEmptyQueue {
 		if !queue.HasLag(v) {
@@ -357,7 +358,7 @@ func (processor *BulkIndexingProcessor) HandleQueueConfig(v *queue.Config, c *pi
 	}
 }
 
-func (processor *BulkIndexingProcessor) NewBulkWorker(tag string ,ctx *pipeline.Context, bulkSizeInByte int, qConfig *queue.Config, host string) {
+func (processor *BulkIndexingProcessor) NewBulkWorker(tag string, ctx *pipeline.Context, bulkSizeInByte int, qConfig *queue.QueueConfig, host string) {
 
 	defer func() {
 		if !global.Env().IsDebug {

@@ -14,7 +14,7 @@ type DiskEnqueueFilter struct {
 	DepthThreshold int64                  `config:"depth_threshold"`
 	QueueName      string                 `config:"queue_name"`
 	Labels         map[string]interface{} `config:"labels,omitempty"`
-	queueConfig    *queue.Config
+	queueConfig    *queue.QueueConfig
 }
 
 func (filter *DiskEnqueueFilter) Name() string {

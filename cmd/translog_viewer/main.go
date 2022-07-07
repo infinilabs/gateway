@@ -49,6 +49,7 @@ func readRequests() {
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 20*1024*1024), 20*1024*1024)
 	scanner.Split(SplitFunc)
 
 	fmt.Println("read files:",file)

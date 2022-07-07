@@ -68,8 +68,9 @@ func New(c *config.Config) (pipeline.Processor, error) {
 			Group:            "group-001",
 			Name:             "consumer-001",
 			FetchMinBytes:    1,
-			FetchMaxMessages: 1000,
-			FetchMaxWaitMs:   10000,
+			FetchMaxBytes:    20 * 1024 * 1024,
+			FetchMaxMessages: 10,
+			FetchMaxWaitMs:   1000,
 		},
 		CommitOnTag:                    "",
 		IdleWaitTimeoutInSeconds:       1,
@@ -163,7 +164,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 			}
 
 			log.Tracef("star to consume queue:%v", qConfig.Name)
-			ctx1, messages, timeout, err := queue.Consume(qConfig, consumer.Name, offset, processor.config.Consumer.FetchMaxMessages, time.Millisecond*time.Duration(processor.config.Consumer.FetchMaxWaitMs))
+			ctx1, messages, timeout, err := queue.Consume(qConfig, consumer, offset)
 			log.Tracef("get %v messages from queue:%v", len(messages), qConfig.Name)
 
 			if err != nil && err.Error() != "EOF" {

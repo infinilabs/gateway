@@ -190,7 +190,7 @@ READ_DOCS:
 			}
 		}
 
-		_,messages,_,err:=queue.Consume(qConfig,consumer.Name,offset,processor.config.FetchMaxMessages,time.Millisecond*time.Duration(processor.config.FetchMaxWaitMs))
+		_, messages, _, err := queue.Consume(qConfig, consumer, offset)
 		if len(messages) > 0 {
 			for _,pop:=range messages {
 				if err != nil {

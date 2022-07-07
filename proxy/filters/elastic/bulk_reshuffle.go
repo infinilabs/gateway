@@ -135,7 +135,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 		var buff *bytebufferpool.ByteBuffer
 		var ok bool
-		var queueConfig *queue.Config
+		var queueConfig *queue.QueueConfig
 		//var queueName string
 		indexAnalysis := this.config.IndexStatsAnalysis   //sync and async
 		actionAnalysis := this.config.ActionStatsAnalysis //sync and async
@@ -293,7 +293,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
-			queueConfig = &queue.Config{}
+			queueConfig = &queue.QueueConfig{}
 			queueConfig.Source = "dynamic"
 			queueConfig.Labels = util.MapStr{}
 			queueConfig.Labels["type"] = "bulk_reshuffle"
