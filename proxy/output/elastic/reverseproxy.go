@@ -525,7 +525,7 @@ START:
 					time.Sleep(1 * time.Second)
 				}
 			}
-			elastic.GetOrInitHost(host).ReportFailure()
+			elastic.GetOrInitHost(host, metadata.Config.ID).ReportFailure()
 			//server failure flow
 		} else if res.StatusCode() == 429 {
 			retry++
