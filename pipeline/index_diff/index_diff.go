@@ -40,7 +40,7 @@ func (a *CompareItem) CompareHash(b *CompareItem) int {
 	return strings.Compare(a.Hash, b.Hash)
 }
 
-func init()  {
+func init() {
 	pipeline.RegisterProcessorPlugin("index_diff", New)
 }
 
@@ -49,7 +49,7 @@ func NewCompareItem(key, hash string) CompareItem {
 	return item
 }
 
-func (processor *IndexDiffProcessor) processMsg(partitionID int,diffResultHandler func(DiffResult)) {
+func (processor *IndexDiffProcessor) processMsg(partitionID int, diffResultHandler func(DiffResult)) {
 	var msgA, msgB CompareItem
 
 MOVEALL:
@@ -120,15 +120,15 @@ COMPARE:
 }
 
 type IndexDiffProcessor struct {
-	config   Config
+	config    Config
 	testChans []CompareChan
-	wg       sync.WaitGroup
+	wg        sync.WaitGroup
 }
 
 func New(c *config.Config) (pipeline.Processor, error) {
 	diffConfig := Config{
 		TextReportEnabled: true,
-		PartitionSize:  10,
+		PartitionSize:     10,
 		BufferSize:        1,
 		SourceInputQueue:  "source",
 		TargetInputQueue:  "target",
@@ -139,21 +139,20 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		return nil, fmt.Errorf("failed to unpack the configuration of index_diff processor: %s", err)
 	}
 
-
-	diffs:=[]CompareChan{}
-	for i:=0;i<diffConfig.PartitionSize;i++{
-		diff:=CompareChan{}
-		diff.msgChans= map[string]chan CompareItem{}
-		diff.stopChan= make(chan struct{})
+	diffs := []CompareChan{}
+	for i := 0; i < diffConfig.PartitionSize; i++ {
+		diff := CompareChan{}
+		diff.msgChans = map[string]chan CompareItem{}
+		diff.stopChan = make(chan struct{})
 
 		diff.msgChans[diffConfig.GetSortedLeftQueue(i)] = make(chan CompareItem, diffConfig.BufferSize)
 		diff.msgChans[diffConfig.GetSortedRightQueue(i)] = make(chan CompareItem, diffConfig.BufferSize)
 
-		diffs=append(diffs,diff)
+		diffs = append(diffs, diff)
 	}
 
 	diff := &IndexDiffProcessor{
-		config: diffConfig,
+		config:    diffConfig,
 		testChans: diffs,
 	}
 
@@ -171,22 +170,22 @@ func (processor *IndexDiffProcessor) Name() string {
 }
 
 type Config struct {
-	PartitionSize      int    `config:"partition_size"`
-	TextReportEnabled  bool   `config:"text_report"`
-	KeepSourceInResult bool   `config:"keep_source"`
-	BufferSize         int    `config:"buffer_size"`
+	PartitionSize      int  `config:"partition_size"`
+	TextReportEnabled  bool `config:"text_report"`
+	KeepSourceInResult bool `config:"keep_source"`
+	BufferSize         int  `config:"buffer_size"`
 
-	DiffQueue          string `config:"diff_queue"`
-	SourceInputQueue   string `config:"source_queue"`
-	TargetInputQueue   string `config:"target_queue"`
+	DiffQueue        string `config:"diff_queue"`
+	SourceInputQueue string `config:"source_queue"`
+	TargetInputQueue string `config:"target_queue"`
 }
 
 func (cfg *Config) GetSortedLeftQueue(partitionID int) string {
-	return cfg.SourceInputQueue +util.ToString(partitionID)+ "_sorted"
+	return cfg.SourceInputQueue + util.ToString(partitionID) + "_sorted"
 }
 
 func (cfg *Config) GetSortedRightQueue(partitionID int) string {
-	return cfg.TargetInputQueue +util.ToString(partitionID)+ "_sorted"
+	return cfg.TargetInputQueue + util.ToString(partitionID) + "_sorted"
 }
 
 func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
@@ -213,17 +212,17 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 
 	for _, q := range queueNames {
 
-		for i:=0;i<processor.config.PartitionSize;i++{
+		for i := 0; i < processor.config.PartitionSize; i++ {
 			processor.wg.Add(1)
-			go func(q string,f int) {
+			go func(q string, f int) {
 				defer processor.wg.Done()
-				buffer := bytebufferpool.Get()
+				buffer := bytebufferpool.Get("index_diff")
 				//build sorted file
 				sorter := extsort.New(nil)
 				file := path.Join(global.Env().GetDataDir(), "diff", q)
 				sortedFile := path.Join(global.Env().GetDataDir(), "diff", q+"_sorted")
 
-				if !util.FileExists(file){
+				if !util.FileExists(file) {
 					return
 				}
 
@@ -255,11 +254,11 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 						}
 					}
 
-					if buffer.Len()>0{
+					if buffer.Len() > 0 {
 						util.FileAppendContentWithByte(sortedFile, buffer.Bytes())
 					}
 
-					bytebufferpool.Put(buffer)
+					bytebufferpool.Put("index_diff", buffer)
 					if err := iter.Err(); err != nil {
 						log.Error(err)
 						return
@@ -291,13 +290,13 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 					return
 				}
 
-			}(q+util.ToString(i),i)
+			}(q+util.ToString(i), i)
 		}
 
 	}
 
-	for i:=0;i<processor.config.PartitionSize;i++{
-		go processor.processMsg(i,func(result DiffResult) {
+	for i := 0; i < processor.config.PartitionSize; i++ {
+		go processor.processMsg(i, func(result DiffResult) {
 			queue.Push(queue.GetOrInitConfig(processor.config.DiffQueue), util.MustToJSONBytes(result))
 		})
 	}
@@ -332,7 +331,7 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 				v, timeout, err := queue.PopTimeout(queue.GetOrInitConfig(processor.config.DiffQueue), timeOut)
 				if timeout {
 
-					for i:=0;i<processor.config.PartitionSize;i++{
+					for i := 0; i < processor.config.PartitionSize; i++ {
 						if len(processor.testChans[i].msgChans[processor.config.GetSortedLeftQueue(i)]) > 0 ||
 							len(processor.testChans[i].msgChans[processor.config.GetSortedRightQueue(i)]) > 0 {
 							time.Sleep(5 * time.Second)
@@ -409,7 +408,7 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 				util.FileAppendNewLine(file, bothBuilder.String())
 			}
 
-			if leftBuilder.Len()==0&&rightBuilder.Len()==0&&bothBuilder.Len()==0{
+			if leftBuilder.Len() == 0 && rightBuilder.Len() == 0 && bothBuilder.Len() == 0 {
 				fmt.Println("Congratulations, the two clusters are consistent!\n")
 			}
 

@@ -31,8 +31,8 @@ type ReverseProxy struct {
 	locker      sync.RWMutex
 
 	fixedClient bool
-	client fasthttp.ClientAPI
-	host string
+	client      fasthttp.ClientAPI
+	host        string
 }
 
 func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
@@ -276,13 +276,13 @@ func NewReverseProxy(cfg *ProxyConfig) *ReverseProxy {
 
 	p.refreshNodes(true)
 
-	if p.proxyConfig.FixedClient{
-		if p.proxyConfig.ClientMode=="client"{
-			_,p.client,p.host=p.getClient()
-		}else{
-			_,p.client,p.host=p.getHostClient()
+	if p.proxyConfig.FixedClient {
+		if p.proxyConfig.ClientMode == "client" {
+			_, p.client, p.host = p.getClient()
+		} else {
+			_, p.client, p.host = p.getHostClient()
 		}
-	}else {
+	} else {
 		if cfg.Refresh.Enabled {
 			log.Debugf("refresh enabled for elasticsearch: [%v]", cfg.Elasticsearch)
 			task := task2.ScheduleTask{
@@ -553,7 +553,7 @@ START:
 		myctx.SetStatusCode(500)
 	} else {
 		if global.Env().IsDebug {
-			log.Tracef("request [%v] [%v] [%v] [%v]", req.URI().String(), util.SubString(string(req.GetRawBody()), 0, 256), res.StatusCode(), util.SubString(string(res.GetRawBody()), 0, 256))
+			log.Tracef("request [%v] [%v] [%v] [%v]", req.URI().String(), util.SubString(util.UnsafeBytesToString(req.GetRawBody()), 0, 256), res.StatusCode(), util.SubString(util.UnsafeBytesToString(res.GetRawBody()), 0, 256))
 		}
 	}
 

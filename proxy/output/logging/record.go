@@ -12,13 +12,13 @@ import (
 )
 
 type RequestRecord struct {
-	QueueName          string `config:"queue_name"`
-	FileName           string `config:"filename"`
-	Verbose            bool `config:"stdout"`
+	QueueName string `config:"queue_name"`
+	FileName  string `config:"filename"`
+	Verbose   bool   `config:"stdout"`
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("record", NewRequestRecord,&Config{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("record", NewRequestRecord, &Config{})
 }
 
 func NewRequestRecord(c *config.Config) (pipeline.Filter, error) {
@@ -39,17 +39,18 @@ func (this *RequestRecord) Name() string {
 const tab = "  "
 const newline = "\n"
 const args = "?"
+
 func (this *RequestRecord) Filter(ctx *fasthttp.RequestCtx) {
 
-	buffer:=bytebufferpool.Get()
-	defer bytebufferpool.Put(buffer)
+	buffer := bytebufferpool.Get("record")
+	defer bytebufferpool.Put("record", buffer)
 
 	buffer.Write(ctx.Method())
 	buffer.WriteString(tab)
 	buffer.Write(ctx.Path())
-	if ctx.QueryArgs()!=nil{
-		argsStr:=ctx.QueryArgs().QueryString()
-		if len(argsStr)>0{
+	if ctx.QueryArgs() != nil {
+		argsStr := ctx.QueryArgs().QueryString()
+		if len(argsStr) > 0 {
 			buffer.WriteString(args)
 			buffer.Write(argsStr)
 		}
@@ -58,16 +59,16 @@ func (this *RequestRecord) Filter(ctx *fasthttp.RequestCtx) {
 	buffer.WriteString(newline)
 
 	reqBody := ctx.Request.GetRawBody()
-	if len(reqBody)>0{
+	if len(reqBody) > 0 {
 		buffer.Write(reqBody)
 		buffer.WriteString(newline)
 	}
 
-	req:=buffer.String()
-	if this.FileName!=""{
-		util.FileAppendNewLine(path.Join(global.Env().GetDataDir(),this.FileName),req)
+	req := buffer.String()
+	if this.FileName != "" {
+		util.FileAppendNewLine(path.Join(global.Env().GetDataDir(), this.FileName), req)
 	}
-	if this.Verbose{
+	if this.Verbose {
 		fmt.Println(req)
 	}
 

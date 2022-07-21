@@ -30,7 +30,7 @@ func (filter *RedisPubSub) Name() string {
 
 func (filter *RedisPubSub) Filter(ctx *fasthttp.RequestCtx) {
 
-	buffer := bytebufferpool.Get()
+	buffer := bytebufferpool.Get("redis_pubsub")
 
 	if filter.Request {
 		data := ctx.Request.Encode()
@@ -52,12 +52,12 @@ func (filter *RedisPubSub) Filter(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	bytebufferpool.Put(buffer)
+	bytebufferpool.Put("redis_pubsub", buffer)
 
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("redis_pubsub",pipeline.FilterConfigChecked(NewRedisPubSub, pipeline.RequireFields("channel")),&RedisPubSub{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("redis_pubsub", pipeline.FilterConfigChecked(NewRedisPubSub, pipeline.RequireFields("channel")), &RedisPubSub{})
 }
 
 func NewRedisPubSub(c *config.Config) (pipeline.Filter, error) {

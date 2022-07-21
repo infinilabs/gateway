@@ -240,8 +240,8 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 
 func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName string) int {
 
-	hashBuffer := bytebufferpool.Get()
-	defer bytebufferpool.Put(hashBuffer)
+	hashBuffer := bytebufferpool.Get("es_scroll")
+	defer bytebufferpool.Put("es_scroll",hashBuffer)
 
 	docSize := 0
 	var docs=map[int]*bytebufferpool.ByteBuffer{}
@@ -299,7 +299,7 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 
 		buffer,ok:=docs[partitionID]
 		if !ok{
-			buffer = bytebufferpool.Get()
+			buffer = bytebufferpool.Get("es_scroll")
 		}
 
 		buffer.WriteString(fmt.Sprintf("{ \"index\" : { \"_index\" : \"%s\", \"_type\" : \"%s\", \"_id\" : \"%s\" } }\n", index, typeStr,id))
@@ -329,7 +329,7 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 
 		//handler := rotate.GetFileHandler(path.Join(global.Env().GetDataDir(), "diff", outputQueueName+util.ToString(k)), rotate.DefaultConfig)
 		//handler.Write(v.Bytes())
-		bytebufferpool.Put(v)
+		bytebufferpool.Put("es_scroll",v)
 	}
 
 	stats.IncrementBy("scrolling_processing."+outputQueueName, "docs", int64(docSize))
