@@ -29,30 +29,30 @@ func (processor *DiskQueueConsumer) Name() string {
 }
 
 type Config struct {
-	NumOfWorkers        int      `config:"worker_size"`
-	IdleTimeoutInSecond int      `config:"idle_timeout_in_seconds"`
+	NumOfWorkers        int `config:"worker_size"`
+	IdleTimeoutInSecond int `config:"idle_timeout_in_seconds"`
 
 	FetchMinBytes    int `config:"fetch_min_bytes"`
 	FetchMaxBytes    int `config:"fetch_max_bytes"`
 	FetchMaxMessages int `config:"fetch_max_messages"`
 	FetchMaxWaitMs   int `config:"fetch_max_wait_ms"`
 
-	SaveSuccessDocsToQueue bool `config:"save_partial_success_requests"`
-	PartialSuccessQueue string `config:"partial_success_queue"`
+	SaveSuccessDocsToQueue bool   `config:"save_partial_success_requests"`
+	PartialSuccessQueue    string `config:"partial_success_queue"`
 
-	InputQueue          string   `config:"input_queue"`
-	FailureQueue        string   `config:"failure_queue"`
-	InvalidQueue        string   `config:"invalid_queue"`
+	InputQueue   string `config:"input_queue"`
+	FailureQueue string `config:"failure_queue"`
+	InvalidQueue string `config:"invalid_queue"`
 
-	Elasticsearch       string   `config:"elasticsearch"`
-	WaitingAfter        []string `config:"waiting_after"`
-	Compress            bool     `config:"compress"`
+	Elasticsearch string   `config:"elasticsearch"`
+	WaitingAfter  []string `config:"waiting_after"`
+	Compress      bool     `config:"compress"`
 
-	SafetyParse bool `config:"safety_parse"`
-	DocBufferSize int `config:"doc_buffer_size"`
+	SafetyParse   bool `config:"safety_parse"`
+	DocBufferSize int  `config:"doc_buffer_size"`
 }
 
-func init()  {
+func init() {
 	pipeline.RegisterProcessorPlugin("queue_consumer", New)
 }
 
@@ -60,11 +60,11 @@ func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
 		NumOfWorkers:        1,
 		IdleTimeoutInSecond: 5,
-		DocBufferSize: 256*1024,
-		SafetyParse: true,
-		FetchMinBytes:   	1,
-		FetchMaxMessages:   10,
-		FetchMaxWaitMs:   10000,
+		DocBufferSize:       256 * 1024,
+		SafetyParse:         true,
+		FetchMinBytes:       1,
+		FetchMaxMessages:    10,
+		FetchMaxWaitMs:      10000,
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -79,7 +79,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 }
 
 var fastHttpClient = &fasthttp.Client{
-	MaxConnsPerHost: 1000,
+	MaxConnsPerHost:               1000,
 	Name:                          "queue_consumer",
 	DisableHeaderNamesNormalizing: false,
 	TLSConfig:                     &tls.Config{InsecureSkipVerify: true},
@@ -138,10 +138,9 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context, count *
 	esInstanceVal := processor.config.Elasticsearch
 	waitingAfter := processor.config.WaitingAfter
 	metadata := elastic.GetMetadata(esInstanceVal)
-	if metadata==nil{
+	if metadata == nil {
 		panic(errors.Errorf("cluster metadata [%v] not ready", processor.config.Elasticsearch))
 	}
-
 
 	//idleDuration := time.Duration(timeOut) * time.Second
 	if processor.config.FailureQueue == "" {
@@ -155,15 +154,14 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context, count *
 		processor.config.PartialSuccessQueue = processor.config.InputQueue + "-partial"
 	}
 
-	qConfig :=queue.GetOrInitConfig(processor.config.InputQueue)
-	var consumer=queue.GetOrInitConsumerConfig(qConfig.Id,"group-001","consumer-001")
+	qConfig := queue.GetOrInitConfig(processor.config.InputQueue)
+	var consumer = queue.GetOrInitConsumerConfig(qConfig.Id, "group-001", "consumer-001")
 	var initOfffset string
 	var offset string
 
-
 READ_DOCS:
-	initOfffset,_=queue.GetOffset(qConfig,consumer)
-	offset=initOfffset
+	initOfffset, _ = queue.GetOffset(qConfig, consumer)
+	offset = initOfffset
 
 	for {
 
@@ -179,7 +177,7 @@ READ_DOCS:
 
 		if len(waitingAfter) > 0 {
 			for _, v := range waitingAfter {
-				qCfg:=queue.GetOrInitConfig(v)
+				qCfg := queue.GetOrInitConfig(v)
 				//TODO handle consumer type
 				hasLag := queue.HasLag(qCfg)
 				if hasLag {
@@ -192,7 +190,7 @@ READ_DOCS:
 
 		_, messages, _, err := queue.Consume(qConfig, consumer, offset)
 		if len(messages) > 0 {
-			for _,pop:=range messages {
+			for _, pop := range messages {
 				if err != nil {
 					log.Error(err)
 					panic(err)
@@ -223,12 +221,12 @@ READ_DOCS:
 						}
 					}
 				}
-				offset=pop.NextOffset
+				offset = pop.NextOffset
 			}
 
-			if offset!=""&&offset!=initOfffset{
-				ok,err:=queue.CommitOffset(qConfig,consumer,offset)
-				if !ok||err!=nil{
+			if offset != "" && offset != initOfffset {
+				ok, err := queue.CommitOffset(qConfig, consumer, offset)
+				if !ok || err != nil {
 					panic(err)
 				}
 			}
@@ -239,7 +237,7 @@ READ_DOCS:
 
 func gzipBest(a *[]byte) []byte {
 	var b bytes.Buffer
-	gz,err := gzip.NewWriterLevel(&b,gzip.BestCompression)
+	gz, err := gzip.NewWriterLevel(&b, gzip.BestCompression)
 	if err != nil {
 		panic(err)
 	}
@@ -278,26 +276,26 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp)
 
-	acceptGzipped:=req.AcceptGzippedResponse()
-	compressed:=false
+	acceptGzipped := req.AcceptGzippedResponse()
+	compressed := false
 	if !req.IsGzipped() && processor.config.Compress {
 		data := req.Body()
-		data1:=gzipBest(&data)
+		data1 := gzipBest(&data)
 
 		//TODO handle response, if client not support gzip, return raw body
 		req.Header.Set(fasthttp.HeaderContentEncoding, "gzip")
 		req.Header.Set(fasthttp.HeaderAcceptEncoding, "gzip")
 		req.SwapBody(data1)
-		compressed=true
+		compressed = true
 	}
 
-	metadata.CheckNodeTrafficThrottle(util.UnsafeBytesToString(req.Header.Host()),1,req.GetRequestLength(),0)
+	metadata.CheckNodeTrafficThrottle(util.UnsafeBytesToString(req.Header.Host()), 1, req.GetRequestLength(), 0)
 
 	//execute
 	err = fastHttpClient.Do(req, resp)
 
-	if !acceptGzipped&&compressed{
-		body:=resp.GetRawBody()
+	if !acceptGzipped && compressed {
+		body := resp.GetRawBody()
 		resp.SwapBody(body)
 		resp.Header.Del(fasthttp.HeaderContentEncoding)
 		resp.Header.Del(fasthttp.HeaderContentEncoding2)
@@ -369,9 +367,9 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 		return true, resp.StatusCode(), nil
 	} else {
 		if global.Env().IsDebug {
-			log.Warn(err, resp.StatusCode(),req.Header.String(), util.SubString(string(req.GetRawBody()), 0, 512), util.SubString(string(respBody), 0, 256))
+			log.Warn(err, resp.StatusCode(), req.Header.String(), util.SubString(util.UnsafeBytesToString(req.GetRawBody()), 0, 512), util.SubString(util.UnsafeBytesToString(respBody), 0, 256))
 		}
-		return false, resp.StatusCode(), errors.New(fmt.Sprintf("invalid status code, %v %v %v", resp.StatusCode(), err, util.SubString(string(respBody), 0, 256)))
+		return false, resp.StatusCode(), errors.New(fmt.Sprintf("invalid status code, %v %v %v", resp.StatusCode(), err, util.SubString(util.UnsafeBytesToString(respBody), 0, 256)))
 	}
 
 }

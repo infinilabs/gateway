@@ -248,8 +248,8 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 
 func (processor *DumpHashProcessor) processingDocs(data []byte, outputQueueName string) int {
 
-	hashBuffer := bytebufferpool.Get()
-	defer bytebufferpool.Put(hashBuffer)
+	hashBuffer := bytebufferpool.Get("dump_hash")
+	defer bytebufferpool.Put("dump_hash",hashBuffer)
 
 	docSize := 0
 	var docs=map[int]*bytebufferpool.ByteBuffer{}
@@ -271,7 +271,7 @@ func (processor *DumpHashProcessor) processingDocs(data []byte, outputQueueName 
 
 		buffer,ok:=docs[partitionID]
 		if !ok{
-			buffer = bytebufferpool.Get()
+			buffer = bytebufferpool.Get("dump_hash")
 		}
 		_, err = buffer.WriteBytesArray(util.UnsafeStringToBytes(id), []byte(","), hash, []byte("\n"))
 		if err != nil {
@@ -286,7 +286,7 @@ func (processor *DumpHashProcessor) processingDocs(data []byte, outputQueueName 
 	for k,v:=range docs{
 		handler := rotate.GetFileHandler(path.Join(global.Env().GetDataDir(), "diff", outputQueueName+util.ToString(k)), rotate.DefaultConfig)
 		handler.Write(v.Bytes())
-		bytebufferpool.Put(v)
+		bytebufferpool.Put("dump_hash",v)
 	}
 
 	stats.IncrementBy("scrolling_processing."+outputQueueName, "docs", int64(docSize))
