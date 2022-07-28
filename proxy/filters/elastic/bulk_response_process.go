@@ -40,13 +40,13 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 		var resbody = ctx.Response.GetRawBody()
 		requestBytes := ctx.Request.GetRawBody()
 
-		nonRetryableItems := bytebufferpool.Get("bulk_response_process-1")
-		retryableItems := bytebufferpool.Get("bulk_response_process-2")
-		successItems := bytebufferpool.Get("bulk_response_process-3")
+		nonRetryableItems := bytebufferpool.Get("bulk_request_docs")
+		retryableItems := bytebufferpool.Get("bulk_request_docs")
+		successItems := bytebufferpool.Get("bulk_request_docs")
 
-		defer bytebufferpool.Put("bulk_response_process-1", nonRetryableItems)
-		defer bytebufferpool.Put("bulk_response_process-2", retryableItems)
-		defer bytebufferpool.Put("bulk_response_process-3", successItems)
+		defer bytebufferpool.Put("bulk_request_docs", nonRetryableItems)
+		defer bytebufferpool.Put("bulk_request_docs", retryableItems)
+		defer bytebufferpool.Put("bulk_request_docs", successItems)
 
 		containError := this.HandleBulkResponse(ctx, this.config.SafetyParse, requestBytes, resbody, this.config.DocBufferSize, nonRetryableItems, retryableItems, successItems)
 		if containError {
