@@ -343,7 +343,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			////update actionItem
 			buff, ok = docBuf[queueConfig.Name]
 			if !ok {
-				buff = bytebufferpool.Get("bulk_reshuffle")
+				buff = bytebufferpool.Get("bulk_request_docs")
 				docBuf[queueConfig.Name] = buff
 				var exists bool
 				exists, err = queue.RegisterConfig(queueConfig.Name, queueConfig)
@@ -361,7 +361,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			if actionMeta.Len() > 0 {
 				buff, ok := docBuf[queueConfig.Name]
 				if !ok {
-					buff = bytebufferpool.Get("bulk_reshuffle")
+					buff = bytebufferpool.Get("bulk_request_docs")
 					docBuf[queueConfig.Name] = buff
 				}
 
@@ -424,7 +424,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			} else {
 				log.Warn("zero message,", x, ",", len(data), ",", string(body))
 			}
-			bytebufferpool.Put("bulk_request_action", y)
+			bytebufferpool.Put("bulk_request_docs", y)
 		}
 
 		if indexAnalysis {
