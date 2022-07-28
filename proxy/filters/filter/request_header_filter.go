@@ -22,7 +22,7 @@ func (filter *RequestHeaderFilter) Name() string {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("request_header_filter",NewRequestHeaderFilter,&RequestHeaderFilter{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_header_filter", NewRequestHeaderFilter, &RequestHeaderFilter{})
 }
 
 func NewRequestHeaderFilter(c *config.Config) (pipeline.Filter, error) {
@@ -47,7 +47,7 @@ func NewRequestHeaderFilter(c *config.Config) (pipeline.Filter, error) {
 func (filter RequestHeaderFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	if global.Env().IsDebug {
-		log.Debug("headers:", string(util.EscapeNewLine(ctx.Request.Header.Header())))
+		log.Debug("headers:", util.UnsafeBytesToString(util.EscapeNewLine(ctx.Request.Header.Header())))
 	}
 
 	if len(filter.Exclude) > 0 {

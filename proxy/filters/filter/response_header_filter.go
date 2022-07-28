@@ -21,7 +21,7 @@ func (filter *ResponseHeaderFilter) Name() string {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("response_header_filter",NewResponseHeaderFilter,&ResponseHeaderFilter{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("response_header_filter", NewResponseHeaderFilter, &ResponseHeaderFilter{})
 }
 
 func NewResponseHeaderFilter(c *config.Config) (pipeline.Filter, error) {
@@ -46,7 +46,7 @@ func NewResponseHeaderFilter(c *config.Config) (pipeline.Filter, error) {
 func (filter *ResponseHeaderFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	if global.Env().IsDebug {
-		log.Debug("headers:", string(util.EscapeNewLine(ctx.Response.Header.Header())))
+		log.Debug("headers:", util.UnsafeBytesToString(util.EscapeNewLine(ctx.Response.Header.Header())))
 	}
 
 	if len(filter.Exclude) > 0 {
