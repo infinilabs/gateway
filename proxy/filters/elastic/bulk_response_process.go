@@ -162,18 +162,20 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 			ctx.UpdateTags(this.config.TagsOnNone2xx, nil)
 		}
 
-		queue.Push(queue.GetOrInitConfig(this.config.InvalidQueue+"-req-error-messages"), util.MustToJSONBytes(
-			util.MapStr{
-				"context": ctx.GetFlowProcess(),
-				"request": util.MapStr{
-					"uri":  ctx.Request.URI().String(),
-					"body": util.SubString(util.UnsafeBytesToString(ctx.Request.GetRawBody()), 0, 1024*4),
-				},
-				"response": util.MapStr{
-					"status": ctx.Response.StatusCode(),
-					"body":   util.SubString(util.UnsafeBytesToString(ctx.Response.GetRawBody()), 0, 1024*4),
-				},
-			}))
+		if ctx.Response.StatusCode() != 429 && ctx.Response.StatusCode() != 409 {
+			queue.Push(queue.GetOrInitConfig(this.config.InvalidQueue+"-req-error-messages"), util.MustToJSONBytes(
+				util.MapStr{
+					"context": ctx.GetFlowProcess(),
+					"request": util.MapStr{
+						"uri":  ctx.Request.URI().String(),
+						"body": util.SubString(util.UnsafeBytesToString(ctx.Request.GetRawBody()), 0, 1024*4),
+					},
+					"response": util.MapStr{
+						"status": ctx.Response.StatusCode(),
+						"body":   util.SubString(util.UnsafeBytesToString(ctx.Response.GetRawBody()), 0, 1024*4),
+					},
+				}))
+		}
 
 		if this.config.FailureQueue != "" {
 			queue.Push(queue.GetOrInitConfig(this.config.FailureQueue), ctx.Request.Encode())
