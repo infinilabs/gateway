@@ -71,11 +71,11 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 						util.MapStr{
 							"request": util.MapStr{
 								"uri":  ctx.Request.URI().String(),
-								"body": util.SubString(string(ctx.Request.GetRawBody()), 0, 1024*4),
+								"body": util.SubString(util.UnsafeBytesToString(ctx.Request.GetRawBody()), 0, 1024*4),
 							},
 							"response": util.MapStr{
 								"status": ctx.Response.StatusCode(),
-								"body":   util.SubString(string(ctx.Response.GetRawBody()), 0, 1024*4),
+								"body":   util.SubString(util.UnsafeBytesToString(ctx.Response.GetRawBody()), 0, 1024*4),
 							},
 						}))
 				}
@@ -167,11 +167,11 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 				"context": ctx.GetFlowProcess(),
 				"request": util.MapStr{
 					"uri":  ctx.Request.URI().String(),
-					"body": util.SubString(string(ctx.Request.GetRawBody()), 0, 1024*4),
+					"body": util.SubString(util.UnsafeBytesToString(ctx.Request.GetRawBody()), 0, 1024*4),
 				},
 				"response": util.MapStr{
 					"status": ctx.Response.StatusCode(),
-					"body":   util.SubString(string(ctx.Response.GetRawBody()), 0, 1024*4),
+					"body":   util.SubString(util.UnsafeBytesToString(ctx.Response.GetRawBody()), 0, 1024*4),
 				},
 			}))
 
