@@ -473,6 +473,7 @@ READ_DOCS:
 			} else {
 				log.Debugf("host [%v] is not available", host)
 				time.Sleep(time.Second * 1)
+				goto CLEAN_BUFFER
 			}
 
 			goto READ_DOCS
