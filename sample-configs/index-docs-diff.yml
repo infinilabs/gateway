@@ -2,37 +2,17 @@ path.data: data
 path.logs: log
 
 #show progress bar
-progress_bar.enabled: true
+#progress_bar.enabled: true
 
 elasticsearch:
   - name: source
     enabled: true
     endpoints:
-      - http://10.0.1.15:9200
-    basic_auth:
-      username: elastic
-      password: xxx
-    #    traffic_control:
-    #      max_qps_per_node: 1000
-    discovery:
-      enabled: true
-      refresh:
-        enabled: true
-        interval: 60s
+      - http://192.168.3.188:9206
   - name: target
     enabled: true
     endpoints:
-      - http://10.0.1.2:9200
-    basic_auth:
-      username: elastic
-      password: xxx
-    discovery:
-      enabled: true
-      refresh:
-        enabled: true
-        interval: 60s
-
-
+      - http://192.168.3.188:9299
 
 pipeline:
   - name: index_diff_service
@@ -43,7 +23,7 @@ pipeline:
         parallel:
           - dump_hash: #dump es1's doc
               sort_document_fields: true
-              indices: "test*"
+              indices: "test-10"
               scroll_time: "10m"
               elasticsearch: "source"
 #              query_string: "_id:c8es70pu46lgfdgmja9g-1646117763293610802-2"
@@ -53,7 +33,7 @@ pipeline:
               slice_size: 1
 #              hash_func: "xxhash64"
           - dump_hash: #dump es2's doc
-              indices: "test*"
+              indices: "test-10"
               scroll_time: "10m"
 #              fields: "doc_hash"
 #              query_string: "_id:c8es70pu46lgfdgmja9g-1646117763293610802-2"

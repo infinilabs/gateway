@@ -188,85 +188,8 @@ func (cfg *Config) GetSortedRightQueue(partitionID int) string {
 	return cfg.TargetInputQueue + util.ToString(partitionID) + "_sorted"
 }
 
-func (processor *IndexDiffProcessor) handlePartition(q string, f int) {
-	defer processor.wg.Done()
-	buffer := bytebufferpool.Get("index_diff")
-	//build sorted file
-	sorter := extsort.New(nil)
-	file := path.Join(global.Env().GetDataDir(), "diff", q)
-	sortedFile := path.Join(global.Env().GetDataDir(), "diff", q+"_sorted")
-
-	if !util.FileExists(file) {
-		return
-	}
-
-	if !util.FileExists(sortedFile) {
-		err := util.FileLinesWalk(file, func(bytes []byte) {
-			_ = sorter.Append(bytes)
-		})
-		if err != nil {
-			log.Error(err)
-			return
-		}
-
-		defer sorter.Close()
-		// Sort and iterate.
-		iter, err := sorter.Sort()
-		if err != nil {
-			log.Error(err)
-			return
-		}
-		defer iter.Close()
-
-		for iter.Next() {
-			buffer.Write(iter.Data())
-			buffer.WriteByte('\n')
-
-			if buffer.Len() > 10*1024 {
-				util.FileAppendContentWithByte(sortedFile, buffer.Bytes())
-				buffer.Reset()
-			}
-		}
-
-		if buffer.Len() > 0 {
-			util.FileAppendContentWithByte(sortedFile, buffer.Bytes())
-		}
-
-		bytebufferpool.Put("index_diff",buffer)
-		if err := iter.Err(); err != nil {
-			log.Error(err)
-			return
-		}
-	} else {
-		log.Warn("target file exists:", sortedFile, ",you may need to remove it first")
-	}
-
-	//popup sorted list
-	err := util.FileLinesWalk(sortedFile, func(bytes []byte) {
-		arr := strings.FieldsFunc(string(bytes), func(r rune) bool {
-			return r == ','
-		})
-		if len(arr) != 2 {
-			//log.Error("invalid line:", util.UnsafeBytesToString(bytes))
-			return
-		}
-		id := arr[0]
-		hash := arr[1]
-		item := CompareItem{
-			//Doc:  doc,
-			Key:  id,
-			Hash: hash,
-		}
-		processor.testChans[f].msgChans[q+"_sorted"] <- item
-	})
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-}
-
 func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
+	log.Infof("start index diff.")
 
 	defer func() {
 		if !global.Env().IsDebug {
@@ -289,14 +212,92 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 	queueNames := []string{processor.config.SourceInputQueue, processor.config.TargetInputQueue}
 
 	for _, q := range queueNames {
-		for i:=0;i<processor.config.PartitionSize;i++{
+
+		for i := 0; i < processor.config.PartitionSize; i++ {
 			processor.wg.Add(1)
-			processor.handlePartition(q+util.ToString(i), i)
+			go func(q string, f int) {
+				defer processor.wg.Done()
+				buffer := bytebufferpool.Get("index_diff")
+				//build sorted file
+				sorter := extsort.New(nil)
+				file := path.Join(global.Env().GetDataDir(), "diff", q)
+				sortedFile := path.Join(global.Env().GetDataDir(), "diff", q+"_sorted")
+
+				if !util.FileExists(file) {
+					return
+				}
+
+				if !util.FileExists(sortedFile) {
+					err := util.FileLinesWalk(file, func(bytes []byte) {
+						_ = sorter.Append(bytes)
+					})
+					if err != nil {
+						log.Error(err)
+						return
+					}
+
+					defer sorter.Close()
+					// Sort and iterate.
+					iter, err := sorter.Sort()
+					if err != nil {
+						log.Error(err)
+						return
+					}
+					defer iter.Close()
+
+					for iter.Next() {
+						buffer.Write(iter.Data())
+						buffer.WriteByte('\n')
+
+						if buffer.Len() > 10*1024 {
+							util.FileAppendContentWithByte(sortedFile, buffer.Bytes())
+							buffer.Reset()
+						}
+					}
+
+					if buffer.Len() > 0 {
+						util.FileAppendContentWithByte(sortedFile, buffer.Bytes())
+					}
+
+					bytebufferpool.Put("index_diff", buffer)
+					if err := iter.Err(); err != nil {
+						log.Error(err)
+						return
+					}
+				} else {
+					log.Warn("target file exists:", sortedFile, ",you may need to remove it first")
+				}
+
+				//popup sorted list
+				err := util.FileLinesWalk(sortedFile, func(bytes []byte) {
+					arr := strings.FieldsFunc(string(bytes), func(r rune) bool {
+						return r == ','
+					})
+					if len(arr) != 2 {
+						//log.Error("invalid line:", util.UnsafeBytesToString(bytes))
+						return
+					}
+					id := arr[0]
+					hash := arr[1]
+					item := CompareItem{
+						//Doc:  doc,
+						Key:  id,
+						Hash: hash,
+					}
+					processor.testChans[f].msgChans[q+"_sorted"] <- item
+				})
+				if err != nil {
+					log.Error(err)
+					return
+				}
+
+			}(q+util.ToString(i), i)
 		}
+
 	}
 
-	for i:=0;i<processor.config.PartitionSize;i++{
-		processor.processMsg(i, func(result DiffResult) {
+	for i := 0; i < processor.config.PartitionSize; i++ {
+		go processor.processMsg(i, func(result DiffResult) {
 			queue.Push(queue.GetOrInitConfig(processor.config.DiffQueue), util.MustToJSONBytes(result))
 		})
 	}

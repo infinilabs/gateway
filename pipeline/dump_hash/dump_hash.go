@@ -35,9 +35,11 @@ import (
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
+	"math"
 	"path"
 	"runtime"
 	"sync"
+	"time"
 )
 
 type DumpHashProcessor struct {
@@ -47,35 +49,35 @@ type DumpHashProcessor struct {
 
 type Config struct {
 	//字段名称必须是大写
-	PartitionSize      int    `config:"partition_size"`
-	BatchSize          int    `config:"batch_size"`
-	SliceSize          int    `config:"slice_size"`
-	Elasticsearch      string `config:"elasticsearch"`
-	Output             string `config:"output_queue"`
-	SortType           string `config:"sort_type"`
-	SortField          string `config:"sort_field"`
-	Indices            string `config:"indices"`
+	PartitionSize int    `config:"partition_size"`
+	BatchSize     int    `config:"batch_size"`
+	SliceSize     int    `config:"slice_size"`
+	Elasticsearch string `config:"elasticsearch"`
+	Output        string `config:"output_queue"`
+	SortType      string `config:"sort_type"`
+	SortField     string `config:"sort_field"`
+	Indices       string `config:"indices"`
 
-	QueryString              string `config:"query_string"`
+	QueryString string `config:"query_string"`
 
-	HashFunc           string `config:"hash_func"`
-	ScrollTime         string `config:"scroll_time"`
-	Fields             string `config:"fields"`
+	HashFunc   string `config:"hash_func"`
+	ScrollTime string `config:"scroll_time"`
+	Fields     string `config:"fields"`
 	//SortDocumentFields bool   `config:"sort_document_fields"`
 }
 
-func init()  {
+func init() {
 	pipeline.RegisterProcessorPlugin("dump_hash", New)
 }
 
 func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
-		PartitionSize:  10,
-		SliceSize:  1,
-		BatchSize:  1000,
-		ScrollTime: "5m",
-		SortType:   "asc",
-		HashFunc:   "xxhash32",
+		PartitionSize: 10,
+		SliceSize:     1,
+		BatchSize:     1000,
+		ScrollTime:    "5m",
+		SortType:      "asc",
+		HashFunc:      "xxhash32",
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -101,7 +103,7 @@ func (processor *DumpHashProcessor) Name() string {
 
 func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 
-	//start := time.Now()
+	start := time.Now()
 	wg := sync.WaitGroup{}
 
 	//file := path.Join(global.Env().GetDataDir(), "diff", processor.config.Output)
@@ -163,7 +165,7 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 
 			log.Debugf("slice [%v] docs: %v / %v", tempSlice, docSize, totalHits)
 
-			if totalHits == 0 ||docSize==0{
+			if totalHits == 0 || docSize == 0 {
 
 				log.Tracef("slice %v is empty", tempSlice)
 				return
@@ -174,10 +176,10 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 			defer fasthttp.ReleaseRequest(req)
 			defer fasthttp.ReleaseResponse(res)
 
-			meta:=elastic.GetMetadata(processor.config.Elasticsearch)
-			apiCtx:=&elastic.APIContext{
-				Client: meta.GetHttpClient(meta.GetActivePreferredHost("")),
-				Request: req,
+			meta := elastic.GetMetadata(processor.config.Elasticsearch)
+			apiCtx := &elastic.APIContext{
+				Client:   meta.GetHttpClient(meta.GetActivePreferredHost("")),
+				Request:  req,
 				Response: res,
 			}
 
@@ -240,8 +242,8 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 	progress.Start()
 	wg.Wait()
 	progress.Stop()
-
-	//log.Infof("dump finished, es: %v, index: %v, docs: %v, duration: %vs, qps: %v ", processor.config.Elasticsearch, processor.config.Indices, stats, duration, math.Ceil(float64(stats)/math.Ceil((duration))))
+	duration := time.Since(start)
+	log.Infof("dump finished, es: %v, index: %v, docs: %v, duration: %vs, qps: %v ", processor.config.Elasticsearch, processor.config.Indices, totalDocsNeedToScroll, duration, math.Ceil(float64(totalDocsNeedToScroll)/math.Ceil((duration.Seconds()))))
 
 	return nil
 }
@@ -249,10 +251,10 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 func (processor *DumpHashProcessor) processingDocs(data []byte, outputQueueName string) int {
 
 	hashBuffer := bytebufferpool.Get("dump_hash")
-	defer bytebufferpool.Put("dump_hash",hashBuffer)
+	defer bytebufferpool.Put("dump_hash", hashBuffer)
 
 	docSize := 0
-	var docs=map[int]*bytebufferpool.ByteBuffer{}
+	var docs = map[int]*bytebufferpool.ByteBuffer{}
 	jsonparser.ArrayEach(data, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
 
 		id, err := jsonparser.GetString(value, "_id")
@@ -267,10 +269,10 @@ func (processor *DumpHashProcessor) processingDocs(data []byte, outputQueueName 
 
 		hash := processor.Hash(processor.config.HashFunc, hashBuffer, source)
 
-		partitionID:=elastic.GetShardID(7,util.UnsafeStringToBytes(id),processor.config.PartitionSize)
+		partitionID := elastic.GetShardID(7, util.UnsafeStringToBytes(id), processor.config.PartitionSize)
 
-		buffer,ok:=docs[partitionID]
-		if !ok{
+		buffer, ok := docs[partitionID]
+		if !ok {
 			buffer = bytebufferpool.Get("dump_hash")
 		}
 		_, err = buffer.WriteBytesArray(util.UnsafeStringToBytes(id), []byte(","), hash, []byte("\n"))
@@ -279,14 +281,14 @@ func (processor *DumpHashProcessor) processingDocs(data []byte, outputQueueName 
 		}
 		docSize++
 
-		docs[partitionID]=buffer
+		docs[partitionID] = buffer
 
 	}, "hits", "hits")
 
-	for k,v:=range docs{
+	for k, v := range docs {
 		handler := rotate.GetFileHandler(path.Join(global.Env().GetDataDir(), "diff", outputQueueName+util.ToString(k)), rotate.DefaultConfig)
 		handler.Write(v.Bytes())
-		bytebufferpool.Put("dump_hash",v)
+		bytebufferpool.Put("dump_hash", v)
 	}
 
 	stats.IncrementBy("scrolling_processing."+outputQueueName, "docs", int64(docSize))
