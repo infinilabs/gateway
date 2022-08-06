@@ -11,6 +11,10 @@ entry:
 flow:
   - name: primary-write-flow
     filter:
+#      - set_context:
+#          context:
+#            _ctx.request.method: DELETE
+#            _ctx.request.path: /bot_index/_searchvv
       - http:
 #          schema: "https" #https or http
           schema: "http" #https or http
@@ -85,3 +89,5 @@ pipeline:
           when:
             cluster_available: [ "logging-server" ]
 
+#  ./bin/echo_server -debug
+#  curl http://abcde.domain.com:8000/uat/bot_index/_search -uzk:1234

@@ -1,0 +1,55 @@
+entry:
+  - max_concurrency: 1000
+    router: my_router
+    name: my_es_entry
+    enabled: true
+    network:
+      binding: 0.0.0.0:8000
+      reuse_port: false
+path:
+  data: data
+  logs: log
+
+router:
+  - name: my_router
+    rules:
+      - method:
+          - '*'
+        pattern:
+          - /uat/bot_index/_search
+        flow:
+          - bot_index
+#elasticsearch:
+#  - basic_auth:
+#      password: '123456'
+#      username: elastic
+#    endpoints:
+#      - http://xxxxxxxxx
+#    traffic_control:
+#      max_qps_per_node: 100
+#    discovery:
+#      refresh:
+#        interval: 30s
+#        enabled: true
+#      enabled: true
+#    name: uat
+#    enabled: true
+flow:
+  - filter:
+      - basic_auth:
+          valid_users:
+            zk: '1234'
+      - set_context:
+          context:
+            _ctx.request.method: DELETE
+            _ctx.request.path: /bot_index/_search
+#      - elasticsearch:
+#          elasticsearch: uat
+#          refresh:
+#            interval: 30s
+#            enabled: true
+      - dump:
+          request: true
+    name: bot_index
+
+# curl http://abcde.domain.com:8000/uat/bot_index/_search -uzk:1234

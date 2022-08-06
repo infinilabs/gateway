@@ -6,7 +6,6 @@ import (
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/rate"
 	"infini.sh/framework/core/rotate"
-	"infini.sh/framework/lib/bytebufferpool"
 	"runtime"
 	"sync"
 	"time"
@@ -39,7 +38,6 @@ import (
 
 //处理 bulk 格式的数据索引。
 type BulkIndexingProcessor struct {
-	bufferPool           *bytebufferpool.Pool
 	config               *Config
 	runningConfigs       map[string]*queue.QueueConfig
 	wg                   sync.WaitGroup
@@ -78,7 +76,7 @@ type Config struct {
 	PauseWhen *conditions.Config `config:"pause_when,omitempty"`
 }
 
-func init()  {
+func init() {
 	pipeline.RegisterProcessorPlugin("disorder_bulk_indexing", New)
 }
 
@@ -119,10 +117,6 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		runningConfigs:       map[string]*queue.QueueConfig{},
 		inFlightQueueConfigs: sync.Map{},
 	}
-
-	bulkSizeInByte := runner.config.BulkConfig.GetBulkSizeInBytes()
-	estimatedBulkSizeInByte := bulkSizeInByte + (bulkSizeInByte / 3)
-	runner.bufferPool = bytebufferpool.NewPool(uint64(estimatedBulkSizeInByte), uint64(bulkSizeInByte*2))
 
 	if runner.config.NumOfWorkers <= 0 {
 		runner.config.NumOfWorkers = 1
@@ -166,13 +160,13 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 	}()
 
 	//handle updates
-	if processor.config.DetectActiveQueue{
-		log.Tracef("detector running [%v]",processor.detectorRunning)
-		if !processor.detectorRunning{
-			processor.detectorRunning=true
+	if processor.config.DetectActiveQueue {
+		log.Tracef("detector running [%v]", processor.detectorRunning)
+		if !processor.detectorRunning {
+			processor.detectorRunning = true
 			processor.wg.Add(1)
 			go func(c *pipeline.Context) {
-				log.Tracef("init detector for active queue [%v] ",processor.id)
+				log.Tracef("init detector for active queue [%v] ", processor.id)
 				defer func() {
 					if !global.Env().IsDebug {
 						if r := recover(); r != nil {
@@ -188,7 +182,7 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 							log.Error("error in bulk indexing processor,", v)
 						}
 					}
-					processor.detectorRunning=false
+					processor.detectorRunning = false
 					log.Debug("exit detector for active queue")
 					processor.wg.Done()
 				}()
@@ -299,22 +293,22 @@ func (processor *BulkIndexingProcessor) HandleQueueConfig(v *queue.QueueConfig, 
 		} else {
 			log.Debugf("node_id not found: %v", v)
 		}
-	}else if level=="shard"||level=="partition"{
-		index,ok:=v.Labels["index"]
-		if ok{
+	} else if level == "shard" || level == "partition" {
+		index, ok := v.Labels["index"]
+		if ok {
 			routingTable, err := meta.GetIndexRoutingTable(util.ToString(index))
 			if err != nil {
-				if rate.GetRateLimiter("error",err.Error(),1,1, time.Second*3).Allow() {
+				if rate.GetRateLimiter("error", err.Error(), 1, 1, time.Second*3).Allow() {
 					log.Warn(err)
 				}
 				return
 			}
-			shard,ok:=v.Labels["shard"]
-			if ok{
-				shards,ok:=routingTable[util.ToString(shard)]
-				if ok{
-					for _,x:=range shards{
-						if x.Primary{
+			shard, ok := v.Labels["shard"]
+			if ok {
+				shards, ok := routingTable[util.ToString(shard)]
+				if ok {
+					for _, x := range shards {
+						if x.Primary {
 							//each primary shard has a goroutine, or run by one goroutine
 							if x.Node != "" {
 								nodeInfo := meta.GetNodeInfo(x.Node)
@@ -379,20 +373,20 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string, ctx *pipeline.
 		log.Trace("exit bulk indexing processor")
 	}()
 
-	key:=fmt.Sprintf("%v",qConfig.Id)
+	key := fmt.Sprintf("%v", qConfig.Id)
 
-	if processor.config.MaxWorkers>0&&util.MapLength(&processor.inFlightQueueConfigs)>processor.config.MaxWorkers{
-		log.Debugf("reached max num of workers, skip init [%v]",qConfig.Name)
+	if processor.config.MaxWorkers > 0 && util.MapLength(&processor.inFlightQueueConfigs) > processor.config.MaxWorkers {
+		log.Debugf("reached max num of workers, skip init [%v]", qConfig.Name)
 		return
 	}
 
-	var workerID=util.GetUUID()
+	var workerID = util.GetUUID()
 
-	processor.inFlightQueueConfigs.Store(key,workerID)
-	log.Debugf("starting worker:[%v], queue:[%v], host:[%v]",workerID, qConfig.Name, host)
+	processor.inFlightQueueConfigs.Store(key, workerID)
+	log.Debugf("starting worker:[%v], queue:[%v], host:[%v]", workerID, qConfig.Name, host)
 
 	mainBuf := elastic.AcquireBulkBuffer()
-	mainBuf.Queue=qConfig.Id
+	mainBuf.Queue = qConfig.Id
 	defer elastic.ReturnBulkBuffer(mainBuf)
 
 	var bulkProcessor elastic.BulkProcessor
@@ -411,7 +405,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string, ctx *pipeline.
 				case string:
 					v = r.(string)
 				}
-				log.Errorf("error in bulk_indexing worker[%v],queue:[%v],%v", workerID,qConfig.Id,v)
+				log.Errorf("error in bulk_indexing worker[%v],queue:[%v],%v", workerID, qConfig.Id, v)
 				ctx.Failed()
 			}
 		}
@@ -431,25 +425,24 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string, ctx *pipeline.
 		log.Debugf("exit worker[%v], queue:[%v]", workerID, qConfig.Id)
 	}()
 
-
 	idleDuration := time.Duration(processor.config.IdleTimeoutInSecond) * time.Second
-	elasticsearch,ok:=qConfig.Labels["elasticsearch"]
-	if !ok{
-		if processor.config.Elasticsearch==""{
-			log.Errorf("label [elasticsearch] was not found in: %v",qConfig)
+	elasticsearch, ok := qConfig.Labels["elasticsearch"]
+	if !ok {
+		if processor.config.Elasticsearch == "" {
+			log.Errorf("label [elasticsearch] was not found in: %v", qConfig)
 			return
-		}else{
-			elasticsearch=processor.config.Elasticsearch
+		} else {
+			elasticsearch = processor.config.Elasticsearch
 		}
 	}
-	esClusterID=util.ToString(elasticsearch)
+	esClusterID = util.ToString(elasticsearch)
 	meta = elastic.GetMetadata(esClusterID)
 	if meta == nil {
 		panic(errors.Errorf("cluster metadata [%v] not ready", esClusterID))
 	}
 
-	if elastic.IsHostDead(host){
-		host=meta.GetActiveHost()
+	if elastic.IsHostDead(host) {
+		host = meta.GetActiveHost()
 	}
 
 	bulkProcessor = elastic.BulkProcessor{
@@ -462,7 +455,6 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string, ctx *pipeline.
 
 	var lastCommit time.Time = time.Now()
 
-
 READ_DOCS:
 
 	for {
@@ -472,15 +464,16 @@ READ_DOCS:
 
 		//TODO add config to enable check or not
 		if !elastic.IsHostAvailable(host) {
-			if elastic.IsHostDead(host){
-				host1:= host
-				host=meta.GetActiveHost()
-				if rate.GetRateLimiter("host_dead",host,1,1, time.Second*3).Allow() {
-					log.Infof("host [%v] is dead, use: [%v]", host1,host)
+			if elastic.IsHostDead(host) {
+				host1 := host
+				host = meta.GetActiveHost()
+				if rate.GetRateLimiter("host_dead", host, 1, 1, time.Second*3).Allow() {
+					log.Infof("host [%v] is dead, use: [%v]", host1, host)
 				}
-			}else{
+			} else {
 				log.Debugf("host [%v] is not available", host)
 				time.Sleep(time.Second * 1)
+				goto CLEAN_BUFFER
 			}
 
 			goto READ_DOCS
@@ -488,7 +481,7 @@ READ_DOCS:
 
 		if len(processor.config.WaitingAfter) > 0 {
 			for _, v := range processor.config.WaitingAfter {
-				qCfg:=queue.GetOrInitConfig(v)
+				qCfg := queue.GetOrInitConfig(v)
 				hasLag := queue.HasLag(qCfg)
 
 				log.Debugf("checking queue lag: %v %v", qConfig.Name, hasLag)
@@ -568,7 +561,7 @@ READ_DOCS:
 
 CLEAN_BUFFER:
 
-	if mainBuf.GetMessageSize()>0 {
+	if mainBuf.GetMessageSize() > 0 {
 		lastCommit = time.Now()
 		// check bulk result, if ok, then commit offset, or retry non-200 requests, or save failure offset
 		continueNext, err := processor.submitBulkRequest(tag, esClusterID, meta, host, bulkProcessor, mainBuf)
@@ -583,7 +576,7 @@ CLEAN_BUFFER:
 		mainBuf.Reset()
 	}
 
-	if !ctx.IsCanceled(){
+	if !ctx.IsCanceled() {
 		goto READ_DOCS
 	}
 }

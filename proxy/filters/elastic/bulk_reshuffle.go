@@ -29,9 +29,6 @@ func (this *BulkReshuffle) Name() string {
 	return "bulk_reshuffle"
 }
 
-var bufferPool = bytebufferpool.NewPool(65536, 655360)
-var smallSizedPool = bytebufferpool.NewPool(512, 655360)
-
 type Level string
 
 const ClusterLevel = "cluster"
@@ -140,8 +137,8 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		indexAnalysis := this.config.IndexStatsAnalysis   //sync and async
 		actionAnalysis := this.config.ActionStatsAnalysis //sync and async
 		validateRequest := this.config.ValidateRequest
-		actionMeta := smallSizedPool.Get("bulk_reshuffle")
-		defer smallSizedPool.Put("bulk_reshuffle", actionMeta)
+		actionMeta := bytebufferpool.Get("bulk_request_action")
+		defer bytebufferpool.Put("bulk_request_action", actionMeta)
 
 		var docBuffer []byte
 		docBuffer = elastic.BulkDocBuffer.Get(this.config.DocBufferSize) //doc buffer for bytes scanner
@@ -346,7 +343,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			////update actionItem
 			buff, ok = docBuf[queueConfig.Name]
 			if !ok {
-				buff = bufferPool.Get("bulk_reshuffle")
+				buff = bytebufferpool.Get("bulk_request_docs")
 				docBuf[queueConfig.Name] = buff
 				var exists bool
 				exists, err = queue.RegisterConfig(queueConfig.Name, queueConfig)
@@ -364,7 +361,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			if actionMeta.Len() > 0 {
 				buff, ok := docBuf[queueConfig.Name]
 				if !ok {
-					buff = bufferPool.Get("bulk_reshuffle")
+					buff = bytebufferpool.Get("bulk_request_docs")
 					docBuf[queueConfig.Name] = buff
 				}
 
@@ -427,7 +424,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			} else {
 				log.Warn("zero message,", x, ",", len(data), ",", string(body))
 			}
-			bufferPool.Put("bulk_reshuffle", y)
+			bytebufferpool.Put("bulk_request_docs", y)
 		}
 
 		if indexAnalysis {
@@ -455,7 +452,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		//fake results
 		ctx.SetContentType(JSON_CONTENT_TYPE)
 
-		buffer := bytebufferpool.Get("bulk_reshuffle")
+		buffer := bytebufferpool.Get("bulk_request_docs")
 
 		buffer.Write(startPart)
 		for i := 0; i < docCount; i++ {
@@ -467,7 +464,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		buffer.Write(endPart)
 
 		ctx.Response.AppendBody(buffer.Bytes())
-		bytebufferpool.Put("bulk_reshuffle", buffer)
+		bytebufferpool.Put("bulk_request_docs", buffer)
 
 		if len(this.config.TagsOnSuccess) > 0 {
 			ctx.UpdateTags(this.config.TagsOnSuccess, nil)

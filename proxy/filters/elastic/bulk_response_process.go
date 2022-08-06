@@ -40,13 +40,13 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 		var resbody = ctx.Response.GetRawBody()
 		requestBytes := ctx.Request.GetRawBody()
 
-		nonRetryableItems := bytebufferpool.Get("bulk_response_process-1")
-		retryableItems := bytebufferpool.Get("bulk_response_process-2")
-		successItems := bytebufferpool.Get("bulk_response_process-3")
+		nonRetryableItems := bytebufferpool.Get("bulk_request_docs")
+		retryableItems := bytebufferpool.Get("bulk_request_docs")
+		successItems := bytebufferpool.Get("bulk_request_docs")
 
-		defer bytebufferpool.Put("bulk_response_process-1", nonRetryableItems)
-		defer bytebufferpool.Put("bulk_response_process-2", retryableItems)
-		defer bytebufferpool.Put("bulk_response_process-3", successItems)
+		defer bytebufferpool.Put("bulk_request_docs", nonRetryableItems)
+		defer bytebufferpool.Put("bulk_request_docs", retryableItems)
+		defer bytebufferpool.Put("bulk_request_docs", successItems)
 
 		containError := this.HandleBulkResponse(ctx, this.config.SafetyParse, requestBytes, resbody, this.config.DocBufferSize, nonRetryableItems, retryableItems, successItems)
 		if containError {
@@ -71,11 +71,11 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 						util.MapStr{
 							"request": util.MapStr{
 								"uri":  ctx.Request.URI().String(),
-								"body": util.SubString(string(ctx.Request.GetRawBody()), 0, 1024*4),
+								"body": util.SubString(util.UnsafeBytesToString(ctx.Request.GetRawBody()), 0, 1024*4),
 							},
 							"response": util.MapStr{
 								"status": ctx.Response.StatusCode(),
-								"body":   util.SubString(string(ctx.Response.GetRawBody()), 0, 1024*4),
+								"body":   util.SubString(util.UnsafeBytesToString(ctx.Response.GetRawBody()), 0, 1024*4),
 							},
 						}))
 				}
@@ -162,18 +162,20 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 			ctx.UpdateTags(this.config.TagsOnNone2xx, nil)
 		}
 
-		queue.Push(queue.GetOrInitConfig(this.config.InvalidQueue+"-req-error-messages"), util.MustToJSONBytes(
-			util.MapStr{
-				"context": ctx.GetFlowProcess(),
-				"request": util.MapStr{
-					"uri":  ctx.Request.URI().String(),
-					"body": util.SubString(string(ctx.Request.GetRawBody()), 0, 1024*4),
-				},
-				"response": util.MapStr{
-					"status": ctx.Response.StatusCode(),
-					"body":   util.SubString(string(ctx.Response.GetRawBody()), 0, 1024*4),
-				},
-			}))
+		if ctx.Response.StatusCode() != 429 && ctx.Response.StatusCode() != 409 {
+			queue.Push(queue.GetOrInitConfig(this.config.InvalidQueue+"-req-error-messages"), util.MustToJSONBytes(
+				util.MapStr{
+					"context": ctx.GetFlowProcess(),
+					"request": util.MapStr{
+						"uri":  ctx.Request.URI().String(),
+						"body": util.SubString(util.UnsafeBytesToString(ctx.Request.GetRawBody()), 0, 1024*4),
+					},
+					"response": util.MapStr{
+						"status": ctx.Response.StatusCode(),
+						"body":   util.SubString(util.UnsafeBytesToString(ctx.Response.GetRawBody()), 0, 1024*4),
+					},
+				}))
+		}
 
 		if this.config.FailureQueue != "" {
 			queue.Push(queue.GetOrInitConfig(this.config.FailureQueue), ctx.Request.Encode())
