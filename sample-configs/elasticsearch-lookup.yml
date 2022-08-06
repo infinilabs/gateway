@@ -1,0 +1,78 @@
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    network:
+      binding: 0.0.0.0:8000
+
+flow:
+  - name: es-flow
+    filter:
+      - elasticsearch:
+          elasticsearch: es-server
+      - elasticsearch_lookup:
+          when:
+            suffix:
+              _ctx.request.path: "/_search"
+          source:
+            join_by_field_values:
+              json_path: [ "_source","category"] #extracted values will be preset as variable `JOIN_BY_FIELD_ARRAY_VALUES` pass to second fetch phrase.
+          target:
+            elasticsearch: es-server
+            index_pattern: test1
+            template:
+              variable: #syntax: key -> string value
+                JOIN_BY_FIELD_NAME: 'category' # `_source` should enabled
+                SORT_BY_FIELD_NAME: 'payload'
+                SORT_BY_FIELD_ORDER: 'desc'
+                MAX_NUMBER_OF_DOCS_TO_RETURN: '1'
+              method: POST
+              body: '
+              {
+                "size": 0,
+                "query": {
+                  "bool": {
+                    "must": [
+                      {
+                        "terms": {
+                          "{{JOIN_BY_FIELD_NAME}}":  [ {{JOIN_BY_FIELD_ARRAY_VALUES}} ]
+                        }
+                      }
+                    ]
+                  }
+                },
+                "aggs": {
+                  "hit_docs": {
+                    "terms": {
+                      "field": "{{JOIN_BY_FIELD_NAME}}",
+                      "size": {{MAX_NUMBER_OF_FIELD_ARRAY_VALUES}}
+                    },
+                    "aggs": {
+                      "sorted_doc": {
+                        "top_hits": {
+                          "sort": [
+                            {
+                              "{{SORT_BY_FIELD_NAME}}": {
+                                "order": "{{SORT_BY_FIELD_ORDER}}"
+                              }
+                            }
+                          ],
+                          "size": {{MAX_NUMBER_OF_DOCS_TO_RETURN}}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              '
+
+
+router:
+  - name: my_router
+    default_flow: es-flow
+
+elasticsearch:
+  - name: es-server
+    enabled: true
+    endpoints:
+     - http://192.168.3.188:9231
