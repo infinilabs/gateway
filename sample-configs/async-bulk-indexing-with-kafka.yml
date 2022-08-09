@@ -1,0 +1,97 @@
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 200000
+    network:
+      binding: 0.0.0.0:8000
+
+flow:
+  - name: async_bulk
+    filter:
+      - bulk_reshuffle:
+          when:
+            contains:
+              _ctx.request.path: /_bulk
+          elasticsearch: dev
+          level: cluster
+          partition_size: 3
+          fix_null_id: true
+      - elasticsearch:
+          elasticsearch: dev  #elasticsearch configure reference name
+          max_connection_per_node: 1000 #max tcp connection to upstream, default for all nodes
+          max_response_size: -1 #default for all nodes
+          balancer: weight
+          refresh: # refresh upstream nodes list, need to enable this feature to use elasticsearch nodes auto discovery
+            enabled: true
+            interval: 60s
+          filter:
+            roles:
+              exclude:
+                - master
+  - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
+    filter:
+      - context_filter:
+          context: _ctx.request.path
+          exclude:
+            - /favicon.ico
+      - logging:
+          queue_name: request_logging
+          max_request_body_size: 102400
+          max_response_body_size: 102400
+router:
+  - name: my_router
+    default_flow: async_bulk
+#    tracing_flow: request_logging
+
+elasticsearch:
+  - name: dev
+    enabled: true
+    endpoints:
+     - http://192.168.3.188:9206
+     - http://192.168.3.188:9216
+
+pipeline:
+  - name: bulk_request_ingest
+    auto_start: true
+    keep_running: true
+    retry_delay_in_ms: 1000
+    processor:
+      - disorder_bulk_indexing:
+          max_connection_per_node: 100
+          max_worker_size: 100
+          worker_size: 10
+          bulk:
+            compress: false
+            batch_size_in_mb: 10
+            batch_size_in_docs: 10000
+          consumer:
+            fetch_max_messages: 1000
+          queues:
+            type: bulk_reshuffle
+#  - name: consume-request_logging
+#    auto_start: true
+#    keep_running: true
+#    processor:
+#      - json_indexing:
+#          index_name: "gateway_requests"
+#          elasticsearch: "dev"
+#          input_queue: "request_logging"
+#          worker_size: 10
+
+
+#stats:
+#  enabled: false
+#  buffer_size: 10000
+
+disk_queue.enabled: false
+disk_queue.default: false
+
+kafka_queue:
+  enabled: true
+  default: true
+  brokers:
+    - "192.168.3.188:9092"

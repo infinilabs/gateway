@@ -18,17 +18,18 @@ type Kafka struct {
 	RequiredAcks     int      `config:"required_acks"`
 	Brokers          []string `config:"brokers"`
 
-	msgPool *sync.Pool
+	msgPool     *sync.Pool
+	taskContext context.Context
+	messages    []kafka.Message
+	lock        sync.Mutex
+	w           *kafka.Writer
 }
 
 func (filter *Kafka) Name() string {
 	return "kafka"
 }
 
-var taskContext = context.Background()
-var w *kafka.Writer
-var messages = []kafka.Message{}
-var lock sync.Mutex
+
 
 func (filter *Kafka) Filter(ctx *fasthttp.RequestCtx) {
 
@@ -36,24 +37,24 @@ func (filter *Kafka) Filter(ctx *fasthttp.RequestCtx) {
 	msg.Key = ctx.Request.RequestURI()
 	msg.Value = ctx.Request.Body()
 
-	lock.Lock()
+	filter.lock.Lock()
 
-	messages = append(messages, msg)
+	filter.messages = append(filter.messages, msg)
 
 	//TODO flush finally or periodly
 	//check need to flush or not
-	if len(messages) >= filter.BatchSize {
-		err := w.WriteMessages(taskContext, messages...)
+	if len(filter.messages) >= filter.BatchSize {
+		err := filter.w.WriteMessages(filter.taskContext, filter.messages...)
 		if err != nil {
 			panic("could not write message " + err.Error())
 		}
-		for _, v := range messages {
+		for _, v := range filter.messages {
 			filter.msgPool.Put(v)
 		}
-		messages = []kafka.Message{}
+		filter.messages = []kafka.Message{}
 	}
 
-	lock.Unlock()
+	filter.lock.Unlock()
 }
 
 func init() {
@@ -72,7 +73,7 @@ func NewKafkaFilter(c *config.Config) (pipeline.Filter, error) {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	w = kafka.NewWriter(kafka.WriterConfig{
+	runner.w = kafka.NewWriter(kafka.WriterConfig{
 		Brokers:      runner.Brokers,
 		Topic:        runner.Topic,
 		BatchSize:    runner.BatchSize,
@@ -85,6 +86,11 @@ func NewKafkaFilter(c *config.Config) (pipeline.Filter, error) {
 			return kafka.Message{}
 		},
 	}
+
+	runner.taskContext = context.Background()
+	runner.messages = []kafka.Message{}
+	runner.lock=sync.Mutex{}
+
 
 	return &runner, nil
 }
