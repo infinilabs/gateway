@@ -71,8 +71,9 @@ pipeline:
             batch_size_in_docs: 10000
           consumer:
             fetch_max_messages: 1000
-          queues:
-            type: bulk_reshuffle
+          queue_selector:
+            labels:
+              type: bulk_reshuffle
 #  - name: consume-request_logging
 #    auto_start: true
 #    keep_running: true
