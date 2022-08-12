@@ -95,7 +95,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 			FetchMinBytes:    1,
 			FetchMaxBytes:    10 * 1024 * 1024,
 			FetchMaxMessages: 500,
-			FetchMaxWaitMs:   1000,
+			FetchMaxWaitMs:   10000,
 		},
 
 		DetectActiveQueue: true,
@@ -265,8 +265,14 @@ func (processor *BulkIndexingProcessor) HandleQueueConfig(v *queue.QueueConfig, 
 	//handle pause when
 	//c.Set("labels", v.Labels)
 	if processor.pauseWhen != nil {
-		taskContext := BulkContext{pipelineContext: c, TaskContext: &util.MapStr{}, ElasticsearchContext: meta}
-		taskContext.TaskContext.Put("labels", v.Labels)
+		//taskContext := BulkContext{pipelineContext: c, TaskContext: &util.MapStr{}, ElasticsearchContext: meta}
+		//taskContext.TaskContext.Put("labels", v.Labels)
+
+		taskContext:=conditions.Context{}
+		taskContext.AddContext(util.MapStr{
+			"labels":v.Labels,
+		}).AddContext(c).AddContext(meta)
+
 		check := processor.pauseWhen.Check(&taskContext)
 		if check {
 			log.Debugf("hit pause when, skip process queue: %v", v.Name)
@@ -497,8 +503,15 @@ READ_DOCS:
 		//handle pause when
 		//c.Set("labels", v.Labels)
 		if processor.pauseWhen != nil {
-			taskContext := BulkContext{pipelineContext: ctx, TaskContext: &util.MapStr{}, ElasticsearchContext: meta}
-			taskContext.TaskContext.Put("labels", qConfig.Labels)
+
+			//taskContext := BulkContext{pipelineContext: ctx, TaskContext: &util.MapStr{}, ElasticsearchContext: meta}
+			//taskContext.TaskContext.Put("labels", qConfig.Labels)
+
+			taskContext:=conditions.Context{}
+			taskContext.AddContext(util.MapStr{
+					"labels":qConfig.Labels,
+				}).AddContext(ctx).AddContext(meta)
+
 			check := processor.pauseWhen.Check(&taskContext)
 			if check {
 				log.Debugf("hit pause when, skip process queue: %v", qConfig.Name)
