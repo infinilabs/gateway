@@ -54,12 +54,9 @@ flow:
 #          body: '{"error":true,"message":"503 Service Unavailable"}'
 #      - drop: #结束所有后续流程的处理
 
-      #option2: 入队列主和备
+      #option2: 放入主失败队列,主备都会消费该队列
       - queue:
           queue_name: "primary-failure"
-      - queue:
-          queue_name: "backup"
-
       #由请求触发的限速模式下的主动检查后端监控情况
       - elasticsearch_health_check:
           elasticsearch: "primary"
@@ -591,7 +588,7 @@ pipeline:
           consumer:
             fetch_max_messages: 100
           max_worker_size: 200
-          num_of_slices: 20
+#          num_of_slices: 20
 #          slices: [0]
           waiting_after:
             - "backup-failure"
@@ -615,16 +612,16 @@ pipeline:
 disk_queue:
   retention:
     max_num_of_local_files: 3
-  upload_to_s3: false
+  upload_to_s3: true
 #  compress_on_message_payload:
 #    enabled: true
-#  s3:
-#    server: my_blob_store
-#    location: cn-beijing-001
-#    bucket: infini-replica-blob-store
+  s3:
+    server: my_blob_store
+    location: cn-beijing-001
+    bucket: infini-replica-blob-store
 
-#s3:
-#  my_blob_store:
-#    endpoint: "192.168.3.188:9000"
-#    access_key: "minio"
-#    access_secret: "miniostorage"
+s3:
+  my_blob_store:
+    endpoint: "192.168.3.188:9000"
+    access_key: "minio"
+    access_secret: "miniostorage"
