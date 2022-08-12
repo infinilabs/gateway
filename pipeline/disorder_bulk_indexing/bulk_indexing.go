@@ -263,11 +263,7 @@ func (processor *BulkIndexingProcessor) HandleQueueConfig(v *queue.QueueConfig, 
 	}
 
 	//handle pause when
-	//c.Set("labels", v.Labels)
 	if processor.pauseWhen != nil {
-		//taskContext := BulkContext{pipelineContext: c, TaskContext: &util.MapStr{}, ElasticsearchContext: meta}
-		//taskContext.TaskContext.Put("labels", v.Labels)
-
 		taskContext:=conditions.Context{}
 		taskContext.AddContext(util.MapStr{
 			"labels":v.Labels,
@@ -501,12 +497,7 @@ READ_DOCS:
 		}
 
 		//handle pause when
-		//c.Set("labels", v.Labels)
 		if processor.pauseWhen != nil {
-
-			//taskContext := BulkContext{pipelineContext: ctx, TaskContext: &util.MapStr{}, ElasticsearchContext: meta}
-			//taskContext.TaskContext.Put("labels", qConfig.Labels)
-
 			taskContext:=conditions.Context{}
 			taskContext.AddContext(util.MapStr{
 					"labels":qConfig.Labels,

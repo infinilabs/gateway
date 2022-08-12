@@ -62,10 +62,30 @@ pipeline:
           pause_when:
             and:
               - in:
-                  _meta.elasticsearch.$[[labels.elasticsearch]].index.$[[labels.index]].settings.index.routing.allocation.require.box_type: ["warm","cold"]
-              - range:
-                  _meta.elasticsearch.$[[labels.elasticsearch]].index.$[[labels.index]].stats._all.primaries.merges.current.gt: 3
+                  _meta.elasticsearch.$[[labels.elasticsearch]].index.$[[labels.index]].settings.index.routing.allocation.include.box_type: ["warm","cold"]
+#              - range:
+#                  _meta.elasticsearch.$[[labels.elasticsearch]].index.$[[labels.index]].stats._all.primaries.merges.current.gt: 3
 #              - equals:
 #                  _meta.elasticsearch.$[[labels.elasticsearch]].index.$[[labels.index]].settings.index.blocks.write: true
           when:
             cluster_available: [ "dev" ]
+
+
+#  PUT a-test-11
+#  {
+#    "settings": {
+#      "number_of_shards": 10,
+#      "number_of_replicas": 0,
+#      "refresh_interval": "10s",
+#      "index.translog.durability": "async"
+#    }
+#  }
+#  PUT a-test-11/_settings
+#  {
+#    "index.routing.allocation.include.box_type": "cold"
+#  }
+#
+#  PUT a-test-11/_settings
+#  {
+#    "index.routing.allocation.include.box_type": null
+#  }
