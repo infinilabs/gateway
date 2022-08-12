@@ -79,7 +79,7 @@ elasticsearch:
   - name: test_cluster
     enabled: true
     endpoints:
-    - http://localhost:9200
+    - http://192.168.3.188:9206
     discovery:
       enabled: true
       refresh:

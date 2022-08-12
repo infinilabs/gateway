@@ -12,7 +12,7 @@ elasticsearch:
   - name: target
     enabled: true
     endpoints:
-      - http://192.168.3.188:9299
+      - http://192.168.3.188:9206
 
 pipeline:
   - name: index_diff_service
@@ -23,7 +23,7 @@ pipeline:
         parallel:
           - dump_hash: #dump es1's doc
               sort_document_fields: true
-              indices: "test-10"
+              indices: "filebeat-7.8.0"
               scroll_time: "10m"
               elasticsearch: "source"
 #              query_string: "_id:c8es70pu46lgfdgmja9g-1646117763293610802-2"
@@ -33,7 +33,7 @@ pipeline:
               slice_size: 1
 #              hash_func: "xxhash64"
           - dump_hash: #dump es2's doc
-              indices: "test-10"
+              indices: "filebeat-7.8.0-new"
               scroll_time: "10m"
 #              fields: "doc_hash"
 #              query_string: "_id:c8es70pu46lgfdgmja9g-1646117763293610802-2"

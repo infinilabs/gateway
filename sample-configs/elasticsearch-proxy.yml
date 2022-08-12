@@ -35,7 +35,7 @@ elasticsearch:
   - name: es-server
     enabled: true
     endpoints:
-     - http://192.168.3.188:9211
+     - http://192.168.3.188:9206
     basic_auth:
       username: elastic
       password: Bp2HyArQDd+5PdgEJ4QH

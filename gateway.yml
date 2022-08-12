@@ -69,6 +69,7 @@ elasticsearch:
   schema: http
   hosts:
     - 192.168.3.188:9206
+    - 127.0.0.1:9200
   traffic_control: #global traffic control
     max_bps_per_node: 209715200 #max total bytes send to es per node, 200MB/s
     max_qps_per_node: 20000 #max total requests send to es per node, 20k/s
