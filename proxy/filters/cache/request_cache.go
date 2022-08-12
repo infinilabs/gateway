@@ -314,8 +314,11 @@ func (filter *RequestCacheGet) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 	if args.Has("no_cache") {
-		cacheable = false
-		ctx.Request.URI().QueryArgs().Del("no_cache")
+		v:=args.Peek("no_cache")
+		if string(v)!="false"{
+			cacheable = false
+		}
+		ctx.URI().QueryArgs().Del("no_cache")
 	}
 
 	//check bypass patterns
