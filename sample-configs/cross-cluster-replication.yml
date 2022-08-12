@@ -47,24 +47,24 @@ flow:
                 interval: 30s
   - name: primary-on-failure-write-flow #当主集群不可用之后的处理流程
     filter:
-#      #option1: 直接丢弃请求，让客户端选择处理，或者也可落地队列确保不丢数据;
-#      - set_response:
-#          status: 503
-#          content_type: "application/json"
-#          body: '{"error":true,"message":"503 Service Unavailable"}'
-#      - drop: #结束所有后续流程的处理
-
-      #option2: 放入主失败队列,主备都会消费该队列
-      - queue:
-          queue_name: "primary-failure"
-      #由请求触发的限速模式下的主动检查后端监控情况
-      - elasticsearch_health_check:
-          elasticsearch: "primary"
+      #option1: 直接丢弃请求，让客户端选择处理，或者也可落地队列确保不丢数据;
       - set_response:
-          status: 200
+          status: 503
           content_type: "application/json"
-          body: '{"error":false,"success":true,"acknowledged":true,"hits":{},"found":true}'
+          body: '{"error":true,"message":"503 Service Unavailable"}'
       - drop: #结束所有后续流程的处理
+
+#      #option2: 放入主失败队列,主备都会消费该队列
+#      - queue:
+#          queue_name: "primary-failure"
+#      #由请求触发的限速模式下的主动检查后端监控情况
+#      - elasticsearch_health_check:
+#          elasticsearch: "primary"
+#      - set_response:
+#          status: 200
+#          content_type: "application/json"
+#          body: '{"error":false,"success":true,"acknowledged":true,"hits":{},"found":true}'
+#      - drop: #结束所有后续流程的处理
 
   - name: primary-write-flow #正常的主写流程
     filter:
