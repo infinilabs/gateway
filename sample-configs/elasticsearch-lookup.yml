@@ -16,14 +16,14 @@ flow:
               _ctx.request.path: "/_search"
           source:
             join_by_field_values:
-              json_path: [ "_source","category"] #extracted values will be preset as variable `JOIN_BY_FIELD_ARRAY_VALUES` pass to second fetch phrase.
+              json_path: [ "_source","key"] #extracted values will be preset as variable `JOIN_BY_FIELD_ARRAY_VALUES` pass to second fetch phrase.
           target:
             elasticsearch: es-server
-            index_pattern: test1
+            index_pattern: details
             template:
               variable: #syntax: key -> string value
-                JOIN_BY_FIELD_NAME: 'category' # `_source` should enabled
-                SORT_BY_FIELD_NAME: 'payload'
+                JOIN_BY_FIELD_NAME: 'key.keyword' # `_source` should enabled
+                SORT_BY_FIELD_NAME: 'weight'
                 SORT_BY_FIELD_ORDER: 'desc'
                 MAX_NUMBER_OF_DOCS_TO_RETURN: '1'
               method: POST
@@ -75,4 +75,55 @@ elasticsearch:
   - name: es-server
     enabled: true
     endpoints:
-     - http://192.168.3.188:9231
+     - http://192.168.3.188:9206
+
+
+#DELETE summary
+#DELETE details
+#POST summary/_doc/
+#{
+#  "name": "this is the summary doc, named key-1",
+#  "key": "dev-1"
+#}
+#
+#GET details/
+#POST details/_doc/
+#{
+#  "key": "dev-1",
+#  "desc": "this is a big description of text for key-1, you know, for join on the fly",
+#  "weight":1
+#}
+#
+#POST details/_doc/
+#{
+#  "key": "dev-1",
+#  "desc": "this is a big description of text for key-1, you know, for join on the fly, i want this because it is newly updated",
+#  "weight":2
+#}
+
+#➜  gateway git:(master) ✗ curl "localhost:8000/summary/_search?pretty"
+#{
+#  "took" : 4,
+#  "timed_out" : false,
+#  "_shards" : {
+#    "total" : 1,
+#    "successful" : 1,
+#    "skipped" : 0,
+#    "failed" : 0
+#  },
+#  "hits" : {
+#    "total" : {
+#      "value" : 1,
+#      "relation" : "eq"
+#    },
+#    "max_score" : 1.0,
+#    "hits" : [
+#      {"_index":"details","_type":"_doc","_id":"vY6PkYIB8JeJI9fF4A0V","_score":null,"_source":{
+#  "key": "dev-1",
+#  "desc": "this is a big description of text for key-1, you know, for join on the fly, i want this because it is newly updated",
+#  "weight":2
+#}
+#,"sort":[2]}
+#    ]
+#  }
+#}

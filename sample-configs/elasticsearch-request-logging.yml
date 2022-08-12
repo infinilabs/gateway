@@ -8,11 +8,11 @@ entry:
     max_concurrency: 10000
     network:
       binding: 0.0.0.0:8000
-    tls:
-      enabled: true
-      cert_file: /etc/elasticsearch/certs/es7.crt
-      key_file: /etc/elasticsearch/certs/es7-key.pem
-      skip_insecure_verify: false
+#    tls:
+#      enabled: true
+#      cert_file: /etc/elasticsearch/certs/es7.crt
+#      key_file: /etc/elasticsearch/certs/es7-key.pem
+#      skip_insecure_verify: false
 flow:
   - name: primary-write-flow
     filter:
@@ -51,7 +51,7 @@ elasticsearch:
   - name: es-server #the business server
     enabled: true
     endpoints:
-      - https://10.129.1.1:9200
+      - http://192.168.3.188:9206
     basic_auth:
       username: admin
       password: admin
@@ -63,7 +63,7 @@ elasticsearch:
   - name: logging-server #the logging server
     enabled: true
     endpoints:
-      - https://10.129.1.1:9200
+      - http://192.168.3.188:9206
     basic_auth:
       username: admin
       password: admin

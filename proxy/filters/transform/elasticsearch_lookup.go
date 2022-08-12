@@ -22,12 +22,11 @@ type RequestTemplate struct {
 }
 
 type ElasticsearchLookup struct {
-	Elasticsearch string `config:"elasticsearch"`
-	IndexPattern  string `config:"index_pattern"`
+	Elasticsearch string `config:"target.elasticsearch"`
+	IndexPattern  string `config:"target.index_pattern"`
+	Template RequestTemplate `config:"target.template"`
 
-	Template RequestTemplate `config:"template"`
-
-	JoinBySourceFieldValuesKeyPath []string `config:"join_by_field_values.json_path"`
+	JoinBySourceFieldValuesKeyPath []string `config:"source.join_by_field_values.json_path"`
 
 }
 

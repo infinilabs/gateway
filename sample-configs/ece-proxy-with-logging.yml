@@ -90,4 +90,5 @@ pipeline:
             cluster_available: [ "logging-server" ]
 
 #  ./bin/echo_server -debug
+# echo "127.0.0.1 abcde.domain.com" >> /etc/hosts
 #  curl http://abcde.domain.com:8000/uat/bot_index/_search -uzk:1234
