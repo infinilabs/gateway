@@ -441,7 +441,9 @@ START:
 		if !elastic.IsHostAvailable(host) {
 			old := host
 			host = metadata.GetActiveHost()
-			log.Infof("host [%v] is not available, re-choose one: [%v]", old, host)
+			if rate.GetRateLimiterPerSecond("proxy-host-not-available",old,1).Allow(){
+				log.Infof("host [%v] is not available, re-choose one: [%v]", old, host)
+			}
 			pc = metadata.GetHttpClient(host)
 		}
 	}
