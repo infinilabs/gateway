@@ -7,18 +7,14 @@ entry:
       binding: 0.0.0.0:8002
 
 flow:
-  - name: echo1
+  - name: es
     filter:
-      - echo:
-          message: "echo testing"
       - elasticsearch:
           elasticsearch: server4
-#      - elasticsearch:
-#          elasticsearch: server
 
 router:
   - name: my_router1
-    default_flow: echo1
+    default_flow: es
 
 elasticsearch:
   - name: server4
