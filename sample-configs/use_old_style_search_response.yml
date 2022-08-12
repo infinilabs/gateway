@@ -19,13 +19,14 @@ flow:
          and:
            - contains:
                _ctx.request.path: "_search"
-           - equals:
-               _ctx.request.header.User-Agent: "curl/7.54.0"
+#           - equals:
+#               _ctx.request.header.User-Agent: "curl/7.54.0"
     - record:
         stdout: true
     - elasticsearch:
        elasticsearch: es-server
     - dump:
+        request: true
         response_body: true
 
 elasticsearch:

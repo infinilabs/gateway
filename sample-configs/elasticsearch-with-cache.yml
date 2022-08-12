@@ -19,7 +19,12 @@ flow:
           elasticsearch: es-server
   - name: es-cache-flow
     filter:
+#      - set_request_query_args:
+#          args:
+#            - size -> 10
       - get_cache:
+      - dump:
+          request: true
       - elasticsearch:
           elasticsearch: es-server
       - set_cache:
@@ -32,6 +37,8 @@ router:
           - "GET"
           - "HEAD"
         pattern:
+          - "/"
+          - "/_search"
           - "/{any_index}/_search"
         flow:
           - es-cache-flow
@@ -41,3 +48,8 @@ elasticsearch:
     enabled: true
     endpoints:
      - http://192.168.3.188:9206
+
+#curl localhost:8000/abcd/_search -v
+#curl "localhost:8000/abcd/_search?no_cache=true" -v
+#curl "localhost:8000/abcd/_search?no_cache=false" -v
+#curl "localhost:8000/abcd/_search?no_cache=true&size=1" -v

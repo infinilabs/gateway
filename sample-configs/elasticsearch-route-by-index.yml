@@ -49,8 +49,11 @@ elasticsearch:
   - name: es2-erp
     enabled: true
     endpoints:
-     - http://192.168.3.188:9207
+     - http://192.168.3.188:9206
   - name: es3-mall
     enabled: true
     endpoints:
-     - http://192.168.3.188:9208
+     - http://192.168.3.188:9299
+
+# curl localhost:8000/apm-sab/_search -v
+# curl localhost:8000/mall-sab/_search -v

@@ -34,6 +34,7 @@ path.logs: log
 
 
 #curl localhost:8000 -u hackers:dogood
+#curl localhost:8000 -u hackers:dogood1
 
 entry:
   - name: my_es_entry
