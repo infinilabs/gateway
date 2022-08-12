@@ -26,6 +26,7 @@ import (
 	"infini.sh/framework/modules/filter"
 	"infini.sh/framework/modules/pipeline"
 	queue2 "infini.sh/framework/modules/queue/disk_queue"
+	"infini.sh/framework/modules/queue/kafka_queue"
 	"infini.sh/framework/modules/queue/mem_queue"
 	"infini.sh/framework/modules/redis"
 	"infini.sh/framework/modules/s3"
@@ -48,6 +49,7 @@ func setup()  {
 	module.RegisterSystemModule(&filter.FilterModule{})
 	module.RegisterSystemModule(&s3.S3Module{})
 	module.RegisterSystemModule(&mem_queue.MemoryQueue{})
+	module.RegisterSystemModule(&kafka_queue.KafkaQueue{})
 	module.RegisterSystemModule(&queue2.DiskQueue{})
 	module.RegisterSystemModule(&redis.RedisModule{})
 	module.RegisterSystemModule(&elastic.ElasticModule{})

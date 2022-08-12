@@ -7,7 +7,7 @@ entry:
     router: my_router
     max_concurrency: 200000
     network:
-      binding: 0.0.0.0:8000
+      binding: 0.0.0.0:8070
 
 flow:
   - name: async_bulk
@@ -51,25 +51,26 @@ elasticsearch:
   - name: dev
     enabled: true
     endpoints:
-     - http://192.168.3.188:9206
-     - http://192.168.3.188:9216
+     - http://localhost:9200
+#     - http://192.168.3.188:9206
+#     - http://192.168.3.188:9216
 
 pipeline:
   - name: bulk_request_ingest
     auto_start: true
-    keep_running: true
+#    keep_running: true
     retry_delay_in_ms: 1000
     processor:
-      - disorder_bulk_indexing:
+      - bulk_indexing:
           max_connection_per_node: 100
           max_worker_size: 100
           worker_size: 10
           bulk:
             compress: false
             batch_size_in_mb: 10
-            batch_size_in_docs: 10000
+            batch_size_in_docs: 100
           consumer:
-            fetch_max_messages: 1000
+            fetch_max_messages: 100
           queues:
             type: bulk_reshuffle
 #  - name: consume-request_logging
@@ -89,9 +90,10 @@ pipeline:
 
 disk_queue.enabled: false
 disk_queue.default: false
-
+#
 kafka_queue:
   enabled: true
   default: true
   brokers:
-    - "192.168.3.188:9092"
+    - "192.168.3.23:9092"
+#    - "192.168.3.188:9092"

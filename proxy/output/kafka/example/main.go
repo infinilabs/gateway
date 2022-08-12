@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	topic         = "medcl"
-	brokerAddress = "localhost:9092"
+	topic         = "cbp5cm3q50k10squ2na0"
+	brokerAddress = "192.168.3.188:9092"
 )
 
 func main() {
@@ -45,6 +45,8 @@ func produce(ctx context.Context) {
 		RequiredAcks: 0,
 		// assign the logger to the writer
 	})
+
+	w.AllowAutoTopicCreation=true
 
 	messages:=[]kafka.Message{}
 	j:=0
