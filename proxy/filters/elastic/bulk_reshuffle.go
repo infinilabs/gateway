@@ -93,6 +93,8 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 	return &runner, nil
 }
 
+var docBufferPool=  bytebufferpool.NewTaggedPool("bulk_request_docs",1,1024*1024*1024,100000)
+
 func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 	pathStr := util.UnsafeBytesToString(ctx.URI().Path())
@@ -343,7 +345,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			////update actionItem
 			buff, ok = docBuf[queueConfig.Name]
 			if !ok {
-				buff = bytebufferpool.Get("bulk_request_docs")
+				buff = docBufferPool.Get()
 				docBuf[queueConfig.Name] = buff
 				var exists bool
 				exists, err = queue.RegisterConfig(queueConfig.Name, queueConfig)
@@ -361,7 +363,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			if actionMeta.Len() > 0 {
 				buff, ok := docBuf[queueConfig.Name]
 				if !ok {
-					buff = bytebufferpool.Get("bulk_request_docs")
+					buff = docBufferPool.Get()
 					docBuf[queueConfig.Name] = buff
 				}
 
@@ -424,7 +426,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			} else {
 				log.Warn("zero message,", x, ",", len(data), ",", string(body))
 			}
-			bytebufferpool.Put("bulk_request_docs", y)
+			docBufferPool.Put(y)
 		}
 
 		if indexAnalysis {
@@ -452,7 +454,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		//fake results
 		ctx.SetContentType(JSON_CONTENT_TYPE)
 
-		buffer := bytebufferpool.Get("bulk_request_docs")
+		buffer := docBufferPool.Get()
 
 		buffer.Write(startPart)
 		for i := 0; i < docCount; i++ {
@@ -464,7 +466,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		buffer.Write(endPart)
 
 		ctx.Response.AppendBody(buffer.Bytes())
-		bytebufferpool.Put("bulk_request_docs", buffer)
+		docBufferPool.Put(buffer)
 
 		if len(this.config.TagsOnSuccess) > 0 {
 			ctx.UpdateTags(this.config.TagsOnSuccess, nil)
