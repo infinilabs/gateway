@@ -62,7 +62,9 @@ pipeline:
     processor:
       - bulk_indexing:
           max_connection_per_node: 100
-          max_worker_size: 10
+          num_of_slices: 3
+          max_worker_size: 30
+          idle_timeout_in_seconds: 10
           bulk:
             compress: false
             batch_size_in_mb: 10
