@@ -62,7 +62,7 @@ func (filter *SetRequestQueryArgs) Name() string {
 
 func (filter *SetRequestQueryArgs) Filter(ctx *fasthttp.RequestCtx) {
 	for k, v := range filter.m {
-		value := ctx.Request.Header.Peek(k)
+		value := ctx.Request.URI().QueryArgs().Peek(k)
 		if len(value) > 0 {
 			ctx.Request.URI().QueryArgs().Del(k)
 		}
