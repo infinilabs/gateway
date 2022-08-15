@@ -1,0 +1,6 @@
+FROM amd64/centos:7.9.2009
+
+COPY ./gateway /gateway
+COPY ./gateway.yml /gateway.yml
+
+CMD ["/gateway"]
