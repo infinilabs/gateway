@@ -249,3 +249,22 @@ func TestDatePrecisionTuning3(t *testing.T) {
 
 }
 
+func TestDatePrecisionTuning5(t *testing.T) {
+
+	filter:= DatePrecisionTuning{config: &defaultConfig}
+	ctx:=&fasthttp.RequestCtx{}
+	ctx.Request=fasthttp.Request{}
+	ctx.Request.SetRequestURI("/_search")
+	ctx.Request.Header.SetMethod(fasthttp.MethodPost)
+
+	data:=[]byte("{\"version\":true,\"size\":500,\"sort\":[{\"createTime\":{\"order\":\"desc\",\"unmapped_type\":\"boolean\"}}],\"aggs\":{\"2\":{\"date_histogram\":{\"field\":\"createTime\",\"fixed_interval\":\"30s\",\"time_zone\":\"Asia/Shanghai\",\"min_doc_count\":1}}},\"stored_fields\":[\"*\"],\"script_fields\":{},\"docvalue_fields\":[{\"field\":\"createTime\",\"format\":\"date_time\"}],\"_source\":{\"excludes\":[]},\"query\":{\"bool\":{\"must\":[],\"filter\":[{\"match_all\":{}},{\"range\":{\"createTime\":{\"gte\":\"2022-08-15T11:26:51.953Z\",\"lte\":\"2022-08-15T11:41:51.953Z\",\"format\":\"strict_date_optional_time\"}}}],\"should\":[],\"must_not\":[]}},\"highlight\":{\"pre_tags\":[\"@kibana-highlighted-field@\"],\"post_tags\":[\"@/kibana-highlighted-field@\"],\"fields\":{\"*\":{}},\"fragment_size\":2147483647}}")
+	ctx.Request.SetBody(data)
+
+	filter.config.TimePrecision=6
+	filter.Filter(ctx)
+	rePrecisedBody:=string(ctx.Request.Body())
+	fmt.Println(rePrecisedBody)
+	assert.Equal(t,rePrecisedBody,"{\"version\":true,\"size\":500,\"sort\":[{\"createTime\":{\"order\":\"desc\",\"unmapped_type\":\"boolean\"}}],\"aggs\":{\"2\":{\"date_histogram\":{\"field\":\"createTime\",\"fixed_interval\":\"30s\",\"time_zone\":\"Asia/Shanghai\",\"min_doc_count\":1}}},\"stored_fields\":[\"*\"],\"script_fields\":{},\"docvalue_fields\":[{\"field\":\"createTime\",\"format\":\"date_time\"}],\"_source\":{\"excludes\":[]},\"query\":{\"bool\":{\"must\":[],\"filter\":[{\"match_all\":{}},{\"range\":{\"createTime\":{\"gte\":\"2022-08-15T11:26:51.000Z\",\"lte\":\"2022-08-15T11:41:51.999Z\",\"format\":\"strict_date_optional_time\"}}}],\"should\":[],\"must_not\":[]}},\"highlight\":{\"pre_tags\":[\"@kibana-highlighted-field@\"],\"post_tags\":[\"@/kibana-highlighted-field@\"],\"fields\":{\"*\":{}},\"fragment_size\":2147483647}}")
+
+}
+

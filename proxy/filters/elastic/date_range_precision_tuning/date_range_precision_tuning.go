@@ -74,13 +74,23 @@ func (this *DatePrecisionTuning) Filter(ctx *fasthttp.RequestCtx) {
 			precisionOffset := 0
 			matchCount := 0
 			//fmt.Println("body[start:end]: ",string(body[start:end]))
-			for i, v := range body[start:end] {
-				if v == 84 { //T
-					startProcess = true
-					precisionOffset = 0
-					matchCount++
-					continue
+			block:=body[start:end]
+			len:=len(block)-1
+			for i, v := range block {
+				if i>1 &&i <len{
+					//fmt.Println(i,",",string(v),",",block[i-1],",",block[i+1])
+					left:=block[i-1]
+					right:=block[i+1]
+					if v == 84 &&left > 47 && left < 58 &&right > 47 && right < 58{ //T
+						//fmt.Println("star process")
+						startProcess = true
+						precisionOffset = 0
+						matchCount++
+						continue
+					}
 				}
+
+
 				if startProcess && v > 47 && v < 58 {
 					precisionOffset++
 					if precisionOffset <= this.config.TimePrecision {
