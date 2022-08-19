@@ -1,12 +1,5 @@
 path.data: data
 path.logs: log
-#log.level: trace
-#log.debug: true
-
-#api:
-#  enabled: true
-#  network:
-#    binding: 127.0.0.1:2900
 
 entry:
   - name: my_es_entry
@@ -43,16 +36,16 @@ flow:
       - stats:
       - logging:
           queue_name: request_logging
-          max_request_body_size: 1024
-          max_response_body_size: 1024
+          max_request_body_size: 10240
+          max_response_body_size: 10240
           when: #>1s or none-200 requests will be logged
             or:
               - not:
                   or:
                     - equals:
                         _ctx.request.path: "/favicon.ico"
-                    - equals:
-                        _ctx.response.status: 200
+                    - in:
+                        _ctx.response.status: [200,201]
                     - in:
                         _ctx.request.path: ["/sw.js"]
               - range:
@@ -61,7 +54,6 @@ router:
   - name: my_router
     default_flow: default_flow
     tracing_flow: logging
-
 
 elasticsearch:
 - name: dev
@@ -110,65 +102,3 @@ pipeline:
           type: bulk_reshuffle
         when:
           cluster_available: [ "dev" ]
-
-#floating_ip:
-#  enabled: false
-#  ip: 192.168.3.234      #yep, it's optional, infini-gateway could detect one but maybe not the right one
-##  netmask: 255.255.255.0 #optional
-##  interface: en1         #optional
-
-#statsd:
-#  enabled: true
-#  host: 127.0.0.1
-#  port: 8125
-#  protocol: udp
-#  namespace: gateway.
-#  buffer_size: 102400
-
-#redis:
-#  enabled: true
-#  host: localhost
-#  port: 6379
-#
-#queue:
-#  - name: dev-node-yNgVusnXSgqvP2fZeGFSLw
-#    type: redis
-#
-#disk_queue:
-#  upload_to_s3: true
-#  s3:
-#    server: my_blob_store
-#    location: cn-beijing-001
-#    bucket: infini-store
-##  max_used_bytes: 102400
-##  warning_free_bytes: 322122547200
-##  reserved_free_bytes: 322122547200
-##  max_bytes_per_file: 1048576
-#
-#
-#s3:
-#  my_blob_store:
-#    endpoint: "192.168.3.63:9000"
-#    access_key: "minio"
-#    access_secret: "gogoaminio"
-##    token: "XXXX"
-##    ssl: true
-#
-#
-#elastic:
-#  elasticsearch: dev
-#  enabled: true
-#  remote_configs: true
-#  health_check:
-#    enabled: true
-#  availability_check:
-#    enabled: true
-#  metadata_refresh:
-#    enabled: true
-#  store:
-#    enabled: true
-#  orm:
-#    enabled: true
-#    init_template: true
-#    template_name: ".infini"
-#    index_prefix: ".infini_"
