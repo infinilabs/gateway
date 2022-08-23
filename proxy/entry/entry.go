@@ -92,7 +92,10 @@ func (this *Entrypoint) Start() error {
 			flow := common.FilterFlow{}
 			for _, y := range rule.Flow {
 
-				cfg := common.GetFlowConfig(y)
+				cfg,err := common.GetFlowConfig(y)
+				if err!=nil{
+					panic(err)
+				}
 
 				if len(cfg.Filters) > 0 {
 					flow1, err := pipeline.NewFilter(cfg.GetConfig())

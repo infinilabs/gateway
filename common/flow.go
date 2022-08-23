@@ -50,20 +50,23 @@ func (flow *FilterFlow) Process(ctx *fasthttp.RequestCtx) {
 		v.Filter(ctx)
 	}
 }
+var nilIDFlowError=errors.New("flow id can't be nil")
 
-func MustGetFlow(flowID string) FilterFlow {
-
+func GetFlow(flowID string) (FilterFlow,error) {
+	v := FilterFlow{}
 	if flowID==""{
-		panic("flow id can't be nil")
+		return v,nilIDFlowError
 	}
 
 	v1,ok:=flows.Load(flowID)
 	if ok{
-		return v1.(FilterFlow)
+		return v1.(FilterFlow),nil
 	}
 
-	v := FilterFlow{}
-	cfg := GetFlowConfig(flowID)
+	cfg,err := GetFlowConfig(flowID)
+	if err!=nil{
+		return v,err
+	}
 
 	if global.Env().IsDebug {
 		log.Tracef("flow [%v] [%v]", flowID, cfg)
@@ -72,13 +75,22 @@ func MustGetFlow(flowID string) FilterFlow {
 	if len(cfg.Filters) > 0 {
 		flow1, err := pipeline.NewFilter(cfg.GetConfig())
 		if err != nil {
-			panic(err)
+			return v,err
 		}
 		v.JoinFilter(flow1)
 	}
 
 	flows.Store(flowID, v)
-	return v
+	return v,nil
+}
+
+func MustGetFlow(flowID string) FilterFlow {
+
+	flow,err:=GetFlow(flowID)
+	if err!=nil{
+		panic(err)
+	}
+	return flow
 }
 
 func GetFlowProcess(flowID string) func(ctx *fasthttp.RequestCtx) {
@@ -130,10 +142,10 @@ func GetRouter(name string) RouterConfig {
 	return v
 }
 
-func GetFlowConfig(id string) FlowConfig {
+func GetFlowConfig(id string) (FlowConfig,error) {
 	v, ok := flowConfigs[id]
 	if !ok {
-		panic(errors.Errorf("flow [%s] not found", id))
+		return v,errors.Errorf("flow [%s] not found", id)
 	}
-	return v
+	return v,nil
 }
