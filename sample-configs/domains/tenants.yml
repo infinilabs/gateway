@@ -1,0 +1,19 @@
+configs.template:
+  - name: "ae2d7509-4de0-5e51-1cce-3db44b4e3de4"
+    path: ./sample-configs/domains/domain_flow.tpl
+    variable:
+      CLUSTER_UUID: "ae2d7509-4de0-5e51-1cce-3db44b4e3de4"
+      CLUSTER_ENDPOINTS:
+        - "\"http://192.168.3.188:9206\""
+      CLUSTER_USERNAME: ""
+      CLUSTER_PASSWORD: ""
+      CLUSTER_DISCOVERY_ENABLED: true
+  - name: "c70704fb-c505-8000-bc96-e9738c144f0e"
+    path: ./sample-configs/domains/domain_flow.tpl
+    variable:
+      CLUSTER_UUID: "c70704fb-c505-8000-bc96-e9738c144f0e"
+      CLUSTER_ENDPOINTS:
+        - "\"http://192.168.3.188:9298\""
+      CLUSTER_USERNAME: ""
+      CLUSTER_PASSWORD: ""
+      CLUSTER_DISCOVERY_ENABLED: true
