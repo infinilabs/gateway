@@ -69,6 +69,7 @@ type RouterConfig struct {
 
 	Rules              []RuleConfig `config:"rules" json:"rules,omitempty" elastic_mapping:"rules: { type: object }"`
 	DeniedClientIPList []string     `config:"denied_client_ip_list" json:"denied_client_ip_list,omitempty" elastic_mapping:"denied_client_ip_list: { type: keyword }"`
+	PermittedClientIPList []string     `config:"permitted_client_ip_list" json:"permitted_client_ip_list,omitempty" elastic_mapping:"permitted_client_ip_list: { type: keyword }"`
 }
 
 type FlowConfig struct {

@@ -213,6 +213,13 @@ func (this *Entrypoint) Start() error {
 		}
 	}
 
+	if len(this.routerConfig.PermittedClientIPList) > 0 {
+		log.Tracef("adding %v client ip to permitted list", len(this.routerConfig.PermittedClientIPList))
+		for _, ip := range this.routerConfig.PermittedClientIPList {
+			this.server.AddWhiteIPList(ip)
+		}
+	}
+
 	this.schema = "http://"
 	if this.config.TLSConfig.TLSEnabled {
 		this.schema = "https://"

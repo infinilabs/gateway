@@ -1,0 +1,25 @@
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 200000
+    network:
+      binding: 0.0.0.0:8000
+
+flow:
+  - name: hello_world
+    filter:
+      - echo:
+          message: "hello world"
+router:
+  - name: my_router
+    default_flow: hello_world
+    permitted_client_ip_list:
+      - 133.37.55.22
+      - 127.0.0.1
+#    denied_client_ip_list:
+#      - 133.37.55.22
+#      - 127.0.0.1
