@@ -246,19 +246,22 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 	}
 
 	if len(newHosts) == 0 {
-		log.Error("proxy upstream is empty")
+		log.Errorf("upstream for [%v] is empty",esConfig.Name)
 		return
 	}
 
 	if util.JoinArray(newHosts, ", ") == util.JoinArray(p.endpoints, ", ") {
-		log.Debug("hosts no change, skip")
+		log.Debugf("hosts of [%v] no change, skip",esConfig.Name)
 		return
 	}
 
 	//replace with new hostClients
 	//TODO add locker
 	p.bla = balancer.NewBalancer(ws)
-	log.Infof("elasticsearch [%v] hosts: [%v] => [%v]", esConfig.Name, util.JoinArray(p.endpoints, ", "), util.JoinArray(newHosts, ", "))
+	newHostsStr:=util.JoinArray(newHosts, ", ")
+	if rate.GetRateLimiterPerSecond("elasticsearch",esConfig.Name+newHostsStr,1).Allow(){
+		log.Infof("elasticsearch [%v] hosts: [%v] => [%v]", esConfig.Name, util.JoinArray(p.endpoints, ", "), newHostsStr)
+	}
 	p.endpoints = newHosts
 	log.Trace(esConfig.Name, " elasticsearch client nodes refreshed")
 
@@ -355,7 +358,6 @@ func (p *ReverseProxy) getClient() (clientAvailable bool, client *fasthttp.Clien
 	if len(p.clients) == 0 || len(p.endpoints) == 0 {
 		p.refreshNodes(true)
 		if p.clients == nil || len(p.clients) == 0 || len(p.endpoints) == 0 {
-			log.Error("no upstream found")
 			panic("no upstream found")
 		}
 	}
@@ -442,7 +444,7 @@ START:
 			old := host
 			host = metadata.GetActiveHost()
 			if rate.GetRateLimiterPerSecond("proxy-host-not-available",old,1).Allow(){
-				log.Infof("host [%v] is not available, re-choose one: [%v]", old, host)
+				log.Infof("host [%v] is not available, fallback: [%v]", old, host)
 			}
 			pc = metadata.GetHttpClient(host)
 		}
