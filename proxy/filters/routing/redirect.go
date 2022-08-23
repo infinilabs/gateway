@@ -9,6 +9,7 @@ import (
 
 type RedirectFilter struct {
 	Uri string `config:"uri"`
+	Code int `config:"code"`
 }
 
 func (filter *RedirectFilter) Name() string {
@@ -16,7 +17,7 @@ func (filter *RedirectFilter) Name() string {
 }
 
 func (filter *RedirectFilter) Filter(ctx *fasthttp.RequestCtx) {
-	ctx.Redirect(filter.Uri,302)
+	ctx.Redirect(filter.Uri,filter.Code)
 	ctx.Finished()
 }
 
@@ -26,7 +27,9 @@ func init() {
 
 func NewRedirectFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := RedirectFilter{}
+	runner := RedirectFilter{
+		Code: 302,
+	}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
