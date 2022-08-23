@@ -22,7 +22,6 @@ import (
 type HTTPFilter struct {
 	requestTimeout time.Duration
 
-	MaxConnsPerHost int      `config:"max_connection_per_host"`
 	Schema          string   `config:"schema"`
 	SkipFailureHost bool     `config:"skip_failure_host"`
 	Host            string   `config:"host"`
@@ -171,7 +170,6 @@ func init() {
 func NewHTTPFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := HTTPFilter{
-		MaxConnsPerHost:       10000,
 		SkipFailureHost:       true,
 		MaxConnection:         5000,
 		MaxRetryTimes:         0,
