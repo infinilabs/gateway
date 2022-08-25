@@ -7,6 +7,8 @@ import (
 	"crypto/tls"
 	"fmt"
 	log "github.com/cihub/seelog"
+	"github.com/shaj13/libcache"
+	_ "github.com/shaj13/libcache/lru"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
@@ -16,6 +18,7 @@ import (
 	"infini.sh/gateway/lib/guardian/auth"
 	"infini.sh/gateway/lib/guardian/auth/strategies/ldap"
 	"net/http"
+	"time"
 )
 
 type LDAPFilter struct {
@@ -31,6 +34,8 @@ type LDAPFilter struct {
 	GroupAttribute string   `config:"group_attribute"`
 	Attributes     []string `config:"attributes"`
 	RequireGroup   bool     `config:"require_group"`
+	MaxCacheItems   int     `config:"max_cache_items"`
+	CacheTTL   string     `config:"cache_ttl"`
 
 	BypassAPIKey bool `config:"bypass_api_key"`
 	ldapQuery    auth.Strategy
@@ -94,6 +99,7 @@ func NewLDAPFilter(c *config.Config) (pipeline.Filter, error) {
 		Tls:            false,
 		RequireGroup:   true,
 		Port:           389,
+		CacheTTL: "300s",
 		UserFilter:     "(uid=%s)",
 		GroupFilter:    "(memberUid=%s)",
 		UidAttribute:   "uid",
@@ -122,6 +128,16 @@ func NewLDAPFilter(c *config.Config) (pipeline.Filter, error) {
 	if runner.Tls {
 		cfg.TLS = &tls.Config{InsecureSkipVerify: true}
 	}
-	runner.ldapQuery = ldap.New(&cfg)
+
+	cacheObj := libcache.LRU.New(runner.MaxCacheItems)
+	if runner.CacheTTL!=""{
+		cacheObj.SetTTL(util.GetDurationOrDefault(runner.CacheTTL,time.Minute*5))
+	}
+	cacheObj.RegisterOnExpired(func(key, _ interface{}) {
+		cacheObj.Peek(key)
+	})
+
+	runner.ldapQuery = ldap.NewCached(&cfg,cacheObj)
+
 	return &runner, nil
 }
