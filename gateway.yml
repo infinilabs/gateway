@@ -14,7 +14,6 @@ entry:
 flow:
   - name: default_flow
     filter:
-      - get_cache:
       - bulk_reshuffle:
           when:
             contains:
@@ -22,6 +21,7 @@ flow:
           elasticsearch: dev
           level: node
           fix_null_id: true
+      - get_cache:
       - elasticsearch:
           elasticsearch: dev  #elasticsearch configure reference name
           max_connection_per_node: 1000 #max tcp connection to upstream, default for all nodes
