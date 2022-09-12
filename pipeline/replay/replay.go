@@ -135,7 +135,7 @@ func (processor *ReplayProcessor) Process(ctx *pipeline.Context) error {
 					//execute previous request now
 					if requestIsSet {
 						if buffer.Len() > 0 {
-							if util.ContainStr(string(req.RequestURI()), "_bulk") {
+							if util.ContainStr(string(req.Header.RequestURI()), "_bulk") {
 								buffer.WriteString(newline)
 							}
 							req.SetBody(buffer.Bytes())

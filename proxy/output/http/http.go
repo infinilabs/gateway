@@ -36,6 +36,7 @@ type HTTPFilter struct {
 	RetryDelayInMs      int `config:"retry_delay_in_ms"`
 
 	SkipCleanupHopHeaders bool `config:"skip_cleanup_hop_headers"`
+	SkipEnrichMetadata    bool `config:"skip_metadata_enrich"`
 
 	MaxConnWaitTimeout    time.Duration `config:"max_conn_wait_timeout"`
 	MaxIdleConnDuration   time.Duration `config:"max_idle_conn_duration"`
@@ -125,15 +126,21 @@ func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err er
 	orignalHost := string(ctx.Request.URI().Host())
 	orignalSchema := string(ctx.Request.URI().Scheme())
 
+	if host==""{
+		panic("invalid host")
+	}
+
 	ctx.URI().SetHost(host)
 	ctx.Request.SetHost(host)
 
 	//keep original host
 	ctx.Request.Header.SetHost(orignalHost)
 
-	ctx.Request.Header.Add("X-Forwarded-For", ctx.RemoteAddr().String())
-	ctx.Request.Header.Add("X-Real-IP", ctx.RemoteAddr().String())
-	ctx.Request.Header.Add("X-Forwarded-Host", orignalHost)
+	if !filter.SkipEnrichMetadata {
+		ctx.Request.Header.Set(fasthttp.HeaderXForwardedFor, ctx.RemoteAddr().String())
+		ctx.Request.Header.Set(fasthttp.HeaderXRealIP, ctx.RemoteAddr().String())
+		ctx.Request.Header.Set(fasthttp.HeaderXForwardedHost, orignalHost)
+	}
 
 	ctx.Request.URI().SetScheme(filter.Schema)
 
@@ -187,7 +194,7 @@ func NewHTTPFilter(c *config.Config) (pipeline.Filter, error) {
 		Timeout:      util.GetDurationOrDefault("30s", 30*time.Second),
 		WriteTimeout: util.GetDurationOrDefault("0s", 0*time.Hour),
 		//idle alive connection will be closed
-		MaxIdleConnDuration: util.GetDurationOrDefault("30s", 30*time.Second),
+		MaxIdleConnDuration: util.GetDurationOrDefault("300s", 300*time.Second),
 	}
 
 	if err := c.Unpack(&runner); err != nil {

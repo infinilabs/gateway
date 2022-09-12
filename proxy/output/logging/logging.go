@@ -117,11 +117,7 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	//request.ID = ctx.ID()
-
-	//request.ID = uint64(ctx.SequenceID)
-
-	//request.ConnTime = ctx.ConnTime().UTC().Format("2006-01-02T15:04:05.000Z")
+	request.ConnTime = ctx.ConnTime().UTC().Format("2006-01-02T15:04:05.000Z")
 	request.LoggingTime = time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	request.Request.StartTime = ctx.Time().UTC().Format("2006-01-02T15:04:05.000Z")
 
@@ -177,44 +173,44 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 
 	request.Elastic = map[string]interface{}{}
 
-	bulk_status := map[string]interface{}{}
-	if ctx.Has("bulk_response_status") {
-		responseStats := ctx.Get("bulk_response_status")
-		if responseStats!=nil{
-			bulk_status["status"] = responseStats
+	if this.config.SaveBulkDetails {
+
+		bulk_status := map[string]interface{}{}
+		if ctx.Has("bulk_response_status") {
+			responseStats := ctx.Get("bulk_response_status")
+			if responseStats!=nil{
+				bulk_status["status"] = responseStats
+			}
 		}
-	}
 
-	if ctx.Has("bulk_index_stats") {
-		if request.Elastic == nil {
-			request.Elastic = map[string]interface{}{}
-		}
-		indexStats := ctx.Get("bulk_index_stats")
-		if indexStats!=nil{
-			statsObj, ok := indexStats.(map[string]int)
-			if ok {
-				docs := 0
-				for _, v := range statsObj {
-					docs += v
-				}
+		if ctx.Has("bulk_index_stats") {
+			if request.Elastic == nil {
+				request.Elastic = map[string]interface{}{}
+			}
+			indexStats := ctx.Get("bulk_index_stats")
+			if indexStats != nil {
+				statsObj, ok := indexStats.(map[string]int)
+				if ok {
+					docs := 0
+					for _, v := range statsObj {
+						docs += v
+					}
 
-				bulk_status["indices"] = len(statsObj)
-				bulk_status["documents"] = docs
+					bulk_status["indices"] = len(statsObj)
+					bulk_status["documents"] = docs
 
-				if this.config.SaveBulkDetails {
 					actionStats := ctx.Get("bulk_action_stats")
 					stats := map[string]interface{}{}
 					stats["index"] = indexStats
 					stats["action"] = actionStats
 					bulk_status["stats"] = stats
 				}
-
 			}
 		}
-	}
 
-	if len(bulk_status)>0{
-		request.Elastic["bulk_stats"] = bulk_status
+		if len(bulk_status)>0{
+			request.Elastic["bulk_stats"] = bulk_status
+		}
 	}
 
 	if ctx.Has("elastic_cluster_name") {
@@ -245,8 +241,8 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 	respBody := string(ctx.Response.GetRawBody())
 
 	if global.Env().IsDebug {
-		log.Debug("logging request body:", string(reqBody))
-		log.Debug("logging response body:", string(respBody))
+		log.Trace("logging request body:", string(reqBody))
+		log.Trace("logging response body:", string(respBody))
 	}
 
 	if len(respBody) > this.config.MaxResponseBodySize {

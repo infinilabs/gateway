@@ -56,6 +56,7 @@ flow:
           user_filter: "(cn=%s)"
           group_attribute: "ou"
           bypass_api_key: true
+          cache_ttl: "10s"
       - set_basic_auth:
           username: elastic
           password: CeO9QrXwap7sFliFiMkm
@@ -80,7 +81,7 @@ elasticsearch:
   - name: 717
     enabled: true
     endpoints:
-      - http://192.168.3.188:9231
+      - http://192.168.3.188:9206
     basic_auth:
       username: elastic
       password: CeO9QrXwap7sFliFiMkm

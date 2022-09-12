@@ -88,17 +88,22 @@ pipeline:
         bulk_size_in_mb: 10 #in MB
         when:
           cluster_available: [ "dev" ]
-#- name: bulk_request_ingest
-#  auto_start: true
-#  keep_running: true
-#  processor:
-#    - bulk_indexing:
-#        elasticsearch: "dev"
-#        max_worker_size: 10
-#        bulk.compress: true
-#        bulk_size_in_mb: 50  #in MB
-#        retry_delay_in_seconds: 5
-#        queues: #filter by labels
-#          type: bulk_reshuffle
-#        when:
-#          cluster_available: [ "dev" ]
+- name: bulk_request_ingest
+  auto_start: true
+  keep_running: true
+  processor:
+    - bulk_indexing:
+        elasticsearch: "dev"
+        max_worker_size: 10
+        bulk.compress: true
+        bulk_size_in_mb: 50  #in MB
+        retry_delay_in_seconds: 5
+        queues: #filter by labels
+          type: bulk_reshuffle
+        when:
+          cluster_available: [ "dev" ]
+
+disk_queue:
+  compress:
+    segment:
+      enabled: true

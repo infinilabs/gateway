@@ -270,7 +270,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 						//check enabled shards
 						if len(this.config.EnabledShards) > 0 {
 							if !util.ContainsInAnyInt32Array(shardID, this.config.EnabledShards) {
-								log.Debugf("shard %s-%s not enabled, skip processing", index, shardID)
+								log.Debugf("shard %v-%v not enabled, skip processing", index, shardID)
 								return errors.Errorf("shard %s-%v not enabled, skip processing", index, shardID)
 							}
 						}
@@ -413,7 +413,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 			if len(data) > 0 {
 
-				cfg, ok := queue.GetConfigByKey(x)
+				cfg, ok := queue.SmartGetConfig(x)
 				if !ok {
 					panic(errors.Errorf("queue config [%v] not exists", x))
 				}

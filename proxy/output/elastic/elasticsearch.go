@@ -68,7 +68,7 @@ func New(c *config.Config) (pipeline.Filter, error) {
 		Balancer:              "weight",
 		MaxResponseBodySize:   100 * 1024 * 1024,
 		MaxConnection:         5000,
-		MaxRetryTimes:         0,
+		MaxRetryTimes:         5,
 		RetryDelayInMs:        1000,
 		TLSInsecureSkipVerify: true,
 		ReadBufferSize:        4096 * 4,

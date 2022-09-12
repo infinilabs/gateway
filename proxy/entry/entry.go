@@ -220,9 +220,7 @@ func (this *Entrypoint) Start() error {
 		}
 	}
 
-	this.schema = "http://"
 	if this.config.TLSConfig.TLSEnabled {
-		this.schema = "https://"
 		cfg := &tls.Config{
 			MinVersion: tls.VersionTLS12,
 			CurvePreferences: []tls.CurveID{
@@ -338,9 +336,20 @@ func (this *Entrypoint) Start() error {
 		panic(err)
 	}
 
-	log.Infof("entry [%s] listen at: %s%s", this.String(), this.schema, this.listenAddress)
+	log.Infof("entry [%s] listen at: %s%s", this.String(), this.GetSchema(), this.listenAddress)
 
 	return nil
+}
+
+func (this *Entrypoint) GetSchema()string{
+	if this.schema!=""{
+		return this.schema
+	}
+	if this.config.TLSConfig.TLSEnabled{
+		return "https://"
+	}else{
+		return "http://"
+	}
 }
 
 func (this *Entrypoint) GetConfig() common.EntryConfig {
@@ -374,7 +383,7 @@ func (this *Entrypoint) Stop() error {
 				if util.ContainStr(this.listenAddress,"0.0.0.0"){
 					this.listenAddress=strings.Replace(this.listenAddress,"0.0.0.0","127.0.0.1",-1)
 				}
-				util.HttpGet(this.schema+this.listenAddress+"/favicon.ico")
+				util.HttpGet(this.GetSchema()+this.listenAddress+"/favicon.ico")
 			}
 		}()
 

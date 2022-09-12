@@ -252,7 +252,7 @@ func (p *RequestCache) getHash(ctx *fasthttp.RequestCtx) string {
 	//buffer:=hashBufferPool.Get().(*bytes.Buffer)
 
 	if global.Env().IsDebug {
-		log.Trace("generate hash:", string(ctx.Request.Header.Method()), string(ctx.Request.RequestURI()), string(ctx.Request.URI().QueryArgs().QueryString()), string(ctx.Request.Body()), string(ctx.Request.PostArgs().QueryString()))
+		log.Trace("generate hash:", string(ctx.Request.Header.Method()), string(ctx.Request.Header.RequestURI()), string(ctx.Request.URI().QueryArgs().QueryString()), string(ctx.Request.Body()), string(ctx.Request.PostArgs().QueryString()))
 	}
 
 	//TODO 后台可以按照请求路径来勾选 Hash 因子
@@ -365,7 +365,7 @@ func (filter *RequestCacheGet) Filter(ctx *fasthttp.RequestCtx) {
 			ctx.SetDestination("cache")
 
 			if global.Env().IsDebug {
-				log.Trace("cache hit:", hash, ",", string(ctx.Request.Header.Method()), ",", string(ctx.Request.RequestURI()))
+				log.Trace("cache hit:", hash, ",", string(ctx.Request.Header.Method()), ",", string(ctx.Request.Header.RequestURI()))
 			}
 
 			ctx.Finished()

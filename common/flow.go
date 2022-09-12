@@ -17,6 +17,9 @@ type FilterFlow struct {
 }
 
 func (flow *FilterFlow) JoinFilter(filter pipeline.Filter) *FilterFlow {
+	if filter==nil||filter.Filter==nil{
+		panic("invalid filer")
+	}
 	flow.Filters = append(flow.Filters, filter)
 	return flow
 }
@@ -36,6 +39,9 @@ func (flow *FilterFlow) ToString() string {
 
 func (flow *FilterFlow) Process(ctx *fasthttp.RequestCtx) {
 	for _, v := range flow.Filters {
+		if v==nil{
+			panic("invalid filter")
+		}
 		if !ctx.ShouldContinue() {
 			if global.Env().IsDebug {
 				log.Tracef("filter [%v] not continued", v.Name())
@@ -74,7 +80,7 @@ func GetFlow(flowID string) (FilterFlow,error) {
 
 	if len(cfg.Filters) > 0 {
 		flow1, err := pipeline.NewFilter(cfg.GetConfig())
-		if err != nil {
+		if flow1==nil||err != nil {
 			return v,err
 		}
 		v.JoinFilter(flow1)

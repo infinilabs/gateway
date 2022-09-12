@@ -418,8 +418,8 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string, ctx *pipeline.
 		continueNext, err := processor.submitBulkRequest(tag, esClusterID, meta, host, bulkProcessor, mainBuf)
 		if !continueNext {
 			log.Errorf("error in queue:[%v], err:%v", qConfig.Id, err)
-			if mainBuf.Buffer.Len() > 0 {
-				queue.Push(qConfig, mainBuf.Buffer.Bytes())
+			if mainBuf.GetMessageSize() > 0 {
+				queue.Push(qConfig, mainBuf.GetMessageBytes())
 			}
 			return
 		}
@@ -544,8 +544,8 @@ READ_DOCS:
 				continueRequest, err := processor.submitBulkRequest(tag, esClusterID, meta, host, bulkProcessor, mainBuf)
 				if !continueRequest {
 					log.Errorf("error in queue:[%v], err:%v", qConfig.Id, err)
-					if mainBuf.Buffer.Len() > 0 {
-						queue.Push(qConfig, mainBuf.Buffer.Bytes())
+					if mainBuf.GetMessageSize() > 0 {
+						queue.Push(qConfig, mainBuf.GetMessageBytes())
 					}
 					return
 				}
@@ -571,8 +571,8 @@ CLEAN_BUFFER:
 		continueNext, err := processor.submitBulkRequest(tag, esClusterID, meta, host, bulkProcessor, mainBuf)
 		if !continueNext {
 			log.Errorf("error in queue:[%v], err:%v", qConfig.Id, err)
-			if mainBuf.Buffer.Len() > 0 {
-				queue.Push(qConfig, mainBuf.Buffer.Bytes())
+			if mainBuf.GetMessageSize() > 0 {
+				queue.Push(qConfig, mainBuf.GetMessageBytes())
 			}
 			return
 		}

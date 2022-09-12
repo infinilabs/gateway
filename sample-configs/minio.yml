@@ -1,0 +1,18 @@
+#download minio https://min.io/download#/
+#chmod +x minio
+#MINIO_ROOT_USER=admin MINIO_ROOT_PASSWORD=password ./minio server ./data --console-address ":6001"
+
+disk_queue:
+  retention:
+    max_num_of_local_files: 3
+  upload_to_s3: true
+  s3:
+    server: my_blob_store
+    location: cn-beijing-001
+    bucket: infini-replica-blob-store
+
+s3:
+  my_blob_store:
+    endpoint: "192.168.3.188:9000"
+    access_key: "admin"
+    access_secret: "password"

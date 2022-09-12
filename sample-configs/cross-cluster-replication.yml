@@ -101,8 +101,9 @@ flow:
                 interval: 30s
           - bulk_response_process: #bulk 出错不继续执行后续 flow，因为成功、失败、非法的请求都已经入队，可以直接退出
               success_queue: "backup"
+              include_busy_requests_to_failure_queue: false #skip 429, clients should retry
               failure_queue: "primary-failure" #失败的请求，两边的集群都要做一次，避免脏数据
-              invalid_queue: "primary-invalid"
+#              invalid_queue: "primary-invalid"
           - flow: # 非 bulk 请求继续判断
               flows:
                 - primary-response-check
@@ -118,8 +119,8 @@ flow:
                 _ctx.response.status.gte: 400
                 _ctx.response.status.lt: 500
         then:
-          - queue:
-              queue_name: "primary-invalid"
+#          - queue:
+#              queue_name: "primary-invalid"
           - drop:
       - if: #正常的请求, 复制到备份集群
           in:
@@ -167,7 +168,8 @@ flow:
         then:
           - drop:
       - bulk_response_process: #bulk 成功执行了，非法消息都入队，其他消息都不用管，继续重试，只有全部成功或者失败的时候才 commit，请求丢给 backup，否则提前结束
-          invalid_queue: "primary-invalid" #保存用来查看消息日志
+#          invalid_queue: "primary-invalid" #保存用来查看消息日志
+          include_busy_requests_to_failure_queue: true #429 的错误必须重试
           tag_on_all_invalid: [ "commit_message_allowed" ] #只有都是非法请求的情况下才 commit
           tag_on_all_success: [ "commit_message_allowed" ] #只有都是成功的情况下才 commit
           continue_on_all_error: true #bulk 请求整体响应不是200，继续交由后面的 filter 进行处理
@@ -182,8 +184,8 @@ flow:
         then:
           - tag:
               add: [ "commit_message_allowed" ]
-          - queue:
-              queue_name: "primary-invalid"
+#          - queue:
+#              queue_name: "primary-invalid"
           - drop:
       - if:
           in:
@@ -229,6 +231,7 @@ flow:
           - drop:
       - bulk_response_process: #bulk 成功执行了，非法消息都入队，其他消息都不用管，继续重试，只有全部成功或者失败的时候才 commit，请求丢给 backup，否则提前结束
           invalid_queue: "backup-invalid" #保存用来查看消息日志
+          include_busy_requests_to_failure_queue: true
           tag_on_all_invalid: [ "commit_message_allowed" ] #只有都是非法请求的情况下才 commit
           tag_on_all_success: [ "commit_message_allowed" ] #只有都是成功的情况下才 commit
           continue_on_all_error: true #bulk 请求整体响应不是200，继续交由后面的 filter 进行处理
@@ -294,6 +297,7 @@ flow:
             interval: 30s
       - bulk_response_process: # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
           invalid_queue: "backup-invalid"
+          include_busy_requests_to_failure_queue: true
           failure_queue: "backup-failure"
           tag_on_all_success: ["commit_message_allowed"]
           tag_on_all_invalid: ["commit_message_allowed"]
@@ -357,6 +361,7 @@ flow:
             interval: 30s
       - bulk_response_process: # 如果部分请求出错，保存相关的消息到队列后，直接结束，不继续后续流程的处理
           invalid_queue: "backup-invalid"
+          include_busy_requests_to_failure_queue: true
           tag_on_all_invalid: ["commit_message_allowed"]
           tag_on_all_success: ["commit_message_allowed"]
           continue_on_all_error: true #bulk 请求整体响应不是200，继续交由后面的 filter 进行处理
@@ -386,17 +391,15 @@ flow:
 
   - name: request_logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
     filter:
-#      - record:
-#          stdout: true
-#          filename: requests.txt
+#      - stats:
       - context_filter:
           context: _ctx.request.path
           exclude:
             - /favicon.ico
       - logging:
           queue_name: request_logging
-          max_request_body_size: 102400
-          max_response_body_size: 102400
+          max_request_body_size: 1024
+          max_response_body_size: 1024
           when:
             or:
               - equals:
@@ -477,7 +480,7 @@ elasticsearch:
   - name: primary
     enabled: true
     endpoints:
-      - http://192.168.3.188:9299
+      - http://192.168.3.188:9204
     basic_auth:
       username: test
       password: testtest
@@ -540,23 +543,6 @@ pipeline:
           when:
             cluster_available: [ "backup" ]
 
-## option A - pipelines for backup cluster - safety first, each requests are replicated in order, the speed may slow
-#  - name: queue_backup-consumer
-#    auto_start: true
-#    keep_running: true
-#    processor:
-#      - flow_runner:
-#          input_queue: "backup"
-#          flow: backup-flow-replicate-processing
-#          commit_on_tag: "commit_message_allowed"
-#          consumer:
-#            group: "group123"
-#            name: "name133"
-#          when:
-#            and:
-#              - cluster_available: ["backup"]
-
-# option B - pipelines for backup cluster, reshuffle bulk requests
   - name: consume-queue_backup-to-backup
     auto_start: true
     keep_running: true
@@ -582,9 +568,9 @@ pipeline:
     processor:
       - bulk_indexing:
           bulk:
-            compress: true
-            batch_size_in_mb: 20
-            batch_size_in_docs: 5000
+            #compress: true
+            batch_size_in_mb: 5
+            batch_size_in_docs: 50000
           consumer:
             fetch_max_messages: 100
           max_worker_size: 200
@@ -610,11 +596,12 @@ pipeline:
 
 ## let's upload disk queue files to s3 for backup
 disk_queue:
+  compress:
+    segment:
+      enabled: true
   retention:
     max_num_of_local_files: 3
   upload_to_s3: true
-#  compress_on_message_payload:
-#    enabled: true
   s3:
     server: my_blob_store
     location: cn-beijing-001

@@ -34,7 +34,7 @@ func (filter *Kafka) Name() string {
 func (filter *Kafka) Filter(ctx *fasthttp.RequestCtx) {
 
 	msg := filter.msgPool.Get().(kafka.Message)
-	msg.Key = ctx.Request.RequestURI()
+	msg.Key = ctx.Request.Header.RequestURI()
 	msg.Value = ctx.Request.Body()
 
 	filter.lock.Lock()

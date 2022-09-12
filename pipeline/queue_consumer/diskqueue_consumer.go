@@ -318,7 +318,7 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 	respBody := resp.GetRawBody()
 
 	if resp.StatusCode() == http.StatusOK || resp.StatusCode() == http.StatusCreated || resp.StatusCode() == http.StatusNotFound {
-		if util.ContainStr(string(req.RequestURI()), "_bulk") {
+		if util.ContainStr(string(req.Header.RequestURI()), "_bulk") {
 
 			//var resbody = resp.GetRawBody()
 			//requestBytes := req.GetRawBody()

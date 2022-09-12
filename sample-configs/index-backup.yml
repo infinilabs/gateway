@@ -36,8 +36,6 @@ elastic:
 
 #disk_queue:
 #  upload_to_s3: true
-#  compress_on_message_payload:
-#    enabled: true
 #  s3:
 #    server: my_blob_store
 #    location: cn-beijing-001

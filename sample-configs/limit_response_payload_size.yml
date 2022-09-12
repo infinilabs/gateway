@@ -1,0 +1,37 @@
+path.data: data
+path.logs: log
+
+entry:
+  - name: test_entry
+    enabled: true
+    router: default
+    max_concurrency: 20000
+    network:
+      binding: 0.0.0.0:8000
+
+router:
+  - name: default
+    default_flow: test
+
+flow:
+  - name: test
+    filter:
+      - elasticsearch:
+          elasticsearch: es-server
+      - set_response:
+          when:
+#            range:
+              _ctx.response.body_length:
+                gte: 1024
+          body: '{"message":"response too large."}'
+          status: 400
+
+elasticsearch:
+  - name: es-server
+    enabled: true
+    endpoints:
+      - http://192.168.3.188:9206
+
+# TESTING
+#  curl localhost:8000/
+#  curl localhost:8000/_cluster/state

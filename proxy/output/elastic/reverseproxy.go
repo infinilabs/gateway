@@ -396,7 +396,7 @@ RANDOM:
 	return true, c, e
 }
 
-var failureMessage = []string{"connection refused", "connection reset", "no such host", "timed out", "Connection: close"}
+var failureMessage = []string{"connection refused", "no such host", "timed out", "Connection: close"}
 
 func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.ElasticsearchMetadata, myctx *fasthttp.RequestCtx) {
 
@@ -410,14 +410,10 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 		}
 	}
 
-	retry := 0
-START:
-
-	req := &myctx.Request
 	res := &myctx.Response
 
 	if !p.proxyConfig.SkipCleanupHopHeaders {
-		cleanHopHeaders(req)
+		cleanHopHeaders(&myctx.Request)
 	}
 
 	var pc fasthttp.ClientAPI
@@ -451,16 +447,16 @@ START:
 	}
 
 	// modify schema，align with elasticsearch's schema
-	orignalHost := util.UnsafeBytesToString(req.Header.Host())
-	orignalSchema := req.GetSchema()
+	orignalHost := util.UnsafeBytesToString(myctx.Request.Header.Host())
+	orignalSchema := myctx.Request.GetSchema()
 	useClient := false
 	schemaChanged := false
 	if metadata.GetSchema() != orignalSchema {
 		if !p.proxyConfig.SkipEnrichMetadata {
-			req.Header.Add("X-Forwarded-Proto", orignalSchema)
+			myctx.Request.Header.Set("X-Forwarded-Proto", orignalSchema)
 		}
 
-		req.URI().SetScheme(metadata.GetSchema())
+		myctx.Request.URI().SetScheme(metadata.GetSchema())
 		_, pc, host = p.getClient()
 
 		if !elastic.IsHostAvailable(host) {
@@ -476,19 +472,23 @@ START:
 	}
 
 	if !p.proxyConfig.SkipEnrichMetadata {
-		req.Header.Add("X-Forwarded-For", myctx.RemoteAddr().String())
-		req.Header.Add("X-Real-IP", myctx.RemoteAddr().String())
-		req.Header.Add("X-Forwarded-Host", orignalHost)
+		myctx.Request.Header.Add(fasthttp.HeaderXForwardedFor, myctx.RemoteAddr().String())
+		myctx.Request.Header.Add(fasthttp.HeaderXRealIP, myctx.RemoteAddr().String())
+		myctx.Request.Header.Add(fasthttp.HeaderXForwardedHost, orignalHost)
 	}
+
 	if global.Env().IsDebug {
-		log.Tracef("send request [%v] to upstream [%v]", req.URI().String(), host)
+		log.Tracef("send request [%v] to upstream [%v]", myctx.Request.URI().String(), host)
 	}
 
 	if host != orignalHost {
-		req.SetHostBytes(util.UnsafeStringToBytes(host))
+		myctx.Request.SetHostBytes(util.UnsafeStringToBytes(host))
 	}
 
-	metadata.CheckNodeTrafficThrottle(host, 1, req.GetRequestLength(), 0)
+	retry := 0
+START:
+
+	metadata.CheckNodeTrafficThrottle(host, 1, myctx.Request.GetRequestLength(), 0)
 
 	//if p.proxyConfig.Timeout <= 0 {
 	//	p.proxyConfig.Timeout = 60 * time.Second
@@ -496,27 +496,9 @@ START:
 
 	var err error
 	if p.proxyConfig.Timeout > 0 {
-		err = pc.DoTimeout(req, res, p.proxyConfig.Timeout)
+		err = pc.DoTimeout(&myctx.Request, res, p.proxyConfig.Timeout)
 	} else {
-		err = pc.Do(req, res)
-	}
-
-	if !p.proxyConfig.SkipKeepOriginalURI {
-		// restore schema
-		if schemaChanged {
-			req.URI().SetScheme(orignalSchema)
-		}
-
-		if host != orignalHost {
-			req.SetHost(orignalHost)
-		}
-	}
-
-	//update
-	if !p.proxyConfig.SkipEnrichMetadata {
-		myctx.Response.Header.Set("X-Backend-Cluster", p.proxyConfig.Elasticsearch)
-		myctx.Response.Header.Set("X-Backend-Server", host)
-		myctx.SetDestination(host)
+		err = pc.Do(&myctx.Request, res)
 	}
 
 	if err != nil {
@@ -531,20 +513,20 @@ START:
 			}
 			elastic.GetOrInitHost(host, metadata.Config.ID).ReportFailure()
 			//server failure flow
-		} else if res.StatusCode() == 429 {
+		} else if myctx.Response.StatusCode() == 429 {
 			retry++
 			if p.proxyConfig.MaxRetryTimes > 0 && retry < p.proxyConfig.MaxRetryTimes {
 				if p.proxyConfig.RetryDelayInMs > 0 {
 					time.Sleep(time.Duration(p.proxyConfig.RetryDelayInMs) * time.Millisecond)
 				}
-				stats.Increment("reverse_proxy", "429_busy_retry")
+				myctx.Request.Header.Add("RETRY_AT",time.Now().String())
 				goto START
 			} else {
-				log.Debugf("reached max retries, failed to proxy request: %v, %v", err, string(req.RequestURI()))
+				log.Debugf("reached max retries, failed to proxy request: %v, %v", err, string(myctx.Request.Header.RequestURI()))
 			}
 		} else {
 			if rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"backend_failure_on_error", 1).Allow() {
-				log.Warnf("failed to proxy request: %v to host %v, %v, retried: #%v, error:%v", string(req.RequestURI()), host, retry, retry, err)
+				log.Warnf("failed to proxy request: %v to host %v, %v, retried: #%v, error:%v", string(myctx.Request.Header.RequestURI()), host, retry, retry, err)
 			}
 			time.Sleep(1 * time.Second)
 		}
@@ -557,16 +539,34 @@ START:
 		myctx.SetStatusCode(500)
 	} else {
 		if global.Env().IsDebug {
-			log.Tracef("request [%v] [%v] [%v] [%v]", req.URI().String(), util.SubString(util.UnsafeBytesToString(req.GetRawBody()), 0, 256), res.StatusCode(), util.SubString(util.UnsafeBytesToString(res.GetRawBody()), 0, 256))
+			log.Tracef("request [%v] [%v] [%v] [%v]", myctx.Request.URI().String(), util.SubString(util.UnsafeBytesToString(myctx.Request.GetRawBody()), 0, 256), myctx.Response.StatusCode(), util.SubString(util.UnsafeBytesToString(myctx.Response.GetRawBody()), 0, 256))
 		}
 	}
 
-	if useClient {
-		myctx.Response.SetStatusCode(res.StatusCode())
-		myctx.Response.Header.SetContentTypeBytes(res.Header.ContentType())
-		myctx.Response.SetBody(res.Body())
+	if !p.proxyConfig.SkipKeepOriginalURI {
+		// restore schema
+		if schemaChanged {
+			myctx.Request.URI().SetScheme(orignalSchema)
+		}
 
-		compress, compressType := res.IsCompressed()
+		if host != orignalHost &&orignalHost!="" {
+			myctx.Request.SetHost(orignalHost)
+		}
+	}
+
+	//update
+	if !p.proxyConfig.SkipEnrichMetadata {
+		myctx.Response.Header.Set("X-Backend-Cluster", p.proxyConfig.Elasticsearch)
+		myctx.Response.Header.Set("X-Backend-Server", host)
+		myctx.SetDestination(host)
+	}
+
+	if useClient {
+		myctx.Response.SetStatusCode(myctx.Response.StatusCode())
+		myctx.Response.Header.SetContentTypeBytes(myctx.Response.Header.ContentType())
+		myctx.Response.SetBody(myctx.Response.Body())
+
+		compress, compressType := myctx.Response.IsCompressed()
 		if compress {
 			myctx.Response.Header.Set(fasthttp.HeaderContentEncoding, string(compressType))
 		}

@@ -54,9 +54,6 @@ pipeline:
 disk_queue:
   sync_timeout_in_ms: 10000
   sync_every_records: 10000
-#  compress_on_message_payload:
-#    enabled: true
-#    level: 11
 
 
 
