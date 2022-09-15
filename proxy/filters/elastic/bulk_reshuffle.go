@@ -114,7 +114,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			if rate.GetRateLimiter("cluster_metadata", clusterName, 1, 1, 5*time.Second).Allow() {
 				log.Warnf("elasticsearch [%v] metadata is nil, skip reshuffle", clusterName)
 			}
-			time.Sleep(1 * time.Second)
+			//time.Sleep(1 * time.Second)
 			return
 		}
 

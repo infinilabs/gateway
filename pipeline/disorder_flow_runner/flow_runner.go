@@ -26,7 +26,6 @@ type Config struct {
 var ctxPool = &sync.Pool{
 	New: func() interface{} {
 		c := fasthttp.RequestCtx{
-			//SequenceID: util.GetIncrementID("ctx"),
 		}
 		return &c
 	},
@@ -34,7 +33,6 @@ var ctxPool = &sync.Pool{
 
 func acquireCtx() (ctx *fasthttp.RequestCtx) {
 	x1 := ctxPool.Get().(*fasthttp.RequestCtx)
-	//x1.SequenceID = util.GetIncrementID("ctx")
 	x1.Reset()
 	x1.Request.Reset()
 	x1.Response.Reset()

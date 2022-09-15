@@ -6,9 +6,16 @@ entry:
     enabled: true
     router: my_router
     max_concurrency: 10000
-    reduce_memory_usage: true
     network:
       binding: 0.0.0.0:8000
+    tls:
+      enabled: false
+  - name: backup_es_entry
+    enabled: true
+    router: backup_router
+    max_concurrency: 10000
+    network:
+      binding: 0.0.0.0:8001
     tls:
       enabled: false
 
@@ -103,7 +110,7 @@ flow:
               success_queue: "backup"
               include_busy_requests_to_failure_queue: false #skip 429, clients should retry
               failure_queue: "primary-failure" #失败的请求，两边的集群都要做一次，避免脏数据
-#              invalid_queue: "primary-invalid"
+              invalid_queue: "primary-invalid"
           - flow: # 非 bulk 请求继续判断
               flows:
                 - primary-response-check
@@ -119,8 +126,8 @@ flow:
                 _ctx.response.status.gte: 400
                 _ctx.response.status.lt: 500
         then:
-#          - queue:
-#              queue_name: "primary-invalid"
+          - queue:
+              queue_name: "primary-invalid"
           - drop:
       - if: #正常的请求, 复制到备份集群
           in:
@@ -168,7 +175,7 @@ flow:
         then:
           - drop:
       - bulk_response_process: #bulk 成功执行了，非法消息都入队，其他消息都不用管，继续重试，只有全部成功或者失败的时候才 commit，请求丢给 backup，否则提前结束
-#          invalid_queue: "primary-invalid" #保存用来查看消息日志
+          invalid_queue: "primary-invalid" #保存用来查看消息日志
           include_busy_requests_to_failure_queue: true #429 的错误必须重试
           tag_on_all_invalid: [ "commit_message_allowed" ] #只有都是非法请求的情况下才 commit
           tag_on_all_success: [ "commit_message_allowed" ] #只有都是成功的情况下才 commit
@@ -184,8 +191,8 @@ flow:
         then:
           - tag:
               add: [ "commit_message_allowed" ]
-#          - queue:
-#              queue_name: "primary-invalid"
+          - queue:
+              queue_name: "primary-invalid"
           - drop:
       - if:
           in:
@@ -352,6 +359,7 @@ flow:
 #          partition_size: 3
           fix_null_id: true
           tag_on_success: ["commit_message_allowed"]
+
       - elasticsearch:
           elasticsearch: "backup"
           max_retry_times: 0
@@ -412,7 +420,11 @@ flow:
       - set_response:
           body: "request not allowed"
           status: 500
-#_delete_by_query not supported
+  - name: backup_flow
+    filter:
+      - elasticsearch:
+          elasticsearch: "real_backup"
+
 router:
   - name: my_router
     default_flow: primary-write-flow
@@ -461,12 +473,33 @@ router:
           - "/{any_index}/{any_type}"
         flow:
           - deny_flow
+  - name: backup_router
+    default_flow: backup_flow
+    tracing_flow: request_logging
 
 elasticsearch:
+  - name: primary
+    enabled: true
+    endpoints:
+      - http://localhost:9200
+#      - http://192.168.3.188:9204
+    basic_auth:
+      username: test
+      password: testtest
+    discovery:
+      enabled: true
+      refresh:
+        enabled: true
+        interval: 60s
   - name: backup
     enabled: true
     endpoints:
-      - http://192.168.3.188:9206
+      - http://localhost:8001
+  - name: real_backup
+    enabled: true
+    endpoints:
+#      - http://192.168.3.188:9206
+      - http://localhost:9201
     basic_auth:
       username: elastic
       password: changeme
@@ -477,19 +510,6 @@ elasticsearch:
       refresh:
         enabled: true
         interval: 60s
-  - name: primary
-    enabled: true
-    endpoints:
-      - http://192.168.3.188:9204
-    basic_auth:
-      username: test
-      password: testtest
-    discovery:
-      enabled: true
-      refresh:
-        enabled: true
-        interval: 60s
-
 
 pipeline:
   # pipelines for logging
@@ -499,10 +519,10 @@ pipeline:
     processor:
       - json_indexing:
           index_name: "gateway_requests"
-          elasticsearch: "backup"
+          elasticsearch: "primary"
           input_queue: "request_logging"
           when:
-            cluster_available: [ "backup" ]
+            cluster_available: [ "primary" ]
 
   # pipelines for primary cluster
   - name: consume-queue_primary-dead_retry-to-primary
@@ -574,7 +594,7 @@ pipeline:
           consumer:
             fetch_max_messages: 100
           max_worker_size: 200
-#          num_of_slices: 20
+#          num_of_slices: 10
 #          slices: [0]
           waiting_after:
             - "backup-failure"
