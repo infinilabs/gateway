@@ -42,10 +42,6 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 		nonRetryableItems := elastic.AcquireBulkBuffer()
 		retryableItems := elastic.AcquireBulkBuffer()
 
-		//ctx.DelayReleaseBulkBuffer(successItems)
-		//ctx.DelayReleaseBulkBuffer(nonRetryableItems)
-		//ctx.DelayReleaseBulkBuffer(retryableItems)
-
 		var containError bool
 		var bulkStats map[int]int
 
@@ -68,6 +64,12 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 			}
 
 			ctx.Set("bulk_response_status", obj)
+
+
+			elastic.ReturnBulkBuffer(successItems)
+			elastic.ReturnBulkBuffer(nonRetryableItems)
+			elastic.ReturnBulkBuffer(retryableItems)
+
 		}()
 
 		containError, bulkStats = elastic.HandleBulkResponse2("tag", this.config.SafetyParse, requestBytes, resbody, this.config.DocBufferSize, successItems, nonRetryableItems, retryableItems, this.config.IncludeBusyRequestsToFailureQueue)
@@ -91,17 +93,17 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 					bytes := ctx.Request.OverrideBodyEncode(nonRetryableItems.GetMessageBytes(), true)
 					queue.Push(queue.GetOrInitConfig(this.config.InvalidQueue), bytes)
 
-					queue.Push(queue.GetOrInitConfig(this.config.InvalidQueue+"-bulk-error-messages"), util.MustToJSONBytes(
-						util.MapStr{
-							"request": util.MapStr{
-								"uri":  ctx.Request.URI().String(),
-								"body": util.SubString(util.UnsafeBytesToString(ctx.Request.GetRawBody()), 0, 1024*4),
-							},
-							"response": util.MapStr{
-								"status": ctx.Response.StatusCode(),
-								"body":   util.SubString(util.UnsafeBytesToString(ctx.Response.GetRawBody()), 0, 1024*4),
-							},
-						}))
+					//queue.Push(queue.GetOrInitConfig(this.config.InvalidQueue+"-bulk-error-messages"), util.MustToJSONBytes(
+					//	util.MapStr{
+					//		"request": util.MapStr{
+					//			"uri":  ctx.Request.URI().String(),
+					//			"body": util.SubString(util.UnsafeBytesToString(ctx.Request.GetRawBody()), 0, 1024*4),
+					//		},
+					//		"response": util.MapStr{
+					//			"status": ctx.Response.StatusCode(),
+					//			"body":   util.SubString(util.UnsafeBytesToString(ctx.Response.GetRawBody()), 0, 1024*4),
+					//		},
+					//	}))
 				}
 
 				if len(this.config.TagsOnPartialInvalid) > 0 {
@@ -133,17 +135,17 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 
 					queue.Push(queue.GetOrInitConfig(this.config.FailureQueue), bytes)
 
-					queue.Push(queue.GetOrInitConfig(this.config.FailureQueue+"-bulk-error-messages"), util.MustToJSONBytes(
-						util.MapStr{
-							"request": util.MapStr{
-								"uri":  ctx.Request.URI().String(),
-								"body": util.SubString(util.UnsafeBytesToString(ctx.Request.GetRawBody()), 0, 1024*4),
-							},
-							"response": util.MapStr{
-								"status": ctx.Response.StatusCode(),
-								"body":   util.SubString(util.UnsafeBytesToString(ctx.Response.GetRawBody()), 0, 1024*4),
-							},
-						}))
+					//queue.Push(queue.GetOrInitConfig(this.config.FailureQueue+"-bulk-error-messages"), util.MustToJSONBytes(
+					//	util.MapStr{
+					//		"request": util.MapStr{
+					//			"uri":  ctx.Request.URI().String(),
+					//			"body": util.SubString(util.UnsafeBytesToString(ctx.Request.GetRawBody()), 0, 1024*4),
+					//		},
+					//		"response": util.MapStr{
+					//			"status": ctx.Response.StatusCode(),
+					//			"body":   util.SubString(util.UnsafeBytesToString(ctx.Response.GetRawBody()), 0, 1024*4),
+					//		},
+					//	}))
 				}
 
 				if len(this.config.TagsOnPartialFailure) > 0 {
@@ -225,17 +227,17 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 				}
 
 				queue.Push(queue.GetOrInitConfig(this.config.FailureQueue), bytes)
-				queue.Push(queue.GetOrInitConfig(this.config.FailureQueue+"-bulk-error-messages"), util.MustToJSONBytes(
-					util.MapStr{
-						"request": util.MapStr{
-							"uri":  ctx.Request.URI().String(),
-							"body": util.SubString(util.UnsafeBytesToString(ctx.Request.GetRawBody()), 0, 1024*4),
-						},
-						"response": util.MapStr{
-							"status": ctx.Response.StatusCode(),
-							"body":   util.SubString(util.UnsafeBytesToString(ctx.Response.GetRawBody()), 0, 1024*4),
-						},
-					}))
+				//queue.Push(queue.GetOrInitConfig(this.config.FailureQueue+"-bulk-error-messages"), util.MustToJSONBytes(
+				//	util.MapStr{
+				//		"request": util.MapStr{
+				//			"uri":  ctx.Request.URI().String(),
+				//			"body": util.SubString(util.UnsafeBytesToString(ctx.Request.GetRawBody()), 0, 1024*4),
+				//		},
+				//		"response": util.MapStr{
+				//			"status": ctx.Response.StatusCode(),
+				//			"body":   util.SubString(util.UnsafeBytesToString(ctx.Response.GetRawBody()), 0, 1024*4),
+				//		},
+				//	}))
 		}
 
 		if !this.config.ContinueOnAllError {
