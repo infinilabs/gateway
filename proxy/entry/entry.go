@@ -156,9 +156,9 @@ func (this *Entrypoint) Start() error {
 		this.config.MaxIdleWorkerDurationSeconds = 10
 	}
 
-	//if this.config.TCPKeepaliveSeconds <= 0 {
-	//	this.config.TCPKeepaliveSeconds = 10
-	//}
+	if this.config.TCPKeepaliveSeconds <= 0 {
+		this.config.TCPKeepaliveSeconds = 15*60
+	}
 
 	if this.config.WriteTimeout <= 0 {
 		this.config.WriteTimeout = 30

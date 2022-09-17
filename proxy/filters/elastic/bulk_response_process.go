@@ -209,10 +209,12 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 							"context": ctx.GetFlowProcess(),
 							"request": util.MapStr{
 								"uri":  ctx.Request.URI().String(),
+								"header":  ctx.Request.Header.String(),
 								"body": util.SubString(util.UnsafeBytesToString(ctx.Request.GetRawBody()), 0, 1024*4),
 							},
 							"response": util.MapStr{
 								"status": ctx.Response.StatusCode(),
+								"header": ctx.Response.Header.String(),
 								"body":   util.SubString(util.UnsafeBytesToString(ctx.Response.GetRawBody()), 0, 1024*4),
 							},
 						}))
