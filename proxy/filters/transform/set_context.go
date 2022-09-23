@@ -26,7 +26,7 @@ func (filter *SetContext) Filter(ctx *fasthttp.RequestCtx) {
 		for k, v := range keys {
 			_,err := ctx.PutValue(k, v)
 			if err != nil {
-				log.Error(err)
+				log.Error("key:",k,",value:",v,",err:",err)
 			}
 		}
 	}
