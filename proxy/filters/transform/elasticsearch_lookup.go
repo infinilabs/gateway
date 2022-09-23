@@ -95,7 +95,7 @@ func (filter *ElasticsearchLookup) Filter(ctx *fasthttp.RequestCtx) {
 						}
 					}
 				}
-				ctx.Response.SetRawBody(body)
+				ctx.Response.SetBodyRaw(body)
 			}
 		}
 	}
