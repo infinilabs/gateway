@@ -267,6 +267,8 @@ func (processor *DumpHashProcessor) processingDocs(data []byte, outputQueueName 
 			panic(err)
 		}
 
+		util.WalkBytesAndReplace(source,util.NEWLINE,util.SPACE)
+
 		hash := processor.Hash(processor.config.HashFunc, hashBuffer, source)
 
 		partitionID := elastic.GetShardID(7, util.UnsafeStringToBytes(id), processor.config.PartitionSize)

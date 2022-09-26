@@ -302,6 +302,9 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 			buffer = bytebufferpool.Get("es_scroll")
 		}
 
+		//trim newline to space
+		util.WalkBytesAndReplace(source,util.NEWLINE,util.SPACE)
+
 		buffer.WriteString(fmt.Sprintf("{ \"index\" : { \"_index\" : \"%s\", \"_type\" : \"%s\", \"_id\" : \"%s\" } }\n", index, typeStr,id))
 		buffer.Write(source)
 		buffer.WriteString("\n")
