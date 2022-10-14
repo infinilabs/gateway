@@ -70,12 +70,14 @@ func (this *Entrypoint) Start() error {
 
 	var ln net.Listener
 	var err error
-	if this.config.NetworkConfig.ReusePort {
+
+	if this.config.NetworkConfig.ReusePort&&!strings.Contains(this.listenAddress,"::") {
 		log.Debug("reuse port ", this.listenAddress)
-		ln, err = reuseport.Listen("tcp4", this.config.NetworkConfig.GetBindingAddr())
+		ln, err = reuseport.Listen("tcp", this.config.NetworkConfig.GetBindingAddr())
 	} else {
 		ln, err = net.Listen("tcp", this.listenAddress)
 	}
+
 	if err != nil {
 		panic(errors.Errorf("error in listener: %s", err))
 	}

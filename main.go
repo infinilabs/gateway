@@ -23,7 +23,6 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/modules/api"
 	"infini.sh/framework/modules/elastic"
-	"infini.sh/framework/modules/filter"
 	"infini.sh/framework/modules/pipeline"
 	queue2 "infini.sh/framework/modules/queue/disk_queue"
 	"infini.sh/framework/modules/queue/kafka_queue"
@@ -46,7 +45,6 @@ func setup()  {
 	module.RegisterSystemModule(&stats2.SimpleStatsModule{})
 	module.RegisterUserPlugin(&stats.StatsDModule{})
 	module.RegisterUserPlugin(translog.TranslogModule{})
-	module.RegisterSystemModule(&filter.FilterModule{})
 	module.RegisterSystemModule(&s3.S3Module{})
 	module.RegisterSystemModule(&mem_queue.MemoryQueue{})
 	module.RegisterSystemModule(&kafka_queue.KafkaQueue{})
