@@ -33,7 +33,7 @@ func (this *GatewayModule) Name() string {
 	return "gateway"
 }
 
-func (module *GatewayModule) Setup(cfg *Config) {
+func (module *GatewayModule) Setup() {
 
 	module.entryPoints = module.loadEntryPoints()
 

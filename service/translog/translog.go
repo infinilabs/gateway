@@ -1,7 +1,6 @@
 package translog
 
 import (
-	. "infini.sh/framework/core/config"
 	"infini.sh/framework/core/rotate"
 )
 
@@ -14,7 +13,7 @@ func (this TranslogModule) Name() string {
 	return "translog"
 }
 
-func (module TranslogModule) Setup(cfg *Config) {
+func (module TranslogModule) Setup() {
 
 }
 

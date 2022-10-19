@@ -52,7 +52,7 @@ var (
 	}
 )
 
-func (module FloatingIPPlugin) Setup(cfg *config.Config) {
+func (module FloatingIPPlugin) Setup() {
 	ok, err := env.ParseConfig("floating_ip", &floatingIPConfig)
 	if ok && err != nil {
 		panic(err)

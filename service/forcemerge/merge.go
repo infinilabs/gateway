@@ -19,7 +19,6 @@ package forcemerge
 import (
 	"context"
 	log "github.com/cihub/seelog"
-	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/env"
 	"infini.sh/framework/core/global"
@@ -61,7 +60,7 @@ type MergeConfig struct {
 
 var mergeConfig = MergeConfig{}
 
-func (module ForceMergeModule) Setup(cfg *config.Config) {
+func (module ForceMergeModule) Setup() {
 
 	ok, err := env.ParseConfig("force_merge", &mergeConfig)
 	if ok && err != nil {
