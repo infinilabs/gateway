@@ -6,6 +6,7 @@ import (
 	"github.com/segmentio/kafka-go"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/pipeline"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"sync"
 	"time"
@@ -29,19 +30,15 @@ func (filter *Kafka) Name() string {
 	return "kafka"
 }
 
-
-
 func (filter *Kafka) Filter(ctx *fasthttp.RequestCtx) {
 
 	msg := filter.msgPool.Get().(kafka.Message)
-	msg.Key = ctx.Request.Header.RequestURI()
-	msg.Value = ctx.Request.Body()
+	msg.Key = util.Int64ToBytes(int64(util.GetIncrementID64("request")))
+	msg.Value = ctx.Request.Encode()
 
 	filter.lock.Lock()
-
 	filter.messages = append(filter.messages, msg)
 
-	//TODO flush finally or periodly
 	//check need to flush or not
 	if len(filter.messages) >= filter.BatchSize {
 		err := filter.w.WriteMessages(filter.taskContext, filter.messages...)
