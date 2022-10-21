@@ -208,16 +208,16 @@ func (this *Entrypoint) Start() error {
 		MaxConnsPerIP:                      this.config.MaxConnsPerIP,
 	}
 
-	if len(this.routerConfig.DeniedClientIPList) > 0 {
-		log.Tracef("adding %v client ip to denied list", len(this.routerConfig.DeniedClientIPList))
-		for _, ip := range this.routerConfig.DeniedClientIPList {
+	if this.routerConfig.IPAccessRules.Enabled&&len(this.routerConfig.IPAccessRules.ClientIP.DeniedList) > 0 {
+		log.Tracef("adding %v client ip to denied list", len(this.routerConfig.IPAccessRules.ClientIP.DeniedList))
+		for _, ip := range this.routerConfig.IPAccessRules.ClientIP.DeniedList {
 			this.server.AddBlackIPList(ip)
 		}
 	}
 
-	if len(this.routerConfig.PermittedClientIPList) > 0 {
-		log.Tracef("adding %v client ip to permitted list", len(this.routerConfig.PermittedClientIPList))
-		for _, ip := range this.routerConfig.PermittedClientIPList {
+	if this.routerConfig.IPAccessRules.Enabled&&len(this.routerConfig.IPAccessRules.ClientIP.PermittedList) > 0 {
+		log.Tracef("adding %v client ip to permitted list", len(this.routerConfig.IPAccessRules.ClientIP.PermittedList))
+		for _, ip := range this.routerConfig.IPAccessRules.ClientIP.PermittedList {
 			this.server.AddWhiteIPList(ip)
 		}
 	}

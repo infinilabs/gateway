@@ -68,8 +68,16 @@ type RouterConfig struct {
 	TracingFlow string `config:"tracing_flow" json:"tracing_flow,omitempty" elastic_mapping:"tracing_flow: { type: keyword }"`
 
 	Rules              []RuleConfig `config:"rules" json:"rules,omitempty" elastic_mapping:"rules: { type: object }"`
-	DeniedClientIPList []string     `config:"denied_client_ip_list" json:"denied_client_ip_list,omitempty" elastic_mapping:"denied_client_ip_list: { type: keyword }"`
-	PermittedClientIPList []string     `config:"permitted_client_ip_list" json:"permitted_client_ip_list,omitempty" elastic_mapping:"permitted_client_ip_list: { type: keyword }"`
+
+	IPAccessRules IPAccessRules `config:"ip_access_control" json:"ip_access_rules,omitempty" elastic_mapping:"ip_access_rules: { type: object }"`
+}
+
+type IPAccessRules struct {
+	Enabled             bool   `config:"enabled" json:"enabled,omitempty" elastic_mapping:"enabled: { type: boolean }"`
+	ClientIP struct{
+		DeniedList []string     `config:"denied" json:"denied,omitempty" elastic_mapping:"denied: { type: keyword }"`
+		PermittedList []string     `config:"permitted" json:"permitted,omitempty" elastic_mapping:"permitted: { type: keyword }"`
+	} `config:"client_ip" json:"client_ip,omitempty" elastic_mapping:"client_ip: { type: object }"`
 }
 
 type FlowConfig struct {
