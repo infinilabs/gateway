@@ -253,6 +253,12 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 
 	request.Response.BodyLength = ctx.Response.GetBodyLength()
 
+	//parser user
+	exists, user, _ := ctx.Request.ParseBasicAuth()
+	if exists {
+		request.Request.User = string(user)
+	}
+
 	m = map[string]string{}
 	ctx.Request.Header.VisitAll(func(key, value []byte) {
 
@@ -270,11 +276,6 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 	})
 
 	request.Request.Header = m
-
-	exists, user, _ := ctx.Request.ParseBasicAuth()
-	if exists {
-		request.Request.User = string(user)
-	}
 
 	m = map[string]string{}
 	ctx.Response.Header.VisitAll(func(key, value []byte) {
