@@ -378,16 +378,25 @@ func (this *Entrypoint) Stop() error {
 			log.Debug("entry shutdown 5s timeout")
 		}
 	} else {
-		go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*5000))
+		defer cancel()
+
+		go func(ctx context.Context) {
 			if r := recover(); r != nil {}
+			ticker := time.NewTicker(3*time.Second)
 			for {
-				time.Sleep(3*time.Second)
-				if util.ContainStr(this.listenAddress,"0.0.0.0"){
-					this.listenAddress=strings.Replace(this.listenAddress,"0.0.0.0","127.0.0.1",-1)
+				select {
+				case <-ticker.C:
+					time.Sleep(1*time.Second)
+					if util.ContainStr(this.listenAddress,"0.0.0.0"){
+						this.listenAddress=strings.Replace(this.listenAddress,"0.0.0.0","127.0.0.1",-1)
+					}
+					util.HttpGet(this.GetSchema()+this.listenAddress+"/favicon.ico")
+				case <-ctx.Done():
+					return
 				}
-				util.HttpGet(this.GetSchema()+this.listenAddress+"/favicon.ico")
 			}
-		}()
+		}(ctx)
 
 		if this.server!=nil{
 			this.server.Shutdown()
