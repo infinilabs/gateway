@@ -93,7 +93,7 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 	return &runner, nil
 }
 
-var docBufferPool=  bytebufferpool.NewTaggedPool("bulk_request_docs",1,1024*1024*1024,100000)
+var docBufferPool=  bytebufferpool.NewTaggedPool("bulk_request_docs",0,0,0)
 
 func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
