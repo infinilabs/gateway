@@ -223,7 +223,10 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 	//request.DataFlow = &model.DataFlow{}
 	request.DataFlow.From = request.RemoteIP
 
-	request.DataFlow.Process = ctx.GetRequestProcess()
+	process:=ctx.GetRequestProcess()
+	if len(ctx.GetRequestProcess())>0{
+		request.DataFlow.Process = strings.Split(process,"->")
+	}
 
 	//TODO ,use gateway's uuid instead
 	request.DataFlow.Relay = global.Env().SystemConfig.NodeConfig.ToString()
