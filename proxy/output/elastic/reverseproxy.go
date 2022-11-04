@@ -230,6 +230,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 				WriteTimeout:                  cfg.WriteTimeout,
 				ReadBufferSize:                cfg.ReadBufferSize,
 				WriteBufferSize:               cfg.WriteBufferSize,
+				DialDualStack: true,
 				TLSConfig: &tls.Config{
 					InsecureSkipVerify: cfg.TLSInsecureSkipVerify,
 				},
@@ -561,11 +562,11 @@ START:
 	}
 
 	if useClient {
-		myctx.Response.SetStatusCode(myctx.Response.StatusCode())
-		myctx.Response.Header.SetContentTypeBytes(myctx.Response.Header.ContentType())
-		myctx.Response.SetBody(myctx.Response.Body())
+		myctx.Response.SetStatusCode(res.StatusCode())
+		myctx.Response.Header.SetContentTypeBytes(res.Header.ContentType())
+		myctx.Response.SetBody(res.Body())
 
-		compress, compressType := myctx.Response.IsCompressed()
+		compress, compressType := res.IsCompressed()
 		if compress {
 			myctx.Response.Header.Set(fasthttp.HeaderContentEncoding, string(compressType))
 		}
