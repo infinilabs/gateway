@@ -24,6 +24,7 @@ type GenericLimiter struct {
 	RetryDelayInMs int    `config:"retry_delay_in_ms"`
 	Status         int    `config:"status"`
 	Message        string `config:"message"`
+	WarnMessage    bool `config:"log_warn_message"`
 	RetriedMessage string `config:"failed_retry_message"`
 
 	interval       time.Duration
@@ -69,12 +70,22 @@ func (filter *GenericLimiter) internalProcess(tokenType, token string, ctx *fast
 			if filter.Action == "drop" {
 				ctx.SetStatusCode(filter.Status)
 				ctx.WriteString(filter.Message)
+
+				if filter.WarnMessage{
+					log.Warnf("request throttled: %v",string(ctx.Path()))
+				}
+
 				ctx.Finished()
 				return
 			} else {
 				if retryTimes > filter.MaxRetryTimes {
 					ctx.SetStatusCode(filter.Status)
 					ctx.WriteString(filter.RetriedMessage)
+
+					if filter.WarnMessage{
+						log.Warnf("request throttled: %v",string(ctx.Path()))
+					}
+
 					ctx.Finished()
 					return
 				}

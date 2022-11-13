@@ -13,6 +13,7 @@ import (
 )
 
 type RequestPathLimitFilter struct {
+	WarnMessage    bool `config:"log_warn_message"`
 	Message string        `config:"message"`
 	Rules   []*MatchRules `config:"rules"`
 }
@@ -105,6 +106,10 @@ func (filter *RequestPathLimitFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 					if global.Env().IsDebug {
 						log.Debug(key, " reach limited ", v.Pattern, ",extract:", item)
+					}
+
+					if filter.WarnMessage{
+						log.Warnf("request throttled: %v",string(ctx.Path()))
 					}
 
 					ctx.SetStatusCode(429)
