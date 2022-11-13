@@ -347,8 +347,8 @@ flow:
               _ctx.request.path: /_bulk
           elasticsearch: "backup"
           queue_name_prefix: "async_bulk"
-          level: cluster #cluster,node,index,shard
-          #          partition_size: 3
+          level: node #cluster,node,index,shard
+          partition_size: 3
           fix_null_id: true
           tag_on_success: ["commit_message_allowed"]
 
@@ -569,13 +569,13 @@ pipeline:
     processor:
       - bulk_indexing:
           bulk:
-            #compress: true
-            batch_size_in_mb: 5
+            compress: true
+            batch_size_in_mb: 20
             batch_size_in_docs: 50000
           consumer:
             fetch_max_messages: 100
           max_worker_size: 200
-          #          num_of_slices: 10
+          num_of_slices: 3
           #          slices: [0]
           waiting_after:
             - "backup-failure"
@@ -602,14 +602,14 @@ disk_queue:
       enabled: true
   retention:
     max_num_of_local_files: 3
-  upload_to_s3: true
-  s3:
-    server: my_blob_store
-    location: cn-beijing-001
-    bucket: infini-replica-blob-store
+#  upload_to_s3: true
+#  s3:
+#    server: my_blob_store
+#    location: cn-beijing-001
+#    bucket: infini-replica-blob-store
 
-s3:
-  my_blob_store:
-    endpoint: "192.168.3.188:9000"
-    access_key: "minio"
-    access_secret: "miniostorage"
+#s3:
+#  my_blob_store:
+#    endpoint: "192.168.3.188:9000"
+#    access_key: "minio"
+#    access_secret: "miniostorage"
