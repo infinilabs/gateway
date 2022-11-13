@@ -36,7 +36,8 @@ func requestHandler(ctx *fasthttp.RequestCtx) {
 		fmt.Println(string(ctx.Request.URI().Hash()))
 		fmt.Println(string(ctx.Request.URI().Username()))
 		fmt.Println(string(ctx.Request.URI().Password()))
-		fmt.Println(util.ToJson(ctx.Request.Header,true))
+		fmt.Println(ctx.Request.Header.String(),true)
+		fmt.Println(ctx.Request.GetRawBody(),true)
 	}
 	ctx.Response.Header.Set("SERVER",name)
 	ctx.Response.SetStatusCode(200)
