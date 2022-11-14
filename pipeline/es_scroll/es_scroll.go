@@ -69,7 +69,7 @@ func init() {
 
 func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
-		PartitionSize:  10,
+		PartitionSize:  1,
 		SliceSize:  1,
 		BatchSize:  1000,
 		ScrollTime: "5m",
