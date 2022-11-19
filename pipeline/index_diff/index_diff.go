@@ -49,73 +49,91 @@ func NewCompareItem(key, hash string) CompareItem {
 	return item
 }
 
+func handleDiffResult(diffType string, msgA, msgB *CompareItem, diffResultHandler func(DiffResult)){
+	result := DiffResult{Target: msgB, Source: msgA}
+	result.DiffType = diffType
+	if msgA != nil {
+		result.Key = msgA.Key
+	}else if msgB != nil {
+		result.Key = msgB.Key
+	}
+	diffResultHandler(result)
+}
+
 func (processor *IndexDiffProcessor) processMsg(partitionID int, diffResultHandler func(DiffResult)) {
 	var msgA, msgB CompareItem
+	var okA, okB bool
+	var readMode = 0 // 0-all 1-A 2-B
+	var (
+		sourceChan = processor.testChans[partitionID].msgChans[processor.config.GetSortedLeftQueue(partitionID)]
+		targetChan = processor.testChans[partitionID].msgChans[processor.config.GetSortedRightQueue(partitionID)]
+	)
 
-MOVEALL:
-	msgA = <-processor.testChans[partitionID].msgChans[processor.config.GetSortedLeftQueue(partitionID)]
-	msgB = <-processor.testChans[partitionID].msgChans[processor.config.GetSortedRightQueue(partitionID)]
-	//fmt.Println("Pop A:",msgA.Key)
-	//fmt.Println("Pop B:",msgB.Key)
-
-COMPARE:
-	result := msgA.CompareKey(&msgB)
-
-	//fmt.Println("A:",msgA.Key," vs B:",msgB.Key,"=",result)
-	if global.Env().IsDebug {
-		log.Trace(result, " - ", msgA, " vs ", msgB)
-	}
-
-	if result > 0 {
-
-		result := DiffResult{Target: &msgB}
-		result.DiffType = "OnlyInTarget"
-		result.Key = msgB.Key
-
-		diffResultHandler(result)
-
-		if global.Env().IsDebug {
-			log.Trace("OnlyInTarget :", msgB)
+	for {
+		if readMode == 0 || readMode == 1 {
+			msgA, okA = <-sourceChan
+		}
+		if readMode == 0 || readMode == 2 {
+			msgB, okB = <-targetChan
 		}
 
-		msgB = <-processor.testChans[partitionID].msgChans[processor.config.GetSortedRightQueue(partitionID)]
-		//fmt.Println("Pop B:",msgB.Key)
-
-		goto COMPARE
-	} else if result < 0 { // 1 < 2
-
-		result := DiffResult{Source: &msgA}
-		result.DiffType = "OnlyInSource"
-		result.Key = msgA.Key
-
-		diffResultHandler(result)
-
-		if global.Env().IsDebug {
-			log.Trace(msgA, ": OnlyInSource")
-		}
-
-		msgA = <-processor.testChans[partitionID].msgChans[processor.config.GetSortedLeftQueue(partitionID)]
 		//fmt.Println("Pop A:",msgA.Key)
-
-		goto COMPARE
-	} else {
-		//doc exists, compare hash
-		if msgA.CompareHash(&msgB) != 0 {
-			if global.Env().IsDebug {
-				log.Trace(msgA, "!=", msgB)
-			}
-			result := DiffResult{Target: &msgB, Source: &msgA}
-			result.DiffType = "DiffBoth"
-			result.Key = msgB.Key
-
-			diffResultHandler(result)
-
-		} else {
-			if global.Env().IsDebug {
-				log.Trace(msgA, "==", msgB)
-			}
+		//fmt.Println("Pop B:",msgB.Key)
+		if !okA && !okB {
+			return
 		}
-		goto MOVEALL
+		if !okA {
+			handleDiffResult("OnlyInTarget", nil, &msgB, diffResultHandler)
+			for msgB = range targetChan {
+				handleDiffResult("OnlyInTarget", nil, &msgB, diffResultHandler)
+			}
+			return
+		}
+		if !okB {
+			handleDiffResult("OnlyInSource", &msgA, nil, diffResultHandler)
+			for msgA = range sourceChan {
+				handleDiffResult("OnlyInSource", &msgA, nil, diffResultHandler)
+			}
+			return
+		}
+
+		result := msgA.CompareKey(&msgB)
+
+		//fmt.Println("A:",msgA.Key," vs B:",msgB.Key,"=",result)
+		if global.Env().IsDebug {
+			log.Trace(result, " - ", msgA, " vs ", msgB)
+		}
+
+		if result > 0 {
+			handleDiffResult("OnlyInTarget", nil, &msgB, diffResultHandler)
+			if global.Env().IsDebug {
+				log.Trace("OnlyInTarget :", msgB)
+			}
+
+			readMode = 2
+		} else if result < 0 { // 1 < 2
+			handleDiffResult("OnlyInSource", &msgA, nil, diffResultHandler)
+			if global.Env().IsDebug {
+				log.Trace(msgA, ": OnlyInSource")
+			}
+
+			readMode = 1
+		} else {
+			//doc exists, compare hash
+			if msgA.CompareHash(&msgB) != 0 {
+				if global.Env().IsDebug {
+					log.Trace(msgA, "!=", msgB)
+				}
+				handleDiffResult("DiffBoth", &msgA, &msgB, diffResultHandler)
+
+			} else {
+				if global.Env().IsDebug {
+					log.Trace(msgA, "==", msgB)
+				}
+				//handleDiffResult("Equal", &msgA, &msgB, diffResultHandler)
+			}
+			readMode = 0
+		}
 	}
 }
 
@@ -286,6 +304,7 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 					}
 					processor.testChans[f].msgChans[q+"_sorted"] <- item
 				})
+				close(processor.testChans[f].msgChans[q+"_sorted"])
 				if err != nil {
 					log.Error(err)
 					return
@@ -297,9 +316,13 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 	}
 
 	for i := 0; i < processor.config.PartitionSize; i++ {
-		go processor.processMsg(i, func(result DiffResult) {
-			queue.Push(queue.GetOrInitConfig(processor.config.DiffQueue), util.MustToJSONBytes(result))
-		})
+		processor.wg.Add(1)
+		go func(j int) {
+			defer processor.wg.Done()
+			processor.processMsg(j, func(result DiffResult) {
+				queue.Push(queue.GetOrInitConfig(processor.config.DiffQueue), util.MustToJSONBytes(result))
+			})
+		}(i)
 	}
 
 	processor.wg.Wait()
@@ -323,26 +346,14 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 			bothBuilder := strings.Builder{}
 			strBuilder.WriteString(str)
 
-			var i, left, right, both int
+			var i, left, right, both, equal int
 
-		WAIT:
-			timeOut := 5 * time.Second
+			timeOut := 1 * time.Second
 			for {
 
 				v, timeout, err := queue.PopTimeout(queue.GetOrInitConfig(processor.config.DiffQueue), timeOut)
 				if timeout {
-
-					for i := 0; i < processor.config.PartitionSize; i++ {
-						if len(processor.testChans[i].msgChans[processor.config.GetSortedLeftQueue(i)]) > 0 ||
-							len(processor.testChans[i].msgChans[processor.config.GetSortedRightQueue(i)]) > 0 {
-							time.Sleep(5 * time.Second)
-							log.Debug("waiting for:", len(processor.testChans[i].msgChans[processor.config.GetSortedLeftQueue(i)]), ",",
-								len(processor.testChans[i].msgChans[processor.config.GetSortedRightQueue(i)]))
-							goto WAIT
-						}
-						goto RESULT
-					}
-
+						break
 				}
 
 				i++
@@ -376,9 +387,10 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 					both++
 					bothBuilder.WriteString(fmt.Sprintf("doc:%v, hash:%v vs %v\n", docID, doc.Source.Hash, doc.Target.Hash))
 					break
+				case "Equal":
+					equal++
 				}
 			}
-		RESULT:
 			fmt.Println(strBuilder.String())
 			util.FileAppendNewLine(file, strBuilder.String())
 
