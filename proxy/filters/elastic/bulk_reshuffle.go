@@ -143,11 +143,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		actionMeta := bytebufferpool.Get("bulk_request_action")
 		defer bytebufferpool.Put("bulk_request_action", actionMeta)
 
-		var docBuffer []byte
-		docBuffer = elastic.BulkDocBuffer.Get(this.config.DocBufferSize) //doc buffer for bytes scanner
-		defer elastic.BulkDocBuffer.Put(docBuffer)
-
-		docCount, err := elastic.WalkBulkRequests(this.config.SafetyParse, body, docBuffer, func(eachLine []byte) (skipNextLine bool) {
+		docCount, err := elastic.WalkBulkRequests(body, func(eachLine []byte) (skipNextLine bool) {
 			if validEachLine {
 				obj := map[string]interface{}{}
 				err := util.FromJSONBytes(eachLine, &obj)
@@ -244,7 +240,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 			if actionStr == "" || index == "" || id == "" {
 				log.Warn("invalid bulk action:", actionStr, ",index:", string(index), ",id:", string(id), ",", metaStr)
-				return errors.Error("invalid bulk action:", actionStr, ",index:", string(index), ",id:", string(id), ",", metaStr)
+				panic(errors.Error("invalid bulk action:", actionStr, ",index:", string(index), ",id:", string(id), ",", metaStr))
 			}
 
 			var nodeID, ShardIDStr string
@@ -256,7 +252,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 					if rate.GetRateLimiter("index_routing_table_not_found", index, 1, 2, time.Minute*1).Allow() {
 						log.Warn(index, ",", metaStr, ",", err)
 					}
-					return err
+					panic(err)
 				} else {
 					//check if it is not only one shard
 					totalShards := len(table)
@@ -280,14 +276,14 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 					ShardIDStr = util.IntToString(shardID)
 					shardInfo, err := metadata.GetPrimaryShardInfo(index, ShardIDStr)
 					if err != nil {
-						return errors.Error("shard info was not found,", index, ",", shardID, ",", err)
+						panic(errors.Error("shard info was not found,", index, ",", shardID, ",", err))
 					}
 
 					if shardInfo == nil {
 						if rate.GetRateLimiter(fmt.Sprintf("shard_info_not_found_%v", index), ShardIDStr, 1, 5, time.Minute*1).Allow() {
 							log.Warn("shardInfo was not found,", index, ",", shardID)
 						}
-						return errors.Error("shard info was not found,", index, ",", shardID)
+						panic(errors.Error("shard info was not found,", index, ",", shardID))
 					}
 					nodeID = shardInfo.Node
 				}
@@ -400,7 +396,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			if global.Env().IsDebug {
 				log.Error(err)
 			}
-			return
+			panic(err)
 		}
 
 		//send to queue

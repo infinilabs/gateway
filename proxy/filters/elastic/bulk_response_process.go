@@ -72,7 +72,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 
 		}()
 
-		containError, bulkStats = elastic.HandleBulkResponse2("tag", this.config.SafetyParse, requestBytes, resbody, this.config.DocBufferSize, successItems, nonRetryableItems, retryableItems, this.config.IncludeBusyRequestsToFailureQueue)
+		containError, bulkStats = elastic.HandleBulkResponse("tag", requestBytes, resbody, successItems, nonRetryableItems, retryableItems, this.config.IncludeBusyRequestsToFailureQueue)
 
 		if containError {
 
@@ -250,10 +250,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 type Config struct {
-	SafetyParse                       bool `config:"safety_parse"`
 	IncludeBusyRequestsToFailureQueue bool `config:"include_busy_requests_to_failure_queue"`
-
-	DocBufferSize int `config:"doc_buffer_size"`
 
 	SuccessQueue string `config:"success_queue"`
 	InvalidQueue string `config:"invalid_queue"`
@@ -290,8 +287,6 @@ func init() {
 
 func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 	cfg := Config{
-		DocBufferSize:                     256 * 1024,
-		SafetyParse:                       true,
 		IncludeBusyRequestsToFailureQueue: true,
 		MessageTruncateSize:               1024,
 	}

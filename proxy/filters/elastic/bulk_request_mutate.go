@@ -51,7 +51,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 
 		defer elastic.BulkDocBuffer.Put(docBuffer)
 
-		docCount, err := elastic.WalkBulkRequests(this.SafetyParse, body, docBuffer, func(eachLine []byte) (skipNextLine bool) {
+		docCount, err := elastic.WalkBulkRequests(body, func(eachLine []byte) (skipNextLine bool) {
 			return false
 		}, func(metaBytes []byte, actionStr, index, typeName, id,routing string) (err error) {
 

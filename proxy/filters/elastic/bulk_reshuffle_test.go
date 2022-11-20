@@ -55,7 +55,7 @@ func TestParseActionMeta2(t *testing.T) {
 
 	data := []byte("{\"index\":{\"_index\":\"medcl1\",\"_type\":\"_doc\",\"_id\":\"GZq-bnYBC53QmW9Kk2ve\"}}")
 
-	action, indexb, typeb, idb,_ := elastic.ParseActionMeta(data)
+	action, indexb, typeb, idb,_ ,_ := elastic.ParseActionMeta(data)
 	fmt.Println(string(action), string(indexb), string(idb))
 	assert.Equal(t,string(action),"index")
 	assert.Equal(t,string(indexb),"medcl1")
@@ -65,7 +65,7 @@ func TestParseActionMeta2(t *testing.T) {
 
 	data = []byte("{\"index\":{\"_type\":\"_doc\",\"_id\":\"GZq-bnYBC53QmW9Kk2ve\",\"_index\":\"medcl1\"}}")
 
-	action, indexb, typeb, idb,_ = elastic.ParseActionMeta(data)
+	action, indexb, typeb, idb,_,_  = elastic.ParseActionMeta(data)
 
 	fmt.Println(string(action), string(indexb), string(idb), )
 	assert.Equal(t,string(action),"index")
@@ -76,7 +76,7 @@ func TestParseActionMeta2(t *testing.T) {
 
 	data = []byte("{\"index\":{\"_id\":\"GZq-bnYBC53QmW9Kk2ve\",\"_type\":\"_doc\",\"_index\":\"medcl1\"}}")
 
-	action, indexb, typeb, idb,_ = elastic.ParseActionMeta(data)
+	action, indexb, typeb, idb,_,_  = elastic.ParseActionMeta(data)
 
 	fmt.Println(string(action), string(indexb), string(idb), )
 	assert.Equal(t,string(action),"index")
@@ -85,7 +85,7 @@ func TestParseActionMeta2(t *testing.T) {
 	assert.Equal(t,string(idb),"GZq-bnYBC53QmW9Kk2ve")
 
 	data = []byte("{\"index\":{\"_index\":\"test\",\"_type\":\"doc\"}}")
-	action, indexb, typeb, idb,_ = elastic.ParseActionMeta(data)
+	action, indexb, typeb, idb,_,_  = elastic.ParseActionMeta(data)
 
 	fmt.Println(string(action), string(indexb), string(idb), )
 	assert.Equal(t,string(action),"index")
@@ -94,7 +94,7 @@ func TestParseActionMeta2(t *testing.T) {
 	assert.Equal(t,string(idb),"")
 
 	data = []byte("{\"delete\":{\"_index\":\"test\",\"_type\":\"_doc\"}}")
-	action, indexb, typeb, idb,_ = elastic.ParseActionMeta(data)
+	action, indexb, typeb, idb,_,_  = elastic.ParseActionMeta(data)
 
 	fmt.Println(string(action), string(indexb), string(idb), )
 	assert.Equal(t,string(action),"delete")
@@ -103,7 +103,7 @@ func TestParseActionMeta2(t *testing.T) {
 	assert.Equal(t,string(idb),"")
 
 	data = []byte("{\"create\":{\"_index\":\"test\",\"_type\":\"_doc\"}}")
-	action, indexb, typeb, idb,_ = elastic.ParseActionMeta(data)
+	action, indexb, typeb, idb,_,_  = elastic.ParseActionMeta(data)
 
 	fmt.Println(string(action), string(indexb), string(idb), )
 	assert.Equal(t,string(action),"create")
@@ -112,7 +112,7 @@ func TestParseActionMeta2(t *testing.T) {
 	assert.Equal(t,string(idb),"")
 
 	data = []byte("{ \"update\" : {\"_id\" : \"1\", \"_index\" : \"test\"} }")
-	action, indexb, typeb, idb,_ = elastic.ParseActionMeta(data)
+	action, indexb, typeb, idb,_,_  = elastic.ParseActionMeta(data)
 
 	fmt.Println(string(action), string(indexb), string(idb), )
 	assert.Equal(t,string(action),"update")
@@ -121,7 +121,7 @@ func TestParseActionMeta2(t *testing.T) {
 	assert.Equal(t,string(idb),"1")
 
 	data = []byte("{ \"update\" : {\"_index\" : \"test\"} }")
-	action, indexb, typeb, idb,_ = elastic.ParseActionMeta(data)
+	action, indexb, typeb, idb,_,_  = elastic.ParseActionMeta(data)
 
 	fmt.Println(string(action), string(indexb), string(idb), )
 	assert.Equal(t,string(action),"update")
