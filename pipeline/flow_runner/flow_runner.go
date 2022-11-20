@@ -21,6 +21,8 @@ type Config struct {
 	FlowMaxRunningTimeoutInSeconds int    `config:"flow_max_running_timeout_in_second"`
 	CommitTimeoutInSeconds         int    `config:"commit_timeout_in_second"`
 
+	SkipEmptyQueue    bool `config:"skip_empty_queue"`
+
 	CommitOnTag              string `config:"commit_on_tag"`
 	IdleWaitTimeoutInSeconds int    `config:"idle_wait_timeout_in_second"`
 
@@ -71,6 +73,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 			FetchMaxMessages: 500,
 			FetchMaxWaitMs:   10000,
 		},
+		SkipEmptyQueue: true,
 		CommitOnTag:                    "",
 		IdleWaitTimeoutInSeconds:       1,
 		FlowMaxRunningTimeoutInSeconds: 60,
@@ -101,7 +104,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 	qConfig := queue.GetOrInitConfig(processor.config.InputQueue)
 	flowProcessor := common.GetFlowProcess(processor.config.FlowName)
 
-	if !queue.HasLag(qConfig) {
+	if processor.config.SkipEmptyQueue&&!queue.HasLag(qConfig) {
 		return nil
 	}
 
