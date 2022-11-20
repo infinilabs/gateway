@@ -613,3 +613,19 @@ disk_queue:
 #    endpoint: "192.168.3.188:9000"
 #    access_key: "minio"
 #    access_secret: "miniostorage"
+
+elastic:
+  enabled: true
+  remote_configs: false
+  health_check:
+    enabled: true
+    interval: 30s
+  availability_check:
+    enabled: true
+    interval: 60s
+  metadata_refresh:
+    enabled: true
+    interval: 30s
+  cluster_settings_check:
+    enabled: false
+    interval: 20s
