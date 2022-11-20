@@ -169,49 +169,49 @@ func TestGetUrlLevelMeta(t *testing.T) {
 	pathArray=strings.Split(pathStr,"/")
 	fmt.Println(pathArray,len(pathArray))
 
-	tindex, ttype := elastic.getUrlLevelBulkMeta(pathStr)
+	tindex, ttype := elastic.ParseUrlLevelBulkMeta(pathStr)
 	fmt.Println(tindex, ttype)
 	assert.Equal(t,tindex,"index")
 	assert.Equal(t,ttype,"")
 
 	pathStr = "/_bulk"
-	tindex, ttype = elastic.getUrlLevelBulkMeta(pathStr)
+	tindex, ttype = elastic.ParseUrlLevelBulkMeta(pathStr)
 	fmt.Println(tindex,ttype)
 	assert.Equal(t,tindex,"")
 	assert.Equal(t,ttype,"")
 
 	pathStr = "//_bulk"
-	tindex, ttype = elastic.getUrlLevelBulkMeta(pathStr)
+	tindex, ttype = elastic.ParseUrlLevelBulkMeta(pathStr)
 	fmt.Println(tindex,ttype)
 	assert.Equal(t,tindex,"")
 	assert.Equal(t,ttype,"")
 
 	pathStr = "/index/_bulk"
-	tindex, ttype = elastic.getUrlLevelBulkMeta(pathStr)
+	tindex, ttype = elastic.ParseUrlLevelBulkMeta(pathStr)
 	fmt.Println(tindex,ttype)
 	assert.Equal(t,tindex,"index")
 	assert.Equal(t,ttype,"")
 
 	pathStr = "//index/_bulk"
-	tindex, ttype = elastic.getUrlLevelBulkMeta(pathStr)
+	tindex, ttype = elastic.ParseUrlLevelBulkMeta(pathStr)
 	fmt.Println(tindex,ttype)
 	assert.Equal(t,tindex,"index")
 	assert.Equal(t,ttype,"")
 
 	pathStr = "//index//_bulk"
-	tindex, ttype = elastic.getUrlLevelBulkMeta(pathStr)
+	tindex, ttype = elastic.ParseUrlLevelBulkMeta(pathStr)
 	fmt.Println(tindex,ttype)
 	assert.Equal(t,tindex,"index")
 	assert.Equal(t,ttype,"")
 
 	pathStr = "/index/doc/_bulk"
-	tindex, ttype = elastic.getUrlLevelBulkMeta(pathStr)
+	tindex, ttype = elastic.ParseUrlLevelBulkMeta(pathStr)
 	fmt.Println(tindex,ttype)
 	assert.Equal(t,tindex,"index")
 	assert.Equal(t,ttype,"doc")
 
 	pathStr = "//index/doc/_bulk"
-	tindex, ttype = elastic.getUrlLevelBulkMeta(pathStr)
+	tindex, ttype = elastic.ParseUrlLevelBulkMeta(pathStr)
 	fmt.Println(tindex,ttype)
 	assert.Equal(t,tindex,"index")
 	assert.Equal(t,ttype,"doc")

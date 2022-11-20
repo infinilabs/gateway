@@ -16,6 +16,7 @@ import (
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
+	"github.com/savsgio/gotils/bytes"
 	"time"
 )
 
@@ -418,7 +419,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 					panic(errors.Errorf("queue config [%v] not exists", x))
 				}
 
-				err := queue.Push(cfg, data)
+				err := queue.Push(cfg, bytes.Copy(data))
 				if err != nil {
 					panic(err)
 				}
@@ -465,7 +466,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		}
 		buffer.Write(endPart)
 
-		ctx.Response.AppendBody(buffer.Bytes())
+		ctx.Response.AppendBody(bytes.Copy(buffer.Bytes()))
 		docBufferPool.Put(buffer)
 
 		if len(this.config.TagsOnSuccess) > 0 {
