@@ -482,8 +482,9 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 		log.Tracef("send request [%v] to upstream [%v]", myctx.Request.URI().String(), host)
 	}
 
-	if host != orignalHost {
-		myctx.Request.SetHostBytes(util.UnsafeStringToBytes(host))
+	curHost:=util.UnsafeBytesToString(myctx.Request.Host())
+	if host!=curHost||host != orignalHost {
+		myctx.Request.SetHostBytes([]byte(host))
 	}
 
 	retry := 0
@@ -494,6 +495,7 @@ START:
 	//if p.proxyConfig.Timeout <= 0 {
 	//	p.proxyConfig.Timeout = 60 * time.Second
 	//}
+
 
 	var err error
 	if p.proxyConfig.Timeout > 0 {
@@ -512,7 +514,9 @@ START:
 					time.Sleep(1 * time.Second)
 				}
 			}
-			elastic.GetOrInitHost(host, metadata.Config.ID).ReportFailure()
+			if !p.proxyConfig.SkipAvailableCheck{
+				elastic.GetOrInitHost(host, metadata.Config.ID).ReportFailure()
+			}
 			//server failure flow
 		} else if myctx.Response.StatusCode() == 429 {
 			retry++

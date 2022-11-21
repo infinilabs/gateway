@@ -149,6 +149,7 @@ func (filter *SetHostname) Filter(ctx *fasthttp.RequestCtx) {
 
 	if filter.Hostname != "" {
 		ctx.Request.SetHost(filter.Hostname)
+		ctx.Request.Header.SetHost(filter.Hostname)
 	}
 }
 
