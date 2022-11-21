@@ -24,6 +24,8 @@ type ProxyConfig struct {
 	FixedClient bool   `config:"fixed_client"`
 	ClientMode  string `config:"client_mode"`
 
+	SkipAvailableCheck  bool `config:"skip_available_check"`
+
 	SkipKeepOriginalURI   bool `config:"skip_keep_original_uri"`
 	SkipCleanupHopHeaders bool `config:"skip_cleanup_hop_headers"`
 	SkipEnrichMetadata    bool `config:"skip_metadata_enrich"`
