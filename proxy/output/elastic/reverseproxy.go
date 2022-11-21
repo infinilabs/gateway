@@ -437,7 +437,7 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 			_, pc, host = p.getClient()
 		}
 
-		if !elastic.IsHostAvailable(host) {
+		if !p.proxyConfig.SkipAvailableCheck&&!elastic.IsHostAvailable(host) {
 			old := host
 			host = metadata.GetActiveHost()
 			if rate.GetRateLimiterPerSecond("proxy-host-not-available",old,1).Allow(){
@@ -460,7 +460,7 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 		myctx.Request.URI().SetScheme(metadata.GetSchema())
 		_, pc, host = p.getClient()
 
-		if !elastic.IsHostAvailable(host) {
+		if !p.proxyConfig.SkipAvailableCheck&&!elastic.IsHostAvailable(host) {
 			old := host
 			host = metadata.GetActiveHost()
 			log.Infof("host [%v] is not available, re-choose one: [%v]", old, host)
