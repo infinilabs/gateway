@@ -23,8 +23,6 @@ type ElasticsearchBulkRequestMutate struct {
 	RemoveTypeMeta   bool              `config:"remove_type"`
 	RemovePipeline   bool              `config:"remove_pipeline"`
 	AddTimestampToID bool              `config:"generate_enhanced_id"`
-	SafetyParse      bool              `config:"safety_parse"`
-	DocBufferSize    int               `config:"doc_buffer_size"`
 	IndexNameRename  map[string]string `config:"index_rename"`
 	TypeNameRename   map[string]string `config:"type_rename"`
 }
@@ -45,11 +43,6 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 		defer bytebufferpool.Put("bulk_request_docs", bulkBuff)
 		actionMeta := bytebufferpool.Get("bulk_request_action")
 		defer bytebufferpool.Put("bulk_request_action", actionMeta)
-
-		var docBuffer []byte
-		docBuffer = elastic.BulkDocBuffer.Get(this.DocBufferSize) //doc buffer for bytes scanner
-
-		defer elastic.BulkDocBuffer.Put(docBuffer)
 
 		docCount, err := elastic.WalkBulkRequests(body, func(eachLine []byte) (skipNextLine bool) {
 			return false
@@ -170,7 +163,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 			actionMeta.Write(metaBytes)
 
 			return nil
-		}, func(payloadBytes []byte) {
+		}, func(payloadBytes []byte, actionStr, index, typeName, id,routing string) {
 
 			if actionMeta.Len() > 0 {
 
@@ -213,8 +206,6 @@ func NewElasticsearchBulkRequestMutateFilter(c *config.Config) (pipeline.Filter,
 
 	runner := ElasticsearchBulkRequestMutate{
 		FixNilID:      true,
-		DocBufferSize: 256 * 1024,
-		SafetyParse:   true,
 	}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)

@@ -52,6 +52,10 @@ func (filter *GenericLimiter) init() {
 }
 
 func (filter *GenericLimiter) internalProcess(tokenType, token string, ctx *fasthttp.RequestCtx) {
+	filter.internalProcessWithValues(tokenType,token,ctx,1,ctx.Request.GetRequestLength())
+}
+
+func (filter *GenericLimiter) internalProcessWithValues(tokenType, token string, ctx *fasthttp.RequestCtx,hits, bytes int) {
 
 	if global.Env().IsDebug {
 		log.Tracef("limit config: %v, type:%v, token:%v", filter,tokenType,token)
@@ -60,11 +64,19 @@ func (filter *GenericLimiter) internalProcess(tokenType, token string, ctx *fast
 	if filter.MaxRequests > 0 || filter.MaxBytes > 0 {
 		retryTimes := 0
 	RetryRateLimit:
-		if (filter.MaxRequests > 0 && !rate.GetRateLimiter(filter.uuid+"_limit_requests", token, int(filter.MaxRequests), int(filter.BurstRequests), filter.interval).Allow()) ||
-			(filter.MaxBytes > 0 && !rate.GetRateLimiter(filter.uuid+"_limit_bytes", token, int(filter.MaxBytes), int(filter.BurstBytes), filter.interval).AllowN(time.Now(), ctx.Request.GetRequestLength())) {
+		if (filter.MaxRequests > 0 && !rate.GetRateLimiter(filter.uuid+"_limit_requests", token, int(filter.MaxRequests), int(filter.BurstRequests), filter.interval).AllowN(time.Now(),hits)) ||
+			(filter.MaxBytes > 0 && !rate.GetRateLimiter(filter.uuid+"_limit_bytes", token, int(filter.MaxBytes), int(filter.BurstBytes), filter.interval).AllowN(time.Now(), bytes)) {
 
 			if global.Env().IsDebug {
 				log.Warn(tokenType, " ", token, " reached limit")
+			}
+
+			if filter.MaxRequests > 0 &&filter.MaxRequests<hits{
+				log.Warn(tokenType, " ", token, " reached limit: ",filter.MaxRequests," by:", hits,", seems the limit is too small")
+			}
+
+			if filter.MaxBytes > 0 &&filter.MaxBytes<bytes{
+				log.Warn(tokenType, " ", token, " reached limit: ",filter.MaxBytes," by:", bytes,", seems the limit is too small")
 			}
 
 			if filter.Action == "drop" {
@@ -72,7 +84,7 @@ func (filter *GenericLimiter) internalProcess(tokenType, token string, ctx *fast
 				ctx.WriteString(filter.Message)
 
 				if filter.WarnMessage{
-					log.Warnf("request throttled: %v",string(ctx.Path()))
+					log.Warnf("request throttled: %v, %v %v",tokenType,token,string(ctx.Path()))
 				}
 
 				ctx.Finished()
@@ -83,7 +95,7 @@ func (filter *GenericLimiter) internalProcess(tokenType, token string, ctx *fast
 					ctx.WriteString(filter.RetriedMessage)
 
 					if filter.WarnMessage{
-						log.Warnf("request throttled: %v",string(ctx.Path()))
+						log.Warnf("request throttled: %v %v %v",tokenType,token,string(ctx.Path()))
 					}
 
 					ctx.Finished()

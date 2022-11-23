@@ -58,7 +58,6 @@ type BulkReshuffleConfig struct {
 	ValidateRequest bool `config:"validate_request"`
 
 	//split all lines into memory rather than scan
-	SafetyParse   bool  `config:"safety_parse"`
 	ValidEachLine bool  `config:"validate_each_line"`
 	ValidMetadata bool  `config:"validate_metadata"`
 	ValidPayload  bool  `config:"validate_payload"`
@@ -79,7 +78,6 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 		DocBufferSize:       256 * 1024,
 		QueuePrefix:         "async_bulk",
 		IndexStatsAnalysis:  true,
-		SafetyParse:         true,
 		ActionStatsAnalysis: true,
 		FixNullID:           true,
 		Level:               NodeLevel,
@@ -159,21 +157,25 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 			shardID := 0
 
-			//url level
-			var urlLevelIndex string
-			var urlLevelType string
-
-			urlLevelIndex, urlLevelType = elastic.ParseUrlLevelBulkMeta(pathStr)
-
 			var indexNew, typeNew, idNew string
-			if index == "" && urlLevelIndex != "" {
-				index = urlLevelIndex
-				indexNew = urlLevelIndex
-			}
 
-			if typeName == "" && urlLevelType != "" {
-				typeName = urlLevelType
-				typeNew = urlLevelType
+			//only handle empty index
+			if index==""{
+				//url level
+				var urlLevelIndex string
+				var urlLevelType string
+
+				urlLevelIndex, urlLevelType = elastic.ParseUrlLevelBulkMeta(pathStr)
+
+				if index == "" && urlLevelIndex != "" {
+					index = urlLevelIndex
+					indexNew = urlLevelIndex
+				}
+
+				if typeName == "" && urlLevelType != "" {
+					typeName = urlLevelType
+					typeNew = urlLevelType
+				}
 			}
 
 			if (actionStr == elastic.ActionIndex || actionStr == elastic.ActionCreate) && (len(id) == 0 || id == "null") && fixNullID {
@@ -355,7 +357,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			actionMeta.Write(metaBytes)
 
 			return nil
-		}, func(payloadBytes []byte) {
+		}, func(payloadBytes []byte, actionStr, index, typeName, id,routing string) {
 
 			if actionMeta.Len() > 0 {
 				buff, ok := docBuf[queueConfig.Name]
