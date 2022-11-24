@@ -57,7 +57,7 @@ func (filter *RequestClientIPLimitFilter) Filter(ctx *fasthttp.RequestCtx) {
 				if global.Env().IsDebug {
 					log.Debug(clientIP, "met check rules")
 				}
-				filter.limiter.internalProcess("clientIP", clientIP, ctx)
+				filter.limiter.internalProcess("client_ip", clientIP, ctx)
 				return
 			}
 		}
@@ -65,5 +65,5 @@ func (filter *RequestClientIPLimitFilter) Filter(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	filter.limiter.internalProcess("clientIP", clientIP, ctx)
+	filter.limiter.internalProcess("client_ip", clientIP, ctx)
 }

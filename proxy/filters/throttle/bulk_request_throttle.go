@@ -84,7 +84,7 @@ func (this *ElasticsearchBulkRequestThrottle) Filter(ctx *fasthttp.RequestCtx) {
 				log.Debug("index:",k, " met bulk check rules, hits:",hits,",bytes:",bytes)
 			}
 			if ok&&ok1{
-				limiter.internalProcessWithValues("index_bulk_requests", k, ctx,hits,bytes)
+				limiter.internalProcessWithValues("bulk_requests", k, ctx,hits,bytes)
 				continue
 			}
 		}
