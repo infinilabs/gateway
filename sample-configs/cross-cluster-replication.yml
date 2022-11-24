@@ -52,19 +52,6 @@ flow:
           content_type: "application/json"
           body: '{"error":true,"message":"503 Service Unavailable"}'
       - drop: #结束所有后续流程的处理
-
-  #      #option2: 放入主失败队列,主备都会消费该队列
-  #      - queue:
-  #          queue_name: "primary-failure"
-  #      #由请求触发的限速模式下的主动检查后端监控情况
-  #      - elasticsearch_health_check:
-  #          elasticsearch: "primary"
-  #      - set_response:
-  #          status: 200
-  #          content_type: "application/json"
-  #          body: '{"error":false,"success":true,"acknowledged":true,"hits":{},"found":true}'
-  #      - drop: #结束所有后续流程的处理
-
   - name: primary-write-flow #正常的主写流程
     filter:
       - flow:
@@ -83,14 +70,14 @@ flow:
               flows:
                 - primary-on-failure-write-flow
         else: # 集群不可用或者集群可用且没有堆积的情况，都直接转发给集群先处理
-          #          - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
-          #              fix_null_id: true
-          #              fix_null_type: true
-          #              default_type: _doc
-          #              type_rename:
-          #                "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
-          #              remove_pipeline: true
-          #              generate_enhanced_id: true
+          - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
+              fix_null_id: true
+              fix_null_type: true
+              default_type: _doc
+#              type_rename:
+#                "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
+              remove_pipeline: true
+              generate_enhanced_id: true
           - elasticsearch: #集群可用，直接处理请求
               elasticsearch: "primary"
               max_connection_per_node: 1000
@@ -146,14 +133,6 @@ flow:
           - sleep:
               sleep_in_million_seconds: 5000
           - drop:
-      #      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
-      #          fix_null_id: true
-      #          fix_null_type: true
-      #          default_type: _doc
-      #          type_rename:
-      #            "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
-      #          remove_pipeline: true
-      #          generate_enhanced_id: true
       - elasticsearch:
           elasticsearch: "primary"
           max_connection_per_node: 1000
@@ -208,14 +187,6 @@ flow:
       - flow:
           flows:
             - set-auth-for-backup-flow
-      #      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
-      #          fix_null_id: true
-      #          fix_null_type: true
-      #          default_type: _doc
-      #          type_rename:
-      #            "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
-      #          remove_pipeline: true
-      #          generate_enhanced_id: true
       - elasticsearch:
           elasticsearch: "backup"
           max_connection_per_node: 1000
@@ -274,19 +245,6 @@ flow:
       - flow:
           flows:
             - set-auth-for-backup-flow
-      #      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
-      #          fix_null_id: true
-      #          fix_null_type: true
-      #          default_type: _doc
-      #          type_rename:
-      #            "*": _doc #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
-      #          index_rename:
-      #            test-10: "test-backup"
-      #          remove_pipeline: true
-      #          generate_enhanced_id: true
-      #          when:
-      #            contains:
-      #              _ctx.request.path: /_bulk
       - elasticsearch:
           elasticsearch: "backup"
           max_connection_per_node: 1000
@@ -323,21 +281,6 @@ flow:
           - sleep:
               sleep_in_million_seconds: 5000
           - drop:
-      #      - bulk_request_mutate: #修复自动生成 id 的文档，主动生成 id
-      #          fix_null_id: true
-      #          fix_null_type: true
-      #          default_type: _doc
-      #          type_rename:
-      #          "*": "_doc" #统一索引的 Type 类型，适合旧版本多 Type 迁移到新版本集群
-      #          index_rename:
-      #            test-10: "test-backup"
-      #          remove_pipeline: true # pipeline should be enabled manually, please ensure each cluster has the same setup
-      #          generate_enhanced_id: true
-      #          when:
-      #            contains:
-      #              _ctx.request.path: /_bulk
-      #      - record:
-      #          stdout: true
       - flow:
           flows:
             - set-auth-for-backup-flow
@@ -347,8 +290,8 @@ flow:
               _ctx.request.path: /_bulk
           elasticsearch: "backup"
           queue_name_prefix: "async_bulk"
-          level: node #cluster,node,index,shard
-          partition_size: 3
+          level: cluster #cluster,node,index,shard
+          partition_size: 6
           fix_null_id: true
           tag_on_success: ["commit_message_allowed"]
 
@@ -466,8 +409,7 @@ elasticsearch:
   - name: primary
     enabled: true
     endpoints:
-      #      - http://localhost:9200
-      - http://192.168.3.188:9206
+      - http://10.0.0.3:9200
     basic_auth:
       username: test
       password: testtest
@@ -479,8 +421,7 @@ elasticsearch:
   - name: backup
     enabled: true
     endpoints:
-      - http://192.168.3.188:9204
-    #      - http://localhost:9201
+      - http://10.0.0.3:9201
     basic_auth:
       username: elastic
       password: changeme
@@ -613,6 +554,9 @@ disk_queue:
 #    endpoint: "192.168.3.188:9000"
 #    access_key: "minio"
 #    access_secret: "miniostorage"
+#    token: "token"
+#    skip_insecure_verify: true
+#    ssl: true
 
 elastic:
   enabled: true
@@ -629,3 +573,9 @@ elastic:
   cluster_settings_check:
     enabled: false
     interval: 20s
+
+#floating_ip:
+#  enabled: true
+#  ip: 192.168.3.234
+#  netmask: 255.255.255.0
+#  interface: en1
