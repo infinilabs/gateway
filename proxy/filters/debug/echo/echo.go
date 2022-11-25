@@ -14,6 +14,7 @@ type Echo struct {
 	RepeatTimes int    `config:"repeat"    type:"number"  default_value:"1" `
 	Continue    bool   `config:"continue"  type:"bool"    default_value:"true" `
 	Terminal    bool   `config:"stdout"    type:"bool"    default_value:"false" `
+	Response    bool   `config:"response"    type:"bool"    default_value:"true" `
 	Message     string `config:"message"   type:"string"  default_value:"." `
 	Messages    []string `config:"messages" `
 }
@@ -25,6 +26,7 @@ func init() {
 func New(c *config.Config) (pipeline.Filter, error) {
 
 	runner := Echo{
+		Response: true,
 		RepeatTimes: 1,
 		Continue:    true,
 		Message:     ".",
@@ -45,7 +47,9 @@ func (filter *Echo) Filter(ctx *fasthttp.RequestCtx) {
 	str := filter.Message
 	size := filter.RepeatTimes
 	for i := 0; i < size; i++ {
-		ctx.WriteString(str)
+		if filter.Response{
+			ctx.WriteString(str)
+		}
 		if filter.Terminal {
 			fmt.Print(str)
 		}
