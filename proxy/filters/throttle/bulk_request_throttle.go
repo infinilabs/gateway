@@ -7,14 +7,17 @@ import (
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
+	"infini.sh/framework/core/radix"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
+	"strings"
 )
 
 type ElasticsearchBulkRequestThrottle struct {
-	Indices    map[string]*config.Config `config:"indices"`
-
-	indicesLimiter    map[string]*GenericLimiter
+	Indices         map[string]*config.Config `config:"indices"`
+	hashWildcard    bool
+	indicesLimiter  map[string]*GenericLimiter
+	indicesPatterns map[string]*radix.Pattern
 }
 
 func (filter *ElasticsearchBulkRequestThrottle) Name() string {
@@ -79,13 +82,28 @@ func (this *ElasticsearchBulkRequestThrottle) Filter(ctx *fasthttp.RequestCtx) {
 
 		for k,hits:=range indexOpStats{
 			bytes,ok1:=indexPayloadStats[k]
+			if !ok1{
+				continue
+			}
 			limiter,ok:=this.indicesLimiter[k]
 			if global.Env().IsDebug {
 				log.Debug("index:",k, " met bulk check rules, hits:",hits,",bytes:",bytes)
 			}
-			if ok&&ok1{
+			if !ok{
+				if this.hashWildcard{
+					for x,y:=range this.indicesPatterns{
+						ok := y.Match(k)
+						if global.Env().IsDebug{
+							log.Trace("hit index pattern:",x,",",k)
+						}
+						if ok{
+							limiter,ok=this.indicesLimiter[x]
+						}
+					}
+				}
+			}
+			if limiter!=nil{
 				limiter.internalProcessWithValues("bulk_requests", k, ctx,hits,bytes)
-				continue
 			}
 		}
 
@@ -108,8 +126,16 @@ func NewElasticsearchBulkRequestThrottleFilter(c *config.Config) (pipeline.Filte
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
+	runner.indicesPatterns= map[string]*radix.Pattern{}
 	runner.indicesLimiter= map[string]*GenericLimiter{}
+
 	for k,v:=range runner.Indices{
+		if strings.Contains(k,"*"){
+			runner.hashWildcard=true
+			patterns := radix.Compile(k)
+			runner.indicesPatterns[k]=patterns
+		}
+
 		limiter := genericLimiter
 		if err := v.Unpack(&limiter); err != nil {
 			return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
