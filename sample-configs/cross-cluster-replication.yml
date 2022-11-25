@@ -112,9 +112,6 @@ flow:
           in:
             _ctx.response.status: [200,201]
         then: #仅正常处理的集群才转发给后端集群
-          - flow:
-              flows:
-                - set-auth-for-backup-flow
           - queue:
               queue_name: "backup"
           - drop:
