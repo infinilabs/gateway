@@ -102,13 +102,14 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 	var initOfffset string
 	var offset string
 	qConfig := queue.GetOrInitConfig(processor.config.InputQueue)
-	flowProcessor := common.GetFlowProcess(processor.config.FlowName)
-
-	if processor.config.SkipEmptyQueue&&!queue.HasLag(qConfig) {
+	var consumer = queue.GetOrInitConsumerConfig(qConfig.Id, processor.config.Consumer.Group, processor.config.Consumer.Name)
+	initOfffset, _ = queue.GetOffset(qConfig, consumer)
+	offset = initOfffset
+	if processor.config.SkipEmptyQueue&&!queue.ConsumerHasLag(qConfig,consumer) {
 		return nil
 	}
 
-	var consumer = queue.GetOrInitConsumerConfig(qConfig.Id, processor.config.Consumer.Group, processor.config.Consumer.Name)
+	flowProcessor := common.GetFlowProcess(processor.config.FlowName)
 	var skipFinalDocsProcess bool
 
 	defer func() {
@@ -145,8 +146,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 	t1 := util.AcquireTimer(time.Duration(processor.config.FlowMaxRunningTimeoutInSeconds) * time.Second)
 	defer util.ReleaseTimer(t1)
 
-	initOfffset, _ = queue.GetOffset(qConfig, consumer)
-	offset = initOfffset
+
 	lastCommitTime := time.Now()
 	var commitIdle = time.Duration(processor.config.CommitTimeoutInSeconds) * time.Second
 	for {
