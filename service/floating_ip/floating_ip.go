@@ -275,6 +275,23 @@ func (module FloatingIPPlugin) SwitchToStandbyMode() {
 
 		aliveChan := make(chan bool)
 		go func() {
+			defer func() {
+				if !global.Env().IsDebug {
+					if r := recover(); r != nil {
+						var v string
+						switch r.(type) {
+						case error:
+							v = r.(error).Error()
+						case runtime.Error:
+							v = r.(runtime.Error).Error()
+						case string:
+							v = r.(string)
+						}
+						log.Error("error", v)
+					}
+				}
+			}()
+
 			heartbeat.StartClient(floatingIPConfig.IP, floatingIPConfig.EchoPort, func() {
 				aliveChan <- true
 			}, func() {
@@ -366,6 +383,23 @@ func (module FloatingIPPlugin) StateMachine() {
 
 	aliveChan := make(chan bool)
 	go func() {
+		defer func() {
+			if !global.Env().IsDebug {
+				if r := recover(); r != nil {
+					var v string
+					switch r.(type) {
+					case error:
+						v = r.(error).Error()
+					case runtime.Error:
+						v = r.(runtime.Error).Error()
+					case string:
+						v = r.(string)
+					}
+					log.Error("error", v)
+				}
+			}
+		}()
+
 		err := heartbeat.StartClient(floatingIPConfig.IP, floatingIPConfig.EchoPort, func() {
 			aliveChan <- true
 		}, func() {

@@ -234,6 +234,23 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 		for i := 0; i < processor.config.PartitionSize; i++ {
 			processor.wg.Add(1)
 			go func(q string, f int) {
+				defer func() {
+					if !global.Env().IsDebug {
+						if r := recover(); r != nil {
+							var v string
+							switch r.(type) {
+							case error:
+								v = r.(error).Error()
+							case runtime.Error:
+								v = r.(runtime.Error).Error()
+							case string:
+								v = r.(string)
+							}
+							log.Error("error", v)
+						}
+					}
+				}()
+
 				defer processor.wg.Done()
 				buffer := bytebufferpool.Get("index_diff")
 				//build sorted file
@@ -318,6 +335,23 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 	for i := 0; i < processor.config.PartitionSize; i++ {
 		processor.wg.Add(1)
 		go func(j int) {
+			defer func() {
+				if !global.Env().IsDebug {
+					if r := recover(); r != nil {
+						var v string
+						switch r.(type) {
+						case error:
+							v = r.(error).Error()
+						case runtime.Error:
+							v = r.(runtime.Error).Error()
+						case string:
+							v = r.(string)
+						}
+						log.Error("error", v)
+					}
+				}
+			}()
+
 			defer processor.wg.Done()
 			processor.processMsg(j, func(result DiffResult) {
 				queue.Push(queue.GetOrInitConfig(processor.config.DiffQueue), util.MustToJSONBytes(result))
@@ -330,6 +364,23 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 	if processor.config.TextReportEnabled {
 		processor.wg.Add(1)
 		go func() {
+			defer func() {
+				if !global.Env().IsDebug {
+					if r := recover(); r != nil {
+						var v string
+						switch r.(type) {
+						case error:
+							v = r.(error).Error()
+						case runtime.Error:
+							v = r.(runtime.Error).Error()
+						case string:
+							v = r.(string)
+						}
+						log.Error("error", v)
+					}
+				}
+			}()
+
 			defer processor.wg.Done()
 			path1 := path.Join(global.Env().GetLogDir(), "diff_result", fmt.Sprintf("%v_vs_%v", processor.config.SourceInputQueue, processor.config.TargetInputQueue))
 			os.MkdirAll(path1, 0775)

@@ -23,6 +23,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -319,6 +320,23 @@ func (this *Entrypoint) Start() error {
 		lnTls := tls.NewListener(ln, cfg)
 
 		go func() {
+			defer func() {
+				if !global.Env().IsDebug {
+					if r := recover(); r != nil {
+						var v string
+						switch r.(type) {
+						case error:
+							v = r.(error).Error()
+						case runtime.Error:
+							v = r.(runtime.Error).Error()
+						case string:
+							v = r.(string)
+						}
+						log.Error("error", v)
+					}
+				}
+			}()
+
 			if err := this.server.Serve(lnTls); err != nil {
 				panic(errors.Errorf("error in server: %s", err))
 			}
@@ -327,6 +345,22 @@ func (this *Entrypoint) Start() error {
 	} else {
 		log.Trace("starting insecure server")
 		go func() {
+			defer func() {
+				if !global.Env().IsDebug {
+					if r := recover(); r != nil {
+						var v string
+						switch r.(type) {
+						case error:
+							v = r.(error).Error()
+						case runtime.Error:
+							v = r.(runtime.Error).Error()
+						case string:
+							v = r.(string)
+						}
+						log.Error("error", v)
+					}
+				}
+			}()
 			if err := this.server.Serve(ln); err != nil {
 				panic(errors.Errorf("error in server: %s", err))
 			}
@@ -368,6 +402,22 @@ func (this *Entrypoint) Stop() error {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*5000))
 		defer cancel()
 		go func(ctx context.Context) {
+			defer func() {
+				if !global.Env().IsDebug {
+					if r := recover(); r != nil {
+						var v string
+						switch r.(type) {
+						case error:
+							v = r.(error).Error()
+						case runtime.Error:
+							v = r.(runtime.Error).Error()
+						case string:
+							v = r.(string)
+						}
+						log.Error("error", v)
+					}
+				}
+			}()
 			this.server.Shutdown()
 		}(ctx)
 
@@ -382,6 +432,23 @@ func (this *Entrypoint) Stop() error {
 		defer cancel()
 
 		go func(ctx context.Context) {
+			defer func() {
+				if !global.Env().IsDebug {
+					if r := recover(); r != nil {
+						var v string
+						switch r.(type) {
+						case error:
+							v = r.(error).Error()
+						case runtime.Error:
+							v = r.(runtime.Error).Error()
+						case string:
+							v = r.(string)
+						}
+						log.Error("error", v)
+					}
+				}
+			}()
+
 			if r := recover(); r != nil {}
 			ticker := time.NewTicker(3*time.Second)
 			for {
