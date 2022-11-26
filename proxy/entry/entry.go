@@ -280,7 +280,7 @@ func (this *Entrypoint) Start() error {
 				}
 
 				// create a template for the server
-				servCertTmpl, err := util.GetCertTemplate()
+				servCertTmpl, err := util.GetCertTemplateWithSingleDomain(this.config.TLSConfig.DefaultDomain)
 				if err != nil {
 					panic(err)
 				}
