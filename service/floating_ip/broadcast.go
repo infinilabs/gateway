@@ -17,10 +17,9 @@ limitations under the License.
 package floating_ip
 
 import (
-	"infini.sh/framework/core/config"
+	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/util"
 	"net"
-	log "github.com/cihub/seelog"
 	"time"
 )
 
@@ -35,12 +34,16 @@ type Request struct {
 
 var lastBroadcast time.Time
 //send a Broadcast message to network to discovery the cluster
-func Broadcast(config config.NetworkConfig, req *Request) {
+func Broadcast(config *FloatingIPConfig, req *Request) {
+	if config==nil{
+		panic("invalid config")
+	}
+
 	if time.Now().Sub(lastBroadcast).Seconds() < 5 {
 		log.Warn("broadcast requests was throttled(5s)")
 		return
 	}
-	addr, err := net.ResolveUDPAddr("udp", config.GetBindingAddr())
+	addr, err := net.ResolveUDPAddr("udp", config.BoradcastConfig.GetBindingAddr())
 	if err != nil {
 		log.Error(err)
 		return
@@ -61,9 +64,13 @@ func Broadcast(config config.NetworkConfig, req *Request) {
 	lastBroadcast=time.Now()
 }
 
-func ServeMulticastDiscovery(config config.NetworkConfig, h func(*net.UDPAddr, int, []byte)) {
+func ServeMulticastDiscovery(config *FloatingIPConfig, h func(*net.UDPAddr, int, []byte)) {
 
-	addr, err := net.ResolveUDPAddr("udp", config.GetBindingAddr())
+	if config==nil{
+		panic("invalid config")
+	}
+
+	addr, err := net.ResolveUDPAddr("udp", config.BoradcastConfig.GetBindingAddr())
 	if err != nil {
 		log.Error(err)
 		return

@@ -3,7 +3,10 @@ package heartbeat
 // golang achieve tcp long heartbeat connection with
 // server
 import (
+	"infini.sh/framework/core/global"
 	"net"
+	"runtime"
+	log "github.com/cihub/seelog"
 	"sync"
 	"time"
 )
@@ -50,6 +53,23 @@ func StartServer(host string,port int) error  {
 
 
 func PushGRT() {
+	defer func() {
+		if !global.Env().IsDebug {
+			if r := recover(); r != nil {
+				var v string
+				switch r.(type) {
+				case error:
+					v = r.(error).Error()
+				case runtime.Error:
+					v = r.(runtime.Error).Error()
+				case string:
+					v = r.(string)
+				}
+				log.Error("error", v)
+			}
+		}
+	}()
+
 	for {
 		time.Sleep(3 * time.Second)
 		for _, v := range CMap {
@@ -111,6 +131,23 @@ func ServerHandler(conn net.Conn) {
 // write the data correctly
 // timing detection conn die => goroutine die
 func ServerWHandler(conn net.Conn, C *CS) {
+	defer func() {
+		if !global.Env().IsDebug {
+			if r := recover(); r != nil {
+				var v string
+				switch r.(type) {
+				case error:
+					v = r.(error).Error()
+				case runtime.Error:
+					v = r.(runtime.Error).Error()
+				case string:
+					v = r.(string)
+				}
+				log.Error("error", v)
+			}
+		}
+	}()
+
 	// read data written Wch of business ClientWork
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
@@ -129,6 +166,23 @@ func ServerWHandler(conn net.Conn, C *CS) {
 
 // read client data heartbeat +
 func ServerRHandler(conn net.Conn, C *CS) {
+	defer func() {
+		if !global.Env().IsDebug {
+			if r := recover(); r != nil {
+				var v string
+				switch r.(type) {
+				case error:
+					v = r.(error).Error()
+				case runtime.Error:
+					v = r.(runtime.Error).Error()
+				case string:
+					v = r.(string)
+				}
+				log.Error("error", v)
+			}
+		}
+	}()
+
 	// heartbeat ack
 	// business data is written Wch
 
@@ -172,6 +226,23 @@ func ServerRHandler(conn net.Conn, C *CS) {
 }
 
 func ServerWork(C *CS) {
+	defer func() {
+		if !global.Env().IsDebug {
+			if r := recover(); r != nil {
+				var v string
+				switch r.(type) {
+				case error:
+					v = r.(error).Error()
+				case runtime.Error:
+					v = r.(runtime.Error).Error()
+				case string:
+					v = r.(string)
+				}
+				log.Error("error", v)
+			}
+		}
+	}()
+
 	time.Sleep(1 * time.Second)
 	C.Wch <- []byte{Req, '#', 'h', 'e', 'l', 'l', 'o'}
 

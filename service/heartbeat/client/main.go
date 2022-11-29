@@ -22,7 +22,7 @@ import (
 )
 
 func main() {
-	heartbeat.StartClient("192.168.43.234",61111,func() {
+	heartbeat.StartClient("192.168.43.234",61111,1000,1000,func() {
 		println("connected")
 	}, func() {
 		fmt.Println("disconnected")
