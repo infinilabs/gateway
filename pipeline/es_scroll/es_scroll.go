@@ -129,7 +129,8 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 				wg.Done()
 			}()
 
-			scrollResponse1, err := processor.client.NewScroll(processor.config.Indices, processor.config.ScrollTime, processor.config.BatchSize, processor.config.QueryString, tempSlice, processor.config.SliceSize, processor.config.Fields, processor.config.SortField, processor.config.SortType)
+			var query *elastic.SearchRequest=elastic.GetSearchRequest(processor.config.QueryString,processor.config.QueryDSL,processor.config.Fields, processor.config.SortField, processor.config.SortType)
+			scrollResponse1, err := processor.client.NewScroll(processor.config.Indices, processor.config.ScrollTime, processor.config.BatchSize, query, tempSlice, processor.config.SliceSize)
 			if err != nil {
 				log.Errorf("%v-%v", processor.config.Output, err)
 				panic(err)
