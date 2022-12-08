@@ -83,6 +83,7 @@ var fastHttpClient = &fasthttp.Client{
 	Name:                          "queue_consumer",
 	DisableHeaderNamesNormalizing: false,
 	TLSConfig:                     &tls.Config{InsecureSkipVerify: true},
+	DialDualStack: true,
 }
 
 func (processor *DiskQueueConsumer) Process(ctx *pipeline.Context) error {
