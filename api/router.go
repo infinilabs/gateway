@@ -19,7 +19,7 @@ func (h *GatewayAPI) createRouter(w http.ResponseWriter, req *http.Request, ps h
 		return
 	}
 
-	err = orm.Create(obj)
+	err = orm.Create(obj, "")
 	if err != nil {
 		h.WriteError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -81,7 +81,7 @@ func (h *GatewayAPI) updateRouter(w http.ResponseWriter, req *http.Request, ps h
 	obj.ID = id
 	obj.Created = create
 
-	err = orm.Update(&obj)
+	err = orm.Update(&obj, "")
 	if err != nil {
 		h.WriteError(w, err.Error(), http.StatusInternalServerError)
 		return
