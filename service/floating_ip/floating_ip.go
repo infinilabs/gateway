@@ -141,6 +141,7 @@ func pingActiveNode(ip string) bool {
 	if err != nil {
 		log.Debug(err, util.UnsafeBytesToString(out))
 	}
+
 	if util.ContainsAnyInArray(string(out), pingTimeout) {
 		return false
 	} else if util.ContainsAnyInArray(string(out), pingAlive) {
@@ -485,9 +486,13 @@ func (module FloatingIPPlugin) StateMachine() {
 	alive := <-aliveChan
 
 	if !alive {
-		//target floating_ip can't connect, check ip address
-		if pingActiveNode(floatingIPConfig.IP) {
-			panic(errors.Errorf("the floating_ip [%v] has been taken by someone, but the echo_port [%v] is not responding", floatingIPConfig.IP,floatingIPConfig.Echo.EchoPort))
+		time.Sleep(10*time.Second)
+		//target floating_ip can't connect, but ip ping is alive
+		if util.TestTCPPort(floatingIPConfig.IP,floatingIPConfig.Echo.EchoPort,10*time.Second) && pingActiveNode(floatingIPConfig.IP) {
+			log.Warnf("the floating_ip [%v] has been taken by someone, but the echo_port [%v] is not responding, promoting self", floatingIPConfig.IP,floatingIPConfig.Echo.EchoPort)
+			//try to take it back
+			module.SwitchToActiveMode()
+			return
 		}
 	}
 
