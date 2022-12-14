@@ -28,8 +28,11 @@ const (
 )
 
 type Request struct {
-	IP string  `json:"ip"`
-	Priority int  `json:"priority"`
+	IsActive bool 	  `json:"active"`
+	FloatingIP string `json:"floating_ip"`
+	FixedIP    string `json:"fixed_ip"`
+	EchoPort   int    `json:"echo_port"`
+	Priority   int    `json:"priority"`
 }
 
 var lastBroadcast time.Time
