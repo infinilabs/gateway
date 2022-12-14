@@ -332,7 +332,7 @@ func (this *Entrypoint) Start() error {
 						case string:
 							v = r.(string)
 						}
-						log.Error("error", v)
+						log.Error(v)
 					}
 				}
 			}()
@@ -357,7 +357,7 @@ func (this *Entrypoint) Start() error {
 						case string:
 							v = r.(string)
 						}
-						log.Error("error", v)
+						log.Error(v)
 					}
 				}
 			}()
@@ -414,7 +414,7 @@ func (this *Entrypoint) Stop() error {
 						case string:
 							v = r.(string)
 						}
-						log.Error("error", v)
+						log.Error(v)
 					}
 				}
 			}()
@@ -444,7 +444,7 @@ func (this *Entrypoint) Stop() error {
 						case string:
 							v = r.(string)
 						}
-						log.Error("error", v)
+						log.Error(v)
 					}
 				}
 			}()

@@ -246,7 +246,7 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 							case string:
 								v = r.(string)
 							}
-							log.Error("error", v)
+							log.Error(v)
 						}
 					}
 				}()
@@ -347,7 +347,7 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 						case string:
 							v = r.(string)
 						}
-						log.Error("error", v)
+						log.Error(v)
 					}
 				}
 			}()
@@ -376,7 +376,7 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 						case string:
 							v = r.(string)
 						}
-						log.Error("error", v)
+						log.Error(v)
 					}
 				}
 			}()

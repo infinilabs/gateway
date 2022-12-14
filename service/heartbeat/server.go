@@ -65,7 +65,7 @@ func PushGRT() {
 				case string:
 					v = r.(string)
 				}
-				log.Error("error", v)
+				log.Error(v)
 			}
 		}
 	}()
@@ -143,7 +143,7 @@ func ServerWHandler(conn net.Conn, C *CS) {
 				case string:
 					v = r.(string)
 				}
-				log.Error("error", v)
+				log.Error(v)
 			}
 		}
 	}()
@@ -178,7 +178,7 @@ func ServerRHandler(conn net.Conn, C *CS) {
 				case string:
 					v = r.(string)
 				}
-				log.Error("error", v)
+				log.Error(v)
 			}
 		}
 	}()
@@ -238,7 +238,7 @@ func ServerWork(C *CS) {
 				case string:
 					v = r.(string)
 				}
-				log.Error("error", v)
+				log.Error(v)
 			}
 		}
 	}()

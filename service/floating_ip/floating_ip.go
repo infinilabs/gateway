@@ -272,7 +272,7 @@ func (module FloatingIPPlugin) SwitchToStandbyMode(latency time.Duration) {
 						case string:
 							v = r.(string)
 						}
-						log.Error("error", v)
+						log.Error(v)
 					}
 				}
 				aliveChan <- false
@@ -423,7 +423,7 @@ func (module FloatingIPPlugin) StateMachine() {
 				case string:
 					v = r.(string)
 				}
-				log.Error("error", v)
+				log.Error(v)
 			}
 		}
 	}()
@@ -442,7 +442,7 @@ func (module FloatingIPPlugin) StateMachine() {
 					case string:
 						v = r.(string)
 					}
-					log.Error("error", v)
+					log.Error(v)
 				}
 			}
 		}()
