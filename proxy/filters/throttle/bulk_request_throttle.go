@@ -98,6 +98,8 @@ func (this *ElasticsearchBulkRequestThrottle) Filter(ctx *fasthttp.RequestCtx) {
 						}
 						if ok{
 							limiter,ok=this.indicesLimiter[x]
+							//TODO may support multi-patterns
+							break
 						}
 					}
 				}
