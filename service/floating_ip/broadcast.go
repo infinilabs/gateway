@@ -42,7 +42,7 @@ func Broadcast(config *FloatingIPConfig, req *Request) {
 		panic("invalid config")
 	}
 
-	if time.Now().Sub(lastBroadcast).Seconds() < 5 {
+	if time.Now().Sub(lastBroadcast).Seconds() < 1 {
 		log.Warn("broadcast requests was throttled(5s)")
 		return
 	}
