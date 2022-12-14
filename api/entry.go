@@ -18,7 +18,7 @@ func (h *GatewayAPI) createEntry(w http.ResponseWriter, req *http.Request, ps ht
 		return
 	}
 
-	err = orm.Create(obj)
+	err = orm.Create(nil, obj)
 	if err != nil {
 		h.WriteError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -80,7 +80,7 @@ func (h *GatewayAPI) updateEntry(w http.ResponseWriter, req *http.Request, ps ht
 	//protect
 	obj.ID = id
 	obj.Created = create
-	err = orm.Update(&obj)
+	err = orm.Update(nil, &obj)
 	if err != nil {
 		h.WriteError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -107,7 +107,7 @@ func (h *GatewayAPI) deleteEntry(w http.ResponseWriter, req *http.Request, ps ht
 		return
 	}
 
-	err = orm.Delete(&obj)
+	err = orm.Delete(nil, &obj)
 	if err != nil {
 		h.WriteError(w, err.Error(), http.StatusInternalServerError)
 		return
