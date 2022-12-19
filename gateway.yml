@@ -1,6 +1,8 @@
 path.data: data
 path.logs: log
 
+#log.format: '{"timestamp":"%UTCDateT%UTCTime","level":"%Level","message":"%EscapedMsg","file":"%RelFile","func":"%FuncShort","line":"%Line"}%n'
+
 entry:
   - name: my_es_entry
     enabled: true
