@@ -38,6 +38,6 @@ pipeline:
     auto_start: true
     keep_running: true
     processor:
-      - disorder_flow_runner:
+      - fast_flow_runner:
           input_queue: "backup"
           flow: async-write-flow

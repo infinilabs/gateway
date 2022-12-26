@@ -1,4 +1,4 @@
-package disorder_flow_runner
+package fast_flow_runner
 
 import (
 	"fmt"
@@ -16,11 +16,11 @@ import (
 )
 
 type Config struct {
-	FlowName                       string `config:"flow"`
-	InputQueue                     string `config:"input_queue"`
-	NumOfWorkers         int `config:"worker_size"`
-	FlowMaxRunningTimeoutInSeconds int    `config:"flow_max_running_timeout_in_second"`
-	Consumer queue.ConsumerConfig `config:"consumer"`
+	FlowName                       string               `config:"flow"`
+	InputQueue                     string               `config:"input_queue"`
+	NumOfWorkers                   int                  `config:"worker_size"`
+	FlowMaxRunningTimeoutInSeconds int                  `config:"flow_max_running_timeout_in_second"`
+	Consumer                       queue.ConsumerConfig `config:"consumer"`
 }
 
 var ctxPool = &sync.Pool{
@@ -48,18 +48,18 @@ func releaseCtx(ctx *fasthttp.RequestCtx) {
 
 type FlowRunnerProcessor struct {
 	config *Config
-	wg                   sync.WaitGroup
+	wg     sync.WaitGroup
 }
 
 var signalChannel = make(chan bool, 1)
 
 func init() {
-	pipeline.RegisterProcessorPlugin("disorder_flow_runner", New)
+	pipeline.RegisterProcessorPlugin("fast_flow_runner", New)
 }
 
 func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
-		NumOfWorkers:         1,
+		NumOfWorkers: 1,
 		Consumer: queue.ConsumerConfig{
 			Group:            "group-001",
 			Name:             "consumer-001",
@@ -87,13 +87,13 @@ func (processor FlowRunnerProcessor) Stop() error {
 }
 
 func (processor *FlowRunnerProcessor) Name() string {
-	return "disorder_flow_runner"
+	return "fast_flow_runner"
 }
 
 func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 
-	if processor.config.NumOfWorkers<=0{
-		processor.config.NumOfWorkers=1
+	if processor.config.NumOfWorkers <= 0 {
+		processor.config.NumOfWorkers = 1
 	}
 	for i := 0; i < processor.config.NumOfWorkers; i++ {
 		processor.wg.Add(1)
@@ -105,7 +105,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 	return nil
 }
 
-func (processor *FlowRunnerProcessor) HandleQueueConfig(ctx *pipeline.Context) error{
+func (processor *FlowRunnerProcessor) HandleQueueConfig(ctx *pipeline.Context) error {
 
 	defer func() {
 

@@ -77,7 +77,7 @@ type Config struct {
 }
 
 func init() {
-	pipeline.RegisterProcessorPlugin("disorder_bulk_indexing", New)
+	pipeline.RegisterProcessorPlugin("fast_bulk_indexing", New)
 }
 
 func New(c *config.Config) (pipeline.Processor, error) {
@@ -136,7 +136,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 }
 
 func (processor *BulkIndexingProcessor) Name() string {
-	return "disorder_bulk_indexing"
+	return "fast_bulk_indexing"
 }
 
 func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
@@ -264,9 +264,9 @@ func (processor *BulkIndexingProcessor) HandleQueueConfig(v *queue.QueueConfig, 
 
 	//handle pause when
 	if processor.pauseWhen != nil {
-		taskContext:=conditions.Context{}
+		taskContext := conditions.Context{}
 		taskContext.AddContext(util.MapStr{
-			"labels":v.Labels,
+			"labels": v.Labels,
 		}).AddContext(c).AddContext(meta)
 
 		check := processor.pauseWhen.Check(&taskContext)
@@ -498,10 +498,10 @@ READ_DOCS:
 
 		//handle pause when
 		if processor.pauseWhen != nil {
-			taskContext:=conditions.Context{}
+			taskContext := conditions.Context{}
 			taskContext.AddContext(util.MapStr{
-					"labels":qConfig.Labels,
-				}).AddContext(ctx).AddContext(meta)
+				"labels": qConfig.Labels,
+			}).AddContext(ctx).AddContext(meta)
 
 			check := processor.pauseWhen.Check(&taskContext)
 			if check {
@@ -597,7 +597,7 @@ func (processor *BulkIndexingProcessor) submitBulkRequest(tag, esClusterID strin
 	if mainBuf.GetMessageCount() > 0 && mainBuf.GetMessageSize() > 0 {
 		log.Trace(meta.Config.Name, ", starting submit bulk request")
 		start := time.Now()
-		contrinueRequest,_, err := bulkProcessor.Bulk(tag, meta, host, mainBuf)
+		contrinueRequest, _, err := bulkProcessor.Bulk(tag, meta, host, mainBuf)
 		stats.Increment(esClusterID+"."+tag, util.ToString(contrinueRequest))
 		stats.Timing("elasticsearch."+esClusterID+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
 		log.Debug(meta.Config.Name, ", ", host, ", success:", contrinueRequest, ", count:", count, ", size:", util.ByteSize(uint64(size)), ", elapsed:", time.Since(start))

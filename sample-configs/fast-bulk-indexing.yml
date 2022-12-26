@@ -64,7 +64,7 @@ pipeline:
     keep_running: true
     retry_delay_in_ms: 1000
     processor:
-      - disorder_bulk_indexing:
+      - fast_bulk_indexing:
           idle_timeout_in_seconds: 10
           max_connection_per_node: 1000
           worker_size: 3
