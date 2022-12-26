@@ -1,6 +1,7 @@
 package elastic
 
 import (
+	bytes2 "bytes"
 	"fmt"
 	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
@@ -92,8 +93,6 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 	return &runner, nil
 }
 
-var docBufferPool=  bytebufferpool.NewTaggedPool("bulk_request_docs",0,1024*1024*100,1000000)
-
 func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 	pathStr := util.UnsafeBytesToString(ctx.URI().Path())
@@ -123,7 +122,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		var actionStatsData map[string]int
 
 		//index-shardID -> buffer
-		docBuf := map[string]*bytebufferpool.ByteBuffer{}
+		docBuf := map[string]bytes2.Buffer{}
 
 		validEachLine := this.config.ValidEachLine
 		validMetadata := this.config.ValidMetadata
@@ -131,7 +130,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		reshuffleType := this.config.Level
 		fixNullID := this.config.FixNullID
 
-		var buff *bytebufferpool.ByteBuffer
+		var buff bytes2.Buffer
 		var ok bool
 		var queueConfig *queue.QueueConfig
 		//var queueName string
@@ -344,7 +343,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			////update actionItem
 			buff, ok = docBuf[queueConfig.Name]
 			if !ok {
-				buff = docBufferPool.Get()
+				buff = bytes2.Buffer{}
 				docBuf[queueConfig.Name] = buff
 				var exists bool
 				exists, err = queue.RegisterConfig(queueConfig.Name, queueConfig)
@@ -362,7 +361,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			if actionMeta.Len() > 0 {
 				buff, ok := docBuf[queueConfig.Name]
 				if !ok {
-					buff = docBufferPool.Get()
+					buff = bytes2.Buffer{}
 					docBuf[queueConfig.Name] = buff
 				}
 
@@ -425,7 +424,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			} else {
 				log.Warn("zero message,", x, ",", len(data), ",", string(body))
 			}
-			docBufferPool.Put(y)
 		}
 
 		if indexAnalysis {
@@ -453,7 +451,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		//fake results
 		ctx.SetContentType(JSON_CONTENT_TYPE)
 
-		buffer := docBufferPool.Get()
+		buffer := bytes2.Buffer{}
 
 		buffer.Write(startPart)
 		for i := 0; i < docCount; i++ {
@@ -464,8 +462,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		}
 		buffer.Write(endPart)
 
-		ctx.Response.AppendBody(bytes.Copy(buffer.Bytes()))
-		docBufferPool.Put(buffer)
+		ctx.Response.AppendBody(buffer.Bytes())
 
 		if len(this.config.TagsOnSuccess) > 0 {
 			ctx.UpdateTags(this.config.TagsOnSuccess, nil)
