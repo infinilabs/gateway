@@ -42,7 +42,7 @@ var itemPart = []byte("{\"index\":{\"_index\":\"fake-index\",\"_type\":\"doc\",\
 var endPart = []byte("]}")
 
 type BulkReshuffleConfig struct {
-	TagsOnSuccess []string `config:"tag_on_success"` //hit limiter then add tag
+	TagsOnSuccess []string `config:"tag_on_success"`
 
 	Elasticsearch          string `config:"elasticsearch"`
 	QueuePrefix            string `config:"queue_name_prefix"`
@@ -62,7 +62,6 @@ type BulkReshuffleConfig struct {
 	ValidMetadata bool  `config:"validate_metadata"`
 	ValidPayload  bool  `config:"validate_payload"`
 	StickToNode   bool  `config:"stick_to_node"`
-	DocBufferSize int   `config:"doc_buffer_size"`
 	EnabledShards []int `config:"shards"`
 }
 
@@ -75,7 +74,6 @@ func init() {
 func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 
 	cfg := BulkReshuffleConfig{
-		DocBufferSize:       256 * 1024,
 		QueuePrefix:         "async_bulk",
 		IndexStatsAnalysis:  true,
 		ActionStatsAnalysis: true,
@@ -140,6 +138,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		validateRequest := this.config.ValidateRequest
 		actionMeta := bytebufferpool.Get("bulk_request_action")
 		defer bytebufferpool.Put("bulk_request_action", actionMeta)
+		var hitMetadataNotFound bool
 
 		docCount, err := elastic.WalkBulkRequests(body, func(eachLine []byte) (skipNextLine bool) {
 			if validEachLine {
@@ -251,6 +250,10 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				//get routing table of index
 				table, err := metadata.GetIndexRoutingTable(index)
 				if err != nil {
+					if this.config.ContinueMetadataNotFound{
+						hitMetadataNotFound=true
+						return nil
+					}
 					if rate.GetRateLimiter("index_routing_table_not_found", index, 1, 2, time.Minute*1).Allow() {
 						log.Warn(index, ",", metaStr, ",", err)
 					}
@@ -278,10 +281,18 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 					ShardIDStr = util.IntToString(shardID)
 					shardInfo, err := metadata.GetPrimaryShardInfo(index, ShardIDStr)
 					if err != nil {
+						if this.config.ContinueMetadataNotFound{
+							hitMetadataNotFound=true
+							return nil
+						}
 						panic(errors.Error("shard info was not found,", index, ",", shardID, ",", err))
 					}
 
 					if shardInfo == nil {
+						if this.config.ContinueMetadataNotFound{
+							hitMetadataNotFound=true
+							return nil
+						}
 						if rate.GetRateLimiter(fmt.Sprintf("shard_info_not_found_%v", index), ShardIDStr, 1, 5, time.Minute*1).Allow() {
 							log.Warn("shardInfo was not found,", index, ",", shardID)
 						}
@@ -399,6 +410,13 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				log.Error(err)
 			}
 			panic(err)
+		}
+
+		if this.config.ContinueMetadataNotFound&&hitMetadataNotFound{
+			if rate.GetRateLimiterPerSecond("metadata_not_found","reshuffle",1).Allow(){
+				log.Warn("metadata not found, skip reshuffle")
+			}
+			return
 		}
 
 		//send to queue
