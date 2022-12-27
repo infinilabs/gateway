@@ -273,7 +273,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 						if len(this.config.EnabledShards) > 0 {
 							if !util.ContainsInAnyInt32Array(shardID, this.config.EnabledShards) {
 								log.Debugf("shard %v-%v not enabled, skip processing", index, shardID)
-								return errors.Errorf("shard %s-%v not enabled, skip processing", index, shardID)
+								return nil
 							}
 						}
 					}
