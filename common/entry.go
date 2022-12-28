@@ -14,10 +14,10 @@ type EntryConfig struct {
 	Name                string `config:"name" json:"name,omitempty" elastic_mapping:"name:{type:keyword,fields:{text: {type: text}}}"`
 	Enabled             bool   `config:"enabled" json:"enabled,omitempty" elastic_mapping:"enabled: { type: boolean }"`
 	DirtyShutdown       bool   `config:"dirty_shutdown" json:"dirty_shutdown,omitempty" elastic_mapping:"dirty_shutdown: { type: boolean }"`
-	ReduceMemoryUsage   bool   `config:"reduce_memory_usage" json:"reduce_memory_usage,omitempty" elastic_mapping:"reduce_memory_usage: { type: boolean }"`
+	SkipReduceMemoryUsage   bool   `config:"skip_reduce_memory" json:"skip_reduce_memory,omitempty" elastic_mapping:"skip_reduce_memory: { type: boolean }"`
 	ReadTimeout         int    `config:"read_timeout" json:"read_timeout,omitempty" elastic_mapping:"read_timeout: { type: integer }"`
 	WriteTimeout        int    `config:"write_timeout" json:"write_timeout,omitempty" elastic_mapping:"write_timeout: { type: integer }"`
-	TCPKeepalive        bool   `config:"tcp_keepalive" json:"tcp_keepalive,omitempty" elastic_mapping:"tcp_keepalive: { type: boolean }"`
+	DisableTCPKeepalive        bool   `config:"disable_tcp_keepalive" json:"disable_tcp_keepalive,omitempty" elastic_mapping:"disable_tcp_keepalive: { type: boolean }"`
 	TCPKeepaliveSeconds int    `config:"tcp_keepalive_in_seconds" json:"tcp_keepalive_in_seconds,omitempty" elastic_mapping:"tcp_keepalive_in_seconds: { type: integer }"`
 	IdleTimeout         int    `config:"idle_timeout" json:"idle_timeout,omitempty" elastic_mapping:"idle_timeout: { type: integer }"`
 
