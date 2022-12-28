@@ -39,10 +39,10 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 		body := ctx.Request.GetRawBody()
 
 		//this buffer will release after context exit
-		var bulkBuff *bytebufferpool.ByteBuffer = bytebufferpool.Get("bulk_request_docs")
-		defer bytebufferpool.Put("bulk_request_docs", bulkBuff)
-		actionMeta := bytebufferpool.Get("bulk_request_action")
-		defer bytebufferpool.Put("bulk_request_action", actionMeta)
+		var bulkBuff *bytebufferpool.ByteBuffer = bytebufferpool.Get("bulk_mutate_request_docs")
+		defer bytebufferpool.Put("bulk_mutate_request_docs", bulkBuff)
+		actionMeta := bytebufferpool.Get("bulk_mutate_request_action")
+		defer bytebufferpool.Put("bulk_mutate_request_action", actionMeta)
 
 		docCount, err := elastic.WalkBulkRequests(body, func(eachLine []byte) (skipNextLine bool) {
 			return false

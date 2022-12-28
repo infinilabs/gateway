@@ -90,7 +90,7 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 	return &runner, nil
 }
 
-var docBufferPool=  bytebufferpool.NewTaggedPool("bulk_request_docs",0,1024*1024*100,1000000)
+var docBufferPool=  bytebufferpool.NewTaggedPool("bulk_reshuffle_request_docs",0,1024*1024*100,1000000)
 
 func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
@@ -136,8 +136,8 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		indexAnalysis := this.config.IndexStatsAnalysis   //sync and async
 		actionAnalysis := this.config.ActionStatsAnalysis //sync and async
 		validateRequest := this.config.ValidateRequest
-		actionMeta := bytebufferpool.Get("bulk_request_action")
-		defer bytebufferpool.Put("bulk_request_action", actionMeta)
+		actionMeta := bytebufferpool.Get("bulk_reshuffle_request_action")
+		defer bytebufferpool.Put("bulk_reshuffle_request_action", actionMeta)
 		var hitMetadataNotFound bool
 
 		docCount, err := elastic.WalkBulkRequests(body, func(eachLine []byte) (skipNextLine bool) {
