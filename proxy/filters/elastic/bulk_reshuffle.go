@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
+	"github.com/savsgio/gotils/bytes"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/errors"
@@ -16,7 +17,7 @@ import (
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
-	"github.com/savsgio/gotils/bytes"
+	"runtime"
 	"time"
 )
 
@@ -137,7 +138,24 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		actionAnalysis := this.config.ActionStatsAnalysis //sync and async
 		validateRequest := this.config.ValidateRequest
 		actionMeta := bytebufferpool.Get("bulk_reshuffle_request_action")
-		defer bytebufferpool.Put("bulk_reshuffle_request_action", actionMeta)
+		defer func() {
+			if !global.Env().IsDebug {
+				if r := recover(); r != nil {
+					var v string
+					switch r.(type) {
+					case error:
+						v = r.(error).Error()
+					case runtime.Error:
+						v = r.(runtime.Error).Error()
+					case string:
+						v = r.(string)
+					}
+					log.Error("error in bulk_reshuffle,", v)
+				}
+			}
+			bytebufferpool.Put("bulk_reshuffle_request_action", actionMeta)
+		}()
+
 		var hitMetadataNotFound bool
 
 		docCount, err := elastic.WalkBulkRequests(body, func(eachLine []byte) (skipNextLine bool) {
