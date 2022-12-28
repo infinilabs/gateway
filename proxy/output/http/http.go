@@ -26,8 +26,7 @@ type HTTPFilter struct {
 	SkipFailureHost bool     `config:"skip_failure_host"`
 	Host            string   `config:"host"`
 	Hosts           []string `config:"hosts"`
-	//client          *fasthttp.Client
-	clients sync.Map //*fasthttp.HostClient
+	clients sync.Map //*fasthttp.Client
 
 	//host
 	MaxConnection       int `config:"max_connection_per_node"`
@@ -80,7 +79,7 @@ func (filter *HTTPFilter) Filter(ctx *fasthttp.RequestCtx) {
 		for _, v := range filter.Hosts {
 			err = filter.forward(v, ctx)
 			if err == nil {
-				return
+				break
 			}
 		}
 		if err != nil {
@@ -147,9 +146,11 @@ func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err er
 	if global.Env().IsDebug {
 		log.Debug("forward http request:", ctx.URI().String(), ctx.Request.String())
 	}
+
+
 	c, ok := filter.clients.Load(host)
 	if ok {
-		client, ok := c.(*fasthttp.HostClient)
+		client, ok := c.(*fasthttp.Client)
 		if !ok {
 			return errors.Errorf("invalid host client:", host)
 		}
@@ -163,10 +164,17 @@ func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err er
 		ctx.Request.URI().SetScheme(orignalSchema)
 		ctx.Request.SetHost(orignalHost)
 
-		ctx.Response.Header.Set("X-Backend-Server", host)
+		if err!=nil{
+			log.Error(err,string(ctx.Response.GetRawBody()))
+		}
+
 	} else {
-		return errors.Errorf("invalid host client:", host)
+		err= errors.Errorf("invalid host client:", host)
+		log.Warn(err)
 	}
+
+	ctx.Response.Header.Set("X-Backend-Server", host)
+
 	return err
 }
 
@@ -178,7 +186,7 @@ func NewHTTPFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := HTTPFilter{
 		SkipFailureHost:       true,
-		MaxConnection:         5000,
+		MaxConnection:         100000,
 		MaxRetryTimes:         0,
 		RetryDelayInMs:        1000,
 		TLSInsecureSkipVerify: true,
@@ -214,13 +222,12 @@ func NewHTTPFilter(c *config.Config) (pipeline.Filter, error) {
 	runner.clients = sync.Map{}
 
 	for _, host := range runner.Hosts {
-		c := &fasthttp.HostClient{
+
+		c :=&fasthttp.Client{
 			Name:                          "reverse_proxy",
-			Addr:                          host,
 			DisableHeaderNamesNormalizing: true,
 			DisablePathNormalizing:        true,
-			IsTLS:                         runner.Schema == "https",
-			MaxConns:                      runner.MaxConnection,
+			MaxConnsPerHost:               runner.MaxConnection,
 			MaxResponseBodySize:           runner.MaxResponseBodySize,
 			MaxConnWaitTimeout:            runner.MaxConnWaitTimeout,
 			MaxConnDuration:               runner.MaxConnDuration,
@@ -229,6 +236,7 @@ func NewHTTPFilter(c *config.Config) (pipeline.Filter, error) {
 			WriteTimeout:                  runner.WriteTimeout,
 			ReadBufferSize:                runner.ReadBufferSize,
 			WriteBufferSize:               runner.WriteBufferSize,
+			DialDualStack: true,
 			TLSConfig: &tls.Config{
 				InsecureSkipVerify: runner.TLSInsecureSkipVerify,
 			},
