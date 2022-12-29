@@ -23,6 +23,7 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/modules/api"
 	"infini.sh/framework/modules/elastic"
+	"infini.sh/framework/modules/metrics"
 	"infini.sh/framework/modules/pipeline"
 	queue2 "infini.sh/framework/modules/queue/disk_queue"
 	"infini.sh/framework/modules/queue/kafka_queue"
@@ -57,6 +58,8 @@ func setup()  {
 	module.RegisterSystemModule(&pipeline.PipeModule{})
 	module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
 	module.RegisterSystemModule(&api.APIModule{})
+	module.RegisterUserPlugin(&metrics.MetricsModule{})
+
 }
 
 func start()  {
