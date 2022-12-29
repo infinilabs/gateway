@@ -186,7 +186,7 @@ func NewHTTPFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := HTTPFilter{
 		SkipFailureHost:       true,
-		MaxConnection:         100000,
+		MaxConnection:         5000,
 		MaxRetryTimes:         0,
 		RetryDelayInMs:        1000,
 		TLSInsecureSkipVerify: true,
