@@ -40,7 +40,7 @@ type DataFlow struct {
 type HttpRequest struct {
 	ID           uint64    `json:"id,omitempty"`
 	ConnTime     string    `json:"conn_time,omitempty"`
-	LoggingTime  string    `json:"@timestamp,omitempty"`
+	LoggingTime  string    `json:"timestamp,omitempty"`
 	LocalIP      string    `json:"local_ip,omitempty"`
 	RemoteIP     string    `json:"remote_ip,omitempty"`
 	IsTLS        bool      `json:"tls"`

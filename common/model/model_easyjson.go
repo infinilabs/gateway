@@ -440,7 +440,7 @@ func easyjsonC80ae7adDecodeInfiniShGatewayCommonModel2(in *jlexer.Lexer, out *Ht
 			out.ID = uint64(in.Uint64())
 		case "conn_time":
 			out.ConnTime = string(in.String())
-		case "@timestamp":
+		case "timestamp":
 			out.LoggingTime = string(in.String())
 		case "local_ip":
 			out.LocalIP = string(in.String())
@@ -537,7 +537,7 @@ func easyjsonC80ae7adEncodeInfiniShGatewayCommonModel2(out *jwriter.Writer, in H
 		out.String(string(in.ConnTime))
 	}
 	if in.LoggingTime != "" {
-		const prefix string = ",\"@timestamp\":"
+		const prefix string = ",\"timestamp\":"
 		if first {
 			first = false
 			out.RawString(prefix[1:])
