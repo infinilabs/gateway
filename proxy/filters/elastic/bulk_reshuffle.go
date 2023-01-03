@@ -93,6 +93,19 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 
 var docBufferPool=  bytebufferpool.NewTaggedPool("bulk_reshuffle_request_docs",0,1024*1024*100,1000000)
 
+func SafetyAddNewlineBetweenData(buffer *bytebufferpool.ByteBuffer,data []byte)  {
+	if buffer.Len()>0{
+		//previous data is not ending with \n
+		if !util.BytesHasSuffix(buffer.B,elastic.NEWLINEBYTES){
+			//new data is not start with \n
+			if !util.BytesHasPrefix(data,elastic.NEWLINEBYTES){
+				buffer.Write(elastic.NEWLINEBYTES)
+			}
+		}
+	}
+	buffer.Write(data)
+}
+
 func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 	pathStr := util.UnsafeBytesToString(ctx.URI().Path())
@@ -269,6 +282,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				table, err := metadata.GetIndexRoutingTable(index)
 				if err != nil {
 					if this.config.ContinueMetadataNotFound{
+						log.Error(err)
 						hitMetadataNotFound=true
 						return nil
 					}
@@ -300,6 +314,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 					shardInfo, err := metadata.GetPrimaryShardInfo(index, ShardIDStr)
 					if err != nil {
 						if this.config.ContinueMetadataNotFound{
+							log.Error(err)
 							hitMetadataNotFound=true
 							return nil
 						}
@@ -308,6 +323,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 					if shardInfo == nil {
 						if this.config.ContinueMetadataNotFound{
+							log.Error(err)
 							hitMetadataNotFound=true
 							return nil
 						}
@@ -382,8 +398,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
-			//保存临时变量
-			actionMeta.Write(metaBytes)
+			SafetyAddNewlineBetweenData(actionMeta,metaBytes)
 
 			return nil
 		}, func(payloadBytes []byte, actionStr, index, typeName, id,routing string) {
@@ -399,14 +414,11 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 					log.Trace("metadata:", string(payloadBytes))
 				}
 
-				if buff.Len() > 0 {
-					buff.Write(elastic.NEWLINEBYTES)
-				}
+				SafetyAddNewlineBetweenData(buff,actionMeta.Bytes())
 
-				buff.Write(actionMeta.Bytes())
 				if payloadBytes != nil && len(payloadBytes) > 0 {
-					buff.Write(elastic.NEWLINEBYTES)
-					buff.Write(payloadBytes)
+
+					SafetyAddNewlineBetweenData(buff,payloadBytes)
 
 					if validPayload {
 						obj := map[string]interface{}{}
@@ -439,7 +451,11 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 		//send to queue
 		for x, y := range docBuf {
-			y.Write(elastic.NEWLINEBYTES)
+
+			if !util.BytesHasSuffix(y.B,elastic.NEWLINEBYTES){
+				y.Write(elastic.NEWLINEBYTES)
+			}
+
 			data := y.Bytes()
 
 			if validateRequest {

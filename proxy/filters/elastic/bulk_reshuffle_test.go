@@ -33,6 +33,11 @@ import (
 //
 //}
 
+func TestParseBulkRequestWithDelete(t *testing.T) {
+	data:=[]byte("{\"delete\":{\"_index\":\"idx-familycloud-stdfile2\",\"_id\":\"1411aX3240ge17520221106010809oh0\",\"routing\":\"ab1daa0979a64f32994a81c0091b1577\"}}\n{ \"create\" : { \"_index\" : \"my_index\", \"_id\" : \"2\"} }\n{ \"field\" : \"value2\", \"home_location\": \"41.12,-71.34\"}")
+	fmt.Println(string(data))
+}
+
 func TestParseActionMeta1(t *testing.T) {
 
 	data := []byte("{\"index\":{\"_index\":\"medcl1\",\"_type\":\"_doc\",\"_id\":\"GZq-bnYBC53QmW9Kk2ve\"}}")
