@@ -429,6 +429,31 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			panic(err)
 		}
 
+
+		//stats
+		if indexAnalysis {
+			ctx.Set("bulk_index_stats", indexStatsData)
+			for k, v := range indexStatsData {
+				//统计索引次数
+				stats.IncrementBy("elasticsearch."+clusterName+".indices", k, int64(v))
+			}
+		}
+		if actionAnalysis {
+			ctx.Set("bulk_action_stats", actionStatsData)
+			for k, v := range actionStatsData {
+				//统计操作次数
+				stats.IncrementBy("elasticsearch."+clusterName+".operations", k, int64(v))
+			}
+		}
+
+		if ctx.Has("elastic_cluster_name") {
+			es1 := ctx.MustGetStringArray("elastic_cluster_name")
+			ctx.Set("elastic_cluster_name", append(es1, clusterName))
+		} else {
+			ctx.Set("elastic_cluster_name", []string{clusterName})
+		}
+
+		//skip async or not
 		if this.config.ContinueMetadataNotFound&&hitMetadataNotFound{
 			if rate.GetRateLimiterPerSecond("metadata_not_found","reshuffle",1).Allow(){
 				log.Warn("metadata not found, skip reshuffle")
@@ -472,27 +497,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			docBufferPool.Put(y)
 		}
 
-		if indexAnalysis {
-			ctx.Set("bulk_index_stats", indexStatsData)
-			for k, v := range indexStatsData {
-				//统计索引次数
-				stats.IncrementBy("elasticsearch."+clusterName+".indices", k, int64(v))
-			}
-		}
-		if actionAnalysis {
-			ctx.Set("bulk_action_stats", actionStatsData)
-			for k, v := range actionStatsData {
-				//统计操作次数
-				stats.IncrementBy("elasticsearch."+clusterName+".operations", k, int64(v))
-			}
-		}
-
-		if ctx.Has("elastic_cluster_name") {
-			es1 := ctx.MustGetStringArray("elastic_cluster_name")
-			ctx.Set("elastic_cluster_name", append(es1, clusterName))
-		} else {
-			ctx.Set("elastic_cluster_name", []string{clusterName})
-		}
 
 		//fake results
 		ctx.SetContentType(JSON_CONTENT_TYPE)
