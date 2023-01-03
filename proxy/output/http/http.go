@@ -144,7 +144,7 @@ func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err er
 	ctx.Request.URI().SetScheme(filter.Schema)
 
 	if global.Env().IsDebug {
-		log.Debug("forward http request:", ctx.URI().String(), ctx.Request.String())
+		log.Tracef("forward http request: %v, %v", ctx.URI().String(), ctx.Request.String())
 	}
 
 
