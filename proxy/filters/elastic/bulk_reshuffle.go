@@ -439,6 +439,11 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		//send to queue
 		for x, y := range docBuf {
 
+			if y.Len()<=0{
+				log.Trace("invalid doc buffer, skip processing")
+				continue
+			}
+
 			if !util.BytesHasSuffix(y.B,elastic.NEWLINEBYTES){
 				y.Write(elastic.NEWLINEBYTES)
 			}
@@ -509,6 +514,8 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		if len(this.config.TagsOnSuccess) > 0 {
 			ctx.UpdateTags(this.config.TagsOnSuccess, nil)
 		}
+
+		ctx.Response.Header.Set("X-Async-Bulk","true")
 
 		if !this.config.ContinueAfterReshuffle {
 			ctx.Response.SetStatusCode(200)
