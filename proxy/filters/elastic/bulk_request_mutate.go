@@ -171,14 +171,10 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 					log.Tracef("payload:\n%v", string(payloadBytes))
 				}
 
-				if bulkBuff.Len() > 0 {
-					bulkBuff.Write(elastic.NEWLINEBYTES)
-				}
+				elastic.SafetyAddNewlineBetweenData(bulkBuff,actionMeta.Bytes())
 
-				bulkBuff.Write(actionMeta.Bytes())
 				if payloadBytes != nil && len(payloadBytes) > 0 {
-					bulkBuff.Write(elastic.NEWLINEBYTES)
-					bulkBuff.Write(payloadBytes)
+					elastic.SafetyAddNewlineBetweenData(bulkBuff,payloadBytes)
 				}
 
 				actionMeta.Reset()
@@ -191,7 +187,9 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 		}
 
 		if bulkBuff.Len() > 0 {
-			bulkBuff.Write(elastic.NEWLINEBYTES)
+			if !util.BytesHasSuffix(bulkBuff.B,elastic.NEWLINEBYTES){
+				bulkBuff.Write(elastic.NEWLINEBYTES)
+			}
 			ctx.Request.SetRawBody(bulkBuff.Bytes())
 		}
 	}

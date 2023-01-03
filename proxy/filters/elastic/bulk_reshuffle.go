@@ -93,19 +93,6 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 
 var docBufferPool=  bytebufferpool.NewTaggedPool("bulk_reshuffle_request_docs",0,1024*1024*100,1000000)
 
-func SafetyAddNewlineBetweenData(buffer *bytebufferpool.ByteBuffer,data []byte)  {
-	if buffer.Len()>0{
-		//previous data is not ending with \n
-		if !util.BytesHasSuffix(buffer.B,elastic.NEWLINEBYTES){
-			//new data is not start with \n
-			if !util.BytesHasPrefix(data,elastic.NEWLINEBYTES){
-				buffer.Write(elastic.NEWLINEBYTES)
-			}
-		}
-	}
-	buffer.Write(data)
-}
-
 func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 	pathStr := util.UnsafeBytesToString(ctx.URI().Path())
@@ -398,7 +385,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
-			SafetyAddNewlineBetweenData(actionMeta,metaBytes)
+			elastic.SafetyAddNewlineBetweenData(actionMeta,metaBytes)
 
 			return nil
 		}, func(payloadBytes []byte, actionStr, index, typeName, id,routing string) {
@@ -414,11 +401,11 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 					log.Trace("metadata:", string(payloadBytes))
 				}
 
-				SafetyAddNewlineBetweenData(buff,actionMeta.Bytes())
+				elastic.SafetyAddNewlineBetweenData(buff,actionMeta.Bytes())
 
 				if payloadBytes != nil && len(payloadBytes) > 0 {
 
-					SafetyAddNewlineBetweenData(buff,payloadBytes)
+					elastic.SafetyAddNewlineBetweenData(buff,payloadBytes)
 
 					if validPayload {
 						obj := map[string]interface{}{}

@@ -88,8 +88,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 			if nonRetryableItems.GetMessageCount() > 0 {
 
 				if this.config.InvalidQueue != "" {
-					nonRetryableItems.Write(elastic.NEWLINEBYTES)
-
+					nonRetryableItems.SafetyEndWithNewline()
 					bytes := ctx.Request.OverrideBodyEncode(nonRetryableItems.GetMessageBytes(), true)
 					queue.Push(queue.GetOrInitConfig(this.config.InvalidQueue), bytes)
 
@@ -120,8 +119,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 			if retryableItems.GetMessageCount() > 0 {
 
 				if this.config.FailureQueue != "" {
-					retryableItems.Write(elastic.NEWLINEBYTES)
-
+					retryableItems.SafetyEndWithNewline()
 					if retryableItems.GetMessageSize() == 0 || len(retryableItems.GetMessageBytes()) == 0 {
 						log.Error("invalid retryable items, size should not be 0, but is 0,", retryableItems.GetMessageCount())
 					}
@@ -162,7 +160,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 			if successItems.GetMessageCount() > 0 {
 
 				if this.config.SuccessQueue != "" {
-					successItems.WriteByteBuffer(elastic.NEWLINEBYTES)
+					successItems.SafetyEndWithNewline()
 					bytes := ctx.Request.OverrideBodyEncode(successItems.GetMessageBytes(), true)
 					queue.Push(queue.GetOrInitConfig(this.config.SuccessQueue), bytes)
 				}
