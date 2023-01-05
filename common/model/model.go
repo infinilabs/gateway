@@ -39,7 +39,6 @@ type DataFlow struct {
 
 type HttpRequest struct {
 	ID           uint64    `json:"id,omitempty"`
-	ConnTime     string    `json:"conn_time,omitempty"`
 	LoggingTime  string    `json:"timestamp,omitempty"`
 	LocalIP      string    `json:"local_ip,omitempty"`
 	RemoteIP     string    `json:"remote_ip,omitempty"`
@@ -50,5 +49,3 @@ type HttpRequest struct {
 	DataFlow     *DataFlow `json:"flow,omitempty"`
 	Elastic map[string]interface{} `json:"elastic,omitempty"`
 }
-
-//TODO elapsed time, domain(check), client->proxy->upstream make it works,
