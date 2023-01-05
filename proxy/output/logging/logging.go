@@ -117,7 +117,6 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	request.ConnTime = ctx.ConnTime().UTC().Format("2006-01-02T15:04:05.000Z")
 	request.LoggingTime = time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	request.Request.StartTime = ctx.Time().UTC().Format("2006-01-02T15:04:05.000Z")
 
