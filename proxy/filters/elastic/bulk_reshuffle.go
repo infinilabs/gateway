@@ -268,13 +268,12 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				//get routing table of index
 				table, err := metadata.GetIndexRoutingTable(index)
 				if err != nil {
-					if this.config.ContinueMetadataNotFound{
-						log.Error(err)
-						hitMetadataNotFound=true
-						return nil
-					}
 					if rate.GetRateLimiter("index_routing_table_not_found", index, 1, 2, time.Minute*1).Allow() {
 						log.Warn(index, ",", metaStr, ",", err)
+					}
+					if this.config.ContinueMetadataNotFound{
+						hitMetadataNotFound=true
+						return nil
 					}
 					panic(err)
 				} else {
