@@ -160,7 +160,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 				log.Tracef("metadata:\n%v", string(metaBytes))
 			}
 
-			actionMeta.Write(metaBytes)
+			elastic.SafetyAddNewlineBetweenData(actionMeta,metaBytes)
 
 			return nil
 		}, func(payloadBytes []byte, actionStr, index, typeName, id,routing string) {
