@@ -298,25 +298,16 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 					ShardIDStr = util.IntToString(shardID)
 					shardInfo, err := metadata.GetPrimaryShardInfo(index, ShardIDStr)
-					if err != nil {
+					if err != nil || shardInfo == nil {
+						if rate.GetRateLimiter(fmt.Sprintf("shard_info_not_found_%v", index), ShardIDStr, 1, 5, time.Minute*1).Allow() {
+							log.Warn("shardInfo was not found,", index, ",", shardID)
+						}
+
 						if this.config.ContinueMetadataNotFound{
-							log.Error(err)
 							hitMetadataNotFound=true
 							return nil
 						}
 						panic(errors.Error("shard info was not found,", index, ",", shardID, ",", err))
-					}
-
-					if shardInfo == nil {
-						if this.config.ContinueMetadataNotFound{
-							log.Error(err)
-							hitMetadataNotFound=true
-							return nil
-						}
-						if rate.GetRateLimiter(fmt.Sprintf("shard_info_not_found_%v", index), ShardIDStr, 1, 5, time.Minute*1).Allow() {
-							log.Warn("shardInfo was not found,", index, ",", shardID)
-						}
-						panic(errors.Error("shard info was not found,", index, ",", shardID))
 					}
 					nodeID = shardInfo.Node
 				}
@@ -455,7 +446,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		//skip async or not
 		if this.config.ContinueMetadataNotFound&&hitMetadataNotFound{
 			if rate.GetRateLimiterPerSecond("metadata_not_found","reshuffle",1).Allow(){
-				log.Warn("metadata not found, skip reshuffle")
+				log.Debug("metadata not found, skip reshuffle")
 			}
 			return
 		}
