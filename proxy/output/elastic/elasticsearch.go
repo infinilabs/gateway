@@ -39,11 +39,13 @@ func (filter *Elasticsearch) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 	if !filter.config.SkipAvailableCheck && filter.getMetadata() != nil && !filter.getMetadata().IsAvailable() {
-		if rate.GetRateLimiter("cluster_check_health", filter.getMetadata().Config.ID, 1, 1, time.Second*1).Allow() {
-			log.Debugf("Elasticsearch [%v] not available", filter.config.Elasticsearch)
-			result, err := elastic.GetClient(filter.getMetadata().Config.Name).ClusterHealth()
-			if err != nil && result.StatusCode == 200 {
-				filter.getMetadata().ReportSuccess()
+		if  filter.config.CheckClusterHealthWhenNotAvailable {
+			if rate.GetRateLimiter("cluster_check_health", filter.getMetadata().Config.ID, 1, 1, time.Second*1).Allow(){
+				log.Debugf("Elasticsearch [%v] not available", filter.config.Elasticsearch)
+				result, err := elastic.GetClient(filter.getMetadata().Config.Name).ClusterHealth()
+				if err != nil &&result!=nil && result.StatusCode == 200 {
+					filter.getMetadata().ReportSuccess()
+				}
 			}
 		}
 

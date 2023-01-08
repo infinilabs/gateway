@@ -25,6 +25,7 @@ type ProxyConfig struct {
 	ClientMode  string `config:"client_mode"`
 
 	SkipAvailableCheck  bool `config:"skip_available_check"`
+	CheckClusterHealthWhenNotAvailable  bool `config:"check_cluster_health_when_not_available"`
 
 	SkipKeepOriginalURI   bool `config:"skip_keep_original_uri"`
 	SkipCleanupHopHeaders bool `config:"skip_cleanup_hop_headers"`
