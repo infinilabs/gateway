@@ -79,9 +79,9 @@ func New(c *config.Config) (pipeline.Filter, error) {
 		//keep alived connection
 		MaxConnDuration: util.GetDurationOrDefault("0s", 0*time.Second),
 
-		ReadTimeout:  util.GetDurationOrDefault("0s", 0*time.Hour),
 		Timeout:      util.GetDurationOrDefault("30s", 30*time.Second),
-		WriteTimeout: util.GetDurationOrDefault("0s", 0*time.Hour),
+		ReadTimeout:  util.GetDurationOrDefault("0s", 0*time.Hour), //set to other value will cause broken error
+		WriteTimeout: util.GetDurationOrDefault("0s", 0*time.Hour), //same as read timeout
 		//idle alive connection will be closed
 		MaxIdleConnDuration: util.GetDurationOrDefault("30s", 30*time.Second),
 	}
