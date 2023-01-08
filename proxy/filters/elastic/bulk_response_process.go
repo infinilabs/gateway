@@ -72,7 +72,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 
 		}()
 
-		containError, bulkStats = elastic.HandleBulkResponse("tag", requestBytes, resbody, successItems, nonRetryableItems, retryableItems, this.config.IncludeBusyRequestsToFailureQueue)
+		containError, bulkStats = elastic.HandleBulkResponse("tag", requestBytes, resbody, successItems, nonRetryableItems, retryableItems, this.config.RetryException)
 
 		if containError {
 
@@ -277,6 +277,8 @@ type Config struct {
 	TagsOnPartialInvalid []string `config:"tag_on_partial_invalid"` //包含部分非法请求的情况，无需重试的请求
 
 	RetryFlow string `config:"retry_flow"`
+
+	RetryException  elastic.RetryException `config:"retry_exception"`
 }
 
 func init() {
@@ -287,6 +289,7 @@ func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 	cfg := Config{
 		IncludeBusyRequestsToFailureQueue: true,
 		MessageTruncateSize:               1024,
+		RetryException: elastic.RetryException{Retry429: true},
 	}
 	if err := c.Unpack(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
@@ -295,6 +298,8 @@ func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 		config: &cfg}
 
 	runner.id = util.GetUUID()
+
+	cfg.RetryException.Retry429=cfg.IncludeBusyRequestsToFailureQueue
 
 	if runner.config.RetryFlow != "" && runner.config.PartialFailureRetry {
 		flow := common.MustGetFlow(runner.config.RetryFlow)
