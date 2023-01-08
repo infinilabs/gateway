@@ -79,11 +79,11 @@ func New(c *config.Config) (pipeline.Filter, error) {
 		//keep alived connection
 		MaxConnDuration: util.GetDurationOrDefault("0s", 0*time.Second),
 
-		ReadTimeout:  util.GetDurationOrDefault("30s", 30*time.Second),
+		ReadTimeout:  util.GetDurationOrDefault("0s", 0*time.Hour),
 		Timeout:      util.GetDurationOrDefault("30s", 30*time.Second),
-		WriteTimeout: util.GetDurationOrDefault("30s", 30*time.Second),
+		WriteTimeout: util.GetDurationOrDefault("0s", 0*time.Hour),
 		//idle alive connection will be closed
-		MaxIdleConnDuration: util.GetDurationOrDefault("300s", 300*time.Second),
+		MaxIdleConnDuration: util.GetDurationOrDefault("30s", 30*time.Second),
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
