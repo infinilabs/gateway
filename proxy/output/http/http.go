@@ -46,6 +46,9 @@ type HTTPFilter struct {
 	ReadBufferSize        int           `config:"read_buffer_size"`
 	WriteBufferSize       int           `config:"write_buffer_size"`
 	TLSInsecureSkipVerify bool          `config:"tls_insecure_skip_verify"`
+
+	MaxRedirectsCount int          `config:"max_redirects_count"`
+	FollowRedirects bool          `config:"follow_redirects"`
 }
 
 func (filter *HTTPFilter) Name() string {
@@ -155,10 +158,14 @@ func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err er
 			return errors.Errorf("invalid host client:", host)
 		}
 
-		if filter.requestTimeout > 0 {
-			err = client.DoTimeout(&ctx.Request, &ctx.Response, filter.requestTimeout)
-		} else {
-			err = client.Do(&ctx.Request, &ctx.Response)
+		if filter.FollowRedirects{
+			err=client.DoRedirects(&ctx.Request, &ctx.Response,filter.MaxRedirectsCount)
+		}else{
+			if filter.requestTimeout > 0 {
+				err = client.DoTimeout(&ctx.Request, &ctx.Response, filter.requestTimeout)
+			} else {
+				err = client.Do(&ctx.Request, &ctx.Response)
+			}
 		}
 
 		ctx.Request.URI().SetScheme(orignalSchema)
@@ -188,6 +195,7 @@ func NewHTTPFilter(c *config.Config) (pipeline.Filter, error) {
 		SkipFailureHost:       true,
 		MaxConnection:         5000,
 		MaxRetryTimes:         0,
+		MaxRedirectsCount:     10,
 		RetryDelayInMs:        1000,
 		TLSInsecureSkipVerify: true,
 		ReadBufferSize:        4096 * 4,
@@ -198,9 +206,9 @@ func NewHTTPFilter(c *config.Config) (pipeline.Filter, error) {
 		//keep alived connection
 		MaxConnDuration: util.GetDurationOrDefault("0s", 0*time.Second),
 
-		ReadTimeout:  util.GetDurationOrDefault("0s", 0*time.Hour),
+		ReadTimeout:  util.GetDurationOrDefault("30s", 30*time.Second),
 		Timeout:      util.GetDurationOrDefault("30s", 30*time.Second),
-		WriteTimeout: util.GetDurationOrDefault("0s", 0*time.Hour),
+		WriteTimeout: util.GetDurationOrDefault("30s", 30*time.Second),
 		//idle alive connection will be closed
 		MaxIdleConnDuration: util.GetDurationOrDefault("300s", 300*time.Second),
 	}
