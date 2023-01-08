@@ -137,7 +137,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		indexAnalysis := this.config.IndexStatsAnalysis   //sync and async
 		actionAnalysis := this.config.ActionStatsAnalysis //sync and async
 		validateRequest := this.config.ValidateRequest
-		actionMeta := bytebufferpool.Get("bulk_reshuffle_request_action")
+		var collectedMeta bool //may skip request collect during metadata process
 		defer func() {
 			if !global.Env().IsDebug {
 				if r := recover(); r != nil {
@@ -153,7 +153,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 					log.Error("error in bulk_reshuffle,", v)
 				}
 			}
-			bytebufferpool.Put("bulk_reshuffle_request_action", actionMeta)
 		}()
 
 		var hitMetadataNotFound bool
@@ -169,6 +168,8 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			}
 			return false
 		}, func(metaBytes []byte, actionStr, index, typeName, id,routing string) (err error) {
+
+			collectedMeta=false
 
 			metaStr := util.UnsafeBytesToString(metaBytes)
 
@@ -360,7 +361,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			}
 
 			if global.Env().IsDebug {
-				log.Tracef("%s/%s/%s => %v , %v", index, typeName, id, shardID, queueConfig)
+				log.Tracef("compute shard_id: %s/%s/%s => %v , %v", index, typeName, id, shardID, queueConfig)
 			}
 
 			////update actionItem
@@ -375,12 +376,15 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
-			elastic.SafetyAddNewlineBetweenData(actionMeta,metaBytes)
+			//add to major buffer
+			elastic.SafetyAddNewlineBetweenData(buff,metaBytes)
+			collectedMeta=true
 
 			return nil
 		}, func(payloadBytes []byte, actionStr, index, typeName, id,routing string) {
 
-			if actionMeta.Len() > 0 {
+			//only if metadata is collected, than we collect payload, payload can't live without metadata
+			if collectedMeta {
 				buff, ok := docBuf[queueConfig.Name]
 				if !ok {
 					buff = docBufferPool.Get()
@@ -388,10 +392,8 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				}
 
 				if global.Env().IsDebug {
-					log.Trace("metadata:", string(payloadBytes))
+					log.Trace("payload:", string(payloadBytes))
 				}
-
-				elastic.SafetyAddNewlineBetweenData(buff,actionMeta.Bytes())
 
 				if payloadBytes != nil && len(payloadBytes) > 0 {
 
@@ -406,9 +408,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 						}
 					}
 				}
-
-				//cleanup actionMeta
-				actionMeta.Reset()
 			}
 		})
 
@@ -454,8 +453,9 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		//send to queue
 		for x, y := range docBuf {
 
+
 			if y.Len()<=0{
-				log.Trace("invalid doc buffer, skip processing")
+				log.Trace("empty doc buffer, skip processing: ",x)
 				continue
 			}
 

@@ -38,6 +38,17 @@ func TestParseBulkRequestWithDelete(t *testing.T) {
 	fmt.Println(string(data))
 }
 
+func TestParseBulkRequestWithOnlyDelete(t *testing.T) {
+	data:=[]byte("{\"delete\":{\"_index\":\"idx-familycloud-stdfile2\",\"_id\":\"1411aX3240ge17520221106010809oh0\",\"routing\":\"ab1daa0979a64f32994a81c0091b1577\"}}\n")
+	fmt.Println(string(data))
+}
+
+//有 partition 和没有 partition 可能有不同的解析行为
+func TestBulkReshuffle_MixedRequests(t *testing.T) {
+	data:="{\"update\":{\"_index\":\"idx-50\",\"_id\":\"ceq16t3q50k2vhtav6f0\",\"routing\":\"1513594400\",\"retry_on_conflict\":3}}\n{\"doc\":{\"address\":\"\"}}\n{\"delete\":{\"_index\":\"idx-50\",\"_id\":\"ceq16t3q50k2vhtav6g0\",\"routing\":\"1513594401\"}}\n{ \"create\" : { \"_index\" : \"idx-50\", \"_id\" : \"ceq16t3q50k2vhtav6gg\"} }\n{ \"field\" : \"value2\", \"home_location\": \"41.12,-71.34\"}\n"
+	fmt.Println(string(data))
+}
+
 func TestParseActionMeta1(t *testing.T) {
 
 	data := []byte("{\"index\":{\"_index\":\"medcl1\",\"_type\":\"_doc\",\"_id\":\"GZq-bnYBC53QmW9Kk2ve\"}}")
@@ -221,3 +232,5 @@ func TestGetUrlLevelMeta(t *testing.T) {
 	assert.Equal(t,tindex,"index")
 	assert.Equal(t,ttype,"doc")
 }
+
+
