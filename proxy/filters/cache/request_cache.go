@@ -298,6 +298,21 @@ func (filter *RequestCacheGet) Filter(ctx *fasthttp.RequestCtx) {
 
 	url := string(ctx.RequestURI())
 	args := ctx.Request.URI().QueryArgs()
+	if args.Has("no_cache") {
+		v:=args.Peek("no_cache")
+
+		args:=ctx.URI().QueryArgs()
+		args.Del("no_cache")
+
+		//update back
+		ctx.URI().SetQueryString(args.String())
+		ctx.Request.SetRequestURIBytes(ctx.URI().RequestURI())
+
+		if string(v)!="false"{
+			cacheable = false
+			return //skip further process
+		}
+	}
 
 	//check special path
 	switch {
@@ -313,16 +328,8 @@ func (filter *RequestCacheGet) Filter(ctx *fasthttp.RequestCtx) {
 		break
 	}
 
-	if args.Has("no_cache") {
-		v:=args.Peek("no_cache")
-		if string(v)!="false"{
-			cacheable = false
-		}
-		ctx.URI().QueryArgs().Del("no_cache")
-	}
-
 	//check bypass patterns
-	if len(filter.config.PassPatterns) > 0 && util.ContainsAnyInArray(url, filter.config.PassPatterns) {
+	if cacheable&&len(filter.config.PassPatterns) > 0 && util.ContainsAnyInArray(url, filter.config.PassPatterns) {
 		if global.Env().IsDebug {
 			log.Trace("url hit bypass pattern, will not be cached, ", url)
 		}
