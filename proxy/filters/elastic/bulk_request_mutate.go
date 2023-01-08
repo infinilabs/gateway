@@ -41,12 +41,11 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 		//this buffer will release after context exit
 		var bulkBuff *bytebufferpool.ByteBuffer = bytebufferpool.Get("bulk_mutate_request_docs")
 		defer bytebufferpool.Put("bulk_mutate_request_docs", bulkBuff)
-		actionMeta := bytebufferpool.Get("bulk_mutate_request_action")
-		defer bytebufferpool.Put("bulk_mutate_request_action", actionMeta)
-
+		var metaCollected bool
 		docCount, err := elastic.WalkBulkRequests(body, func(eachLine []byte) (skipNextLine bool) {
 			return false
 		}, func(metaBytes []byte, actionStr, index, typeName, id,routing string) (err error) {
+			metaCollected=false
 
 			metaStr := util.UnsafeBytesToString(metaBytes)
 
@@ -160,24 +159,20 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 				log.Tracef("metadata:\n%v", string(metaBytes))
 			}
 
-			elastic.SafetyAddNewlineBetweenData(actionMeta,metaBytes)
+			elastic.SafetyAddNewlineBetweenData(bulkBuff,metaBytes)
+			metaCollected=true
 
 			return nil
 		}, func(payloadBytes []byte, actionStr, index, typeName, id,routing string) {
 
-			if actionMeta.Len() > 0 {
-
+			if metaCollected{
 				if global.Env().IsDebug {
 					log.Tracef("payload:\n%v", string(payloadBytes))
 				}
 
-				elastic.SafetyAddNewlineBetweenData(bulkBuff,actionMeta.Bytes())
-
 				if payloadBytes != nil && len(payloadBytes) > 0 {
 					elastic.SafetyAddNewlineBetweenData(bulkBuff,payloadBytes)
 				}
-
-				actionMeta.Reset()
 			}
 		})
 
