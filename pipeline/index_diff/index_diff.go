@@ -235,6 +235,7 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 			processor.wg.Add(1)
 			go func(q string, f int) {
 				defer func() {
+					close(processor.testChans[f].msgChans[q+"_sorted"])
 					if !global.Env().IsDebug {
 						if r := recover(); r != nil {
 							var v string
@@ -321,7 +322,6 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 					}
 					processor.testChans[f].msgChans[q+"_sorted"] <- item
 				})
-				close(processor.testChans[f].msgChans[q+"_sorted"])
 				if err != nil {
 					log.Error(err)
 					return
