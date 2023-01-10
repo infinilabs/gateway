@@ -12,11 +12,9 @@ import (
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
 	"math/rand"
-	"sync"
 )
 
 type RatioRoutingFlowFilter struct {
-	randPool           *sync.Pool
 	Ratio              float32 `config:"ratio"`
 	Flow               string  `config:"flow"`
 	ContinueAfterMatch bool    `config:"continue"`
@@ -30,14 +28,10 @@ func (filter *RatioRoutingFlowFilter) Name() string {
 func (filter *RatioRoutingFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	v := int(filter.Ratio * 100)
-
-	seeds := filter.randPool.Get().(*rand.Rand)
-	defer filter.randPool.Put(seeds)
-
-	r := seeds.Intn(100)
+	r :=rand.Intn(100)
 
 	if global.Env().IsDebug {
-		log.Debugf("split traffic, check [%v] of [%v]", r, v)
+		log.Debugf("split traffic, check [%v] of [%v], hit: %v", r, v, r <= v)
 	}
 
 	if r <= v {
@@ -64,11 +58,6 @@ func NewRatioRoutingFlowFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RatioRoutingFlowFilter{
 		Ratio: 0.1,
-		randPool: &sync.Pool{
-			New: func() interface{} {
-				return rand.New(rand.NewSource(100))
-			},
-		},
 	}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
