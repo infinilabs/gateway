@@ -140,6 +140,8 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 			log.Tracef("%v,%v commit offset:%v", qConfig.Name, consumer.Name, offset)
 			if !ok || err != nil {
 				ctx.Failed()
+			}else{
+				initOfffset=offset
 			}
 		}
 	}()
@@ -214,6 +216,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 						if !ok || err != nil {
 							return err
 						}
+						initOfffset=offset
 					}
 				}
 

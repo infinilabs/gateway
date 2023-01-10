@@ -230,6 +230,7 @@ READ_DOCS:
 				if !ok || err != nil {
 					panic(err)
 				}
+				initOfffset=offset
 			}
 		}
 
