@@ -3,28 +3,38 @@ package proxy
 import (
 	"infini.sh/framework/core/api"
 	httprouter "infini.sh/framework/core/api/router"
+	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/util"
-	api2 "infini.sh/gateway/api"
+	"infini.sh/gateway/common"
 	"net/http"
 	"path"
 )
 
 func (this *GatewayModule) registerAPI(prefix string) {
 	if prefix == "" {
-		prefix = api2.DefaultAPIPrefix
+		prefix = global.Env().GetAppLowercaseName()
 	}
 
-	api.HandleAPIMethod(api.GET, path.Join("/", prefix, "/entry/stats"), this.getEntries)
 	api.HandleAPIMethod(api.POST, path.Join("/", prefix, "/entry/:id/_start"), this.startEntry)
 	api.HandleAPIMethod(api.POST, path.Join("/", prefix, "/entry/:id/_stop"), this.stopEntry)
+	api.HandleAPIMethod(api.GET, path.Join("/", prefix, "/entry/:id"), this.getConfig)
 }
 
-func (this *GatewayModule) getEntries(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	data := util.MapStr{}
-	for k, v := range this.entryPoints {
-		data[k] = v.Stats()
+func (this *GatewayModule) getConfig(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+	id := ps.ByName("id")
+	v, ok := this.entryPoints[id]
+	if ok {
+		cfg := v.GetConfig()
+		data:=util.MapStr{
+			"entry":cfg,
+			"router":v.GetRouterConfig(),
+			"flows":common.GetAllFlows(),
+		}
+
+		this.WriteJSON(w, data, 200)
+	} else {
+		this.Error404(w)
 	}
-	this.WriteJSON(w, data, 200)
 }
 
 func (this *GatewayModule) startEntry(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {

@@ -2,6 +2,7 @@ package api
 
 import (
 	"infini.sh/framework/core/api"
+	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/orm"
 	"infini.sh/gateway/common"
 	"path"
@@ -10,8 +11,6 @@ import (
 type GatewayAPI struct {
 	api.Handler
 }
-
-const DefaultAPIPrefix = "gateway"
 
 func (this *GatewayAPI) RegisterSchema() {
 	err := orm.RegisterSchemaWithIndexName(common.EntryConfig{}, "entry")
@@ -32,7 +31,7 @@ func (this *GatewayAPI) RegisterSchema() {
 func (this *GatewayAPI) RegisterAPI(prefix string) {
 
 	if prefix == "" {
-		prefix = DefaultAPIPrefix
+		prefix = global.Env().GetAppLowercaseName()
 	}
 
 	api.HandleAPIMethod(api.POST, path.Join("/", prefix, "/entry"), this.createEntry)

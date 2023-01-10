@@ -13,7 +13,7 @@ import (
 
 type FilterFlow struct {
 	orm.ORMObjectBase
-	Filters []pipeline.Filter
+	Filters []pipeline.Filter `json:"filters,omitempty"`
 }
 
 func (flow *FilterFlow) JoinFilter(filter pipeline.Filter) *FilterFlow {
@@ -110,15 +110,17 @@ var routingRules map[string]RuleConfig = make(map[string]RuleConfig)
 var flowConfigs map[string]FlowConfig = make(map[string]FlowConfig)
 var routerConfigs map[string]RouterConfig = make(map[string]RouterConfig)
 
-func init() {
-	//api.HandleAPIMethod("GET","entry", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-	//
-	//})
-
-}
-
 func ClearFlowCache(flow string) {
 	flows.Delete(flow)
+}
+
+func GetAllFlows()map[string]FilterFlow{
+	data:=map[string]FilterFlow{}
+	flows.Range(func(key, value any) bool {
+		data[key.(string)]=value.(FilterFlow)
+		return true
+	})
+	return data
 }
 
 func RegisterFlowConfig(flow FlowConfig) {

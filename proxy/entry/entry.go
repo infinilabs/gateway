@@ -15,6 +15,7 @@ import (
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
+	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/framework/lib/fasthttp/reuseport"
@@ -190,6 +191,8 @@ func (this *Entrypoint) Start() error {
 		NoDefaultContentType:               true,
 		DisableHeaderNamesNormalizing:      true,
 		DisablePreParseMultipartForm:       true,
+		//CloseOnShutdown:       true, //TODO
+		//StreamRequestBody:       true, //TODO
 		Handler:                            this.router.Handler,
 		TraceHandler:                       this.router.TraceHandler,
 		Concurrency:                        this.config.MaxConcurrency,
@@ -233,7 +236,7 @@ func (this *Entrypoint) Start() error {
 			PreferServerCipherSuites: true,
 			InsecureSkipVerify:       true,
 			SessionTicketsDisabled:   false,
-			ClientSessionCache:       tls.NewLRUClientSessionCache(128),
+			ClientSessionCache:       tls.NewLRUClientSessionCache(this.config.TLSConfig.ClientSessionCacheSize),
 			CipherSuites: []uint16{
 				//tls.TLS_AES_128_GCM_SHA256,
 				//tls.TLS_AES_256_GCM_SHA384,
@@ -372,10 +375,25 @@ func (this *Entrypoint) Start() error {
 		panic(err)
 	}
 
+	stats.RegisterStats(fmt.Sprintf("entry.%v.open_connections",this.GetNameOrID()), func() interface{} {
+		return this.server.GetOpenConnectionsCount()
+	})
+
 	log.Infof("entry [%s] listen at: %s%s", this.String(), this.GetSchema(), this.listenAddress)
 
 	return nil
 }
+
+func (this *Entrypoint) GetNameOrID()string{
+	if this.config.Name!=""{
+		return this.config.Name
+	}else if this.config.ID!=""{
+		return this.config.ID
+	}else{
+		return "undefined"
+	}
+}
+
 
 func (this *Entrypoint) GetSchema()string{
 	if this.schema!=""{
@@ -392,8 +410,32 @@ func (this *Entrypoint) GetConfig() common.EntryConfig {
 	return this.config
 }
 
+func (this *Entrypoint) GetRouterConfig() common.RouterConfig {
+	return this.routerConfig
+}
+
+func (this *Entrypoint) GetFlows() map[string]common.FilterFlow {
+	cfgs:=map[string]common.FilterFlow{}
+
+	defaultFlow,err:=common.GetFlow(this.routerConfig.DefaultFlow)
+	if err!=nil{
+		panic(err)
+	}
+	cfgs[this.routerConfig.DefaultFlow]=defaultFlow
+
+	if this.routerConfig.TracingFlow!=""{
+		tracingFlow,err:=common.GetFlow(this.routerConfig.TracingFlow)
+		if err!=nil{
+			panic(err)
+		}
+		cfgs[this.routerConfig.TracingFlow]=tracingFlow
+	}
+
+	return cfgs
+}
+
 func (this *Entrypoint) Stop() error {
-	log.Tracef("entry [%s] closed", this.String())
+	log.Tracef("closing entry [%s]", this.String())
 	if !this.config.Enabled {
 		return nil
 	}
@@ -458,7 +500,7 @@ func (this *Entrypoint) Stop() error {
 					if util.ContainStr(this.listenAddress,"0.0.0.0"){
 						this.listenAddress=strings.Replace(this.listenAddress,"0.0.0.0","127.0.0.1",-1)
 					}
-					util.HttpGet(this.GetSchema()+this.listenAddress+"/favicon.ico")
+					util.HttpGet(this.GetSchema()+this.listenAddress+"/")
 				case <-ctx.Done():
 					return
 				}
@@ -471,13 +513,6 @@ func (this *Entrypoint) Stop() error {
 	}
 
 	return nil
-}
-
-func (this *Entrypoint) Stats() util.MapStr {
-	data := util.MapStr{
-		"open_connections": this.server.GetOpenConnectionsCount(),
-	}
-	return data
 }
 
 func (this *Entrypoint) RefreshTracingFlow() {
