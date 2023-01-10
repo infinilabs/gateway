@@ -88,6 +88,17 @@ func (module *GatewayModule) handleConfigureChange(){
 				v.RefreshDefaultFlow()
 				v.RefreshTracingFlow()
 			}
+
+			//修改完Flow，需要重启服务入口
+			for _,v:=range module.entryPoints{
+				//TODO skip unnecessary restart
+				log.Trace("stopping ",v.GetNameOrID())
+				v.Stop()
+				log.Trace("stopped ",v.GetNameOrID())
+				v.Start()
+				log.Trace("started ",v.GetNameOrID())
+
+			}
 		}
 	})
 
