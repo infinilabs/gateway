@@ -424,7 +424,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string, ctx *pipeline.
 			}
 			return
 		}
-		mainBuf.Reset()
+		mainBuf.ResetData()
 		log.Debugf("exit worker[%v], queue:[%v]", workerID, qConfig.Id)
 	}()
 
@@ -551,7 +551,7 @@ READ_DOCS:
 					return
 				}
 				//reset buffer
-				mainBuf.Reset()
+				mainBuf.ResetData()
 			}
 
 		}
@@ -578,7 +578,7 @@ CLEAN_BUFFER:
 			return
 		}
 		//reset buffer
-		mainBuf.Reset()
+		mainBuf.ResetData()
 	}
 
 	if !ctx.IsCanceled() {
