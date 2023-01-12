@@ -43,36 +43,27 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 		retryableItems := elastic.AcquireBulkBuffer()
 
 		var containError bool
-		var bulkStats map[int]int
+		var bulkResults=util.MapStr{}
 
 		defer func() {
-			obj := util.MapStr{}
-			obj["code"] = bulkStats
-			obj["error"] = containError
-
-			obj["failure"] = util.MapStr{
-				"count": retryableItems.GetMessageCount(),
-				"size":  retryableItems.GetMessageSize(),
-			}
-			obj["invalid"] = util.MapStr{
-				"count": nonRetryableItems.GetMessageCount(),
-				"size":  nonRetryableItems.GetMessageSize(),
-			}
-			obj["success"] = util.MapStr{
-				"count": successItems.GetMessageCount(),
-				"size":  successItems.GetMessageSize(),
-			}
-
-			ctx.Set("bulk_response_status", obj)
-
-
 			elastic.ReturnBulkBuffer(successItems)
 			elastic.ReturnBulkBuffer(nonRetryableItems)
 			elastic.ReturnBulkBuffer(retryableItems)
 
 		}()
 
-		containError, bulkStats = elastic.HandleBulkResponse("tag", requestBytes, resbody, successItems, nonRetryableItems, retryableItems, this.config.RetryException)
+		label:=util.MapStr{}
+
+		containError,_,bulkResults = elastic.HandleBulkResponse(&ctx.Request,&ctx.Response,label, requestBytes, resbody, successItems, nonRetryableItems, retryableItems, this.config.BulkResponseParseConfig)
+
+		if bulkResults!=nil{
+			ctx.Set("bulk_response_status", bulkResults)
+		}
+
+		//stats only, skip further process
+		if this.config.StatsOnly{
+			return
+		}
 
 		if containError {
 
@@ -91,18 +82,6 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 					nonRetryableItems.SafetyEndWithNewline()
 					bytes := ctx.Request.OverrideBodyEncode(nonRetryableItems.GetMessageBytes(), true)
 					queue.Push(queue.GetOrInitConfig(this.config.InvalidQueue), bytes)
-
-					//queue.Push(queue.GetOrInitConfig(this.config.InvalidQueue+"-bulk-error-messages"), util.MustToJSONBytes(
-					//	util.MapStr{
-					//		"request": util.MapStr{
-					//			"uri":  ctx.Request.URI().String(),
-					//			"body": util.SubString(util.UnsafeBytesToString(ctx.Request.GetRawBody()), 0, 1024*4),
-					//		},
-					//		"response": util.MapStr{
-					//			"status": ctx.Response.StatusCode(),
-					//			"body":   util.SubString(util.UnsafeBytesToString(ctx.Response.GetRawBody()), 0, 1024*4),
-					//		},
-					//	}))
 				}
 
 				if len(this.config.TagsOnPartialInvalid) > 0 {
@@ -132,18 +111,6 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 					}
 
 					queue.Push(queue.GetOrInitConfig(this.config.FailureQueue), bytes)
-
-					//queue.Push(queue.GetOrInitConfig(this.config.FailureQueue+"-bulk-error-messages"), util.MustToJSONBytes(
-					//	util.MapStr{
-					//		"request": util.MapStr{
-					//			"uri":  ctx.Request.URI().String(),
-					//			"body": util.SubString(util.UnsafeBytesToString(ctx.Request.GetRawBody()), 0, 1024*4),
-					//		},
-					//		"response": util.MapStr{
-					//			"status": ctx.Response.StatusCode(),
-					//			"body":   util.SubString(util.UnsafeBytesToString(ctx.Response.GetRawBody()), 0, 1024*4),
-					//		},
-					//	}))
 				}
 
 				if len(this.config.TagsOnPartialFailure) > 0 {
@@ -172,7 +139,6 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 
 			//出错不继续交由后续流程，直接结束处理
 			if !this.config.ContinueOnAnyError {
-				//log.Errorf("this.config.ContinueOnError:%v, %v",this.config.ContinueOnAnyError,ctx.GetFlowProcess())
 				ctx.Finished()
 				return
 			}
@@ -201,22 +167,6 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 		if ctx.Response.StatusCode() >= 400 && ctx.Response.StatusCode() < 500 {
 			if !(this.config.IncludeBusyRequestsToFailureQueue&&ctx.Response.StatusCode()==429) {
 				invalid=true
-				if this.config.InvalidQueue != "" {
-					queue.Push(queue.GetOrInitConfig(this.config.InvalidQueue+"-req-error-messages"), util.MustToJSONBytes(
-						util.MapStr{
-							"context": ctx.GetFlowProcess(),
-							"request": util.MapStr{
-								"uri":  ctx.Request.URI().String(),
-								"header":  ctx.Request.Header.String(),
-								"body": util.SubString(util.UnsafeBytesToString(ctx.Request.GetRawBody()), 0, 1024*4),
-							},
-							"response": util.MapStr{
-								"status": ctx.Response.StatusCode(),
-								"header": ctx.Response.Header.String(),
-								"body":   util.SubString(util.UnsafeBytesToString(ctx.Response.GetRawBody()), 0, 1024*4),
-							},
-						}))
-				}
 			}
 		}
 
@@ -225,19 +175,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 				if len(bytes) == 0 {
 					log.Error("retryable items, size:", len(bytes))
 				}
-
 				queue.Push(queue.GetOrInitConfig(this.config.FailureQueue), bytes)
-				//queue.Push(queue.GetOrInitConfig(this.config.FailureQueue+"-bulk-error-messages"), util.MustToJSONBytes(
-				//	util.MapStr{
-				//		"request": util.MapStr{
-				//			"uri":  ctx.Request.URI().String(),
-				//			"body": util.SubString(util.UnsafeBytesToString(ctx.Request.GetRawBody()), 0, 1024*4),
-				//		},
-				//		"response": util.MapStr{
-				//			"status": ctx.Response.StatusCode(),
-				//			"body":   util.SubString(util.UnsafeBytesToString(ctx.Response.GetRawBody()), 0, 1024*4),
-				//		},
-				//	}))
 		}
 
 		if !this.config.ContinueOnAllError {
@@ -248,6 +186,9 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 type Config struct {
+
+	StatsOnly bool `config:"stats_only"`
+
 	IncludeBusyRequestsToFailureQueue bool `config:"include_busy_requests_to_failure_queue"`
 
 	SuccessQueue string `config:"success_queue"`
@@ -278,7 +219,7 @@ type Config struct {
 
 	RetryFlow string `config:"retry_flow"`
 
-	RetryException  elastic.RetryException `config:"retry_exception"`
+	BulkResponseParseConfig elastic.BulkResponseParseConfig `config:"response_handle"`
 }
 
 func init() {
@@ -289,7 +230,16 @@ func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 	cfg := Config{
 		IncludeBusyRequestsToFailureQueue: true,
 		MessageTruncateSize:               1024,
-		RetryException: elastic.RetryException{Retry429: true},
+		BulkResponseParseConfig:elastic.BulkResponseParseConfig{
+			BulkResultMessageMaxRequestBodyLength:  10*1024,
+			BulkResultMessageMaxResponseBodyLength: 10*1024,
+			OutputBulkResults:true,
+			IncludeIndexStats:  true,
+			IncludeOperationStats:  true,
+			IncludeErrorDetails: true,
+			MaxItemOfErrorDetailsCount:  50,
+			RetryException: elastic.RetryException{Retry429: true},
+		},
 	}
 	if err := c.Unpack(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
@@ -299,7 +249,7 @@ func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 
 	runner.id = util.GetUUID()
 
-	cfg.RetryException.Retry429=cfg.IncludeBusyRequestsToFailureQueue
+	cfg.BulkResponseParseConfig.RetryException.Retry429=cfg.IncludeBusyRequestsToFailureQueue
 
 	if runner.config.RetryFlow != "" && runner.config.PartialFailureRetry {
 		flow := common.MustGetFlow(runner.config.RetryFlow)

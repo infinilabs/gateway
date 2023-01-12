@@ -174,15 +174,15 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 
 	if this.config.SaveBulkDetails {
 
-		bulk_status := map[string]interface{}{}
 		if ctx.Has("bulk_response_status") {
-			responseStats := ctx.Get("bulk_response_status")
-			if responseStats!=nil{
-				bulk_status["status"] = responseStats
+			bulk_status := ctx.Get("bulk_response_status")
+			if bulk_status!=nil{
+				request.Elastic["bulk_results"] = bulk_status
 			}
 		}
 
 		if ctx.Has("bulk_index_stats") {
+			bulk_status := map[string]interface{}{}
 			if request.Elastic == nil {
 				request.Elastic = map[string]interface{}{}
 			}
@@ -203,12 +203,11 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 					stats["index"] = indexStats
 					stats["action"] = actionStats
 					bulk_status["stats"] = stats
+
+
+					request.Elastic["bulk_requests"] = bulk_status
 				}
 			}
-		}
-
-		if len(bulk_status)>0{
-			request.Elastic["bulk_stats"] = bulk_status
 		}
 	}
 
