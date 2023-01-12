@@ -54,6 +54,7 @@ type BulkReshuffleConfig struct {
 	IndexStatsAnalysis     bool   `config:"index_stats_analysis"`
 	ActionStatsAnalysis    bool   `config:"action_stats_analysis"`
 
+
 	ContinueMetadataNotFound bool `config:"continue_metadata_missing"`
 
 	ValidateRequest bool `config:"validate_request"`
@@ -424,14 +425,14 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			ctx.Set("bulk_index_stats", indexStatsData)
 			for k, v := range indexStatsData {
 				//统计索引次数
-				stats.IncrementBy("elasticsearch."+clusterName+".indices", k, int64(v))
+				stats.IncrementBy("elasticsearch."+clusterName+".indices", elastic.RemoveDotFromIndexName(k,"#"), int64(v))
 			}
 		}
 		if actionAnalysis {
 			ctx.Set("bulk_action_stats", actionStatsData)
 			for k, v := range actionStatsData {
 				//统计操作次数
-				stats.IncrementBy("elasticsearch."+clusterName+".operations", k, int64(v))
+				stats.IncrementBy("elasticsearch."+clusterName+".operations", elastic.RemoveDotFromIndexName(k,"#"), int64(v))
 			}
 		}
 
