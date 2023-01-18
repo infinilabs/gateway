@@ -31,6 +31,7 @@ func (filter *RedisPubSub) Name() string {
 func (filter *RedisPubSub) Filter(ctx *fasthttp.RequestCtx) {
 
 	buffer := bytebufferpool.Get("redis_pubsub")
+	defer bytebufferpool.Put("redis_pubsub", buffer)
 
 	if filter.Request {
 		data := ctx.Request.Encode()
@@ -52,7 +53,6 @@ func (filter *RedisPubSub) Filter(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	bytebufferpool.Put("redis_pubsub", buffer)
 
 }
 

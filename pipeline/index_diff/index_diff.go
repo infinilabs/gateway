@@ -254,6 +254,8 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 
 				defer processor.wg.Done()
 				buffer := bytebufferpool.Get("index_diff")
+				defer bytebufferpool.Put("index_diff", buffer)
+
 				//build sorted file
 				sorter := extsort.New(nil)
 				file := path.Join(global.Env().GetDataDir(), "diff", q)
@@ -295,7 +297,6 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 						util.FileAppendContentWithByte(sortedFile, buffer.Bytes())
 					}
 
-					bytebufferpool.Put("index_diff", buffer)
 					if err := iter.Err(); err != nil {
 						log.Error(err)
 						return

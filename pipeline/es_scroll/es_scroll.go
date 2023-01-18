@@ -241,9 +241,6 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 
 func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName string) int {
 
-	hashBuffer := bytebufferpool.Get("es_scroll")
-	defer bytebufferpool.Put("es_scroll",hashBuffer)
-
 	docSize := 0
 	var docs=map[int]*bytebufferpool.ByteBuffer{}
 	jsonparser.ArrayEach(data, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {

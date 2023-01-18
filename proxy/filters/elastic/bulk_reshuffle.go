@@ -92,7 +92,7 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 	return &runner, nil
 }
 
-var docBufferPool=  bytebufferpool.NewTaggedPool("bulk_reshuffle_request_docs",0,1024*1024*100,1000000)
+var docBufferPool=  bytebufferpool.NewTaggedPool("bulk_reshuffle_request_docs",0,1024*1024*1024,1000000)
 
 func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
@@ -492,7 +492,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		//fake results
 		ctx.SetContentType(JSON_CONTENT_TYPE)
 
-		buffer := docBufferPool.Get()
+		buffer := bytebufferpool.Get("fake_bulk_results")
 
 		buffer.Write(startPart)
 		for i := 0; i < docCount; i++ {
@@ -503,8 +503,8 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		}
 		buffer.Write(endPart)
 
-		ctx.Response.AppendBody(bytes.Copy(buffer.Bytes()))
-		docBufferPool.Put(buffer)
+		ctx.Response.SetBody(bytes.Copy(buffer.Bytes()))
+		bytebufferpool.Put("fake_bulk_results",buffer)
 
 		if len(this.config.TagsOnSuccess) > 0 {
 			ctx.UpdateTags(this.config.TagsOnSuccess, nil)
