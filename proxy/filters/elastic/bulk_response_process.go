@@ -233,12 +233,12 @@ func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 		BulkResponseParseConfig:elastic.BulkResponseParseConfig{
 			BulkResultMessageMaxRequestBodyLength:  10*1024,
 			BulkResultMessageMaxResponseBodyLength: 10*1024,
-			OutputBulkResults:true,
-			IncludeIndexStats:  true,
-			IncludeOperationStats:  true,
-			IncludeErrorDetails: true,
-			MaxItemOfErrorDetailsCount:  50,
-			RetryException: elastic.RetryException{Retry429: true},
+			OutputBulkStats:                        true,
+			IncludeIndexStats:                      true,
+			IncludeActionStats:                     true,
+			IncludeErrorDetails:                    true,
+			MaxItemOfErrorDetailsCount:             50,
+			RetryException:                         elastic.RetryException{Retry429: true},
 		},
 	}
 	if err := c.Unpack(&cfg); err != nil {
