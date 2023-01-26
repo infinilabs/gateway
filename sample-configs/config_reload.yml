@@ -1,3 +1,0 @@
-path.configs: "sample-configs/reloadable-configs"
-configs:
-  auto_reload: true
