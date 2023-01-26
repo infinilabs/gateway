@@ -252,7 +252,7 @@ func gzipBest(a *[]byte) []byte {
 }
 
 func (processor *DiskQueueConsumer) processMessage(metadata *elastic.ElasticsearchMetadata, msg *queue.Message) (bool, int, error) {
-	req := fasthttp.AcquireRequest()
+	req := fasthttp.AcquireRequestWithTag("disk_consumer_request")
 	defer fasthttp.ReleaseRequest(req)
 	err := req.Decode(msg.Data)
 	if err != nil {
@@ -275,7 +275,7 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 
 	host := metadata.GetActiveHost()
 	req.SetHost(host)
-	resp := fasthttp.AcquireResponse()
+	resp := fasthttp.AcquireResponseWithTag("disk_consumer_response")
 	defer fasthttp.ReleaseResponse(resp)
 
 	acceptGzipped := req.AcceptGzippedResponse()

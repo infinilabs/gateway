@@ -467,7 +467,7 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 			pc = metadata.GetHttpClient(host)
 		}
 
-		res = fasthttp.AcquireResponse()
+		res = fasthttp.AcquireResponseWithTag("proxy_response")
 		useClient = true
 		schemaChanged = true
 	}

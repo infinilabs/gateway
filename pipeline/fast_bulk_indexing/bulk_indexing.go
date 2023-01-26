@@ -1,6 +1,7 @@
 package bulk_indexing
 
 import (
+	ctx "context"
 	"fmt"
 	"infini.sh/framework/core/conditions"
 	"infini.sh/framework/core/config"
@@ -598,7 +599,8 @@ func (processor *BulkIndexingProcessor) submitBulkRequest(tag, esClusterID strin
 	if mainBuf.GetMessageCount() > 0 && mainBuf.GetMessageSize() > 0 {
 		log.Trace(meta.Config.Name, ", starting submit bulk request")
 		start := time.Now()
-		contrinueRequest, _, err := bulkProcessor.Bulk(tag, meta, host, mainBuf)
+		ctx:=ctx.Background()
+		contrinueRequest, _, err := bulkProcessor.Bulk(ctx,tag, meta, host, mainBuf)
 		stats.Increment(esClusterID+"."+tag, util.ToString(contrinueRequest))
 		stats.Timing("elasticsearch."+esClusterID+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
 		log.Debug(meta.Config.Name, ", ", host, ", success:", contrinueRequest, ", count:", count, ", size:", util.ByteSize(uint64(size)), ", elapsed:", time.Since(start))

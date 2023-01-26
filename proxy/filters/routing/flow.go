@@ -84,11 +84,14 @@ func (filter *FlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
-			if global.Env().IsDebug {
-				log.Debugf("variable: %v", variables)
-			}
+
 
 			if filter.ContextFlow.hasTemplate {
+
+				if global.Env().IsDebug {
+					log.Tracef("variable: %v", variables)
+				}
+
 				flowID = filter.ContextFlow.template.ExecuteFuncString(func(w io.Writer, tag string) (int, error) {
 
 					variable,ok:=variables[tag]
@@ -111,10 +114,10 @@ func (filter *FlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 		flow, err := common.GetFlow(util.ToString(flowID))
 		if err != nil {
+			log.Errorf("failed to get flow [%v], err: [%v], continue", flowID, err)
 			if !filter.IgnoreUndefinedFlow {
 				panic(err)
 			}
-			log.Errorf("failed to get flow [%v], err: [%v], continue", flowID, err)
 		} else {
 			if global.Env().IsDebug {
 				log.Debugf("request [%v] go on flow: [%s] [%s]", ctx.URI().String(), flowID, flow.ToString())
@@ -147,19 +150,19 @@ func (filter *FlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 			})
 
 			if global.Env().IsDebug {
-				log.Debugf("flow [%v] contains template, rendering to: %v", v, flowID)
+				log.Tracef("flow [%v] contains template, rendering to: %v", v, flowID)
 			}
 		}
 
 		flow, err := common.GetFlow(flowID)
 		if err != nil {
+			log.Errorf("failed to get flow [%v], err: [%v], continue", flowID, err)
 			if  !filter.IgnoreUndefinedFlow{
 				panic(err)
 			}
-			log.Errorf("failed to get flow [%v], err: [%v], continue", flowID, err)
 		}else{
 			if global.Env().IsDebug {
-				log.Debugf("request [%v] go on flow: [%s] [%s]", ctx.URI().String(), v, flow.ToString())
+				log.Tracef("request [%v] go on flow: [%s] [%s]", ctx.URI().String(), v, flow.ToString())
 			}
 
 			ctx.AddFlowProcess("flow:" + flow.ID)
@@ -193,7 +196,7 @@ func NewFlowFilter(c *config.Config) (pipeline.Filter, error) {
 		item.Flow = v
 		if util.ContainStr(v, "$[[") {
 			if global.Env().IsDebug {
-				log.Debugf("flow [%v] contains template, rendering now", v)
+				log.Tracef("flow [%v] contains template, rendering now", v)
 			}
 			item.template, err = fasttemplate.NewTemplate(v, "$[[", "]]")
 			if err != nil {
@@ -216,7 +219,7 @@ func NewFlowFilter(c *config.Config) (pipeline.Filter, error) {
 		//init template
 		if util.ContainStr(runner.ContextFlow.Template, "$[[") {
 			if global.Env().IsDebug {
-				log.Debugf("flow [%v] contains template, rendering now", runner.ContextFlow.Template)
+				log.Tracef("flow [%v] contains template, rendering now", runner.ContextFlow.Template)
 			}
 			runner.ContextFlow.template, err = fasttemplate.NewTemplate(runner.ContextFlow.Template, "$[[", "]]")
 			if err != nil {

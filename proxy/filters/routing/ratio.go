@@ -31,14 +31,14 @@ func (filter *RatioRoutingFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 	r :=rand.Intn(100)
 
 	if global.Env().IsDebug {
-		log.Debugf("split traffic, check [%v] of [%v], hit: %v", r, v, r <= v)
+		log.Tracef("split traffic, check [%v] of [%v], hit: %v", r, v, r <= v)
 	}
 
 	if r <= v {
 		ctx.Request.Header.Set("X-Ratio-Hit","true")
 		ctx.Resume()
 		if global.Env().IsDebug {
-			log.Debugf("request [%v] go on flow: [%s]", ctx.URI().String(), filter.Flow)
+			log.Tracef("request [%v] go on flow: [%s]", ctx.URI().String(), filter.Flow)
 		}
 		filter.flow.Process(ctx)
 		if !filter.ContinueAfterMatch {
