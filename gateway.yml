@@ -1,111 +1,592 @@
+##ILM for system cluster
+#PUT _template/.infini
+#{
+#    "order": 0,
+#    "index_patterns": [
+#      ".infini_*"
+#    ],
+#    "settings": {
+#      "index": {
+#        "max_result_window": "10000000",
+#        "mapping": {
+#          "total_fields": {
+#            "limit": "20000"
+#          }
+#        },
+#        "analysis": {
+#          "analyzer": {
+#            "suggest_text_search": {
+#              "filter": [
+#                "word_delimiter"
+#              ],
+#              "tokenizer": "classic"
+#            }
+#          }
+#        },
+#        "number_of_shards": "1"
+#      }
+#    },
+#    "mappings": {
+#      "dynamic_templates": [
+#        {
+#          "strings": {
+#            "mapping": {
+#              "ignore_above": 256,
+#              "type": "keyword"
+#            },
+#            "match_mapping_type": "string"
+#          }
+#        }
+#      ]
+#    },
+#    "aliases": {}
+#}
+#
+#PUT _ilm/policy/ilm_.infini_metrics-30days-retention
+#{
+#  "policy": {
+#    "phases": {
+#      "hot": {
+#        "min_age": "0ms",
+#        "actions": {
+#          "rollover": {
+#            "max_age": "30d",
+#            "max_size": "50gb"
+#          },
+#          "set_priority": {
+#            "priority": 100
+#          }
+#        }
+#      },
+#      "delete": {
+#        "min_age": "30d",
+#        "actions": {
+#          "delete": {
+#          }
+#        }
+#      }
+#    }
+#  }
+#}
+#
+#PUT _template/.infini_metrics-rollover
+#{
+#    "order" : 100000,
+#    "index_patterns" : [
+#      ".infini_metrics*"
+#    ],
+#    "settings" : {
+#      "index" : {
+#        "format" : "7",
+#        "lifecycle" : {
+#          "name" : "ilm_.infini_metrics-30days-retention",
+#          "rollover_alias" : ".infini_metrics"
+#        },
+#        "codec" : "best_compression",
+#        "number_of_shards" : "1",
+#        "translog.durability":"async"
+#      }
+#    },
+#    "mappings" : {
+#      "dynamic_templates" : [
+#        {
+#          "strings" : {
+#            "mapping" : {
+#              "ignore_above" : 256,
+#              "type" : "keyword"
+#            },
+#            "match_mapping_type" : "string"
+#          }
+#        }
+#      ]
+#    },
+#    "aliases" : { }
+#  }
+#
+#
+#PUT .infini_metrics-00001
+#{
+#  "settings": {
+#    "index.lifecycle.rollover_alias":".infini_metrics"
+#    , "refresh_interval": "5s"
+#  },
+#  "aliases":{
+#    ".infini_metrics":{
+#      "is_write_index":true
+#    }
+#  },
+#    "mappings": {
+#      "dynamic_templates": [
+#        {
+#          "strings": {
+#            "match_mapping_type": "string",
+#            "mapping": {
+#              "ignore_above": 256,
+#              "type": "keyword"
+#            }
+#          }
+#        }
+#      ],
+#      "properties": {
+#        "timestamp": {
+#          "type": "date"
+#        }
+#      }
+#    }
+#}
+#
+#PUT _template/.infini_logs-rollover
+#{
+#  "order": 100000,
+#  "index_patterns": [
+#    ".infini_logs*"
+#  ],
+#  "settings": {
+#    "index": {
+#      "format": "7",
+#      "lifecycle": {
+#          "name" : "ilm_.infini_metrics-30days-retention",
+#          "rollover_alias" : ".infini_logs"
+#      },
+#      "codec": "best_compression",
+#      "number_of_shards": "1",
+#      "translog": {
+#        "durability": "async"
+#      }
+#    }
+#  },
+#  "mappings": {
+#    "dynamic_templates": [
+#      {
+#        "strings": {
+#          "mapping": {
+#            "ignore_above": 256,
+#            "type": "keyword"
+#          },
+#          "match_mapping_type": "string"
+#        }
+#      }
+#    ],
+#    "properties": {
+#      "payload.message": {
+#        "type": "text"
+#      },
+#      "timestamp": {
+#        "type": "date"
+#      }
+#    }
+#  },
+#  "aliases": {}
+#}
+#
+#PUT .infini_logs-00001
+#{
+#  "settings": {
+#    "index.lifecycle.rollover_alias":".infini_logs"
+#    , "refresh_interval": "5s"
+#  },
+#  "aliases":{
+#    ".infini_logs":{
+#      "is_write_index":true
+#    }
+#  }
+#}
+#
+#
+#PUT _template/.infini_requests_logging-rollover
+#{
+#  "order": 100000,
+#  "index_patterns": [
+#    ".infini_requests_logging*"
+#  ],
+#  "settings": {
+#    "index": {
+#      "format": "7",
+#      "lifecycle": {
+#          "name" : "ilm_.infini_metrics-30days-retention",
+#          "rollover_alias" : ".infini_requests_logging"
+#      },
+#      "codec": "best_compression",
+#      "number_of_shards": "1",
+#      "translog": {
+#        "durability": "async"
+#      }
+#    }
+#  },
+#  "mappings": {
+#    "dynamic_templates": [
+#      {
+#        "strings": {
+#          "mapping": {
+#            "ignore_above": 256,
+#            "type": "keyword"
+#          },
+#          "match_mapping_type": "string"
+#        }
+#      }
+#    ],
+#    "properties": {
+#      "request": {
+#           "properties": {
+#             "body": {
+#               "type": "text"
+#             }
+#           }
+#         },
+#     "response": {
+#       "properties": {
+#         "body": {
+#           "type": "text"
+#         }
+#       }
+#     },
+#      "timestamp": {
+#        "type": "date"
+#      }
+#    }
+#  },
+#  "aliases": {}
+#}
+#
+#PUT .infini_requests_logging-00001
+#{
+#  "settings": {
+#    "index.lifecycle.rollover_alias":".infini_requests_logging"
+#    , "refresh_interval": "5s"
+#  },
+#  "aliases":{
+#    ".infini_requests_logging":{
+#      "is_write_index":true
+#    }
+#  }
+#}
+#
+#
+#PUT _template/.infini_async_bulk_results-rollover
+#{
+#  "order": 100000,
+#  "index_patterns": [
+#    ".infini_async_bulk_results*"
+#  ],
+#  "settings": {
+#    "index": {
+#      "format": "7",
+#      "lifecycle": {
+#          "name" : "ilm_.infini_metrics-30days-retention",
+#          "rollover_alias" : ".infini_async_bulk_results"
+#      },
+#      "codec": "best_compression",
+#      "number_of_shards": "1",
+#      "translog": {
+#        "durability": "async"
+#      }
+#    }
+#  },
+#  "mappings": {
+#    "dynamic_templates": [
+#      {
+#        "strings": {
+#          "mapping": {
+#            "ignore_above": 256,
+#            "type": "keyword"
+#          },
+#          "match_mapping_type": "string"
+#        }
+#      }
+#    ],
+#    "properties": {
+#      "request": {
+#                "properties": {
+#                  "body": {
+#                    "type": "text"
+#                  }
+#                }
+#      },
+#      "response": {
+#            "properties": {
+#              "body": {
+#                "type": "text"
+#              }
+#            }
+#       },
+#      "timestamp": {
+#        "type": "date"
+#      }
+#    }
+#  },
+#  "aliases": {}
+#}
+#
+#PUT .infini_async_bulk_results-00001
+#{
+#  "settings": {
+#    "index.lifecycle.rollover_alias":".infini_async_bulk_results"
+#    , "refresh_interval": "5s"
+#  },
+#  "aliases":{
+#    ".infini_async_bulk_results":{
+#      "is_write_index":true
+#    }
+#  }
+#}
+
+
+configs.auto_reload: true
 path.data: data
 path.logs: log
 
-#log.format: '{"timestamp":"%UTCDateT%UTCTime","level":"%Level","message":"%EscapedMsg","file":"%RelFile","func":"%FuncShort","line":"%Line"}%n'
+##json logging layout
+#log.format: '{"timestamp":"%UTCDateT%UTCTime","level":"%Level","message":"%EscapedMsg","file":"%File:%Line","func":"%FuncShort"}%n'
+
+##system api
+#api:
+#  enabled: true
+#  network:
+#    binding: 0.0.0.0:2900
+
+##elasticsearch servers
+elasticsearch:
+  - name: prod
+    enabled: true
+    endpoints:
+      - http://localhost:9200
+    discovery:
+      enabled: false
+    basic_auth:
+      username: elastic
+      password: password
+    traffic_control.max_bytes_per_node: 1010485760
+  - name: logging-server
+    enabled: true
+    endpoints:
+      - http://localhost:9200
+    basic_auth:
+      username: elastic
+      password: password
+    discovery:
+      enabled: false
 
 entry:
-  - name: my_es_entry
-    enabled: true
-    router: my_router
-    max_concurrency: 10000
-    network:
-      binding: 0.0.0.0:8000
-#    tls:
-#      enabled: true
+- name: my_es_entry
+  enabled: true
+  router: my_router
+  max_concurrency: 10000
+  network:
+    binding: 0.0.0.0:8000
+#  tls:
+#   enabled: true
+#   cert_file: /data/gateway/cert/elasticsearch.pem
+#   key_file: /data/gateway/cert/elasticsearch.key
+#   skip_insecure_verify: false
 
-flow:
-  - name: default_flow
-    filter:
-#      - bulk_reshuffle:
-#          when:
-#            contains:
-#              _ctx.request.path: /_bulk
-#          elasticsearch: dev
-#          level: node
-#          fix_null_id: true
-      - get_cache:
-      - elasticsearch:
-          elasticsearch: dev  #elasticsearch configure reference name
-          max_connection_per_node: 1000 #max tcp connection to upstream, default for all nodes
-          max_response_size: -1 #default for all nodes
-          balancer: weight
-          refresh: # refresh upstream nodes list, need to enable this feature to use elasticsearch nodes auto discovery
-            enabled: true
-            interval: 60s
-      - set_cache:
-  - name: logging # this flow is used for request logging, refer to `router`'s `tracing_flow`
-    filter:
-      - stats:
-      - logging:
-          queue_name: request_logging
-          max_request_body_size: 10240
-          max_response_body_size: 10240
-          when: #>1s or none-200 requests will be logged
-            or:
-              - not:
-                  or:
-                    - equals:
-                        _ctx.request.path: "/favicon.ico"
-                    - in:
-                        _ctx.response.status: [200,201]
-                    - in:
-                        _ctx.request.path: ["/sw.js"]
-              - range:
-                  _ctx.elapsed.gte: 1000
 router:
   - name: my_router
     default_flow: default_flow
-    tracing_flow: logging
+    tracing_flow: logging_flow
+    rules:
+      - method:
+          - "*"
+        pattern:
+          - "/_bulk"
+          - "/{any_index}/_bulk"
+        flow:
+          - async_bulk_flow
 
-elasticsearch:
-- name: dev
-  enabled: true
-  schema: http
-  hosts:
-    - 192.168.3.188:9206
-    - 127.0.0.1:9200
-  traffic_control: #global traffic control
-    max_bps_per_node: 209715200 #max total bytes send to es per node, 200MB/s
-    max_qps_per_node: 20000 #max total requests send to es per node, 20k/s
-  basic_auth: #used to discovery full cluster nodes, or check elasticsearch's health and versions
-    username: test
-    password: testtest
-  discovery: # auto discovery elasticsearch cluster nodes
-    enabled: true
-    refresh:
-      enabled: true
-      interval: 60s
+flow:
+- name: default_flow
+  filter:
+    - elasticsearch:
+        elasticsearch: prod
+        max_connection_per_node: 1000
+#    - http:
+#        schema: "http" #https or http
+#        max_idle_conn_duration: "900s"
+#        skip_failure_host: false
+#        hosts:
+#          - "localhost:9200"
+- name: logging_flow
+  filter:
+    - logging:
+        queue_name: request_logging
+        max_request_body_size: 4096
+        max_response_body_size: 4096
+#        when: #>1s or none-200 requests will be logged
+#         or:
+#           - not:
+#               or:
+#                 - equals:
+#                     _ctx.request.path: "/favicon.ico"
+#                 - in:
+#                     _ctx.response.status: [404,200,201]
+#                 - suffix:
+#                     _ctx.request.path: ".js"
+#                 - suffix:
+#                     _ctx.request.path: ".css"
+#           - range:
+#               _ctx.elapsed.gte: 1000
+- name: async_bulk_flow
+  filter:
+    - bulk_reshuffle:
+        when:
+          contains:
+            _ctx.request.path: /_bulk
+        elasticsearch: prod
+        level: node  #cluster,node,index,shard
+        partition_size: 10 #extra partition within level
+        #shards: [1,3,5,7,9,11,13] #filter shards to ingest for node or shard level
+        continue_metadata_missing: true
+        fix_null_id: true
+    - http: #fallback for non-bulk requests
+        schema: "http" #https or http
+        hosts:
+          - localhost:9200
 
+##background jobs
 pipeline:
-- name: request_logging_index
+
+## system logging and metrics
+- name: async_messages_merge
   auto_start: true
   keep_running: true
   processor:
-    - json_indexing:
-        index_name: "gateway_requests"
-        elasticsearch: "dev"
-        input_queue: "request_logging"
-        idle_timeout_in_seconds: 1
+    - indexing_merge:
+        input_queue: "bulk_result_messages"
+        elasticsearch: "logging-server"
+        index_name: ".infini_async_bulk_results"
+        output_queue:
+          name: "bulk_requests"
+          label:
+            tag: "bulk_logging"
         worker_size: 1
-        bulk_size_in_mb: 10 #in MB
-        when:
-          cluster_available: [ "dev" ]
-- name: bulk_request_ingest
+        bulk_size_in_mb: 10
+- name: metrics_merge
+  auto_start: true
+  keep_running: true
+  processor:
+    - indexing_merge:
+        input_queue: "metrics"
+        elasticsearch: "logging-server"
+        index_name: ".infini_metrics"
+        output_queue:
+          name: "bulk_requests"
+          label:
+            tag: "metrics"
+        worker_size: 1
+        bulk_size_in_mb: 10
+- name: request_logging_merge
+  auto_start: true
+  keep_running: true
+  processor:
+    - indexing_merge:
+        input_queue: "request_logging"
+        elasticsearch: "logging-server"
+        index_name: ".infini_requests_logging"
+        output_queue:
+          name: "bulk_requests"
+          label:
+            tag: "request_logging"
+        worker_size: 1
+        bulk_size_in_mb: 10
+- name: ingest_merged_requests
   auto_start: true
   keep_running: true
   processor:
     - bulk_indexing:
-        elasticsearch: "dev"
-        max_worker_size: 10
-        bulk.compress: true
-        bulk_size_in_mb: 50  #in MB
-        retry_delay_in_seconds: 5
-        queues: #filter by labels
-          type: bulk_reshuffle
+        num_of_slices: 3 #runtime slicing
+        bulk:
+          compress: false
+          batch_size_in_mb: 10
+          batch_size_in_docs: 500
+          #remove_duplicated_newlines: true
+          invalid_queue: "invalid_request"
+          response_handle:
+            bulk_result_message_queue: "system_failure_messages"
+            max_request_body_size: 10240
+            max_response_body_size: 10240
+            save_success_results: false
+            max_error_details_count: 5
+        consumer:
+          fetch_max_messages: 100
+        queues:
+          type: indexing_merge
         when:
-          cluster_available: [ "dev" ]
+          cluster_available: [ "logging-server" ]
 
+##async way to ingest bulk requests handled by async_bulk_flow
+- name: async_ingest_bulk_requests
+  auto_start: true
+  keep_running: true
+  retry_delay_in_ms: 1000
+  processor:
+    - bulk_indexing:
+        max_connection_per_node: 1000
+        num_of_slices: 2 #runtime slice
+        max_worker_size: 200
+        idle_timeout_in_seconds: 10
+        bulk:
+          compress: false
+          batch_size_in_mb: 20
+          batch_size_in_docs: 50000
+          dead_letter_queue: "bulk_dead_requests"
+          response_handle:
+            bulk_result_message_queue: "bulk_result_messages"
+            max_request_body_size: 10240
+            max_response_body_size: 10240
+            save_success_results: true
+            max_error_details_count: 5
+            retry_exception:
+              keyword:
+                - illegal_state_exception
+        consumer:
+          fetch_max_messages: 100
+          eof_retry_delay_in_ms: 500
+        queue_selector:
+          labels:
+            type: bulk_reshuffle
+
+
+##metrics
+metrics:
+  enabled: true
+  queue: metrics
+  instance:
+    enabled: true
+  network:
+    enabled: true
+    summary: true
+
+##diskqueue
 disk_queue:
+  prepare_files_to_read: true
+  #max_bytes_per_file: 20971520
+  eof_retry_delay_in_ms: 500
+  cleanup_files_on_init: false
+  retention:
+    max_num_of_local_files: 20
   compress:
     segment:
       enabled: true
+    delete_after_compress: true
+    idle_threshold: 20
+
+##badger kv
+badger:
+  value_log_max_entries: 1000000
+  value_log_file_size: 104857600
+
+##elasticsearch module
+elastic:
+  enabled: true
+  remote_configs: false
+  health_check:
+    enabled: true
+    interval: 30s
+  availability_check:
+    enabled: true
+    interval: 30s
+  metadata_refresh:
+    enabled: true
+    interval: 30s
+  cluster_settings_check:
+    enabled: false
+    interval: 60s
