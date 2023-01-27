@@ -398,7 +398,7 @@ flow:
     - elasticsearch:
         elasticsearch: prod
         max_connection_per_node: 1000
-#    - http:
+#    - http: ##another general option to proxy requests
 #        schema: "http" #https or http
 #        max_idle_conn_duration: "900s"
 #        skip_failure_host: false
