@@ -1,6 +1,8 @@
 pipeline {
 
-    agent none
+    agent {
+        label "master"
+    }
 
     environment { 
         CI = 'true'
