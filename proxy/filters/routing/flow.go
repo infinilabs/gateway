@@ -77,7 +77,6 @@ func (filter *FlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 				if len(match)>0{
 					for i, name := range filter.ContextFlow.p.SubexpNames() {
 						if name != "" {
-							time.Sleep(1*time.Second)
 							variables[name] = match[i]
 						}
 					}
