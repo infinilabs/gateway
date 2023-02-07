@@ -331,6 +331,19 @@
 #}
 
 
+#this config section will override system wide environments
+#eg: PROD_ES_ENDPOINT=http://192.168.3.185:9200 LOGGING_ES_ENDPOINT=http://192.168.3.185:9201  ./bin/gateway
+env: #use $[[env.LOGGING_ES_ENDPOINT]] in config instead
+  LOGGING_ES_ENDPOINT: http://localhost:9200
+  LOGGING_ES_USER: elastic
+  LOGGING_ES_PASS: password
+  PROD_ES_ENDPOINT: http://localhost:9200
+  PROD_ES_USER: elastic
+  PROD_ES_PASS: password
+  GW_BINDING: "0.0.0.0:8000"
+  API_BINDING: "0.0.0.0:2902"
+
+
 configs.auto_reload: true
 path.data: data
 path.logs: log
@@ -338,31 +351,31 @@ path.logs: log
 ##json logging layout
 #log.format: '{"timestamp":"%UTCDateT%UTCTime","level":"%Level","message":"%EscapedMsg","file":"%File:%Line","func":"%FuncShort"}%n'
 
-##system api
-#api:
-#  enabled: true
-#  network:
-#    binding: 0.0.0.0:2900
+#system api
+api:
+  enabled: true
+  network:
+    binding: $[[env.API_BINDING]]
 
 ##elasticsearch servers
 elasticsearch:
   - name: prod
     enabled: true
     endpoints:
-      - http://localhost:9200
+      - $[[env.PROD_ES_ENDPOINT]]
     discovery:
       enabled: false
     basic_auth:
-      username: elastic
-      password: password
+      username: $[[env.PROD_ES_USER]]
+      password: $[[env.PROD_ES_PASS]]
     traffic_control.max_bytes_per_node: 1010485760
   - name: logging-server
     enabled: true
     endpoints:
-      - http://localhost:9200
+      - $[[env.LOGGING_ES_ENDPOINT]]
     basic_auth:
-      username: elastic
-      password: password
+      username: $[[env.LOGGING_ES_USER]]
+      password: $[[env.LOGGING_ES_PASS]]
     discovery:
       enabled: false
 
@@ -372,7 +385,7 @@ entry:
   router: my_router
   max_concurrency: 10000
   network:
-    binding: 0.0.0.0:8000
+    binding: $[[env.GW_BINDING]]
 #  tls:
 #   enabled: true
 #   cert_file: /data/gateway/cert/elasticsearch.pem
@@ -436,10 +449,13 @@ flow:
         #shards: [1,3,5,7,9,11,13] #filter shards to ingest for node or shard level
         continue_metadata_missing: true
         fix_null_id: true
-    - http: #fallback for non-bulk requests
-        schema: "http" #https or http
-        hosts:
-          - localhost:9200
+    - elasticsearch:
+        elasticsearch: prod
+        max_connection_per_node: 1000
+#    - http: #fallback for non-bulk requests
+#        schema: "http" #https or http
+#        hosts:
+#          - localhost:9200
 
 ##background jobs
 pipeline:
