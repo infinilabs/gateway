@@ -17,6 +17,7 @@ import (
 type RatioRoutingFlowFilter struct {
 	Ratio              float32 `config:"ratio"`
 	Flow               string  `config:"flow"`
+	Action             string  `config:"action"` //redirect_flow or drop
 	ContinueAfterMatch bool    `config:"continue"`
 	flow               common.FilterFlow
 }
@@ -36,27 +37,33 @@ func (filter *RatioRoutingFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	if r <= v {
 		ctx.Request.Header.Set("X-Ratio-Hit","true")
-		ctx.Resume()
-		if global.Env().IsDebug {
-			log.Tracef("request [%v] go on flow: [%s]", ctx.URI().String(), filter.Flow)
-		}
-		filter.flow.Process(ctx)
-		if !filter.ContinueAfterMatch {
+		if filter.Action==redirectAction{
+			ctx.Resume()
+			if global.Env().IsDebug {
+				log.Tracef("request [%v] go on flow: [%s]", ctx.URI().String(), filter.Flow)
+			}
+			filter.flow.Process(ctx)
+			if !filter.ContinueAfterMatch {
+				ctx.Finished()
+			}
+		}else{
 			ctx.Finished()
 		}
 	}else{
 		ctx.Request.Header.Set("X-Ratio-Hit","false")
 	}
-
 }
 
 func init() {
 	pipeline.RegisterFilterPluginWithConfigMetadata("ratio",NewRatioRoutingFlowFilter,&RatioRoutingFlowFilter{})
 }
 
+const redirectAction = "redirect_flow"
+const dropAction = "drop"
 func NewRatioRoutingFlowFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := RatioRoutingFlowFilter{
+		Action: redirectAction,
 		Ratio: 0.1,
 	}
 	if err := c.Unpack(&runner); err != nil {
