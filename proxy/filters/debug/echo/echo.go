@@ -103,8 +103,12 @@ func (filter *Echo) Filter(ctx *fasthttp.RequestCtx) {
 			}
 		}
 	}
-	if !filter.Continue {
+
+	if filter.Response{
 		ctx.Response.SetStatusCode(200)
+	}
+
+	if !filter.Continue {
 		ctx.Finished()
 	}
 }
