@@ -6,6 +6,7 @@ package transform
 import (
 	"fmt"
 	"infini.sh/framework/core/config"
+	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
@@ -13,10 +14,11 @@ import (
 )
 
 type ContextParseFilter struct {
-	Context string `config:"context"`
-	Pattern string `config:"pattern"`
-	Group   string `config:"group"`
-	p       *regexp.Regexp
+	SkipError bool   `config:"skip_error"`
+	Context   string `config:"context"`
+	Pattern   string `config:"pattern"`
+	Group     string `config:"group"`
+	p         *regexp.Regexp
 }
 
 func (filter *ContextParseFilter) Name() string {
@@ -27,13 +29,16 @@ func (filter *ContextParseFilter) Filter(ctx *fasthttp.RequestCtx) {
 	if filter.Context != "" {
 		key, err := ctx.GetValue(filter.Context)
 		if err != nil {
-			panic(err)
+			if filter.SkipError {
+				return
+			}
+			panic(errors.Errorf("context_parse,url:%v,err:%v",ctx.Request.URI().String(),err))
 		}
 		keyStr := util.ToString(key)
 		variables := util.MapStr{}
 		if filter.p != nil {
 			match := filter.p.FindStringSubmatch(keyStr)
-			if len(match)>0{
+			if len(match) > 0 {
 				for i, name := range filter.p.SubexpNames() {
 					if name != "" {
 						variables[name] = match[i]
@@ -41,12 +46,24 @@ func (filter *ContextParseFilter) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 		}
-		if len(variables)>0{
-			if filter.Group!=""{
-				ctx.PutValue(filter.Group,variables)
-			}else{
-				for k,v:=range variables{
-					ctx.PutValue(k,v)
+		if len(variables) > 0 {
+			if filter.Group != "" {
+				_,err=ctx.PutValue(filter.Group, variables)
+				if err!=nil{
+					if filter.SkipError{
+						return
+					}
+					panic(err)
+				}
+			} else {
+				for k, v := range variables {
+					_,err=ctx.PutValue(k, v)
+					if err!=nil{
+						if filter.SkipError{
+							return
+						}
+						panic(err)
+					}
 				}
 			}
 		}
