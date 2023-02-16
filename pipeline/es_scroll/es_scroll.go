@@ -18,6 +18,11 @@ package es_scroll
 
 import (
 	"fmt"
+	"math"
+	"runtime"
+	"sync"
+	"time"
+
 	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
@@ -31,10 +36,6 @@ import (
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
-	"math"
-	"runtime"
-	"sync"
-	"time"
 )
 
 type ScrollProcessor struct {
@@ -44,23 +45,23 @@ type ScrollProcessor struct {
 
 type Config struct {
 	//字段名称必须是大写
-	PartitionSize      int    `config:"partition_size"`
-	BatchSize          int    `config:"batch_size"`
-	SliceSize          int    `config:"slice_size"`
-	Elasticsearch      string `config:"elasticsearch"`
-	SortType           string `config:"sort_type"`
-	SortField          string `config:"sort_field"`
-	Indices            string `config:"indices"`
-	QueryString              string `config:"query_string"`
-	QueryDSL              string `config:"query_dsl"`
-	ScrollTime         string `config:"scroll_time"`
-	Fields             string `config:"fields"`
-	Output             string `config:"output_queue"`
+	PartitionSize int    `config:"partition_size"`
+	BatchSize     int    `config:"batch_size"`
+	SliceSize     int    `config:"slice_size"`
+	Elasticsearch string `config:"elasticsearch"`
+	SortType      string `config:"sort_type"`
+	SortField     string `config:"sort_field"`
+	Indices       string `config:"indices"`
+	QueryString   string `config:"query_string"`
+	QueryDSL      string `config:"query_dsl"`
+	ScrollTime    string `config:"scroll_time"`
+	Fields        string `config:"fields"`
+	Output        string `config:"output_queue"`
 
-	RemoveTypeMeta         bool         `config:"remove_type"`
+	RemoveTypeMeta bool `config:"remove_type"`
 	//RemovePipeline         bool         `config:"remove_pipeline"`
-	IndexNameRename  map[string]string `config:"index_rename"`
-	TypeNameRename   map[string]string `config:"type_rename"`
+	IndexNameRename map[string]string `config:"index_rename"`
+	TypeNameRename  map[string]string `config:"type_rename"`
 }
 
 func init() {
@@ -69,11 +70,11 @@ func init() {
 
 func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
-		PartitionSize:  1,
-		SliceSize:  1,
-		BatchSize:  1000,
-		ScrollTime: "5m",
-		SortType:   "asc",
+		PartitionSize: 1,
+		SliceSize:     1,
+		BatchSize:     1000,
+		ScrollTime:    "5m",
+		SortType:      "asc",
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -129,7 +130,7 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 				wg.Done()
 			}()
 
-			var query *elastic.SearchRequest=elastic.GetSearchRequest(processor.config.QueryString,processor.config.QueryDSL,processor.config.Fields, processor.config.SortField, processor.config.SortType)
+			var query *elastic.SearchRequest = elastic.GetSearchRequest(processor.config.QueryString, processor.config.QueryDSL, processor.config.Fields, processor.config.SortField, processor.config.SortType)
 			scrollResponse1, err := processor.client.NewScroll(processor.config.Indices, processor.config.ScrollTime, processor.config.BatchSize, query, tempSlice, processor.config.SliceSize)
 			if err != nil {
 				log.Errorf("%v-%v", processor.config.Output, err)
@@ -145,6 +146,7 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 			version := processor.client.GetMajorVersion()
 			totalHits, err := common.GetScrollHitsTotal(version, scrollResponse1)
 			if err != nil {
+				log.Errorf("cannot get total hits from json: %v, %v", string(scrollResponse1), err)
 				panic(err)
 			}
 
@@ -166,10 +168,10 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 			defer fasthttp.ReleaseRequest(req)
 			defer fasthttp.ReleaseResponse(res)
 
-			meta:=elastic.GetMetadata(processor.config.Elasticsearch)
-			apiCtx:=&elastic.APIContext{
-				Client: meta.GetHttpClient(meta.GetActivePreferredHost("")),
-				Request: req,
+			meta := elastic.GetMetadata(processor.config.Elasticsearch)
+			apiCtx := &elastic.APIContext{
+				Client:   meta.GetHttpClient(meta.GetActivePreferredHost("")),
+				Request:  req,
 				Response: res,
 			}
 
@@ -190,7 +192,7 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 				data, err := processor.client.NextScroll(apiCtx, processor.config.ScrollTime, initScrollID)
 
 				if err != nil || len(data) == 0 {
-					log.Error("failed to scroll,slice:",slice,",", processor.config.Elasticsearch,",", processor.config.Indices,",", string(data),",", err)
+					log.Error("failed to scroll,slice:", slice, ",", processor.config.Elasticsearch, ",", processor.config.Indices, ",", string(data), ",", err)
 					panic(err)
 				}
 
@@ -233,7 +235,7 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 	wg.Wait()
 	progress.Stop()
 
-	duration:=time.Since(start).Seconds()
+	duration := time.Since(start).Seconds()
 	log.Infof("dump finished, es: %v, index: %v, docs: %v, duration: %vs, qps: %v ", processor.config.Elasticsearch, processor.config.Indices, totalDocsNeedToScroll, duration, math.Ceil(float64(totalDocsNeedToScroll)/math.Ceil((duration))))
 
 	return nil
@@ -242,7 +244,7 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName string) int {
 
 	docSize := 0
-	var docs=map[int]*bytebufferpool.ByteBuffer{}
+	var docs = map[int]*bytebufferpool.ByteBuffer{}
 	jsonparser.ArrayEach(data, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
 
 		id, err := jsonparser.GetString(value, "_id")
@@ -257,7 +259,7 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 
 		typeStr, err := jsonparser.GetString(value, "_type")
 		if err != nil {
-			panic(err)
+			log.Debugf("no _type field found")
 		}
 
 		if index != "" && len(processor.config.IndexNameRename) > 0 {
@@ -272,13 +274,17 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 			}
 		}
 
-		if typeStr != "" &&!processor.config.RemoveTypeMeta && len(processor.config.TypeNameRename) > 0 {
+		if processor.config.RemoveTypeMeta {
+			// delete _type field from batch output
+			typeStr = ""
+		} else if len(processor.config.TypeNameRename) > 0 {
+			// Support rename any (including empty) source _type with *: doc mapping
 			v, ok := processor.config.TypeNameRename[typeStr]
-			if ok&& v!=typeStr {
+			if ok && v != typeStr {
 				typeStr = v
 			} else {
 				v, ok := processor.config.TypeNameRename["*"]
-				if ok && v!=typeStr {
+				if ok && v != typeStr {
 					typeStr = v
 				}
 			}
@@ -288,22 +294,26 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 		if err != nil {
 			panic(err)
 		}
-		stats.Increment("scrolling_docs","docs")
+		stats.Increment("scrolling_docs", "docs")
 		//stats.IncrementBy("scrolling_docs","size", int64(len(source)))
 
 		//hash := processor.Hash(processor.config.HashFunc, hashBuffer, source)
 
-		partitionID:=elastic.GetShardID(7,util.UnsafeStringToBytes(id),processor.config.PartitionSize)
+		partitionID := elastic.GetShardID(7, util.UnsafeStringToBytes(id), processor.config.PartitionSize)
 
-		buffer,ok:=docs[partitionID]
-		if !ok{
+		buffer, ok := docs[partitionID]
+		if !ok {
 			buffer = bytebufferpool.Get("es_scroll")
 		}
 
 		//trim newline to space
-		util.WalkBytesAndReplace(source,util.NEWLINE,util.SPACE)
+		util.WalkBytesAndReplace(source, util.NEWLINE, util.SPACE)
 
-		buffer.WriteString(fmt.Sprintf("{ \"index\" : { \"_index\" : \"%s\", \"_type\" : \"%s\", \"_id\" : \"%s\" } }\n", index, typeStr,id))
+		buffer.WriteString(fmt.Sprintf("{ \"index\" : { \"_index\" : \"%s\", ", index))
+		if typeStr != "" {
+			buffer.WriteString(fmt.Sprintf("\"_type\" : \"%s\",", typeStr))
+		}
+		buffer.WriteString(fmt.Sprintf("\"_id\" : \"%s\" } }\n", id))
 		buffer.Write(source)
 		buffer.WriteString("\n")
 
@@ -314,23 +324,27 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 
 		docSize++
 
-		docs[partitionID]=buffer
+		docs[partitionID] = buffer
 
 	}, "hits", "hits")
 
-	for k,v:=range docs{
+	for k, v := range docs {
 		queueConfig := &queue.QueueConfig{}
 		queueConfig.Source = "dynamic"
 		queueConfig.Labels = util.MapStr{}
 		queueConfig.Labels["type"] = "scroll_docs"
-		queueConfig.Name=outputQueueName+util.ToString(k)
+		queueConfig.Name = outputQueueName + util.ToString(k)
 		queue.RegisterConfig(queueConfig.Name, queueConfig)
+		pushQueue := queue.GetOrInitConfig(outputQueueName + util.ToString(k))
+		if global.Env().IsDebug {
+			log.Trace("queue config: ", pushQueue)
+		}
 
-		queue.Push(queue.GetOrInitConfig(outputQueueName+util.ToString(k)),v.Bytes())
+		queue.Push(pushQueue, v.Bytes())
 
 		//handler := rotate.GetFileHandler(path.Join(global.Env().GetDataDir(), "diff", outputQueueName+util.ToString(k)), rotate.DefaultConfig)
 		//handler.Write(v.Bytes())
-		bytebufferpool.Put("es_scroll",v)
+		bytebufferpool.Put("es_scroll", v)
 	}
 
 	stats.IncrementBy("scrolling_processing."+outputQueueName, "docs", int64(docSize))
