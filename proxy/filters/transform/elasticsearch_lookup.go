@@ -2,8 +2,11 @@ package transform
 
 import (
 	"fmt"
+	"strconv"
+
 	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
+	"github.com/valyala/fasttemplate"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/errors"
@@ -11,23 +14,20 @@ import (
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
-	"src/github.com/valyala/fasttemplate"
-	"strconv"
 )
 
 type RequestTemplate struct {
-	Method string `config:"method"`
-	RequestBody string `config:"body"`
-	Parameters map[string]interface{} `config:"variable"`
+	Method      string                 `config:"method"`
+	RequestBody string                 `config:"body"`
+	Parameters  map[string]interface{} `config:"variable"`
 }
 
 type ElasticsearchLookup struct {
-	Elasticsearch string `config:"target.elasticsearch"`
-	IndexPattern  string `config:"target.index_pattern"`
-	Template RequestTemplate `config:"target.template"`
+	Elasticsearch string          `config:"target.elasticsearch"`
+	IndexPattern  string          `config:"target.index_pattern"`
+	Template      RequestTemplate `config:"target.template"`
 
 	JoinBySourceFieldValuesKeyPath []string `config:"source.join_by_field_values.json_path"`
-
 }
 
 func (filter *ElasticsearchLookup) Name() string {
@@ -35,63 +35,63 @@ func (filter *ElasticsearchLookup) Name() string {
 }
 
 func (filter *ElasticsearchLookup) Filter(ctx *fasthttp.RequestCtx) {
-	body:=ctx.Response.GetRawBody()
+	body := ctx.Response.GetRawBody()
 
-	if body!=nil&&len(body)>0 {
+	if body != nil && len(body) > 0 {
 
-		var joinKeys =[]interface{}{}
-		var oldDocs=map[interface{}][]byte{}
+		var joinKeys = []interface{}{}
+		var oldDocs = map[interface{}][]byte{}
 		jsonparser.ArrayEach(body, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
 
 			//save old docs
 			//get key field value as key, `category`
-			vData,vType,_,err:=jsonparser.Get(value,filter.JoinBySourceFieldValuesKeyPath...)
-			if err!=nil{
+			vData, vType, _, err := jsonparser.Get(value, filter.JoinBySourceFieldValuesKeyPath...)
+			if err != nil {
 				log.Error(err)
 				return
 			}
 
-			if vData!=nil&&len(vData)>0{
+			if vData != nil && len(vData) > 0 {
 				var data interface{}
-				switch vType{
+				switch vType {
 				case jsonparser.String:
-					data=string(vData)
+					data = string(vData)
 					break
 				case jsonparser.Number:
-					data,err=jsonparser.ParseInt(vData)
-					if err!=nil{
-						data,err=jsonparser.ParseFloat(vData)
+					data, err = jsonparser.ParseInt(vData)
+					if err != nil {
+						data, err = jsonparser.ParseFloat(vData)
 					}
 					break
 				}
 
-				joinKeys =append(joinKeys,data)
-				oldDocs[data]=vData
+				joinKeys = append(joinKeys, data)
+				oldDocs[data] = vData
 			}
 			//set doc as value
 			//collect joinKeys for further query
 
-		},"hits","hits")
+		}, "hits", "hits")
 
-		if global.Env().IsDebug{
+		if global.Env().IsDebug {
 			log.Debug("doc joinKeys:", joinKeys)
 		}
 
-		if len(joinKeys)>0{
-			docs:=filter.Lookup(joinKeys)
-			if global.Env().IsDebug{
-				log.Debug("fetch keys:", joinKeys,",hit count of docs:",len(docs))
+		if len(joinKeys) > 0 {
+			docs := filter.Lookup(joinKeys)
+			if global.Env().IsDebug {
+				log.Debug("fetch keys:", joinKeys, ",hit count of docs:", len(docs))
 			}
 
-			if len(docs)>0{
-				offset:=-1
-				for key,doc:=range oldDocs{
+			if len(docs) > 0 {
+				offset := -1
+				for key, doc := range oldDocs {
 					offset++
-					newDoc,ok:= docs[key]
-					if ok{
-						body, _ =jsonparser.Set(body,newDoc,"hits","hits",fmt.Sprintf("[%v]",offset))
-						if global.Env().IsDebug{
-							log.Trace("update doc from:",string(util.EscapeNewLine(doc))," => to: ",string(util.EscapeNewLine(newDoc)))
+					newDoc, ok := docs[key]
+					if ok {
+						body, _ = jsonparser.Set(body, newDoc, "hits", "hits", fmt.Sprintf("[%v]", offset))
+						if global.Env().IsDebug {
+							log.Trace("update doc from:", string(util.EscapeNewLine(doc)), " => to: ", string(util.EscapeNewLine(newDoc)))
 						}
 					}
 				}
@@ -102,7 +102,7 @@ func (filter *ElasticsearchLookup) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("elasticsearch_lookup", NewElasticsearchLookupFilter,&ElasticsearchLookup{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("elasticsearch_lookup", NewElasticsearchLookupFilter, &ElasticsearchLookup{})
 }
 
 func NewElasticsearchLookupFilter(c *config.Config) (pipeline.Filter, error) {
@@ -113,75 +113,74 @@ func NewElasticsearchLookupFilter(c *config.Config) (pipeline.Filter, error) {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	if len(runner.JoinBySourceFieldValuesKeyPath)==0{
+	if len(runner.JoinBySourceFieldValuesKeyPath) == 0 {
 		panic(errors.New("join_by_field_values.json_path can't be nil"))
 	}
 
-	runner.Template.RequestBody=fasttemplate.ExecuteStringStd(runner.Template.RequestBody,"{{","}}",runner.Template.Parameters)
+	runner.Template.RequestBody = fasttemplate.ExecuteStringStd(runner.Template.RequestBody, "{{", "}}", runner.Template.Parameters)
 
 	return &runner, nil
 }
 
-func (filter *ElasticsearchLookup) Lookup(docsID []interface{} )map[interface{}][]byte  {
-	para:=map[string]interface{}{
-		"JOIN_BY_FIELD_ARRAY_VALUES":  string(util.JoinInterfaceArray(docsID,",", func(str string) string {
-			return "\""+str+"\""
+func (filter *ElasticsearchLookup) Lookup(docsID []interface{}) map[interface{}][]byte {
+	para := map[string]interface{}{
+		"JOIN_BY_FIELD_ARRAY_VALUES": string(util.JoinInterfaceArray(docsID, ",", func(str string) string {
+			return "\"" + str + "\""
 		})),
 		"MAX_NUMBER_OF_FIELD_ARRAY_VALUES": strconv.Itoa(len(docsID)),
 	}
 
-	dsl:=util.UnsafeStringToBytes(fasttemplate.ExecuteString(filter.Template.RequestBody,"{{","}}",para))
+	dsl := util.UnsafeStringToBytes(fasttemplate.ExecuteString(filter.Template.RequestBody, "{{", "}}", para))
 
-	if global.Env().IsDebug{
+	if global.Env().IsDebug {
 		log.Debug(filter.Template.RequestBody)
 		log.Trace(string(dsl))
 	}
 
 	if global.Env().IsDebug {
-		log.Debug("index:",filter.IndexPattern, ", dsl:", string(dsl))
+		log.Debug("index:", filter.IndexPattern, ", dsl:", string(dsl))
 	}
 
-	res,err:=elastic.GetClient(filter.Elasticsearch).SearchWithRawQueryDSL(filter.IndexPattern,dsl)
-	if err!=nil{
+	res, err := elastic.GetClient(filter.Elasticsearch).SearchWithRawQueryDSL(filter.IndexPattern, dsl)
+	if err != nil {
 		log.Error(err)
 		panic(err)
 	}
 
-	if res!=nil&&res.RawResult!=nil&&res.RawResult.Body!=nil&&len(res.RawResult.Body)>0{
-		result:=map[interface{}][]byte{}
+	if res != nil && res.RawResult != nil && res.RawResult.Body != nil && len(res.RawResult.Body) > 0 {
+		result := map[interface{}][]byte{}
 		jsonparser.ArrayEach(res.RawResult.Body, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
-			keyData,keyType,_,err:=jsonparser.Get(value,"key")
+			keyData, keyType, _, err := jsonparser.Get(value, "key")
 			var key interface{}
-			switch keyType{
+			switch keyType {
 			case jsonparser.String:
-				key=string(keyData)
+				key = string(keyData)
 				break
 			case jsonparser.Number:
-				key,err=jsonparser.ParseInt(keyData)
-				if err!=nil{
-					key,err=jsonparser.ParseFloat(keyData)
+				key, err = jsonparser.ParseInt(keyData)
+				if err != nil {
+					key, err = jsonparser.ParseFloat(keyData)
 				}
 				break
 			}
 
-			docCount,err:=jsonparser.GetInt(value,"doc_count")
-			if docCount>1{
+			docCount, err := jsonparser.GetInt(value, "doc_count")
+			if docCount > 1 {
 				jsonparser.ArrayEach(value, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
-					result[key]=value
-				},"sorted_doc","hits","hits")
-				if err!=nil{
+					result[key] = value
+				}, "sorted_doc", "hits", "hits")
+				if err != nil {
 					log.Error(err)
 					panic(err)
 				}
 			}
 
-		},"aggregations","hit_docs","buckets")
+		}, "aggregations", "hit_docs", "buckets")
 
-		if len(result)>0{
+		if len(result) > 0 {
 			return result
 		}
 	}
 
 	return nil
 }
-
