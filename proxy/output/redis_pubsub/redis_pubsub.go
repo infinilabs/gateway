@@ -3,8 +3,9 @@ package redis_pubsub
 import (
 	"context"
 	"fmt"
+
 	log "github.com/cihub/seelog"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
@@ -52,7 +53,6 @@ func (filter *RedisPubSub) Filter(ctx *fasthttp.RequestCtx) {
 			panic(err)
 		}
 	}
-
 
 }
 

@@ -18,12 +18,12 @@
 package javascript
 
 import (
+	log "github.com/cihub/seelog"
 	"github.com/dop251/goja"
 	"github.com/pkg/errors"
 	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
-	log "src/github.com/cihub/seelog"
 )
 
 // IMPORTANT:
@@ -107,8 +107,8 @@ func (e *beatEventV0) JSObject() goja.Value {
 	return e.obj
 }
 
-//  // javascript
-// 	var dataset = evt._ctx.field1.field2;
+//	 // javascript
+//		var dataset = evt._ctx.field1.field2;
 func (e *beatEventV0) getContext(call goja.FunctionCall) goja.Value {
 	a0 := call.Argument(0)
 	if goja.IsUndefined(a0) {
@@ -116,9 +116,9 @@ func (e *beatEventV0) getContext(call goja.FunctionCall) goja.Value {
 		return e.vm.ToValue(e.inner.Data)
 	}
 
-	log.Errorf("start get ctx",a0.ToString())
+	log.Errorf("start get ctx", a0.ToString())
 
-	v, err := e.inner.GetValue("_ctx."+a0.String())
+	v, err := e.inner.GetValue("_ctx." + a0.String())
 	if err != nil {
 		return goja.Null()
 	}
@@ -129,8 +129,7 @@ func (e *beatEventV0) getContext(call goja.FunctionCall) goja.Value {
 // returned. If no field is specified then it returns entire object.
 //
 //	// javascript
-// 	var dataset = evt.Get("event.dataset");
-//
+//	var dataset = evt.Get("event.dataset");
 func (e *beatEventV0) get(call goja.FunctionCall) goja.Value {
 	a0 := call.Argument(0)
 
@@ -153,9 +152,8 @@ func (e *beatEventV0) get(call goja.FunctionCall) goja.Value {
 // an object.
 //
 //	// javascript
-// 	evt.Put("event.action", "process-created");
-// 	evt.Put("geo.location", {"lon": -73.614830, "lat": 45.505918});
-//
+//	evt.Put("event.action", "process-created");
+//	evt.Put("geo.location", {"lon": -73.614830, "lat": 45.505918});
 func (e *beatEventV0) put(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) != 2 {
 		panic(errors.New("Put requires two arguments (key and value)"))
@@ -174,8 +172,7 @@ func (e *beatEventV0) put(call goja.FunctionCall) goja.Value {
 // rename moves a value from one key to another. It returns true on success.
 //
 //	// javascript
-// 	evt.Rename("src_ip", "source.ip");
-//
+//	evt.Rename("src_ip", "source.ip");
 func (e *beatEventV0) rename(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) != 2 {
 		panic(errors.New("Rename requires two arguments (from and to)"))
@@ -212,8 +209,7 @@ func (e *beatEventV0) rename(call goja.FunctionCall) goja.Value {
 // delete deletes a key from the object. If returns true on success.
 //
 //	// javascript
-// 	evt.Delete("http.request.headers.authorization");
-//
+//	evt.Delete("http.request.headers.authorization");
 func (e *beatEventV0) delete(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) != 1 {
 		panic(errors.New("Delete requires one argument"))
@@ -249,7 +245,6 @@ func (e *beatEventV0) cancel(call goja.FunctionCall) goja.Value {
 //
 //	// javascript
 //	evt.Tag("_parse_failure");
-//
 func (e *beatEventV0) tag(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) != 1 {
 		panic(errors.New("Tag requires one argument"))
@@ -270,7 +265,6 @@ func (e *beatEventV0) tag(call goja.FunctionCall) goja.Value {
 //
 //	// javascript
 //	evt.AppendTo("error.message", "invalid file hash");
-//
 func (e *beatEventV0) appendTo(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) != 2 {
 		panic(errors.New("AppendTo requires two arguments (field and value)"))

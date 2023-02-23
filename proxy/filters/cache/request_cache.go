@@ -4,9 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math/rand"
+	"strings"
+	"sync"
+	"time"
+
 	log "github.com/cihub/seelog"
 	"github.com/dgraph-io/ristretto"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
@@ -15,10 +20,6 @@ import (
 	ccache "infini.sh/framework/lib/cache"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
-	"math/rand"
-	"strings"
-	"sync"
-	"time"
 )
 
 type RequestCache struct {
@@ -57,8 +58,8 @@ var defaultConfig = Config{
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("get_cache", NewGet,&defaultConfig)
-	pipeline.RegisterFilterPluginWithConfigMetadata("set_cache", NewSet,&defaultConfig)
+	pipeline.RegisterFilterPluginWithConfigMetadata("get_cache", NewGet, &defaultConfig)
+	pipeline.RegisterFilterPluginWithConfigMetadata("set_cache", NewSet, &defaultConfig)
 }
 
 func NewGet(c *config.Config) (pipeline.Filter, error) {
@@ -299,16 +300,16 @@ func (filter *RequestCacheGet) Filter(ctx *fasthttp.RequestCtx) {
 	url := string(ctx.RequestURI())
 	args := ctx.Request.URI().QueryArgs()
 	if args.Has("no_cache") {
-		v:=args.Peek("no_cache")
+		v := args.Peek("no_cache")
 
-		args:=ctx.URI().QueryArgs()
+		args := ctx.URI().QueryArgs()
 		args.Del("no_cache")
 
 		//update back
 		ctx.URI().SetQueryString(args.String())
 		ctx.Request.SetRequestURIBytes(ctx.URI().RequestURI())
 
-		if string(v)!="false"{
+		if string(v) != "false" {
 			cacheable = false
 			return //skip further process
 		}
@@ -329,7 +330,7 @@ func (filter *RequestCacheGet) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 	//check bypass patterns
-	if cacheable&&len(filter.config.PassPatterns) > 0 && util.ContainsAnyInArray(url, filter.config.PassPatterns) {
+	if cacheable && len(filter.config.PassPatterns) > 0 && util.ContainsAnyInArray(url, filter.config.PassPatterns) {
 		if global.Env().IsDebug {
 			log.Trace("url hit bypass pattern, will not be cached, ", url)
 		}
