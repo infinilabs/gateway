@@ -330,7 +330,6 @@
 #  }
 #}
 
-
 #this config section will override system wide environments
 #eg: PROD_ES_ENDPOINT=http://192.168.3.185:9200 LOGGING_ES_ENDPOINT=http://192.168.3.185:9201  ./bin/gateway
 env: #use $[[env.LOGGING_ES_ENDPOINT]] in config instead
@@ -342,7 +341,6 @@ env: #use $[[env.LOGGING_ES_ENDPOINT]] in config instead
   PROD_ES_PASS: password
   GW_BINDING: "0.0.0.0:8000"
   API_BINDING: "0.0.0.0:2902"
-
 
 configs.auto_reload: true
 path.data: data
@@ -369,6 +367,7 @@ elasticsearch:
       username: $[[env.PROD_ES_USER]]
       password: $[[env.PROD_ES_PASS]]
     traffic_control.max_bytes_per_node: 1010485760
+    metadata_cache_enabled: false # Whether to cache the cluster info in memory cache
   - name: logging-server
     enabled: true
     endpoints:
@@ -380,12 +379,12 @@ elasticsearch:
       enabled: false
 
 entry:
-- name: my_es_entry
-  enabled: true
-  router: my_router
-  max_concurrency: 10000
-  network:
-    binding: $[[env.GW_BINDING]]
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 10000
+    network:
+      binding: $[[env.GW_BINDING]]
 #  tls:
 #   enabled: true
 #   cert_file: /data/gateway/cert/elasticsearch.pem
@@ -406,52 +405,54 @@ router:
           - async_bulk_flow
 
 flow:
-- name: default_flow
-  filter:
-    - elasticsearch:
-        elasticsearch: prod
-        max_connection_per_node: 1000
-#    - http: ##another general option to proxy requests
-#        schema: "http" #https or http
-#        max_idle_conn_duration: "900s"
-#        skip_failure_host: false
-#        hosts:
-#          - "localhost:9200"
-- name: logging_flow
-  filter:
-    - logging:
-        queue_name: request_logging
-        max_request_body_size: 4096
-        max_response_body_size: 4096
-#        when: #>1s or none-200 requests will be logged
-#         or:
-#           - not:
-#               or:
-#                 - equals:
-#                     _ctx.request.path: "/favicon.ico"
-#                 - in:
-#                     _ctx.response.status: [404,200,201]
-#                 - suffix:
-#                     _ctx.request.path: ".js"
-#                 - suffix:
-#                     _ctx.request.path: ".css"
-#           - range:
-#               _ctx.elapsed.gte: 1000
-- name: async_bulk_flow
-  filter:
-    - bulk_reshuffle:
-        when:
-          contains:
-            _ctx.request.path: /_bulk
-        elasticsearch: prod
-        level: node  #cluster,node,index,shard
-        partition_size: 10 #extra partition within level
-        #shards: [1,3,5,7,9,11,13] #filter shards to ingest for node or shard level
-        continue_metadata_missing: true
-        fix_null_id: true
-    - elasticsearch:
-        elasticsearch: prod
-        max_connection_per_node: 1000
+  - name: default_flow
+    filter:
+      - elasticsearch:
+          elasticsearch: prod
+          max_connection_per_node: 1000
+  #    - http: ##another general option to proxy requests
+  #        schema: "http" #https or http
+  #        max_idle_conn_duration: "900s"
+  #        skip_failure_host: false
+  #        hosts:
+  #          - "localhost:9200"
+  - name: logging_flow
+    filter:
+      - logging:
+          queue_name: request_logging
+          max_request_body_size: 4096
+          max_response_body_size: 4096
+  #        when: #>1s or none-200 requests will be logged
+  #         or:
+  #           - not:
+  #               or:
+  #                 - equals:
+  #                     _ctx.request.path: "/favicon.ico"
+  #                 - in:
+  #                     _ctx.response.status: [404,200,201]
+  #                 - suffix:
+  #                     _ctx.request.path: ".js"
+  #                 - suffix:
+  #                     _ctx.request.path: ".css"
+  #           - range:
+  #               _ctx.elapsed.gte: 1000
+  - name: async_bulk_flow
+    filter:
+      - bulk_reshuffle:
+          when:
+            contains:
+              _ctx.request.path: /_bulk
+          elasticsearch: prod
+          # Options: cluster,node,index,shard
+          # NOTE: node/shard level requires elasticsearch cluster info
+          level: node
+          partition_size: 10 #extra partition within level
+          #shards: [1,3,5,7,9,11,13] #filter shards to ingest for node or shard level
+          continue_metadata_missing: true # If true, will continue to execute following processors if cluster info missing (level: node, shard)
+          fix_null_id: true
+      - elasticsearch:
+          elasticsearch: prod
+          max_connection_per_node: 1000
 #    - http: #fallback for non-bulk requests
 #        schema: "http" #https or http
 #        hosts:
@@ -459,107 +460,105 @@ flow:
 
 ##background jobs
 pipeline:
+  ## system logging and metrics
+  - name: async_messages_merge
+    auto_start: true
+    keep_running: true
+    processor:
+      - indexing_merge:
+          input_queue: "bulk_result_messages"
+          elasticsearch: "logging-server"
+          index_name: ".infini_async_bulk_results"
+          output_queue:
+            name: "bulk_requests"
+            label:
+              tag: "bulk_logging"
+          worker_size: 1
+          bulk_size_in_mb: 10
+  - name: metrics_merge
+    auto_start: true
+    keep_running: true
+    processor:
+      - indexing_merge:
+          input_queue: "metrics"
+          elasticsearch: "logging-server"
+          index_name: ".infini_metrics"
+          output_queue:
+            name: "bulk_requests"
+            label:
+              tag: "metrics"
+          worker_size: 1
+          bulk_size_in_mb: 10
+  - name: request_logging_merge
+    auto_start: true
+    keep_running: true
+    processor:
+      - indexing_merge:
+          input_queue: "request_logging"
+          elasticsearch: "logging-server"
+          index_name: ".infini_requests_logging"
+          output_queue:
+            name: "bulk_requests"
+            label:
+              tag: "request_logging"
+          worker_size: 1
+          bulk_size_in_mb: 10
+  - name: ingest_merged_requests
+    auto_start: true
+    keep_running: true
+    processor:
+      - bulk_indexing:
+          num_of_slices: 3 #runtime slicing
+          bulk:
+            compress: false
+            batch_size_in_mb: 10
+            batch_size_in_docs: 500
+            #remove_duplicated_newlines: true
+            invalid_queue: "invalid_request"
+            response_handle:
+              bulk_result_message_queue: "system_failure_messages"
+              max_request_body_size: 10240
+              max_response_body_size: 10240
+              save_success_results: false
+              max_error_details_count: 5
+          consumer:
+            fetch_max_messages: 100
+          queues:
+            type: indexing_merge
+          when:
+            cluster_available: ["logging-server"]
 
-## system logging and metrics
-- name: async_messages_merge
-  auto_start: true
-  keep_running: true
-  processor:
-    - indexing_merge:
-        input_queue: "bulk_result_messages"
-        elasticsearch: "logging-server"
-        index_name: ".infini_async_bulk_results"
-        output_queue:
-          name: "bulk_requests"
-          label:
-            tag: "bulk_logging"
-        worker_size: 1
-        bulk_size_in_mb: 10
-- name: metrics_merge
-  auto_start: true
-  keep_running: true
-  processor:
-    - indexing_merge:
-        input_queue: "metrics"
-        elasticsearch: "logging-server"
-        index_name: ".infini_metrics"
-        output_queue:
-          name: "bulk_requests"
-          label:
-            tag: "metrics"
-        worker_size: 1
-        bulk_size_in_mb: 10
-- name: request_logging_merge
-  auto_start: true
-  keep_running: true
-  processor:
-    - indexing_merge:
-        input_queue: "request_logging"
-        elasticsearch: "logging-server"
-        index_name: ".infini_requests_logging"
-        output_queue:
-          name: "bulk_requests"
-          label:
-            tag: "request_logging"
-        worker_size: 1
-        bulk_size_in_mb: 10
-- name: ingest_merged_requests
-  auto_start: true
-  keep_running: true
-  processor:
-    - bulk_indexing:
-        num_of_slices: 3 #runtime slicing
-        bulk:
-          compress: false
-          batch_size_in_mb: 10
-          batch_size_in_docs: 500
-          #remove_duplicated_newlines: true
-          invalid_queue: "invalid_request"
-          response_handle:
-            bulk_result_message_queue: "system_failure_messages"
-            max_request_body_size: 10240
-            max_response_body_size: 10240
-            save_success_results: false
-            max_error_details_count: 5
-        consumer:
-          fetch_max_messages: 100
-        queues:
-          type: indexing_merge
-        when:
-          cluster_available: [ "logging-server" ]
-
-##async way to ingest bulk requests handled by async_bulk_flow
-- name: async_ingest_bulk_requests
-  auto_start: true
-  keep_running: true
-  retry_delay_in_ms: 1000
-  processor:
-    - bulk_indexing:
-        max_connection_per_node: 1000
-        num_of_slices: 2 #runtime slice
-        max_worker_size: 200
-        idle_timeout_in_seconds: 10
-        bulk:
-          compress: false
-          batch_size_in_mb: 20
-          batch_size_in_docs: 50000
-          dead_letter_queue: "bulk_dead_requests"
-          response_handle:
-            bulk_result_message_queue: "bulk_result_messages"
-            max_request_body_size: 10240
-            max_response_body_size: 10240
-            save_success_results: true
-            max_error_details_count: 5
-            retry_exception:
-              keyword:
-                - illegal_state_exception
-        consumer:
-          fetch_max_messages: 100
-          eof_retry_delay_in_ms: 500
-        queue_selector:
-          labels:
-            type: bulk_reshuffle
-
+  ##async way to ingest bulk requests handled by async_bulk_flow
+  - name: async_ingest_bulk_requests
+    auto_start: true
+    keep_running: true
+    retry_delay_in_ms: 1000
+    processor:
+      - bulk_indexing:
+          max_connection_per_node: 1000
+          num_of_slices: 2 #runtime slice
+          max_worker_size: 200
+          idle_timeout_in_seconds: 10
+          bulk:
+            compress: false
+            batch_size_in_mb: 20
+            batch_size_in_docs: 50000
+            dead_letter_queue: "bulk_dead_requests"
+            response_handle:
+              bulk_result_message_queue: "bulk_result_messages"
+              max_request_body_size: 10240
+              max_response_body_size: 10240
+              save_success_results: true
+              max_error_details_count: 5
+              retry_exception:
+                keyword:
+                  - illegal_state_exception
+          consumer:
+            fetch_max_messages: 100
+            eof_retry_delay_in_ms: 500
+          queue_selector:
+            labels:
+              type: bulk_reshuffle
 
 ##metrics
 metrics:
@@ -578,14 +577,14 @@ disk_queue:
   eof_retry_delay_in_ms: 500
   cleanup_files_on_init: false
   retention:
-    max_num_of_local_files: 20
+    max_num_of_local_files: 20 # automatically cleanup consumed files
   compress:
     segment:
       enabled: true
-    delete_after_compress: true
-    idle_threshold: 20
+    delete_after_compress: true # trigger cleanup after compression.
+    idle_threshold: 20 # max number of uncompressed consumed files to preserve.
 
-##badger kv
+## badger kv storage configuration
 badger:
   value_log_max_entries: 1000000
   value_log_file_size: 104857600
