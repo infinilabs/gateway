@@ -346,6 +346,28 @@ configs.auto_reload: true
 path.data: data
 path.logs: log
 
+# Gateway internal stats collecting
+stats:
+  enabled: true
+  # save stats under path.data
+  persist: true
+  # disable stats operations cache
+  no_buffer: true
+  # stats operations cache size
+  buffer_size: 1000
+  # stats operations cache flush interval
+  flush_interval_ms: 1000
+
+# Statsd integration
+statsd:
+  enabled: false
+  host: localhost
+  port: 8125
+  namespace: "app."
+  protocol: "udp"
+  # flush interval
+  interval_in_seconds: 1
+
 ##json logging layout
 #log.format: '{"timestamp":"%UTCDateT%UTCTime","level":"%Level","message":"%EscapedMsg","file":"%File:%Line","func":"%FuncShort"}%n'
 
