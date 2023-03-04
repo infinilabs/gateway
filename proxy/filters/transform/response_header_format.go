@@ -2,6 +2,7 @@ package transform
 
 import (
 	"fmt"
+
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
@@ -17,13 +18,13 @@ func (filter *ResponseHeaderFormatFilter) Name() string {
 
 func (filter *ResponseHeaderFormatFilter) Filter(ctx *fasthttp.RequestCtx) {
 
-	ctx.Request.Header.VisitAll(func(key, value []byte) {
+	ctx.Response.Header.VisitAll(func(key, value []byte) {
 		ctx.Response.Header.SetBytesKV(util.ToLowercase(key), value)
 	})
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("response_header_format",NewResponseHeaderFormatFilter,&ResponseHeaderFormatFilter{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("response_header_format", NewResponseHeaderFormatFilter, &ResponseHeaderFormatFilter{})
 }
 
 func NewResponseHeaderFormatFilter(c *config.Config) (pipeline.Filter, error) {

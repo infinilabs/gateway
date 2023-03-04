@@ -2,13 +2,14 @@ package sample
 
 import (
 	"fmt"
+	"math/rand"
+	"sync"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/lib/fasthttp"
-	"math/rand"
-	"sync"
 )
 
 type SampleFilter struct {
@@ -32,7 +33,7 @@ func (filter *SampleFilter) Filter(ctx *fasthttp.RequestCtx) {
 		log.Debugf("check sample rate [%v] of [%v]", r, v)
 	}
 
-	if r <= v {
+	if r < v {
 		if global.Env().IsDebug {
 			log.Debugf("this request is lucky to continue: [%v] of [%v], %v", r, v, ctx.URI().String())
 		}
@@ -43,7 +44,7 @@ func (filter *SampleFilter) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("sample",NewSampleFilter,&SampleFilter{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("sample", NewSampleFilter, &SampleFilter{})
 }
 
 func NewSampleFilter(c *config.Config) (pipeline.Filter, error) {
