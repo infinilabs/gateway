@@ -16,6 +16,7 @@ import (
 
 type Echo struct {
 	RepeatTimes int      `config:"repeat"    type:"number"  default_value:"1" `
+	Status int      `config:"status"    type:"status"  default_value:"200" `
 	Continue    bool     `config:"continue"  type:"bool"    default_value:"true" `
 	Terminal    bool     `config:"stdout"    type:"bool"    default_value:"false" `
 
@@ -35,6 +36,7 @@ func New(c *config.Config) (pipeline.Filter, error) {
 
 	runner := Echo{
 		Response: true,
+		Status: 200,
 		Logging: false,
 		Terminal: false,
 		RepeatTimes: 1,
@@ -105,7 +107,7 @@ func (filter *Echo) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 	if filter.Response{
-		ctx.Response.SetStatusCode(200)
+		ctx.Response.SetStatusCode(filter.Status)
 	}
 
 	if !filter.Continue {
