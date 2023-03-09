@@ -330,7 +330,7 @@
 #  }
 #}
 
-#this config section will override system wide environments
+#this env section used for setup default settings, can be overwrite by system environments
 #eg: PROD_ES_ENDPOINT=http://192.168.3.185:9200 LOGGING_ES_ENDPOINT=http://192.168.3.185:9201  ./bin/gateway
 env: #use $[[env.LOGGING_ES_ENDPOINT]] in config instead
   LOGGING_ES_ENDPOINT: http://localhost:9200
@@ -363,7 +363,7 @@ statsd:
   enabled: false
   host: localhost
   port: 8125
-  namespace: "app."
+  namespace: "gateway."
   protocol: "udp"
   # flush interval
   interval_in_seconds: 1
@@ -408,7 +408,7 @@ entry:
     network:
       binding: $[[env.GW_BINDING]]
 #  tls:
-#   enabled: true
+#   enabled: true #auto generate certs, cert_file and key_file are optional
 #   cert_file: /data/gateway/cert/elasticsearch.pem
 #   key_file: /data/gateway/cert/elasticsearch.key
 #   skip_insecure_verify: false
@@ -564,12 +564,12 @@ pipeline:
           bulk:
             compress: false
             batch_size_in_mb: 20
-            batch_size_in_docs: 50000
+            batch_size_in_docs: 5000
             dead_letter_queue: "bulk_dead_requests"
             response_handle:
               bulk_result_message_queue: "bulk_result_messages"
-              max_request_body_size: 10240
-              max_response_body_size: 10240
+              max_request_body_size: 1024
+              max_response_body_size: 1024
               save_success_results: true
               max_error_details_count: 5
               retry_exception:
@@ -605,6 +605,21 @@ disk_queue:
       enabled: true
     delete_after_compress: true # trigger cleanup after compression.
     idle_threshold: 20 # max number of uncompressed consumed files to preserve.
+#  upload_to_s3: true
+#  s3:
+#    server: my_blob_store #name defined in s3 servers
+#    location: your_location
+#    bucket: your_bucket_name
+
+##s3 servers
+#s3:
+#  my_blob_store: #name of s3 server
+#    endpoint: "localhost:9021"
+#    access_key: "your_access_key"
+#    access_secret: "your_access_secret"
+#    token: "your_token"
+#    skip_insecure_verify: true
+#    ssl: true
 
 ## badger kv storage configuration
 badger:
@@ -623,7 +638,7 @@ elastic:
     interval: 30s
   metadata_refresh:
     enabled: true
-    interval: 30s
+    interval: 60s
   cluster_settings_check:
     enabled: false
     interval: 60s
