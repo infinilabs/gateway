@@ -250,7 +250,7 @@ func (processor *IndexBackupProcessor) Process(ctx *pipeline.Context) error {
 				//log.Error("node:",nodeInfo.Name,",ip:",nodeInfo.Ip,",",nodeInfo.Settings)
 				path1, ok := nodeInfo.Settings["path"].(map[string]interface{})
 				//log.Error(path,",",ok)
-				log.Debugf("node info: %+v", nodeInfo.Settings["path"])
+				log.Debugf("node info: %v", nodeInfo.Settings["path"])
 				if ok {
 					home, ok := path1["home"]
 					if ok {
