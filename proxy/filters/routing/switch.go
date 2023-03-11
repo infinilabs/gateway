@@ -5,19 +5,23 @@ package routing
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
-	"strings"
 )
 
 type SwitchFlowFilter struct {
 	PathRules          []SwitchRule `config:"path_rules"`
 	RemovePrefix       bool         `config:"remove_prefix"`
 	ContinueAfterMatch bool         `config:"continue"`
+	Unescape           bool         `config:"unescape"`
 }
 
 func (filter *SwitchFlowFilter) Name() string {
@@ -33,10 +37,17 @@ func (filter *SwitchFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 	if len(filter.PathRules) == 0 {
 		return
 	}
-
+	var err error
 	path := string(ctx.RequestURI())
 	paths := strings.Split(path, "/")
 	indexPart := paths[1]
+
+	if util.ContainStr(indexPart, "%") && filter.Unescape {
+		indexPart, err = url.PathUnescape(indexPart)
+		if err != nil {
+			panic(err)
+		}
+	}
 
 	for _, item := range filter.PathRules {
 
@@ -61,12 +72,13 @@ func (filter *SwitchFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("switch",NewSwitchFlowFilter,&SwitchFlowFilter{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("switch", NewSwitchFlowFilter, &SwitchFlowFilter{})
 }
 
 func NewSwitchFlowFilter(c *config.Config) (pipeline.Filter, error) {
 	runner := SwitchFlowFilter{
 		RemovePrefix: true,
+		Unescape:     true,
 	}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
