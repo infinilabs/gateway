@@ -333,14 +333,14 @@
 #this env section used for setup default settings, can be overwrite by system environments
 #eg: PROD_ES_ENDPOINT=http://192.168.3.185:9200 LOGGING_ES_ENDPOINT=http://192.168.3.185:9201  ./bin/gateway
 env: #use $[[env.LOGGING_ES_ENDPOINT]] in config instead
-  LOGGING_ES_ENDPOINT: http://localhost:9200
+  LOGGING_ES_ENDPOINT: https://localhost:9200
   LOGGING_ES_USER: elastic
   LOGGING_ES_PASS: password
-  PROD_ES_ENDPOINT: http://localhost:9200
-  PROD_ES_USER: elastic
-  PROD_ES_PASS: password
+  PROD_ES_ENDPOINT: https://localhost:9200
+  PROD_ES_USER: admin
+  PROD_ES_PASS: admin
   GW_BINDING: "0.0.0.0:8000"
-  API_BINDING: "0.0.0.0:2902"
+  API_BINDING: "0.0.0.0:2900"
 
 configs.auto_reload: true
 path.data: data
@@ -572,9 +572,14 @@ pipeline:
               max_response_body_size: 1024
               save_success_results: true
               max_error_details_count: 5
-              retry_exception:
-                keyword:
-                  - illegal_state_exception
+              retry_rules:
+                default: true
+                retry_429: true
+                retry_4xx: false
+                denied:
+                  status: []
+                  keyword:
+                    - illegal_state_exception
           consumer:
             fetch_max_messages: 100
             eof_retry_delay_in_ms: 500
@@ -591,6 +596,7 @@ metrics:
   network:
     enabled: true
     summary: true
+    sockets: true
 
 ##diskqueue
 disk_queue:

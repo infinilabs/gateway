@@ -4,6 +4,7 @@
 package throttle
 
 import (
+	"fmt"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/rate"
@@ -67,11 +68,11 @@ func (filter *GenericLimiter) internalProcessWithValues(tokenType, token string,
 		hitLimit:=false
 		var limitType string
 		if (filter.MaxRequests > 0 && !rate.GetRateLimiter(filter.uuid+"_limit_requests", token, int(filter.MaxRequests), int(filter.BurstRequests), filter.interval).AllowN(time.Now(),hits)){
-			limitType="counts/"+filter.interval.String()
+			limitType=fmt.Sprintf(">requests: %v/%v",filter.MaxRequests,filter.interval.String())
 			hitLimit=true
 		}else {
 			if (filter.MaxBytes > 0 && !rate.GetRateLimiter(filter.uuid+"_limit_bytes", token, int(filter.MaxBytes), int(filter.BurstBytes), filter.interval).AllowN(time.Now(), bytes)){
-				limitType="bytes/"+filter.interval.String()
+				limitType=fmt.Sprintf(">bytes: %v/%v",filter.MaxBytes,filter.interval.String())
 				hitLimit=true
 			}
 		}
