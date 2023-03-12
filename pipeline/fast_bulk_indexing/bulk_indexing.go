@@ -600,11 +600,15 @@ func (processor *BulkIndexingProcessor) submitBulkRequest(tag, esClusterID strin
 		log.Trace(meta.Config.Name, ", starting submit bulk request")
 		start := time.Now()
 		ctx:=ctx.Background()
-		contrinueRequest, _, err := bulkProcessor.Bulk(ctx,tag, meta, host, mainBuf)
-		stats.Increment(esClusterID+"."+tag, util.ToString(contrinueRequest))
-		stats.Timing("elasticsearch."+esClusterID+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
-		log.Debug(meta.Config.Name, ", ", host, ", success:", contrinueRequest, ", count:", count, ", size:", util.ByteSize(uint64(size)), ", elapsed:", time.Since(start))
-		return contrinueRequest, err
+		continueRequest, statsMap, err := bulkProcessor.Bulk(ctx, tag, meta, host, mainBuf)
+		if global.Env().IsDebug {
+			stats.Timing("elasticsearch."+esClusterID+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
+		}
+		if err!=nil{
+			log.Errorf("submit bulk requests to elasticsearch [%v] failed, err:%v",meta.Config.Name,err)
+		}
+		log.Info(meta.Config.Name, ", ", host, ", stats: ", statsMap, ", count: ", count, ", size: ", util.ByteSize(uint64(size)), ", elapsed: ", time.Since(start), ", continue: ", continueRequest)
+		return continueRequest, err
 	}
 
 	return true, nil

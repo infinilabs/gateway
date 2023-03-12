@@ -54,7 +54,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 
 		label:=util.MapStr{}
 
-		containError,_,bulkResults = elastic.HandleBulkResponse(&ctx.Request,&ctx.Response,label, requestBytes, resbody, successItems, nonRetryableItems, retryableItems, this.config.BulkResponseParseConfig)
+		containError,_,bulkResults = elastic.HandleBulkResponse(&ctx.Request,&ctx.Response,label, requestBytes, resbody, successItems, nonRetryableItems, retryableItems, this.config.BulkResponseParseConfig,this.config.RetryRules)
 
 		if bulkResults!=nil{
 			ctx.Set("bulk_response_status", bulkResults)
@@ -110,6 +110,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 						this.retryFlow.Process(ctx)
 					}
 
+
 					queue.Push(queue.GetOrInitConfig(this.config.FailureQueue), bytes)
 				}
 
@@ -163,19 +164,14 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 			ctx.UpdateTags(this.config.TagsOnNone2xx, nil)
 		}
 
-		var invalid=false
-		if ctx.Response.StatusCode() >= 400 && ctx.Response.StatusCode() < 500 {
-			if !(this.config.IncludeBusyRequestsToFailureQueue&&ctx.Response.StatusCode()==429) {
-				invalid=true
-			}
-		}
-
-		if !invalid && this.config.FailureQueue != "" {
+		if this.config.FailureQueue != "" {
+			if this.config.RetryRules.Retryable(ctx.Response.StatusCode(),string(ctx.Response.GetRawBody())){
 				bytes := ctx.Request.Encode()
 				if len(bytes) == 0 {
 					log.Error("retryable items, size:", len(bytes))
 				}
 				queue.Push(queue.GetOrInitConfig(this.config.FailureQueue), bytes)
+			}
 		}
 
 		if !this.config.ContinueOnAllError {
@@ -188,9 +184,6 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 type Config struct {
 
 	StatsOnly bool `config:"stats_only"`
-
-	IncludeBusyRequestsToFailureQueue bool `config:"include_busy_requests_to_failure_queue"`
-
 	SuccessQueue string `config:"success_queue"`
 	InvalidQueue string `config:"invalid_queue"`
 	FailureQueue string `config:"failure_queue"`
@@ -218,6 +211,7 @@ type Config struct {
 	TagsOnPartialInvalid []string `config:"tag_on_partial_invalid"` //包含部分非法请求的情况，无需重试的请求
 
 	RetryFlow string `config:"retry_flow"`
+	RetryRules elastic.RetryRules 						`config:"retry_rules"`
 
 	BulkResponseParseConfig elastic.BulkResponseParseConfig `config:"response_handle"`
 }
@@ -228,8 +222,8 @@ func init() {
 
 func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 	cfg := Config{
-		IncludeBusyRequestsToFailureQueue: true,
 		MessageTruncateSize:               1024,
+		RetryRules: 							elastic.RetryRules{Retry429: true,Default: true,Retry4xx: false},
 		BulkResponseParseConfig:elastic.BulkResponseParseConfig{
 			BulkResultMessageMaxRequestBodyLength:  10*1024,
 			BulkResultMessageMaxResponseBodyLength: 10*1024,
@@ -238,7 +232,6 @@ func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 			IncludeActionStats:                     true,
 			IncludeErrorDetails:                    true,
 			MaxItemOfErrorDetailsCount:             50,
-			RetryException:                         elastic.RetryException{Retry429: true},
 		},
 	}
 	if err := c.Unpack(&cfg); err != nil {
@@ -248,8 +241,6 @@ func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 		config: &cfg}
 
 	runner.id = util.GetUUID()
-
-	cfg.BulkResponseParseConfig.RetryException.Retry429=cfg.IncludeBusyRequestsToFailureQueue
 
 	if runner.config.RetryFlow != "" && runner.config.PartialFailureRetry {
 		flow := common.MustGetFlow(runner.config.RetryFlow)
