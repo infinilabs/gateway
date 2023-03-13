@@ -342,9 +342,11 @@ env: #use $[[env.LOGGING_ES_ENDPOINT]] in config instead
   GW_BINDING: "0.0.0.0:8000"
   API_BINDING: "0.0.0.0:2900"
 
-configs.auto_reload: true
 path.data: data
 path.logs: log
+path.configs: config # directory of additional gateway configurations
+
+configs.auto_reload: false # set true to auto reload gateway configurations
 
 # Gateway internal stats collecting
 stats:
