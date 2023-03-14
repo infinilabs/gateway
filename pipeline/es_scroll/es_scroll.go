@@ -35,6 +35,7 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
+	es_common "infini.sh/framework/modules/elastic/common"
 	"infini.sh/gateway/common"
 )
 
@@ -43,12 +44,19 @@ type ScrollProcessor struct {
 	client elastic.API
 }
 
+type OutputQueueConfig struct {
+	Name   string                 `config:"name"`
+	Labels map[string]interface{} `config:"labels"`
+}
+
 type Config struct {
+	Elasticsearch       string                       `config:"elasticsearch"`
+	ElasticsearchConfig *elastic.ElasticsearchConfig `config:"elasticsearch_config"`
+
 	//字段名称必须是大写
 	PartitionSize int    `config:"partition_size"`
 	BatchSize     int    `config:"batch_size"`
 	SliceSize     int    `config:"slice_size"`
-	Elasticsearch string `config:"elasticsearch"`
 	SortType      string `config:"sort_type"`
 	SortField     string `config:"sort_field"`
 	Indices       string `config:"indices"`
@@ -56,7 +64,9 @@ type Config struct {
 	QueryDSL      string `config:"query_dsl"`
 	ScrollTime    string `config:"scroll_time"`
 	Fields        string `config:"fields"`
-	Output        string `config:"output_queue"`
+	// DEPRECATED, use `queue` instead
+	Output string             `config:"output_queue"`
+	Queue  *OutputQueueConfig `config:"queue"`
 
 	RemoveTypeMeta bool `config:"remove_type"`
 	//RemovePipeline         bool         `config:"remove_pipeline"`
@@ -82,7 +92,21 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		return nil, fmt.Errorf("failed to unpack the configuration of dump_hash processor: %s", err)
 	}
 
-	client := elastic.GetClient(cfg.Elasticsearch)
+	if cfg.Queue != nil {
+		cfg.Output = cfg.Queue.Name
+	}
+
+	client := elastic.GetClientNoPanic(cfg.Elasticsearch)
+	if client == nil {
+		if cfg.ElasticsearchConfig != nil {
+			cfg.ElasticsearchConfig.Source = "es_scroll"
+			client, _ = es_common.InitElasticInstanceWithoutMetadata(*cfg.ElasticsearchConfig)
+		}
+	}
+	if client == nil {
+		panic("failed to get elasticsearch client")
+	}
+
 	if cfg.SliceSize < 1 || client.GetMajorVersion() < 5 {
 		cfg.SliceSize = 1
 	}
@@ -333,6 +357,11 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 		queueConfig.Source = "dynamic"
 		queueConfig.Labels = util.MapStr{}
 		queueConfig.Labels["type"] = "scroll_docs"
+		if processor.config.Queue != nil {
+			for k, v := range processor.config.Queue.Labels {
+				queueConfig.Labels[k] = v
+			}
+		}
 		queueConfig.Name = outputQueueName + util.ToString(k)
 		queue.RegisterConfig(queueConfig.Name, queueConfig)
 		pushQueue := queue.GetOrInitConfig(outputQueueName + util.ToString(k))
