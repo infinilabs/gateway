@@ -634,8 +634,10 @@ badger:
   value_log_max_entries: 1000000
   value_log_file_size: 104857600
 
-##elasticsearch module
+## elasticsearch module global configurations
 elastic:
+  # elasticsearch for gateway's system info storage
+  elasticsearch: prod
   enabled: true
   remote_configs: false
   health_check:
