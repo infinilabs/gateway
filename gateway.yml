@@ -631,8 +631,18 @@ disk_queue:
 
 ## badger kv storage configuration
 badger:
+  single_bucket_mode: true
+  path: '' # defaults to {path.data}/gateway/node/{nodeID}/badger/
+  memory_mode: false # don't persist data to disk
+  sync_writes: false # flush to disk on every write
+  mem_table_size: 10485760
+  num_mem_tables: 1
+  # lsm tuning options
   value_log_max_entries: 1000000
-  value_log_file_size: 104857600
+  value_log_file_size: 536870912
+  value_threshold: 1048576
+  num_level0_tables: 1
+  num_level0_tables_stall: 2
 
 ## floating ip configuration
 floating_ip:
