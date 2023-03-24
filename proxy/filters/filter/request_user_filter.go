@@ -2,6 +2,7 @@ package filter
 
 import (
 	"fmt"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
@@ -20,7 +21,7 @@ func (filter *RequestUserFilter) Name() string {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("request_user_filter",NewRequestUserFilter,&RequestUserFilter{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_user_filter", NewRequestUserFilter, &RequestUserFilter{})
 }
 
 func NewRequestUserFilter(c *config.Config) (pipeline.Filter, error) {
@@ -56,7 +57,7 @@ func (filter *RequestUserFilter) Filter(ctx *fasthttp.RequestCtx) {
 	if hasRule && !valid {
 		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {
-			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
+			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.PhantomURI().String())
 		}
 		return
 	}
@@ -65,7 +66,7 @@ func (filter *RequestUserFilter) Filter(ctx *fasthttp.RequestCtx) {
 	if hasRule && !valid {
 		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {
-			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
+			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.PhantomURI().String())
 		}
 		return
 	}

@@ -7,6 +7,10 @@ package http
 import (
 	"crypto/tls"
 	"fmt"
+	"math/rand"
+	"sync"
+	"time"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/errors"
@@ -14,9 +18,6 @@ import (
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
-	"math/rand"
-	"sync"
-	"time"
 )
 
 type HTTPFilter struct {
@@ -26,7 +27,7 @@ type HTTPFilter struct {
 	SkipFailureHost bool     `config:"skip_failure_host"`
 	Host            string   `config:"host"`
 	Hosts           []string `config:"hosts"`
-	clients sync.Map //*fasthttp.Client
+	clients         sync.Map //*fasthttp.Client
 
 	//host
 	MaxConnection       int `config:"max_connection_per_node"`
@@ -47,8 +48,8 @@ type HTTPFilter struct {
 	WriteBufferSize       int           `config:"write_buffer_size"`
 	TLSInsecureSkipVerify bool          `config:"tls_insecure_skip_verify"`
 
-	MaxRedirectsCount int          `config:"max_redirects_count"`
-	FollowRedirects bool          `config:"follow_redirects"`
+	MaxRedirectsCount int  `config:"max_redirects_count"`
+	FollowRedirects   bool `config:"follow_redirects"`
 }
 
 func (filter *HTTPFilter) Name() string {
@@ -125,14 +126,13 @@ func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err er
 		cleanHopHeaders(&ctx.Request)
 	}
 
-	orignalHost := string(ctx.Request.URI().Host())
-	orignalSchema := string(ctx.Request.URI().Scheme())
+	orignalHost := string(ctx.Request.PhantomURI().Host())
+	orignalSchema := string(ctx.Request.PhantomURI().Scheme())
 
-	if host==""{
+	if host == "" {
 		panic("invalid host")
 	}
 
-	ctx.URI().SetHost(host)
 	ctx.Request.SetHost(host)
 
 	//keep original host
@@ -144,12 +144,14 @@ func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err er
 		ctx.Request.Header.Set(fasthttp.HeaderXForwardedHost, orignalHost)
 	}
 
-	ctx.Request.URI().SetScheme(filter.Schema)
+	clonedURI := ctx.Request.CloneURI()
+	defer fasthttp.ReleaseURI(clonedURI)
+	clonedURI.SetScheme(filter.Schema)
+	ctx.Request.SetURI(clonedURI)
 
 	if global.Env().IsDebug {
-		log.Tracef("forward http request: %v, %v", ctx.URI().String(), ctx.Request.String())
+		log.Tracef("forward http request: %v, %v", ctx.PhantomURI().String(), ctx.Request.String())
 	}
-
 
 	c, ok := filter.clients.Load(host)
 	if ok {
@@ -158,9 +160,9 @@ func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err er
 			return errors.Errorf("invalid host client:", host)
 		}
 
-		if filter.FollowRedirects{
-			err=client.DoRedirects(&ctx.Request, &ctx.Response,filter.MaxRedirectsCount)
-		}else{
+		if filter.FollowRedirects {
+			err = client.DoRedirects(&ctx.Request, &ctx.Response, filter.MaxRedirectsCount)
+		} else {
 			if filter.requestTimeout > 0 {
 				err = client.DoTimeout(&ctx.Request, &ctx.Response, filter.requestTimeout)
 			} else {
@@ -168,15 +170,16 @@ func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err er
 			}
 		}
 
-		ctx.Request.URI().SetScheme(orignalSchema)
+		clonedURI.SetScheme(orignalSchema)
+		ctx.Request.SetURI(clonedURI)
 		ctx.Request.SetHost(orignalHost)
 
-		if err!=nil{
-			log.Error(err,string(ctx.Response.GetRawBody()))
+		if err != nil {
+			log.Error(err, string(ctx.Response.GetRawBody()))
 		}
 
 	} else {
-		err= errors.Errorf("invalid host client:", host)
+		err = errors.Errorf("invalid host client:", host)
 		log.Warn(err)
 	}
 
@@ -231,7 +234,7 @@ func NewHTTPFilter(c *config.Config) (pipeline.Filter, error) {
 
 	for _, host := range runner.Hosts {
 
-		c :=&fasthttp.Client{
+		c := &fasthttp.Client{
 			Name:                          "reverse_proxy",
 			DisableHeaderNamesNormalizing: true,
 			DisablePathNormalizing:        true,
@@ -244,7 +247,7 @@ func NewHTTPFilter(c *config.Config) (pipeline.Filter, error) {
 			WriteTimeout:                  runner.WriteTimeout,
 			ReadBufferSize:                runner.ReadBufferSize,
 			WriteBufferSize:               runner.WriteBufferSize,
-			DialDualStack: true,
+			DialDualStack:                 true,
 			TLSConfig: &tls.Config{
 				InsecureSkipVerify: runner.TLSInsecureSkipVerify,
 			},

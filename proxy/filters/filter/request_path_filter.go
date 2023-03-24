@@ -2,6 +2,7 @@ package filter
 
 import (
 	"fmt"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
@@ -18,7 +19,7 @@ func (filter *RequestUrlPathFilter) Name() string {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("request_path_filter",NewRequestUrlPathFilter,&RequestUrlPathFilter{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_path_filter", NewRequestUrlPathFilter, &RequestUrlPathFilter{})
 }
 
 func NewRequestUrlPathFilter(c *config.Config) (pipeline.Filter, error) {
@@ -57,7 +58,7 @@ func (filter *RequestUrlPathFilter) Filter(ctx *fasthttp.RequestCtx) {
 	if !valid {
 		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {
-			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
+			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.PhantomURI().String())
 		}
 		return
 	}
@@ -71,7 +72,7 @@ func (filter *RequestUrlPathFilter) Filter(ctx *fasthttp.RequestCtx) {
 	if !valid {
 		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {
-			log.Debugf("must rules not matched, this request has been filtered: %v", ctx.Request.URI().String())
+			log.Debugf("must rules not matched, this request has been filtered: %v", ctx.Request.PhantomURI().String())
 		}
 		return
 	}
@@ -86,7 +87,7 @@ func (filter *RequestUrlPathFilter) Filter(ctx *fasthttp.RequestCtx) {
 		if !hasOtherRules && hasShouldRules {
 			filter.genericFilter.Filter(ctx)
 			if global.Env().IsDebug {
-				log.Debugf("only should rules, but none of them are matched, this request has been filtered: %v", ctx.Request.URI().String())
+				log.Debugf("only should rules, but none of them are matched, this request has been filtered: %v", ctx.Request.PhantomURI().String())
 			}
 		}
 	}

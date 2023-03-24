@@ -2,6 +2,7 @@ package filter
 
 import (
 	"fmt"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
@@ -21,7 +22,7 @@ func (filter *RequestMethodFilter) Name() string {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("request_method_filter",NewRequestMethodFilter,&RequestMethodFilter{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_method_filter", NewRequestMethodFilter, &RequestMethodFilter{})
 }
 
 func NewRequestMethodFilter(c *config.Config) (pipeline.Filter, error) {
@@ -59,7 +60,7 @@ func (filter *RequestMethodFilter) Filter(ctx *fasthttp.RequestCtx) {
 			if util.ToString(x) == method {
 				filter.genericFilter.Filter(ctx)
 				if global.Env().IsDebug {
-					log.Debugf("rule matched, this request has been filtered: %v", ctx.Request.URI().String())
+					log.Debugf("rule matched, this request has been filtered: %v", ctx.Request.PhantomURI().String())
 				}
 				return
 			}
@@ -73,7 +74,7 @@ func (filter *RequestMethodFilter) Filter(ctx *fasthttp.RequestCtx) {
 			}
 			if util.ToString(x) == method {
 				if global.Env().IsDebug {
-					log.Debugf("rule matched, this request has been marked as good one: %v", ctx.Request.URI().String())
+					log.Debugf("rule matched, this request has been marked as good one: %v", ctx.Request.PhantomURI().String())
 				}
 				return
 			}
@@ -81,7 +82,7 @@ func (filter *RequestMethodFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {
-			log.Debugf("no rule matched, this request has been filtered: %v", ctx.Request.URI().String())
+			log.Debugf("no rule matched, this request has been filtered: %v", ctx.Request.PhantomURI().String())
 		}
 	}
 

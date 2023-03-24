@@ -230,7 +230,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 				WriteTimeout:                  cfg.WriteTimeout,
 				ReadBufferSize:                cfg.ReadBufferSize,
 				WriteBufferSize:               cfg.WriteBufferSize,
-				DialDualStack: true,
+				DialDualStack:                 true,
 				TLSConfig: &tls.Config{
 					InsecureSkipVerify: cfg.TLSInsecureSkipVerify,
 				},
@@ -247,20 +247,20 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 	}
 
 	if len(newHosts) == 0 {
-		log.Errorf("upstream for [%v] is empty",esConfig.Name)
+		log.Errorf("upstream for [%v] is empty", esConfig.Name)
 		return
 	}
 
 	if util.JoinArray(newHosts, ", ") == util.JoinArray(p.endpoints, ", ") {
-		log.Debugf("hosts of [%v] no change, skip",esConfig.Name)
+		log.Debugf("hosts of [%v] no change, skip", esConfig.Name)
 		return
 	}
 
 	//replace with new hostClients
 	//TODO add locker
 	p.bla = balancer.NewBalancer(ws)
-	newHostsStr:=util.JoinArray(newHosts, ", ")
-	if rate.GetRateLimiterPerSecond("elasticsearch",esConfig.Name+newHostsStr,1).Allow(){
+	newHostsStr := util.JoinArray(newHosts, ", ")
+	if rate.GetRateLimiterPerSecond("elasticsearch", esConfig.Name+newHostsStr, 1).Allow() {
 		log.Infof("elasticsearch [%v] hosts: [%v] => [%v]", esConfig.Name, util.JoinArray(p.endpoints, ", "), newHostsStr)
 	}
 	p.endpoints = newHosts
@@ -437,10 +437,10 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 			_, pc, host = p.getClient()
 		}
 
-		if !p.proxyConfig.SkipAvailableCheck&&!elastic.IsHostAvailable(host) {
+		if !p.proxyConfig.SkipAvailableCheck && !elastic.IsHostAvailable(host) {
 			old := host
 			host = metadata.GetActiveHost()
-			if rate.GetRateLimiterPerSecond("proxy-host-not-available",old,1).Allow(){
+			if rate.GetRateLimiterPerSecond("proxy-host-not-available", old, 1).Allow() {
 				log.Infof("host [%v] is not available, fallback: [%v]", old, host)
 			}
 			pc = metadata.GetHttpClient(host)
@@ -448,19 +448,22 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 	}
 
 	// modify schema，align with elasticsearch's schema
-	orignalHost := util.UnsafeBytesToString(myctx.Request.Header.Host())
-	orignalSchema := myctx.Request.GetSchema()
+	originalHost := util.UnsafeBytesToString(myctx.Request.Header.Host())
+	originalSchema := myctx.Request.GetSchema()
 	useClient := false
 	schemaChanged := false
-	if metadata.GetSchema() != orignalSchema {
+	clonedURI := myctx.Request.CloneURI()
+	defer fasthttp.ReleaseURI(clonedURI)
+	if metadata.GetSchema() != originalSchema {
 		if !p.proxyConfig.SkipEnrichMetadata {
-			myctx.Request.Header.Set("X-Forwarded-Proto", orignalSchema)
+			myctx.Request.Header.Set("X-Forwarded-Proto", originalSchema)
 		}
 
-		myctx.Request.URI().SetScheme(metadata.GetSchema())
+		clonedURI.SetScheme(metadata.GetSchema())
+		myctx.Request.SetURI(clonedURI)
 		_, pc, host = p.getClient()
 
-		if !p.proxyConfig.SkipAvailableCheck&&!elastic.IsHostAvailable(host) {
+		if !p.proxyConfig.SkipAvailableCheck && !elastic.IsHostAvailable(host) {
 			old := host
 			host = metadata.GetActiveHost()
 			log.Infof("host [%v] is not available, re-choose one: [%v]", old, host)
@@ -475,15 +478,15 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 	if !p.proxyConfig.SkipEnrichMetadata {
 		myctx.Request.Header.Add(fasthttp.HeaderXForwardedFor, myctx.RemoteAddr().String())
 		myctx.Request.Header.Add(fasthttp.HeaderXRealIP, myctx.RemoteAddr().String())
-		myctx.Request.Header.Add(fasthttp.HeaderXForwardedHost, orignalHost)
+		myctx.Request.Header.Add(fasthttp.HeaderXForwardedHost, originalHost)
 	}
 
 	if global.Env().IsDebug {
-		log.Tracef("send request [%v] to upstream [%v]", myctx.Request.URI().String(), host)
+		log.Tracef("send request [%v] to upstream [%v]", myctx.Request.PhantomURI().String(), host)
 	}
 
-	curHost:=util.UnsafeBytesToString(myctx.Request.Host())
-	if host!=curHost||host != orignalHost {
+	curHost := util.UnsafeBytesToString(myctx.Request.Host())
+	if host != curHost || host != originalHost {
 		myctx.Request.SetHostBytes([]byte(host))
 	}
 
@@ -495,7 +498,6 @@ START:
 	//if p.proxyConfig.Timeout <= 0 {
 	//	p.proxyConfig.Timeout = 60 * time.Second
 	//}
-
 
 	var err error
 	if p.proxyConfig.Timeout > 0 {
@@ -514,7 +516,7 @@ START:
 					time.Sleep(1 * time.Second)
 				}
 			}
-			if !p.proxyConfig.SkipAvailableCheck{
+			if !p.proxyConfig.SkipAvailableCheck {
 				elastic.GetOrInitHost(host, metadata.Config.ID).ReportFailure()
 			}
 			//server failure flow
@@ -524,7 +526,7 @@ START:
 				if p.proxyConfig.RetryDelayInMs > 0 {
 					time.Sleep(time.Duration(p.proxyConfig.RetryDelayInMs) * time.Millisecond)
 				}
-				myctx.Request.Header.Add("RETRY_AT",time.Now().String())
+				myctx.Request.Header.Add("RETRY_AT", time.Now().String())
 				goto START
 			} else {
 				log.Debugf("reached max retries, failed to proxy request: %v, %v", err, string(myctx.Request.Header.RequestURI()))
@@ -543,18 +545,19 @@ START:
 		myctx.SetStatusCode(500)
 	} else {
 		if global.Env().IsDebug {
-			log.Tracef("request [%v] [%v] [%v] [%v]", myctx.Request.URI().String(), util.SubString(util.UnsafeBytesToString(myctx.Request.GetRawBody()), 0, 256), myctx.Response.StatusCode(), util.SubString(util.UnsafeBytesToString(myctx.Response.GetRawBody()), 0, 256))
+			log.Tracef("request [%v] [%v] [%v] [%v]", myctx.Request.PhantomURI().String(), util.SubString(util.UnsafeBytesToString(myctx.Request.GetRawBody()), 0, 256), myctx.Response.StatusCode(), util.SubString(util.UnsafeBytesToString(myctx.Response.GetRawBody()), 0, 256))
 		}
 	}
 
 	if !p.proxyConfig.SkipKeepOriginalURI {
 		// restore schema
 		if schemaChanged {
-			myctx.Request.URI().SetScheme(orignalSchema)
+			clonedURI.SetScheme(originalSchema)
+			myctx.Request.SetURI(clonedURI)
 		}
 
-		if host != orignalHost &&orignalHost!="" {
-			myctx.Request.SetHost(orignalHost)
+		if host != originalHost && originalHost != "" {
+			myctx.Request.SetHost(originalHost)
 		}
 	}
 

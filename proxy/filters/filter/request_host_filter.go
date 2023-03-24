@@ -2,6 +2,7 @@ package filter
 
 import (
 	"fmt"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
@@ -20,7 +21,7 @@ func (filter *RequestServerHostFilter) Name() string {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("request_host_filter",NewRequestServerHostFilter,&RequestServerHostFilter{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_host_filter", NewRequestServerHostFilter, &RequestServerHostFilter{})
 }
 
 func NewRequestServerHostFilter(c *config.Config) (pipeline.Filter, error) {
@@ -48,7 +49,7 @@ func (filter *RequestServerHostFilter) Filter(ctx *fasthttp.RequestCtx) {
 	if hasRule && !valid {
 		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {
-			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
+			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.PhantomURI().String())
 		}
 		return
 	}
@@ -57,7 +58,7 @@ func (filter *RequestServerHostFilter) Filter(ctx *fasthttp.RequestCtx) {
 	if hasRule && !valid {
 		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {
-			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
+			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.PhantomURI().String())
 		}
 		return
 	}

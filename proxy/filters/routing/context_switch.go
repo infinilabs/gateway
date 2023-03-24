@@ -5,6 +5,7 @@ package routing
 
 import (
 	"fmt"
+
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/pipeline"
@@ -27,11 +28,11 @@ type ContextSwitchFilter struct {
 }
 
 type CaseRule struct {
-	Case   []interface{} `config:"case"`
-	CaseValueType string  `config:"case_value_type"`
-	Action string        `config:"action"`
-	Flow   string        `config:"flow"`
-	flow   common.FilterFlow
+	Case          []interface{} `config:"case"`
+	CaseValueType string        `config:"case_value_type"`
+	Action        string        `config:"action"`
+	Flow          string        `config:"flow"`
+	flow          common.FilterFlow
 }
 
 func (filter *ContextSwitchFilter) Name() string {
@@ -48,12 +49,12 @@ func (filter *ContextSwitchFilter) Filter(ctx *fasthttp.RequestCtx) {
 			if filter.SkipError {
 				return
 			}
-			panic(errors.Errorf("context_parse,url:%v,err:%v", ctx.Request.URI().String(), err))
+			panic(errors.Errorf("context_parse,url:%v,err:%v", ctx.Request.PhantomURI().String(), err))
 		}
 
 		if len(filter.cases) > 0 {
 			if filter.StringifyValue {
-				key=util.ToString(key)
+				key = util.ToString(key)
 			}
 			v, ok := filter.cases[key]
 			if ok {
@@ -120,11 +121,11 @@ func NewContextSwitchFlowFilter(c *config.Config) (pipeline.Filter, error) {
 		for _, v1 := range v.Case {
 			if runner.StringifyValue {
 				runner.cases[util.ToString(v1)] = v
-			}else{
-				if v.CaseValueType=="int"{
-					v2:=util.InterfaceToInt(v1)
+			} else {
+				if v.CaseValueType == "int" {
+					v2 := util.InterfaceToInt(v1)
 					runner.cases[v2] = v
-				}else{
+				} else {
 					runner.cases[v1] = v
 				}
 			}

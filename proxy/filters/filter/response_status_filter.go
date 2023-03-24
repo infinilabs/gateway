@@ -2,6 +2,7 @@ package filter
 
 import (
 	"fmt"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
@@ -20,7 +21,7 @@ func (filter ResponseStatusCodeFilter) Name() string {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("response_status_filter",NewResponseStatusCodeFilter,&ResponseStatusCodeFilter{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("response_status_filter", NewResponseStatusCodeFilter, &ResponseStatusCodeFilter{})
 }
 
 func NewResponseStatusCodeFilter(c *config.Config) (pipeline.Filter, error) {
@@ -58,7 +59,7 @@ func (filter *ResponseStatusCodeFilter) Filter(ctx *fasthttp.RequestCtx) {
 			if y == code {
 				filter.genericFilter.Filter(ctx)
 				if global.Env().IsDebug {
-					log.Debugf("rule matched, this request has been filtered: %v", ctx.Request.URI().String())
+					log.Debugf("rule matched, this request has been filtered: %v", ctx.Request.PhantomURI().String())
 				}
 				return
 			}
@@ -76,14 +77,14 @@ func (filter *ResponseStatusCodeFilter) Filter(ctx *fasthttp.RequestCtx) {
 			}
 			if y == code {
 				if global.Env().IsDebug {
-					log.Debugf("rule matched, this request has been marked as good one: %v", ctx.Request.URI().String())
+					log.Debugf("rule matched, this request has been marked as good one: %v", ctx.Request.PhantomURI().String())
 				}
 				return
 			}
 		}
 		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {
-			log.Debugf("no rule matched, this request has been filtered: %v", ctx.Request.URI().String())
+			log.Debugf("no rule matched, this request has been filtered: %v", ctx.Request.PhantomURI().String())
 		}
 	}
 }

@@ -5,6 +5,11 @@ import (
 	"compress/gzip"
 	"crypto/tls"
 	"fmt"
+	"net/http"
+	"runtime"
+	"sync"
+	"time"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
@@ -14,10 +19,6 @@ import (
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
-	"net/http"
-	"runtime"
-	"sync"
-	"time"
 )
 
 type DiskQueueConsumer struct {
@@ -83,7 +84,7 @@ var fastHttpClient = &fasthttp.Client{
 	Name:                          "queue_consumer",
 	DisableHeaderNamesNormalizing: false,
 	TLSConfig:                     &tls.Config{InsecureSkipVerify: true},
-	DialDualStack: true,
+	DialDualStack:                 true,
 }
 
 func (processor *DiskQueueConsumer) Process(ctx *pipeline.Context) error {
@@ -230,7 +231,7 @@ READ_DOCS:
 				if !ok || err != nil {
 					panic(err)
 				}
-				initOfffset=offset
+				initOfffset = offset
 			}
 		}
 
@@ -267,10 +268,13 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 	}
 
 	// modify schema，align with elasticsearch's schema
-	orignalSchema := string(req.URI().Scheme())
-	orignalHost := string(req.URI().Host())
+	orignalSchema := string(req.PhantomURI().Scheme())
+	orignalHost := string(req.PhantomURI().Host())
+	clonedURI := req.CloneURI()
+	defer fasthttp.ReleaseURI(clonedURI)
 	if metadata.GetSchema() != orignalSchema {
-		req.URI().SetScheme(metadata.GetSchema())
+		clonedURI.SetScheme(metadata.GetSchema())
+		req.SetURI(clonedURI)
 	}
 
 	host := metadata.GetActiveHost()
@@ -304,7 +308,8 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 	}
 
 	// restore schema
-	req.URI().SetScheme(orignalSchema)
+	clonedURI.SetScheme(orignalSchema)
+	req.SetURI(clonedURI)
 	req.SetHost(orignalHost)
 
 	if err != nil {

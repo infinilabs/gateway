@@ -5,6 +5,7 @@ package routing
 
 import (
 	"fmt"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
@@ -28,7 +29,7 @@ func (filter *CloneFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 		ctx.Resume()
 		flow := common.MustGetFlow(v)
 		if global.Env().IsDebug {
-			log.Debugf("request [%v] go on flow: [%s] [%s]", ctx.URI().String(), v, flow.ToString())
+			log.Debugf("request [%v] go on flow: [%s] [%s]", ctx.PhantomURI().String(), v, flow.ToString())
 		}
 
 		//ctx.UpdateCurrentFlow(flow) //TODO, tracking flow
@@ -43,7 +44,7 @@ func (filter *CloneFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("clone",NewCloneFlowFilter,&CloneFlowFilter{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("clone", NewCloneFlowFilter, &CloneFlowFilter{})
 }
 
 func NewCloneFlowFilter(c *config.Config) (pipeline.Filter, error) {

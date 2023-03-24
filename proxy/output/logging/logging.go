@@ -2,6 +2,9 @@ package logging
 
 import (
 	"fmt"
+	"strings"
+	"sync"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
@@ -9,12 +12,11 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fastjson_marshal"
 	"infini.sh/gateway/common/model"
-	"strings"
-	"sync"
+
+	"time"
 
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/lib/fasthttp"
-	"time"
 )
 
 type RequestLogging struct {
@@ -32,7 +34,7 @@ type Config struct {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("logging", New,&Config{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("logging", New, &Config{})
 }
 
 func New(c *config.Config) (pipeline.Filter, error) {
@@ -126,7 +128,7 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 	request.Request.Method = string(ctx.Method())
-	request.Request.URI = ctx.URI().String()
+	request.Request.URI = ctx.PhantomURI().String()
 	request.Request.Path = string(ctx.Path())
 
 	m := map[string]string{}
@@ -138,18 +140,18 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 
 	request.Request.Host = string(ctx.Request.Host())
 
-	if ctx.LocalIP()!=nil{
+	if ctx.LocalIP() != nil {
 		request.LocalIP = ctx.LocalIP().String()
 	}
-	if ctx.RemoteIP()!=nil{
+	if ctx.RemoteIP() != nil {
 		request.RemoteIP = ctx.RemoteIP().String()
 	}
 
-	if ctx.RemoteAddr()!=nil{
+	if ctx.RemoteAddr() != nil {
 		request.Request.RemoteAddr = ctx.RemoteAddr().String()
 	}
 
-	if ctx.LocalAddr()!=nil{
+	if ctx.LocalAddr() != nil {
 		request.Request.LocalAddr = ctx.LocalAddr().String()
 	}
 
@@ -164,10 +166,10 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 
 	request.Response.ElapsedTimeInMs = float32(float64(ctx.GetElapsedTime().Microseconds()) * 0.001)
 
-	if ctx.Response.LocalAddr()!=nil{
+	if ctx.Response.LocalAddr() != nil {
 		request.Response.LocalAddr = ctx.Response.LocalAddr().String()
-	}else{
-		request.Response.LocalAddr=""
+	} else {
+		request.Response.LocalAddr = ""
 	}
 
 	request.Elastic = map[string]interface{}{}
@@ -176,7 +178,7 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 
 		if ctx.Has("bulk_response_status") {
 			bulk_status := ctx.Get("bulk_response_status")
-			if bulk_status!=nil{
+			if bulk_status != nil {
 				request.Elastic["bulk_results"] = bulk_status
 			}
 		}
@@ -204,7 +206,6 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 					stats["action"] = actionStats
 					bulk_status["stats"] = stats
 
-
 					request.Elastic["bulk_requests"] = bulk_status
 				}
 			}
@@ -213,7 +214,7 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 
 	if ctx.Has("elastic_cluster_name") {
 		stats := ctx.Get("elastic_cluster_name")
-		if stats!=nil{
+		if stats != nil {
 			request.Elastic["cluster_name"] = stats
 		}
 	}
@@ -221,9 +222,9 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 	//request.DataFlow = &model.DataFlow{}
 	request.DataFlow.From = request.RemoteIP
 
-	process:=ctx.GetRequestProcess()
-	if len(ctx.GetRequestProcess())>0{
-		request.DataFlow.Process = strings.Split(process,"->")
+	process := ctx.GetRequestProcess()
+	if len(ctx.GetRequestProcess()) > 0 {
+		request.DataFlow.Process = strings.Split(process, "->")
 	}
 
 	//TODO ,use gateway's uuid instead

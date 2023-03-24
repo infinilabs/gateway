@@ -2,6 +2,7 @@ package filter
 
 import (
 	"fmt"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
@@ -23,14 +24,14 @@ func (filter *RequestClientIPFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	clientIP := ctx.RemoteIP().String()
 
-	if global.Env().IsDebug{
-		log.Trace("client_ip:",clientIP)
+	if global.Env().IsDebug {
+		log.Trace("client_ip:", clientIP)
 	}
 
 	valid, hasRule := CheckExcludeStringRules(clientIP, filter.Exclude, ctx)
 	if hasRule && !valid {
 		if global.Env().IsDebug {
-			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
+			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.PhantomURI().String())
 		}
 		filter.genericFilter.Filter(ctx)
 		return
@@ -39,7 +40,7 @@ func (filter *RequestClientIPFilter) Filter(ctx *fasthttp.RequestCtx) {
 	valid, hasRule = CheckIncludeStringRules(clientIP, filter.Include, ctx)
 	if hasRule && !valid {
 		if global.Env().IsDebug {
-			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.URI().String())
+			log.Debugf("must_not rules matched, this request has been filtered: %v", ctx.Request.PhantomURI().String())
 		}
 		filter.genericFilter.Filter(ctx)
 		return
@@ -48,7 +49,7 @@ func (filter *RequestClientIPFilter) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("request_client_ip_filter",NewRequestClientIPFilter,&RequestAPIKeyFilter{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_client_ip_filter", NewRequestClientIPFilter, &RequestAPIKeyFilter{})
 }
 
 func NewRequestClientIPFilter(c *config.Config) (pipeline.Filter, error) {

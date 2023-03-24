@@ -41,7 +41,7 @@ func (filter *RatioRoutingFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 		if filter.Action == redirectAction {
 			ctx.Resume()
 			if global.Env().IsDebug {
-				log.Tracef("request [%v] go on flow: [%s]", ctx.URI().String(), filter.Flow)
+				log.Tracef("request [%v] go on flow: [%s]", ctx.PhantomURI().String(), filter.Flow)
 			}
 			filter.flow.Process(ctx)
 			if !filter.ContinueAfterMatch {
