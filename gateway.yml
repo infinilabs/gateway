@@ -634,6 +634,20 @@ badger:
   value_log_max_entries: 1000000
   value_log_file_size: 104857600
 
+## floating ip configuration
+floating_ip:
+  enabled: false # enable floating ip, requires root privilege
+  netmask: 255.255.255.0
+  ip: '' # if empty, will automatically bind to x.x.x.234
+  interface: '' # if empty, will automatically find an interface to bind
+  local_ip: '' # if empty, will automatically bind to interface's ip address
+  echo: # gateway will automatically ping master's echo.port to check whether it's still alive
+    port: 61111
+    dial_timeout_in_ms: 1000
+    timeout_in_ms: 5000
+  broadcast:
+    binding: 224.3.2.2:7654 # broadcast address for floating ip status broadcast
+
 ## elasticsearch module global configurations
 elastic:
   # elasticsearch for gateway's system info storage
