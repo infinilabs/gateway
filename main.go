@@ -39,13 +39,11 @@ import (
 	"infini.sh/gateway/proxy"
 	"infini.sh/gateway/service/floating_ip"
 	"infini.sh/gateway/service/forcemerge"
-	"infini.sh/gateway/service/translog"
 )
 
 func setup()  {
 	module.RegisterSystemModule(&stats2.SimpleStatsModule{})
 	module.RegisterUserPlugin(&stats.StatsDModule{})
-	module.RegisterUserPlugin(translog.TranslogModule{})
 	module.RegisterSystemModule(&s3.S3Module{})
 	module.RegisterSystemModule(&mem_queue.MemoryQueue{})
 	module.RegisterSystemModule(&kafka_queue.KafkaQueue{})
