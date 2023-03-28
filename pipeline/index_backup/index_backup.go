@@ -212,7 +212,7 @@ func (processor *IndexBackupProcessor) Process(ctx *pipeline.Context) error {
 					v = r.(string)
 				}
 				log.Errorf("error in processor [%v], [%v]", processor.Name(), v)
-				ctx.Failed()
+				ctx.Error(fmt.Errorf("index backup panic: %v", r))
 			}
 		}
 	}()

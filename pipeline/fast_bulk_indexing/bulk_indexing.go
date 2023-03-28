@@ -3,13 +3,14 @@ package bulk_indexing
 import (
 	ctx "context"
 	"fmt"
+	"runtime"
+	"sync"
+	"time"
+
 	"infini.sh/framework/core/conditions"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/rate"
 	"infini.sh/framework/core/rotate"
-	"runtime"
-	"sync"
-	"time"
 
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/elastic"
@@ -37,7 +38,7 @@ import (
 
 //读各个分片的数据，写 es
 
-//处理 bulk 格式的数据索引。
+// 处理 bulk 格式的数据索引。
 type BulkIndexingProcessor struct {
 	config               *Config
 	runningConfigs       map[string]*queue.QueueConfig
@@ -91,13 +92,13 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		Queues:               map[string]interface{}{},
 
 		Consumer: queue.ConsumerConfig{
-			Group:            "group-001",
-			Name:             "consumer-001",
-			FetchMinBytes:    1,
-			FetchMaxBytes:    10 * 1024 * 1024,
-			FetchMaxMessages: 500,
+			Group:             "group-001",
+			Name:              "consumer-001",
+			FetchMinBytes:     1,
+			FetchMaxBytes:     10 * 1024 * 1024,
+			FetchMaxMessages:  500,
 			EOFRetryDelayInMs: 500,
-			FetchMaxWaitMs:   10000,
+			FetchMaxWaitMs:    10000,
 		},
 
 		DetectActiveQueue: true,
@@ -410,7 +411,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string, ctx *pipeline.
 					v = r.(string)
 				}
 				log.Errorf("error in bulk_indexing worker[%v],queue:[%v],%v", workerID, qConfig.Id, v)
-				ctx.Failed()
+				ctx.Error(fmt.Errorf("NewBulkWorker panic: %v", r))
 			}
 		}
 
@@ -522,7 +523,7 @@ READ_DOCS:
 
 		if len(msg) == 0 {
 			log.Tracef("0 messages found in queue:[%v]", qConfig.Name)
-			ctx.Failed()
+			ctx.Error(errors.New("no message"))
 			return
 		}
 
@@ -599,13 +600,13 @@ func (processor *BulkIndexingProcessor) submitBulkRequest(tag, esClusterID strin
 	if mainBuf.GetMessageCount() > 0 && mainBuf.GetMessageSize() > 0 {
 		log.Trace(meta.Config.Name, ", starting submit bulk request")
 		start := time.Now()
-		ctx:=ctx.Background()
-		continueRequest, statsMap, err := bulkProcessor.Bulk(ctx, tag, meta, host, mainBuf)
+		ctx := ctx.Background()
+		continueRequest, statsMap, _, err := bulkProcessor.Bulk(ctx, tag, meta, host, mainBuf)
 		if global.Env().IsDebug {
 			stats.Timing("elasticsearch."+esClusterID+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
 		}
-		if err!=nil{
-			log.Errorf("submit bulk requests to elasticsearch [%v] failed, err:%v",meta.Config.Name,err)
+		if err != nil {
+			log.Errorf("submit bulk requests to elasticsearch [%v] failed, err:%v", meta.Config.Name, err)
 		}
 		log.Info(meta.Config.Name, ", ", host, ", stats: ", statsMap, ", count: ", count, ", size: ", util.ByteSize(uint64(size)), ", elapsed: ", time.Since(start), ", continue: ", continueRequest)
 		return continueRequest, err

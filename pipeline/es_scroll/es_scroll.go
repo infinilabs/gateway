@@ -21,6 +21,7 @@ import (
 	"math"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/buger/jsonparser"
@@ -128,6 +129,8 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 	wg := sync.WaitGroup{}
 
 	var totalDocsNeedToScroll int64 = 0
+	var totalDocsScrolled int64 = 0
+
 	for slice := 0; slice < processor.config.SliceSize; slice++ {
 
 		tempSlice := slice
@@ -148,6 +151,7 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 							v = r.(string)
 						}
 						log.Error("error in processor,", v)
+						ctx.Error(fmt.Errorf("es_scroll panic: %v", r))
 					}
 				}
 				log.Debug("exit detector for active queue")
@@ -167,6 +171,13 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 				panic(err)
 			}
 
+			defer func() {
+				err := processor.client.ClearScroll(initScrollID)
+				if err != nil {
+					log.Errorf("failed to clear scroll, err: %v", err)
+				}
+			}()
+
 			version := processor.client.GetMajorVersion()
 			totalHits, err := common.GetScrollHitsTotal(version, scrollResponse1)
 			if err != nil {
@@ -174,9 +185,12 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 				panic(err)
 			}
 
-			totalDocsNeedToScroll += totalHits
+			atomic.AddInt64(&totalDocsNeedToScroll, totalHits)
+			ctx.PutValue("es_scroll.total_hits", atomic.LoadInt64(&totalDocsNeedToScroll))
 
 			docSize := processor.processingDocs(scrollResponse1, processor.config.Output)
+			atomic.AddInt64(&totalDocsScrolled, int64(docSize))
+			ctx.PutValue("es_scroll.scrolled_docs", atomic.LoadInt64(&totalDocsScrolled))
 
 			progress.IncreaseWithTotal(processor.config.Output, "scroll-"+util.ToString(tempSlice), docSize, int(totalHits))
 
@@ -235,6 +249,8 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 					}
 
 					docSize := processor.processingDocs(data, processor.config.Output)
+					atomic.AddInt64(&totalDocsScrolled, int64(docSize))
+					ctx.PutValue("es_scroll.scrolled_docs", atomic.LoadInt64(&totalDocsScrolled))
 
 					processedSize += docSize
 					log.Debugf("[%v] slice[%v]:%v,%v-%v", processor.config.Elasticsearch, slice, docSize, processedSize, totalHits)

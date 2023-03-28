@@ -44,7 +44,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 		retryableItems := elastic.AcquireBulkBuffer()
 
 		var containError bool
-		var bulkResults = util.MapStr{}
+		var bulkResults *elastic.BulkResult
 
 		defer func() {
 			elastic.ReturnBulkBuffer(successItems)
