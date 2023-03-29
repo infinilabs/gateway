@@ -482,8 +482,6 @@ flow:
 #        hosts:
 #          - localhost:9200
 
-pipelines:
-  log_output_queue: pipeline_logging
 ##background jobs
 pipeline:
   - name: pipeline_logging_merge
@@ -624,6 +622,7 @@ pipeline:
 metrics:
   enabled: true
   queue: metrics
+  logging_queue: logging
   instance:
     enabled: true
   network:
