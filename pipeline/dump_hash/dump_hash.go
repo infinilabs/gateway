@@ -18,6 +18,12 @@ package dump_hash
 
 import (
 	"fmt"
+	"math"
+	"path"
+	"runtime"
+	"sync"
+	"time"
+
 	"github.com/OneOfOne/xxhash"
 	"github.com/buger/jsonparser"
 	xxhash1 "github.com/cespare/xxhash"
@@ -35,11 +41,6 @@ import (
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
-	"math"
-	"path"
-	"runtime"
-	"sync"
-	"time"
 )
 
 type DumpHashProcessor struct {
@@ -59,7 +60,7 @@ type Config struct {
 	Indices       string `config:"indices"`
 
 	QueryString string `config:"query_string"`
-	QueryDSL string `config:"query_dsl"`
+	QueryDSL    string `config:"query_dsl"`
 
 	HashFunc   string `config:"hash_func"`
 	ScrollTime string `config:"scroll_time"`
@@ -140,7 +141,7 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 				wg.Done()
 			}()
 
-			var query *elastic.SearchRequest=elastic.GetSearchRequest(processor.config.QueryString,processor.config.QueryDSL,processor.config.Fields, processor.config.SortField, processor.config.SortType)
+			var query *elastic.SearchRequest = elastic.GetSearchRequest(processor.config.QueryString, processor.config.QueryDSL, processor.config.Fields, processor.config.SortField, processor.config.SortType)
 			scrollResponse1, err := processor.client.NewScroll(processor.config.Indices, processor.config.ScrollTime, processor.config.BatchSize, query, tempSlice, processor.config.SliceSize)
 			if err != nil {
 				log.Errorf("%v-%v", processor.config.Output, err)
@@ -153,7 +154,7 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 				panic(err)
 			}
 
-			version := processor.client.GetMajorVersion()
+			version := processor.client.GetVersion()
 			totalHits, err := common.GetScrollHitsTotal(version, scrollResponse1)
 			if err != nil {
 				panic(err)
@@ -269,7 +270,7 @@ func (processor *DumpHashProcessor) processingDocs(data []byte, outputQueueName 
 			panic(err)
 		}
 
-		util.WalkBytesAndReplace(source,util.NEWLINE,util.SPACE)
+		util.WalkBytesAndReplace(source, util.NEWLINE, util.SPACE)
 
 		hash := processor.Hash(processor.config.HashFunc, hashBuffer, source)
 
