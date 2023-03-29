@@ -108,7 +108,12 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		panic("failed to get elasticsearch client")
 	}
 
-	if cfg.SliceSize < 1 || client.GetMajorVersion() < 5 {
+	esVersion := client.GetVersion()
+
+	if cfg.SliceSize < 1 {
+		cfg.SliceSize = 1
+	}
+	if esVersion.Distribution == elastic.Elasticsearch && esVersion.Major < 5 {
 		cfg.SliceSize = 1
 	}
 
@@ -161,7 +166,7 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 			var query *elastic.SearchRequest = elastic.GetSearchRequest(processor.config.QueryString, processor.config.QueryDSL, processor.config.Fields, processor.config.SortField, processor.config.SortType)
 			scrollResponse1, err := processor.client.NewScroll(processor.config.Indices, processor.config.ScrollTime, processor.config.BatchSize, query, tempSlice, processor.config.SliceSize)
 			if err != nil {
-				log.Errorf("%v-%v", processor.config.Output, err)
+				log.Errorf("%v-%v, query string: %v, query dsl: %v, search request: %s", processor.config.Output, err, processor.config.QueryString, processor.config.QueryDSL, util.MustToJSON(query))
 				panic(err)
 			}
 
@@ -178,7 +183,7 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 				}
 			}()
 
-			version := processor.client.GetMajorVersion()
+			version := processor.client.GetVersion()
 			totalHits, err := common.GetScrollHitsTotal(version, scrollResponse1)
 			if err != nil {
 				log.Errorf("cannot get total hits from json: %v, %v", string(scrollResponse1), err)
