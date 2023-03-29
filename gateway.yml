@@ -484,6 +484,35 @@ flow:
 
 ##background jobs
 pipeline:
+  - name: pipeline_logging_merge
+    auto_start: true
+    keep_running: true
+    processor:
+      - indexing_merge:
+          input_queue: "logging"
+          idle_timeout_in_seconds: 1
+          elasticsearch: "logging-server"
+          index_name: ".infini_logs"
+          output_queue:
+            name: "gateway-pipeline-logs"
+            label:
+              tag: "pipeline_logging"
+          worker_size: 1
+          bulk_size_in_kb: 1
+  - name: ingest_pipeline_logging
+    auto_start: true
+    keep_running: true
+    processor:
+      - bulk_indexing:
+          bulk:
+            compress: true
+            batch_size_in_mb: 1
+            batch_size_in_docs: 1
+          consumer:
+            fetch_max_messages: 100
+          queues:
+            type: indexing_merge
+            tag: "pipeline_logging"
   ## system logging and metrics
   - name: async_messages_merge
     auto_start: true
@@ -593,6 +622,7 @@ pipeline:
 metrics:
   enabled: true
   queue: metrics
+  logging_queue: logging
   instance:
     enabled: true
   network:
