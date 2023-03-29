@@ -1,0 +1,40 @@
+pipeline {
+
+    agent {label 'master'}
+
+    environment { 
+        CI = 'true'
+    }
+    stages {
+
+       stage('build') {
+
+        parallel {
+
+        stage('Build Linux Packages') {
+
+            agent {
+                label 'linux'
+            }
+
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE'){
+
+                    sh 'cd /home/jenkins/go/src/infini.sh/gateway && git stash && git pull origin master && make clean config build-linux-amd64-dev'
+                    sh label: 'copy-configs', script: 'cd /home/jenkins/go/src/infini.sh/gateway &&  cp ../framework/LICENSE bin && cat ../framework/NOTICE NOTICE > bin/NOTICE'
+
+                    sh label: 'package-linux-amd64-dev', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-amd64-dev.tar.gz gateway-linux-amd64-dev gateway.yml LICENSE NOTICE '
+
+                    sh 'cd /home/jenkins/go/src/infini.sh/gateway && git stash && git pull origin master && make clean config build-linux-amd64'
+                    sh label: 'copy-configs', script: 'cd /home/jenkins/go/src/infini.sh/gateway && cp ../framework/LICENSE bin && cat ../framework/NOTICE NOTICE > bin/NOTICE'
+
+                    sh label: 'package-linux-amd64', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-amd64.tar.gz gateway-linux-amd64 gateway.yml  LICENSE NOTICE '
+
+                    archiveArtifacts artifacts: 'gateway-$VERSION-$BUILD_NUMBER-*', fingerprint: true, followSymlinks: true, onlyIfSuccessful: false
+                }
+            }
+         }
+        }
+      }
+    }
+}
