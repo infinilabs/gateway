@@ -5,6 +5,9 @@ package elastic
 
 import (
 	"fmt"
+	"net/http"
+	"time"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
@@ -14,8 +17,6 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
-	"net/http"
-	"time"
 )
 
 type BulkResponseProcess struct {
@@ -29,7 +30,7 @@ func (this *BulkResponseProcess) Name() string {
 }
 
 func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
-	path := string(ctx.URI().Path())
+	path := string(ctx.PhantomURI().Path())
 	if string(ctx.Request.Header.Method()) != "POST" || !util.ContainStr(path, "_bulk") {
 		return
 	}
@@ -43,7 +44,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 		retryableItems := elastic.AcquireBulkBuffer()
 
 		var containError bool
-		var bulkResults=util.MapStr{}
+		var bulkResults *elastic.BulkResult
 
 		defer func() {
 			elastic.ReturnBulkBuffer(successItems)
@@ -52,22 +53,22 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 
 		}()
 
-		label:=util.MapStr{}
+		label := util.MapStr{}
 
-		containError,_,bulkResults = elastic.HandleBulkResponse(&ctx.Request,&ctx.Response,label, requestBytes, resbody, successItems, nonRetryableItems, retryableItems, this.config.BulkResponseParseConfig,this.config.RetryRules)
+		containError, _, bulkResults = elastic.HandleBulkResponse(&ctx.Request, &ctx.Response, label, requestBytes, resbody, successItems, nonRetryableItems, retryableItems, this.config.BulkResponseParseConfig, this.config.RetryRules)
 
-		if bulkResults!=nil{
+		if bulkResults != nil {
 			ctx.Set("bulk_response_status", bulkResults)
 		}
 
 		//stats only, skip further process
-		if this.config.StatsOnly{
+		if this.config.StatsOnly {
 			return
 		}
 
 		if containError {
 
-			url := ctx.Request.URI().String()
+			url := ctx.Request.PhantomURI().String()
 			if rate.GetRateLimiter("bulk_error", url, 1, 1, 5*time.Second).Allow() {
 				log.Error("error in bulk requests,", url, ",", ctx.Response.StatusCode(), ",invalid:", nonRetryableItems.GetMessageCount(), ",failure:", retryableItems.GetMessageCount(), ",", util.SubString(util.UnsafeBytesToString(resbody), 0, this.config.MessageTruncateSize))
 			}
@@ -109,7 +110,6 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 						ctx.AddFlowProcess("retry_flow:" + this.retryFlow.ID)
 						this.retryFlow.Process(ctx)
 					}
-
 
 					queue.Push(queue.GetOrInitConfig(this.config.FailureQueue), bytes)
 				}
@@ -165,7 +165,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 		}
 
 		if this.config.FailureQueue != "" {
-			if this.config.RetryRules.Retryable(ctx.Response.StatusCode(),string(ctx.Response.GetRawBody())){
+			if this.config.RetryRules.Retryable(ctx.Response.StatusCode(), string(ctx.Response.GetRawBody())) {
 				bytes := ctx.Request.Encode()
 				if len(bytes) == 0 {
 					log.Error("retryable items, size:", len(bytes))
@@ -182,8 +182,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 type Config struct {
-
-	StatsOnly bool `config:"stats_only"`
+	StatsOnly    bool   `config:"stats_only"`
 	SuccessQueue string `config:"success_queue"`
 	InvalidQueue string `config:"invalid_queue"`
 	FailureQueue string `config:"failure_queue"`
@@ -210,8 +209,8 @@ type Config struct {
 	TagsOnPartialFailure []string `config:"tag_on_partial_failure"` //包含部分失败的情况，可以重试
 	TagsOnPartialInvalid []string `config:"tag_on_partial_invalid"` //包含部分非法请求的情况，无需重试的请求
 
-	RetryFlow string `config:"retry_flow"`
-	RetryRules elastic.RetryRules 						`config:"retry_rules"`
+	RetryFlow  string             `config:"retry_flow"`
+	RetryRules elastic.RetryRules `config:"retry_rules"`
 
 	BulkResponseParseConfig elastic.BulkResponseParseConfig `config:"response_handle"`
 }
@@ -222,11 +221,11 @@ func init() {
 
 func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 	cfg := Config{
-		MessageTruncateSize:               1024,
-		RetryRules: 							elastic.RetryRules{Retry429: true,Default: true,Retry4xx: false},
-		BulkResponseParseConfig:elastic.BulkResponseParseConfig{
-			BulkResultMessageMaxRequestBodyLength:  10*1024,
-			BulkResultMessageMaxResponseBodyLength: 10*1024,
+		MessageTruncateSize: 1024,
+		RetryRules:          elastic.RetryRules{Retry429: true, Default: true, Retry4xx: false},
+		BulkResponseParseConfig: elastic.BulkResponseParseConfig{
+			BulkResultMessageMaxRequestBodyLength:  10 * 1024,
+			BulkResultMessageMaxResponseBodyLength: 10 * 1024,
 			OutputBulkStats:                        true,
 			IncludeIndexStats:                      true,
 			IncludeActionStats:                     true,

@@ -21,6 +21,7 @@ import (
 	"math"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/buger/jsonparser"
@@ -35,6 +36,7 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
+	es_common "infini.sh/framework/modules/elastic/common"
 	"infini.sh/gateway/common"
 )
 
@@ -43,12 +45,19 @@ type ScrollProcessor struct {
 	client elastic.API
 }
 
+type OutputQueueConfig struct {
+	Name   string                 `config:"name"`
+	Labels map[string]interface{} `config:"labels"`
+}
+
 type Config struct {
+	Elasticsearch       string                       `config:"elasticsearch"`
+	ElasticsearchConfig *elastic.ElasticsearchConfig `config:"elasticsearch_config"`
+
 	//字段名称必须是大写
 	PartitionSize int    `config:"partition_size"`
 	BatchSize     int    `config:"batch_size"`
 	SliceSize     int    `config:"slice_size"`
-	Elasticsearch string `config:"elasticsearch"`
 	SortType      string `config:"sort_type"`
 	SortField     string `config:"sort_field"`
 	Indices       string `config:"indices"`
@@ -56,7 +65,9 @@ type Config struct {
 	QueryDSL      string `config:"query_dsl"`
 	ScrollTime    string `config:"scroll_time"`
 	Fields        string `config:"fields"`
-	Output        string `config:"output_queue"`
+	// DEPRECATED, use `queue` instead
+	Output string             `config:"output_queue"`
+	Queue  *OutputQueueConfig `config:"queue"`
 
 	RemoveTypeMeta bool `config:"remove_type"`
 	//RemovePipeline         bool         `config:"remove_pipeline"`
@@ -82,7 +93,21 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		return nil, fmt.Errorf("failed to unpack the configuration of dump_hash processor: %s", err)
 	}
 
-	client := elastic.GetClient(cfg.Elasticsearch)
+	if cfg.Queue != nil {
+		cfg.Output = cfg.Queue.Name
+	}
+
+	client := elastic.GetClientNoPanic(cfg.Elasticsearch)
+	if client == nil {
+		if cfg.ElasticsearchConfig != nil {
+			cfg.ElasticsearchConfig.Source = "es_scroll"
+			client, _ = es_common.InitElasticInstanceWithoutMetadata(*cfg.ElasticsearchConfig)
+		}
+	}
+	if client == nil {
+		panic("failed to get elasticsearch client")
+	}
+
 	if cfg.SliceSize < 1 || client.GetMajorVersion() < 5 {
 		cfg.SliceSize = 1
 	}
@@ -104,6 +129,8 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 	wg := sync.WaitGroup{}
 
 	var totalDocsNeedToScroll int64 = 0
+	var totalDocsScrolled int64 = 0
+
 	for slice := 0; slice < processor.config.SliceSize; slice++ {
 
 		tempSlice := slice
@@ -124,6 +151,7 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 							v = r.(string)
 						}
 						log.Error("error in processor,", v)
+						ctx.Error(fmt.Errorf("es_scroll panic: %v", r))
 					}
 				}
 				log.Debug("exit detector for active queue")
@@ -143,6 +171,13 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 				panic(err)
 			}
 
+			defer func() {
+				err := processor.client.ClearScroll(initScrollID)
+				if err != nil {
+					log.Errorf("failed to clear scroll, err: %v", err)
+				}
+			}()
+
 			version := processor.client.GetMajorVersion()
 			totalHits, err := common.GetScrollHitsTotal(version, scrollResponse1)
 			if err != nil {
@@ -150,9 +185,12 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 				panic(err)
 			}
 
-			totalDocsNeedToScroll += totalHits
+			atomic.AddInt64(&totalDocsNeedToScroll, totalHits)
+			ctx.PutValue("es_scroll.total_hits", atomic.LoadInt64(&totalDocsNeedToScroll))
 
 			docSize := processor.processingDocs(scrollResponse1, processor.config.Output)
+			atomic.AddInt64(&totalDocsScrolled, int64(docSize))
+			ctx.PutValue("es_scroll.scrolled_docs", atomic.LoadInt64(&totalDocsScrolled))
 
 			progress.IncreaseWithTotal(processor.config.Output, "scroll-"+util.ToString(tempSlice), docSize, int(totalHits))
 
@@ -211,6 +249,8 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 					}
 
 					docSize := processor.processingDocs(data, processor.config.Output)
+					atomic.AddInt64(&totalDocsScrolled, int64(docSize))
+					ctx.PutValue("es_scroll.scrolled_docs", atomic.LoadInt64(&totalDocsScrolled))
 
 					processedSize += docSize
 					log.Debugf("[%v] slice[%v]:%v,%v-%v", processor.config.Elasticsearch, slice, docSize, processedSize, totalHits)
@@ -333,6 +373,11 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 		queueConfig.Source = "dynamic"
 		queueConfig.Labels = util.MapStr{}
 		queueConfig.Labels["type"] = "scroll_docs"
+		if processor.config.Queue != nil {
+			for k, v := range processor.config.Queue.Labels {
+				queueConfig.Labels[k] = v
+			}
+		}
 		queueConfig.Name = outputQueueName + util.ToString(k)
 		queue.RegisterConfig(queueConfig.Name, queueConfig)
 		pushQueue := queue.GetOrInitConfig(outputQueueName + util.ToString(k))

@@ -2,6 +2,8 @@ package elastic
 
 import (
 	"fmt"
+	"time"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
@@ -11,7 +13,6 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
-	"time"
 )
 
 type ElasticsearchBulkRequestMutate struct {
@@ -33,7 +34,7 @@ func (filter *ElasticsearchBulkRequestMutate) Name() string {
 
 func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 
-	pathStr := util.UnsafeBytesToString(ctx.URI().Path())
+	pathStr := util.UnsafeBytesToString(ctx.PhantomURI().Path())
 
 	if util.SuffixStr(pathStr, "/_bulk") {
 		body := ctx.Request.GetRawBody()
@@ -44,8 +45,8 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 		var metaCollected bool
 		docCount, err := elastic.WalkBulkRequests(body, func(eachLine []byte) (skipNextLine bool) {
 			return false
-		}, func(metaBytes []byte, actionStr, index, typeName, id,routing string,offset int) (err error) {
-			metaCollected=false
+		}, func(metaBytes []byte, actionStr, index, typeName, id, routing string, offset int) (err error) {
+			metaCollected = false
 
 			metaStr := util.UnsafeBytesToString(metaBytes)
 
@@ -159,19 +160,19 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 				log.Tracef("metadata:\n%v", string(metaBytes))
 			}
 
-			elastic.SafetyAddNewlineBetweenData(bulkBuff,metaBytes)
-			metaCollected=true
+			elastic.SafetyAddNewlineBetweenData(bulkBuff, metaBytes)
+			metaCollected = true
 
 			return nil
-		}, func(payloadBytes []byte, actionStr, index, typeName, id,routing string) {
+		}, func(payloadBytes []byte, actionStr, index, typeName, id, routing string) {
 
-			if metaCollected{
+			if metaCollected {
 				if global.Env().IsDebug {
 					log.Tracef("payload:\n%v", string(payloadBytes))
 				}
 
 				if payloadBytes != nil && len(payloadBytes) > 0 {
-					elastic.SafetyAddNewlineBetweenData(bulkBuff,payloadBytes)
+					elastic.SafetyAddNewlineBetweenData(bulkBuff, payloadBytes)
 				}
 			}
 		})
@@ -182,7 +183,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 		}
 
 		if bulkBuff.Len() > 0 {
-			if !util.BytesHasSuffix(bulkBuff.B,elastic.NEWLINEBYTES){
+			if !util.BytesHasSuffix(bulkBuff.B, elastic.NEWLINEBYTES) {
 				bulkBuff.Write(elastic.NEWLINEBYTES)
 			}
 			ctx.Request.SetRawBody(bulkBuff.Bytes())
@@ -198,7 +199,7 @@ func init() {
 func NewElasticsearchBulkRequestMutateFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner := ElasticsearchBulkRequestMutate{
-		FixNilID:      true,
+		FixNilID: true,
 	}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)

@@ -2,6 +2,7 @@ package filter
 
 import (
 	"fmt"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
@@ -61,7 +62,7 @@ func (filter RequestHeaderFilter) Filter(ctx *fasthttp.RequestCtx) {
 				if match {
 					filter.genericFilter.Filter(ctx)
 					if global.Env().IsDebug {
-						log.Debugf("rule matched, this request has been filtered: %v", ctx.Request.URI().String())
+						log.Debugf("rule matched, this request has been filtered: %v", ctx.Request.PhantomURI().String())
 					}
 					return
 				}
@@ -79,7 +80,7 @@ func (filter RequestHeaderFilter) Filter(ctx *fasthttp.RequestCtx) {
 				}
 				if match {
 					if global.Env().IsDebug {
-						log.Debugf("rule matched, this request has been marked as good one: %v", ctx.Request.URI().String())
+						log.Debugf("rule matched, this request has been marked as good one: %v", ctx.Request.PhantomURI().String())
 					}
 					return
 				}
@@ -87,7 +88,7 @@ func (filter RequestHeaderFilter) Filter(ctx *fasthttp.RequestCtx) {
 		}
 		filter.genericFilter.Filter(ctx)
 		if global.Env().IsDebug {
-			log.Debugf("no rule matched, this request has been filtered: %v", ctx.Request.URI().String())
+			log.Debugf("no rule matched, this request has been filtered: %v", ctx.Request.PhantomURI().String())
 		}
 	}
 

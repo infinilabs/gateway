@@ -2,6 +2,10 @@ package fast_flow_runner
 
 import (
 	"fmt"
+	"runtime"
+	"sync"
+	"time"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
@@ -10,9 +14,6 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
-	"runtime"
-	"sync"
-	"time"
 )
 
 type Config struct {
@@ -25,8 +26,7 @@ type Config struct {
 
 var ctxPool = &sync.Pool{
 	New: func() interface{} {
-		c := fasthttp.RequestCtx{
-		}
+		c := fasthttp.RequestCtx{}
 		return &c
 	},
 }
@@ -61,13 +61,13 @@ func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
 		NumOfWorkers: 1,
 		Consumer: queue.ConsumerConfig{
-			Group:            "group-001",
-			Name:             "consumer-001",
-			FetchMinBytes:    1,
-			FetchMaxBytes:    10 * 1024 * 1024,
-			FetchMaxMessages: 500,
+			Group:             "group-001",
+			Name:              "consumer-001",
+			FetchMinBytes:     1,
+			FetchMaxBytes:     10 * 1024 * 1024,
+			FetchMaxMessages:  500,
 			EOFRetryDelayInMs: 500,
-			FetchMaxWaitMs:   10000,
+			FetchMaxWaitMs:    10000,
 		},
 		FlowMaxRunningTimeoutInSeconds: 60,
 	}
@@ -124,7 +124,7 @@ func (processor *FlowRunnerProcessor) HandleQueueConfig(ctx *pipeline.Context) e
 					v = r.(string)
 				}
 				log.Errorf("error in disorder_flow_runner [%v], [%v]", processor.config.FlowName, v)
-				ctx.Failed()
+				ctx.Failed(fmt.Errorf("fast flow runner panic: %v", r))
 			}
 		}
 

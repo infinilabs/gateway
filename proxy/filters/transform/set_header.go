@@ -2,6 +2,7 @@ package transform
 
 import (
 	"fmt"
+
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
@@ -18,7 +19,7 @@ func (filter *SetRequestHeader) Name() string {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("set_request_header",NewSetRequestHeader,&SetRequestHeader{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("set_request_header", NewSetRequestHeader, &SetRequestHeader{})
 }
 
 func NewSetRequestHeader(c *config.Config) (pipeline.Filter, error) {
@@ -61,17 +62,18 @@ func (filter *SetRequestQueryArgs) Name() string {
 }
 
 func (filter *SetRequestQueryArgs) Filter(ctx *fasthttp.RequestCtx) {
+	clonedURI := ctx.Request.CloneURI()
+	defer fasthttp.ReleaseURI(clonedURI)
+	args := clonedURI.QueryArgs()
 	for k, v := range filter.m {
-		value := ctx.Request.URI().QueryArgs().Peek(k)
-		if len(value) > 0 {
-			ctx.Request.URI().QueryArgs().Del(k)
-		}
-		ctx.Request.URI().QueryArgs().Set(k, v)
+		args.Set(k, v)
 	}
+	clonedURI.SetQueryString(args.String())
+	ctx.Request.SetURI(clonedURI)
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("set_request_query_args",NewSetRequestQueryArgs,&SetRequestQueryArgs{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("set_request_query_args", NewSetRequestQueryArgs, &SetRequestQueryArgs{})
 }
 
 func NewSetRequestQueryArgs(c *config.Config) (pipeline.Filter, error) {
@@ -115,7 +117,7 @@ func (filter *SetResponseHeader) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("set_response_header",NewSetResponseHeader,&SetResponseHeader{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("set_response_header", NewSetResponseHeader, &SetResponseHeader{})
 }
 
 func NewSetResponseHeader(c *config.Config) (pipeline.Filter, error) {
@@ -154,7 +156,7 @@ func (filter *SetHostname) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("set_hostname",NewSetHostname,&SetHostname{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("set_hostname", NewSetHostname, &SetHostname{})
 }
 
 func NewSetHostname(c *config.Config) (pipeline.Filter, error) {
@@ -193,7 +195,7 @@ func (filter *SetResponse) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("set_response",NewSetResponse,&SetResponse{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("set_response", NewSetResponse, &SetResponse{})
 }
 
 func NewSetResponse(c *config.Config) (pipeline.Filter, error) {

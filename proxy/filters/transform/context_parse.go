@@ -5,12 +5,13 @@ package transform
 
 import (
 	"fmt"
+	"regexp"
+
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
-	"regexp"
 )
 
 type ContextParseFilter struct {
@@ -32,7 +33,7 @@ func (filter *ContextParseFilter) Filter(ctx *fasthttp.RequestCtx) {
 			if filter.SkipError {
 				return
 			}
-			panic(errors.Errorf("context_parse,url:%v,err:%v",ctx.Request.URI().String(),err))
+			panic(errors.Errorf("context_parse,url:%v,err:%v", ctx.Request.PhantomURI().String(), err))
 		}
 		keyStr := util.ToString(key)
 		variables := util.MapStr{}
@@ -48,18 +49,18 @@ func (filter *ContextParseFilter) Filter(ctx *fasthttp.RequestCtx) {
 		}
 		if len(variables) > 0 {
 			if filter.Group != "" {
-				_,err=ctx.PutValue(filter.Group, variables)
-				if err!=nil{
-					if filter.SkipError{
+				_, err = ctx.PutValue(filter.Group, variables)
+				if err != nil {
+					if filter.SkipError {
 						return
 					}
 					panic(err)
 				}
 			} else {
 				for k, v := range variables {
-					_,err=ctx.PutValue(k, v)
-					if err!=nil{
-						if filter.SkipError{
+					_, err = ctx.PutValue(k, v)
+					if err != nil {
+						if filter.SkipError {
 							return
 						}
 						panic(err)
@@ -75,8 +76,7 @@ func init() {
 }
 
 func NewContextParseFilter(c *config.Config) (pipeline.Filter, error) {
-	runner := ContextParseFilter{
-	}
+	runner := ContextParseFilter{}
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}

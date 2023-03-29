@@ -2,6 +2,8 @@ package throttle
 
 import (
 	"fmt"
+	"strings"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
@@ -10,7 +12,6 @@ import (
 	"infini.sh/framework/core/radix"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
-	"strings"
 )
 
 type ElasticsearchBulkRequestThrottle struct {
@@ -31,7 +32,7 @@ func (this *ElasticsearchBulkRequestThrottle) Filter(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	pathStr := util.UnsafeBytesToString(ctx.URI().Path())
+	pathStr := util.UnsafeBytesToString(ctx.PhantomURI().Path())
 
 	if util.SuffixStr(pathStr, "/_bulk") {
 
@@ -41,8 +42,8 @@ func (this *ElasticsearchBulkRequestThrottle) Filter(ctx *fasthttp.RequestCtx) {
 
 		docCount, err := elastic.WalkBulkRequests(body, func(eachLine []byte) (skipNextLine bool) {
 			return false
-		}, func(metaBytes []byte, actionStr, index, typeName, id,routing string,offset int) (err error) {
-			if index==""{
+		}, func(metaBytes []byte, actionStr, index, typeName, id, routing string, offset int) (err error) {
+			if index == "" {
 				//url level
 				var urlLevelIndex string
 				urlLevelIndex, _ = elastic.ParseUrlLevelBulkMeta(pathStr)
@@ -66,7 +67,7 @@ func (this *ElasticsearchBulkRequestThrottle) Filter(ctx *fasthttp.RequestCtx) {
 				indexPayloadStats[index] = v + len(metaBytes)
 			}
 			return nil
-		}, func(payloadBytes []byte, actionStr, index, typeName, id,routing string) {
+		}, func(payloadBytes []byte, actionStr, index, typeName, id, routing string) {
 			v, ok := indexPayloadStats[index]
 			if !ok {
 				indexPayloadStats[index] = len(payloadBytes)
@@ -75,40 +76,39 @@ func (this *ElasticsearchBulkRequestThrottle) Filter(ctx *fasthttp.RequestCtx) {
 			}
 		})
 
-		if global.Env().IsDebug{
+		if global.Env().IsDebug {
 			log.Debug(indexOpStats)
 			log.Debug(indexPayloadStats)
 		}
 
-		for k,hits:=range indexOpStats{
-			bytes,ok1:=indexPayloadStats[k]
-			if !ok1{
+		for k, hits := range indexOpStats {
+			bytes, ok1 := indexPayloadStats[k]
+			if !ok1 {
 				continue
 			}
-			limiter,ok:=this.indicesLimiter[k]
+			limiter, ok := this.indicesLimiter[k]
 			if global.Env().IsDebug {
-				log.Debug("index:",k, " met bulk check rules, hits:",hits,",bytes:",bytes)
+				log.Debug("index:", k, " met bulk check rules, hits:", hits, ",bytes:", bytes)
 			}
-			if !ok{
-				if this.hashWildcard{
-					for x,y:=range this.indicesPatterns{
+			if !ok {
+				if this.hashWildcard {
+					for x, y := range this.indicesPatterns {
 						ok := y.Match(k)
-						if global.Env().IsDebug{
-							log.Trace("hit index pattern:",x,",",k)
+						if global.Env().IsDebug {
+							log.Trace("hit index pattern:", x, ",", k)
 						}
-						if ok{
-							limiter,ok=this.indicesLimiter[x]
+						if ok {
+							limiter, ok = this.indicesLimiter[x]
 							//TODO may support multi-patterns
 							break
 						}
 					}
 				}
 			}
-			if limiter!=nil{
-				limiter.internalProcessWithValues("bulk_requests", k, ctx,hits,bytes)
+			if limiter != nil {
+				limiter.internalProcessWithValues("bulk_requests", k, ctx, hits, bytes)
 			}
 		}
-
 
 		if err != nil {
 			log.Errorf("processing: %v docs, err: %v", docCount, err)
@@ -128,14 +128,14 @@ func NewElasticsearchBulkRequestThrottleFilter(c *config.Config) (pipeline.Filte
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
-	runner.indicesPatterns= map[string]*radix.Pattern{}
-	runner.indicesLimiter= map[string]*GenericLimiter{}
+	runner.indicesPatterns = map[string]*radix.Pattern{}
+	runner.indicesLimiter = map[string]*GenericLimiter{}
 
-	for k,v:=range runner.Indices{
-		if strings.Contains(k,"*"){
-			runner.hashWildcard=true
+	for k, v := range runner.Indices {
+		if strings.Contains(k, "*") {
+			runner.hashWildcard = true
 			patterns := radix.Compile(k)
-			runner.indicesPatterns[k]=patterns
+			runner.indicesPatterns[k] = patterns
 		}
 
 		limiter := genericLimiter
@@ -143,11 +143,11 @@ func NewElasticsearchBulkRequestThrottleFilter(c *config.Config) (pipeline.Filte
 			return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 		}
 		limiter.init()
-		runner.indicesLimiter[k]=&limiter
+		runner.indicesLimiter[k] = &limiter
 	}
 
-	if global.Env().IsDebug{
-		log.Trace(util.ToJson(runner.indicesLimiter,true))
+	if global.Env().IsDebug {
+		log.Trace(util.ToJson(runner.indicesLimiter, true))
 	}
 
 	return &runner, nil

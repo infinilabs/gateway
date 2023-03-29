@@ -35,7 +35,7 @@ func (filter *SampleFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	if r < v {
 		if global.Env().IsDebug {
-			log.Debugf("this request is lucky to continue: [%v] of [%v], %v", r, v, ctx.URI().String())
+			log.Debugf("this request is lucky to continue: [%v] of [%v], %v", r, v, ctx.PhantomURI().String())
 		}
 		return
 	}

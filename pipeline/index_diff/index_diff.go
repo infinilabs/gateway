@@ -2,6 +2,13 @@ package index_diff
 
 import (
 	"fmt"
+	"os"
+	"path"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/bsm/extsort"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
@@ -10,12 +17,6 @@ import (
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/bytebufferpool"
-	"os"
-	"path"
-	"runtime"
-	"strings"
-	"sync"
-	"time"
 )
 
 type CompareItem struct {
@@ -49,12 +50,12 @@ func NewCompareItem(key, hash string) CompareItem {
 	return item
 }
 
-func handleDiffResult(diffType string, msgA, msgB *CompareItem, diffResultHandler func(DiffResult)){
+func handleDiffResult(diffType string, msgA, msgB *CompareItem, diffResultHandler func(DiffResult)) {
 	result := DiffResult{Target: msgB, Source: msgA}
 	result.DiffType = diffType
 	if msgA != nil {
 		result.Key = msgA.Key
-	}else if msgB != nil {
+	} else if msgB != nil {
 		result.Key = msgB.Key
 	}
 	diffResultHandler(result)
@@ -222,7 +223,7 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 					v = r.(string)
 				}
 				log.Error("error in index_diff service", v)
-				ctx.Failed()
+				ctx.Error(fmt.Errorf("index diff panic: %v", r))
 			}
 		}
 	}()
@@ -405,7 +406,7 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 
 				v, timeout, err := queue.PopTimeout(queue.GetOrInitConfig(processor.config.DiffQueue), timeOut)
 				if timeout {
-						break
+					break
 				}
 
 				i++

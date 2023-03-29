@@ -253,7 +253,7 @@ func (p *RequestCache) getHash(ctx *fasthttp.RequestCtx) string {
 	//buffer:=hashBufferPool.Get().(*bytes.Buffer)
 
 	if global.Env().IsDebug {
-		log.Trace("generate hash:", string(ctx.Request.Header.Method()), string(ctx.Request.Header.RequestURI()), string(ctx.Request.URI().QueryArgs().QueryString()), string(ctx.Request.Body()), string(ctx.Request.PostArgs().QueryString()))
+		log.Trace("generate hash:", string(ctx.Request.Header.Method()), string(ctx.Request.Header.RequestURI()), string(ctx.Request.PhantomURI().QueryArgs().QueryString()), string(ctx.Request.Body()), string(ctx.Request.PostArgs().QueryString()))
 	}
 
 	//TODO 后台可以按照请求路径来勾选 Hash 因子
@@ -261,7 +261,7 @@ func (p *RequestCache) getHash(ctx *fasthttp.RequestCtx) string {
 	buffer.Write(ctx.Request.Header.Method())
 	//TODO enable configure for this feature, may filter by user or share, add/remove Authorization header to hash factor
 	buffer.Write(ctx.Request.Header.PeekAny(fasthttp.AuthHeaderKeys))
-	buffer.Write(ctx.Request.URI().FullURI())
+	buffer.Write(ctx.Request.PhantomURI().FullURI())
 	buffer.Write(ctx.Request.GetRawBody())
 	str := util.MD5digestString(buffer.Bytes())
 
@@ -281,7 +281,7 @@ func (filter *RequestCacheGet) Name() string {
 }
 
 func (filter *RequestCacheGet) Filter(ctx *fasthttp.RequestCtx) {
-	if bytes.Equal(common.FaviconPath, ctx.Request.URI().Path()) {
+	if bytes.Equal(common.FaviconPath, ctx.Request.PhantomURI().Path()) {
 		if global.Env().IsDebug {
 			log.Tracef("skip to delegate favicon.io")
 		}
@@ -298,16 +298,17 @@ func (filter *RequestCacheGet) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 	url := string(ctx.RequestURI())
-	args := ctx.Request.URI().QueryArgs()
+	clonedURI := ctx.Request.CloneURI()
+	defer fasthttp.ReleaseURI(clonedURI)
+	args := clonedURI.QueryArgs()
 	if args.Has("no_cache") {
 		v := args.Peek("no_cache")
 
-		args := ctx.URI().QueryArgs()
 		args.Del("no_cache")
 
 		//update back
-		ctx.URI().SetQueryString(args.String())
-		ctx.Request.SetRequestURIBytes(ctx.URI().RequestURI())
+		clonedURI.SetQueryString(args.String())
+		ctx.Request.SetURI(clonedURI)
 
 		if string(v) != "false" {
 			cacheable = false

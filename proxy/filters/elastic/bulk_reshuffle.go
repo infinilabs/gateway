@@ -2,6 +2,9 @@ package elastic
 
 import (
 	"fmt"
+	"runtime"
+	"time"
+
 	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
 	"github.com/savsgio/gotils/bytes"
@@ -17,8 +20,6 @@ import (
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
-	"runtime"
-	"time"
 )
 
 var JSON_CONTENT_TYPE = "application/json"
@@ -53,7 +54,6 @@ type BulkReshuffleConfig struct {
 	ContinueAfterReshuffle bool   `config:"continue_after_reshuffle"`
 	IndexStatsAnalysis     bool   `config:"index_stats_analysis"`
 	ActionStatsAnalysis    bool   `config:"action_stats_analysis"`
-
 
 	ContinueMetadataNotFound bool `config:"continue_metadata_missing"`
 
@@ -92,11 +92,11 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 	return &runner, nil
 }
 
-var docBufferPool=  bytebufferpool.NewTaggedPool("bulk_reshuffle_request_docs",0,1024*1024*1024,100000)
+var docBufferPool = bytebufferpool.NewTaggedPool("bulk_reshuffle_request_docs", 0, 1024*1024*1024, 100000)
 
 func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
-	pathStr := util.UnsafeBytesToString(ctx.URI().Path())
+	pathStr := util.UnsafeBytesToString(ctx.PhantomURI().Path())
 
 	//拆解 bulk 请求，重新封装
 	if util.SuffixStr(pathStr, "/_bulk") {
@@ -168,9 +168,9 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 			return false
-		}, func(metaBytes []byte, actionStr, index, typeName, id,routing string,offset int) (err error) {
+		}, func(metaBytes []byte, actionStr, index, typeName, id, routing string, offset int) (err error) {
 
-			collectedMeta=false
+			collectedMeta = false
 
 			metaStr := util.UnsafeBytesToString(metaBytes)
 
@@ -179,7 +179,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			var indexNew, typeNew, idNew string
 
 			//only handle empty index
-			if index==""{
+			if index == "" {
 				//url level
 				var urlLevelIndex string
 				var urlLevelType string
@@ -273,8 +273,8 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 					if rate.GetRateLimiter("index_routing_table_not_found", index, 1, 2, time.Minute*1).Allow() {
 						log.Warn(index, ",", metaStr, ",", err)
 					}
-					if this.config.ContinueMetadataNotFound{
-						hitMetadataNotFound=true
+					if this.config.ContinueMetadataNotFound {
+						hitMetadataNotFound = true
 						return nil
 					}
 					panic(err)
@@ -305,8 +305,8 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 							log.Warn("shardInfo was not found,", index, ",", shardID)
 						}
 
-						if this.config.ContinueMetadataNotFound{
-							hitMetadataNotFound=true
+						if this.config.ContinueMetadataNotFound {
+							hitMetadataNotFound = true
 							return nil
 						}
 						panic(errors.Error("shard info was not found,", index, ",", shardID, ",", err))
@@ -378,11 +378,11 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			}
 
 			//add to major buffer
-			elastic.SafetyAddNewlineBetweenData(buff,metaBytes)
-			collectedMeta=true
+			elastic.SafetyAddNewlineBetweenData(buff, metaBytes)
+			collectedMeta = true
 
 			return nil
-		}, func(payloadBytes []byte, actionStr, index, typeName, id,routing string) {
+		}, func(payloadBytes []byte, actionStr, index, typeName, id, routing string) {
 
 			//only if metadata is collected, than we collect payload, payload can't live without metadata
 			if collectedMeta {
@@ -398,7 +398,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 				if payloadBytes != nil && len(payloadBytes) > 0 {
 
-					elastic.SafetyAddNewlineBetweenData(buff,payloadBytes)
+					elastic.SafetyAddNewlineBetweenData(buff, payloadBytes)
 
 					if validPayload {
 						obj := map[string]interface{}{}
@@ -419,20 +419,19 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			panic(err)
 		}
 
-
 		//stats
 		if indexAnalysis {
 			ctx.Set("bulk_index_stats", indexStatsData)
 			for k, v := range indexStatsData {
 				//统计索引次数
-				stats.IncrementBy("elasticsearch."+clusterName+".indices", elastic.RemoveDotFromIndexName(k,"#"), int64(v))
+				stats.IncrementBy("elasticsearch."+clusterName+".indices", elastic.RemoveDotFromIndexName(k, "#"), int64(v))
 			}
 		}
 		if actionAnalysis {
 			ctx.Set("bulk_action_stats", actionStatsData)
 			for k, v := range actionStatsData {
 				//统计操作次数
-				stats.IncrementBy("elasticsearch."+clusterName+".operations", elastic.RemoveDotFromIndexName(k,"#"), int64(v))
+				stats.IncrementBy("elasticsearch."+clusterName+".operations", elastic.RemoveDotFromIndexName(k, "#"), int64(v))
 			}
 		}
 
@@ -444,8 +443,8 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		}
 
 		//skip async or not
-		if this.config.ContinueMetadataNotFound&&hitMetadataNotFound{
-			if rate.GetRateLimiterPerSecond("metadata_not_found","reshuffle",1).Allow(){
+		if this.config.ContinueMetadataNotFound && hitMetadataNotFound {
+			if rate.GetRateLimiterPerSecond("metadata_not_found", "reshuffle", 1).Allow() {
 				log.Debug("metadata not found, skip reshuffle")
 			}
 			return
@@ -454,13 +453,12 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		//send to queue
 		for x, y := range docBuf {
 
-
-			if y.Len()<=0{
-				log.Trace("empty doc buffer, skip processing: ",x)
+			if y.Len() <= 0 {
+				log.Trace("empty doc buffer, skip processing: ", x)
 				continue
 			}
 
-			if !util.BytesHasSuffix(y.B,elastic.NEWLINEBYTES){
+			if !util.BytesHasSuffix(y.B, elastic.NEWLINEBYTES) {
 				y.Write(elastic.NEWLINEBYTES)
 			}
 
@@ -488,7 +486,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			docBufferPool.Put(y)
 		}
 
-
 		//fake results
 		ctx.SetContentType(JSON_CONTENT_TYPE)
 
@@ -504,13 +501,13 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		buffer.Write(endPart)
 
 		ctx.Response.SetBody(bytes.Copy(buffer.Bytes()))
-		bytebufferpool.Put("fake_bulk_results",buffer)
+		bytebufferpool.Put("fake_bulk_results", buffer)
 
 		if len(this.config.TagsOnSuccess) > 0 {
 			ctx.UpdateTags(this.config.TagsOnSuccess, nil)
 		}
 
-		ctx.Response.Header.Set("X-Async-Bulk","true")
+		ctx.Response.Header.Set("X-Async-Bulk", "true")
 
 		if !this.config.ContinueAfterReshuffle {
 			ctx.Response.SetStatusCode(200)

@@ -2,6 +2,10 @@ package flow_runner
 
 import (
 	"fmt"
+	"runtime"
+	"sync"
+	"time"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
@@ -10,9 +14,6 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
-	"runtime"
-	"sync"
-	"time"
 )
 
 type Config struct {
@@ -21,7 +22,7 @@ type Config struct {
 	FlowMaxRunningTimeoutInSeconds int    `config:"flow_max_running_timeout_in_second"`
 	CommitTimeoutInSeconds         int    `config:"commit_timeout_in_second"`
 
-	SkipEmptyQueue    bool `config:"skip_empty_queue"`
+	SkipEmptyQueue bool `config:"skip_empty_queue"`
 
 	CommitOnTag              string `config:"commit_on_tag"`
 	IdleWaitTimeoutInSeconds int    `config:"idle_wait_timeout_in_second"`
@@ -32,7 +33,7 @@ type Config struct {
 var ctxPool = &sync.Pool{
 	New: func() interface{} {
 		c := fasthttp.RequestCtx{
-			EnrichedMetadata:true,
+			EnrichedMetadata: true,
 		}
 		return &c
 	},
@@ -66,15 +67,15 @@ func init() {
 func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
 		Consumer: queue.ConsumerConfig{
-			Group:            "group-001",
-			Name:             "consumer-001",
-			FetchMinBytes:    1,
-			FetchMaxBytes:    10 * 1024 * 1024,
-			FetchMaxMessages: 500,
+			Group:             "group-001",
+			Name:              "consumer-001",
+			FetchMinBytes:     1,
+			FetchMaxBytes:     10 * 1024 * 1024,
+			FetchMaxMessages:  500,
 			EOFRetryDelayInMs: 500,
-			FetchMaxWaitMs:   10000,
+			FetchMaxWaitMs:    10000,
 		},
-		SkipEmptyQueue: true,
+		SkipEmptyQueue:                 true,
 		CommitOnTag:                    "",
 		IdleWaitTimeoutInSeconds:       1,
 		FlowMaxRunningTimeoutInSeconds: 60,
@@ -106,7 +107,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 	var consumer = queue.GetOrInitConsumerConfig(qConfig.Id, processor.config.Consumer.Group, processor.config.Consumer.Name)
 	initOfffset, _ = queue.GetOffset(qConfig, consumer)
 	offset = initOfffset
-	if processor.config.SkipEmptyQueue&&!queue.ConsumerHasLag(qConfig,consumer) {
+	if processor.config.SkipEmptyQueue && !queue.ConsumerHasLag(qConfig, consumer) {
 		return nil
 	}
 
@@ -126,7 +127,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 					v = r.(string)
 				}
 				log.Errorf("error in flow_runner [%v], [%v]", processor.config.FlowName, v)
-				ctx.Failed()
+				ctx.Error(fmt.Errorf("flow runner panic: %v", r))
 				skipFinalDocsProcess = true
 			}
 		}
@@ -139,16 +140,15 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 			ok, err := queue.CommitOffset(qConfig, consumer, offset)
 			log.Tracef("%v,%v commit offset:%v", qConfig.Name, consumer.Name, offset)
 			if !ok || err != nil {
-				ctx.Failed()
-			}else{
-				initOfffset=offset
+				ctx.Error(fmt.Errorf("failed to commit offset, ok: %v, err: %v", ok, err))
+			} else {
+				initOfffset = offset
 			}
 		}
 	}()
 
 	t1 := util.AcquireTimer(time.Duration(processor.config.FlowMaxRunningTimeoutInSeconds) * time.Second)
 	defer util.ReleaseTimer(t1)
-
 
 	lastCommitTime := time.Now()
 	var commitIdle = time.Duration(processor.config.CommitTimeoutInSeconds) * time.Second
@@ -216,12 +216,12 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 						if !ok || err != nil {
 							return err
 						}
-						initOfffset=offset
+						initOfffset = offset
 					}
 				}
 
 			}
-			offset = ctx1.NextOffset.String()//TODO
+			offset = ctx1.NextOffset.String() //TODO
 
 			if timeout || len(messages) == 0 {
 				log.Debugf("[%v][%v] %v messages, timeout:%v, sleep 1s", qConfig.Name, consumer.Name, len(messages), timeout)

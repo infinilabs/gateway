@@ -5,6 +5,7 @@ package dump
 
 import (
 	"fmt"
+
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
@@ -44,12 +45,12 @@ func (filter *DumpFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 	if filter.config.URI {
-		fmt.Println("URI: ", ctx.Request.URI().String())
+		fmt.Println("URI: ", ctx.Request.PhantomURI().String())
 	}
 
 	if filter.config.QueryArgs {
-		fmt.Println("QUERY_ARGS: ", ctx.Request.URI().QueryArgs().String())
-		fmt.Println("QUERY_STRING: ", string(ctx.Request.URI().QueryString()))
+		fmt.Println("QUERY_ARGS: ", ctx.Request.PhantomURI().QueryArgs().String())
+		fmt.Println("QUERY_STRING: ", string(ctx.Request.PhantomURI().QueryString()))
 	}
 
 	if filter.config.RequestHeader {

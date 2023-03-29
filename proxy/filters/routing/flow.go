@@ -2,7 +2,12 @@ package routing
 
 import (
 	"fmt"
+	"io"
+	"regexp"
+	"time"
+
 	log "github.com/cihub/seelog"
+	"github.com/valyala/fasttemplate"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
@@ -10,10 +15,6 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"infini.sh/gateway/common"
-	"io"
-	"github.com/valyala/fasttemplate"
-	"regexp"
-	"time"
 )
 
 type FlowFilter struct {
@@ -30,9 +31,9 @@ type ContextFlow struct {
 	Context  string `config:"context"`
 	Pattern  string `config:"context_parse_pattern"`
 	Template string `config:"flow_id_template"`
-	Continue bool     `config:"continue"`
+	Continue bool   `config:"continue"`
 
-	p *regexp.Regexp
+	p           *regexp.Regexp
 	template    *fasttemplate.Template
 	hasTemplate bool
 }
@@ -55,26 +56,26 @@ func (filter *FlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 			panic(err)
 		}
 
-		flowID:=filter.ContextFlow.Template
-		var hitCache=false
+		flowID := filter.ContextFlow.Template
+		var hitCache = false
 		//check cache first
-		if filter.cache!=nil{
-			v:=filter.cache.Get(key)
-			if v!=nil{
-				tmp,ok:=v.(string)
-				if ok{
-					flowID=tmp
-					hitCache=true
+		if filter.cache != nil {
+			v := filter.cache.Get(key)
+			if v != nil {
+				tmp, ok := v.(string)
+				if ok {
+					flowID = tmp
+					hitCache = true
 				}
 			}
 		}
 
-		if !hitCache{
+		if !hitCache {
 			keyStr := util.ToString(key)
 			variables := util.MapStr{}
 			if filter.ContextFlow.p != nil {
 				match := filter.ContextFlow.p.FindStringSubmatch(keyStr)
-				if len(match)>0{
+				if len(match) > 0 {
 					for i, name := range filter.ContextFlow.p.SubexpNames() {
 						if name != "" {
 							variables[name] = match[i]
@@ -82,8 +83,6 @@ func (filter *FlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 					}
 				}
 			}
-
-
 
 			if filter.ContextFlow.hasTemplate {
 
@@ -93,20 +92,20 @@ func (filter *FlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 				flowID = filter.ContextFlow.template.ExecuteFuncString(func(w io.Writer, tag string) (int, error) {
 
-					variable,ok:=variables[tag]
-					if ok{
+					variable, ok := variables[tag]
+					if ok {
 						return w.Write([]byte(util.ToString(variable)))
 					}
 
 					variable, err := ctx.GetValue(tag)
 					if err != nil {
-						panic(errors.Wrap(err,"tag was not found in context"))
+						panic(errors.Wrap(err, "tag was not found in context"))
 					}
 					return w.Write([]byte(util.ToString(variable)))
 				})
 
 				if global.Env().IsDebug {
-					log.Debugf("flow_id: %v -> %v", filter.ContextFlow.Template,flowID)
+					log.Debugf("flow_id: %v -> %v", filter.ContextFlow.Template, flowID)
 				}
 			}
 		}
@@ -119,17 +118,17 @@ func (filter *FlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 			}
 		} else {
 			if global.Env().IsDebug {
-				log.Debugf("request [%v] go on flow: [%s] [%s]", ctx.URI().String(), flowID, flow.ToString())
+				log.Debugf("request [%v] go on flow: [%s] [%s]", ctx.PhantomURI().String(), flowID, flow.ToString())
 			}
 			ctx.AddFlowProcess("flow:" + flow.ID)
 			flow.Process(ctx)
 
 			//update cache
-			if filter.cache!=nil&&!hitCache{
-				filter.cache.Put(key,flowID)
+			if filter.cache != nil && !hitCache {
+				filter.cache.Put(key, flowID)
 			}
 
-			if !filter.ContextFlow.Continue{
+			if !filter.ContextFlow.Continue {
 				ctx.Finished()
 				return
 			}
@@ -156,12 +155,12 @@ func (filter *FlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 		flow, err := common.GetFlow(flowID)
 		if err != nil {
 			log.Errorf("failed to get flow [%v], err: [%v], continue", flowID, err)
-			if  !filter.IgnoreUndefinedFlow{
+			if !filter.IgnoreUndefinedFlow {
 				panic(err)
 			}
-		}else{
+		} else {
 			if global.Env().IsDebug {
-				log.Tracef("request [%v] go on flow: [%s] [%s]", ctx.URI().String(), v, flow.ToString())
+				log.Tracef("request [%v] go on flow: [%s] [%s]", ctx.PhantomURI().String(), v, flow.ToString())
 			}
 
 			ctx.AddFlowProcess("flow:" + flow.ID)
@@ -228,8 +227,7 @@ func NewFlowFilter(c *config.Config) (pipeline.Filter, error) {
 		}
 	}
 
-	runner.cache=util.NewCacheWithExpireOnAdd(600*time.Second,100)
-
+	runner.cache = util.NewCacheWithExpireOnAdd(600*time.Second, 100)
 
 	return &runner, nil
 }

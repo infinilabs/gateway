@@ -342,9 +342,11 @@ env: #use $[[env.LOGGING_ES_ENDPOINT]] in config instead
   GW_BINDING: "0.0.0.0:8000"
   API_BINDING: "0.0.0.0:2900"
 
-configs.auto_reload: true
 path.data: data
 path.logs: log
+path.configs: config # directory of additional gateway configurations
+
+configs.auto_reload: false # set true to auto reload gateway configurations
 
 # Gateway internal stats collecting
 stats:
@@ -629,11 +631,37 @@ disk_queue:
 
 ## badger kv storage configuration
 badger:
+  single_bucket_mode: true
+  path: '' # defaults to {path.data}/gateway/node/{nodeID}/badger/
+  memory_mode: false # don't persist data to disk
+  sync_writes: false # flush to disk on every write
+  mem_table_size: 10485760
+  num_mem_tables: 1
+  # lsm tuning options
   value_log_max_entries: 1000000
-  value_log_file_size: 104857600
+  value_log_file_size: 536870912
+  value_threshold: 1048576
+  num_level0_tables: 1
+  num_level0_tables_stall: 2
 
-##elasticsearch module
+## floating ip configuration
+floating_ip:
+  enabled: false # enable floating ip, requires root privilege
+  netmask: 255.255.255.0
+  ip: '' # if empty, will automatically bind to x.x.x.234
+  interface: '' # if empty, will automatically find an interface to bind
+  local_ip: '' # if empty, will automatically bind to interface's ip address
+  echo: # gateway will automatically ping master's echo.port to check whether it's still alive
+    port: 61111
+    dial_timeout_in_ms: 1000
+    timeout_in_ms: 5000
+  broadcast:
+    binding: 224.3.2.2:7654 # broadcast address for floating ip status broadcast
+
+## elasticsearch module global configurations
 elastic:
+  # elasticsearch for gateway's system info storage
+  elasticsearch: prod
   enabled: true
   remote_configs: false
   health_check:

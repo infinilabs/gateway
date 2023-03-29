@@ -61,7 +61,7 @@ func (filter *SwitchFlowFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 			flow := common.MustGetFlow(item.Flow)
 			if global.Env().IsDebug {
-				log.Debugf("request [%v] go on flow: [%s]", ctx.URI().String(), flow.ToString())
+				log.Debugf("request [%v] go on flow: [%s]", ctx.PhantomURI().String(), flow.ToString())
 			}
 			flow.Process(ctx)
 			if !filter.ContinueAfterMatch {

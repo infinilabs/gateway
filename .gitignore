@@ -52,3 +52,4 @@ trash
 .public
 /config/generated.go
 generated_*.go
+*.swp
