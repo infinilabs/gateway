@@ -1,341 +1,9 @@
-##ILM for system cluster
-#PUT _template/.infini
-#{
-#    "order": 0,
-#    "index_patterns": [
-#      ".infini_*"
-#    ],
-#    "settings": {
-#      "index": {
-#        "max_result_window": "10000000",
-#        "mapping": {
-#          "total_fields": {
-#            "limit": "20000"
-#          }
-#        },
-#        "analysis": {
-#          "analyzer": {
-#            "suggest_text_search": {
-#              "filter": [
-#                "word_delimiter"
-#              ],
-#              "tokenizer": "classic"
-#            }
-#          }
-#        },
-#        "number_of_shards": "1"
-#      }
-#    },
-#    "mappings": {
-#      "dynamic_templates": [
-#        {
-#          "strings": {
-#            "mapping": {
-#              "ignore_above": 256,
-#              "type": "keyword"
-#            },
-#            "match_mapping_type": "string"
-#          }
-#        }
-#      ]
-#    },
-#    "aliases": {}
-#}
-#
-#PUT _ilm/policy/ilm_.infini_metrics-30days-retention
-#{
-#  "policy": {
-#    "phases": {
-#      "hot": {
-#        "min_age": "0ms",
-#        "actions": {
-#          "rollover": {
-#            "max_age": "30d",
-#            "max_size": "50gb"
-#          },
-#          "set_priority": {
-#            "priority": 100
-#          }
-#        }
-#      },
-#      "delete": {
-#        "min_age": "30d",
-#        "actions": {
-#          "delete": {
-#          }
-#        }
-#      }
-#    }
-#  }
-#}
-#
-#PUT _template/.infini_metrics-rollover
-#{
-#    "order" : 100000,
-#    "index_patterns" : [
-#      ".infini_metrics*"
-#    ],
-#    "settings" : {
-#      "index" : {
-#        "format" : "7",
-#        "lifecycle" : {
-#          "name" : "ilm_.infini_metrics-30days-retention",
-#          "rollover_alias" : ".infini_metrics"
-#        },
-#        "codec" : "best_compression",
-#        "number_of_shards" : "1",
-#        "translog.durability":"async"
-#      }
-#    },
-#    "mappings" : {
-#      "dynamic_templates" : [
-#        {
-#          "strings" : {
-#            "mapping" : {
-#              "ignore_above" : 256,
-#              "type" : "keyword"
-#            },
-#            "match_mapping_type" : "string"
-#          }
-#        }
-#      ]
-#    },
-#    "aliases" : { }
-#  }
-#
-#
-#PUT .infini_metrics-00001
-#{
-#  "settings": {
-#    "index.lifecycle.rollover_alias":".infini_metrics"
-#    , "refresh_interval": "5s"
-#  },
-#  "aliases":{
-#    ".infini_metrics":{
-#      "is_write_index":true
-#    }
-#  },
-#    "mappings": {
-#      "dynamic_templates": [
-#        {
-#          "strings": {
-#            "match_mapping_type": "string",
-#            "mapping": {
-#              "ignore_above": 256,
-#              "type": "keyword"
-#            }
-#          }
-#        }
-#      ],
-#      "properties": {
-#        "timestamp": {
-#          "type": "date"
-#        }
-#      }
-#    }
-#}
-#
-#PUT _template/.infini_logs-rollover
-#{
-#  "order": 100000,
-#  "index_patterns": [
-#    ".infini_logs*"
-#  ],
-#  "settings": {
-#    "index": {
-#      "format": "7",
-#      "lifecycle": {
-#          "name" : "ilm_.infini_metrics-30days-retention",
-#          "rollover_alias" : ".infini_logs"
-#      },
-#      "codec": "best_compression",
-#      "number_of_shards": "1",
-#      "translog": {
-#        "durability": "async"
-#      }
-#    }
-#  },
-#  "mappings": {
-#    "dynamic_templates": [
-#      {
-#        "strings": {
-#          "mapping": {
-#            "ignore_above": 256,
-#            "type": "keyword"
-#          },
-#          "match_mapping_type": "string"
-#        }
-#      }
-#    ],
-#    "properties": {
-#      "payload.message": {
-#        "type": "text"
-#      },
-#      "timestamp": {
-#        "type": "date"
-#      }
-#    }
-#  },
-#  "aliases": {}
-#}
-#
-#PUT .infini_logs-00001
-#{
-#  "settings": {
-#    "index.lifecycle.rollover_alias":".infini_logs"
-#    , "refresh_interval": "5s"
-#  },
-#  "aliases":{
-#    ".infini_logs":{
-#      "is_write_index":true
-#    }
-#  }
-#}
-#
-#
-#PUT _template/.infini_requests_logging-rollover
-#{
-#  "order": 100000,
-#  "index_patterns": [
-#    ".infini_requests_logging*"
-#  ],
-#  "settings": {
-#    "index": {
-#      "format": "7",
-#      "lifecycle": {
-#          "name" : "ilm_.infini_metrics-30days-retention",
-#          "rollover_alias" : ".infini_requests_logging"
-#      },
-#      "codec": "best_compression",
-#      "number_of_shards": "1",
-#      "translog": {
-#        "durability": "async"
-#      }
-#    }
-#  },
-#  "mappings": {
-#    "dynamic_templates": [
-#      {
-#        "strings": {
-#          "mapping": {
-#            "ignore_above": 256,
-#            "type": "keyword"
-#          },
-#          "match_mapping_type": "string"
-#        }
-#      }
-#    ],
-#    "properties": {
-#      "request": {
-#           "properties": {
-#             "body": {
-#               "type": "text"
-#             }
-#           }
-#         },
-#     "response": {
-#       "properties": {
-#         "body": {
-#           "type": "text"
-#         }
-#       }
-#     },
-#      "timestamp": {
-#        "type": "date"
-#      }
-#    }
-#  },
-#  "aliases": {}
-#}
-#
-#PUT .infini_requests_logging-00001
-#{
-#  "settings": {
-#    "index.lifecycle.rollover_alias":".infini_requests_logging"
-#    , "refresh_interval": "5s"
-#  },
-#  "aliases":{
-#    ".infini_requests_logging":{
-#      "is_write_index":true
-#    }
-#  }
-#}
-#
-#
-#PUT _template/.infini_async_bulk_results-rollover
-#{
-#  "order": 100000,
-#  "index_patterns": [
-#    ".infini_async_bulk_results*"
-#  ],
-#  "settings": {
-#    "index": {
-#      "format": "7",
-#      "lifecycle": {
-#          "name" : "ilm_.infini_metrics-30days-retention",
-#          "rollover_alias" : ".infini_async_bulk_results"
-#      },
-#      "codec": "best_compression",
-#      "number_of_shards": "1",
-#      "translog": {
-#        "durability": "async"
-#      }
-#    }
-#  },
-#  "mappings": {
-#    "dynamic_templates": [
-#      {
-#        "strings": {
-#          "mapping": {
-#            "ignore_above": 256,
-#            "type": "keyword"
-#          },
-#          "match_mapping_type": "string"
-#        }
-#      }
-#    ],
-#    "properties": {
-#      "request": {
-#                "properties": {
-#                  "body": {
-#                    "type": "text"
-#                  }
-#                }
-#      },
-#      "response": {
-#            "properties": {
-#              "body": {
-#                "type": "text"
-#              }
-#            }
-#       },
-#      "timestamp": {
-#        "type": "date"
-#      }
-#    }
-#  },
-#  "aliases": {}
-#}
-#
-#PUT .infini_async_bulk_results-00001
-#{
-#  "settings": {
-#    "index.lifecycle.rollover_alias":".infini_async_bulk_results"
-#    , "refresh_interval": "5s"
-#  },
-#  "aliases":{
-#    ".infini_async_bulk_results":{
-#      "is_write_index":true
-#    }
-#  }
-#}
-
-#this env section used for setup default settings, can be overwrite by system environments
+#the env section used for setup default settings, it can be overwritten by system environments.
 #eg: PROD_ES_ENDPOINT=http://192.168.3.185:9200 LOGGING_ES_ENDPOINT=http://192.168.3.185:9201  ./bin/gateway
 env: #use $[[env.LOGGING_ES_ENDPOINT]] in config instead
   LOGGING_ES_ENDPOINT: https://localhost:9200
-  LOGGING_ES_USER: elastic
-  LOGGING_ES_PASS: password
+  LOGGING_ES_USER: admin
+  LOGGING_ES_PASS: admin
   PROD_ES_ENDPOINT: https://localhost:9200
   PROD_ES_USER: admin
   PROD_ES_PASS: admin
@@ -706,3 +374,336 @@ elastic:
   cluster_settings_check:
     enabled: false
     interval: 60s
+
+
+##ILM for system cluster
+#  PUT _template/.infini
+#  {
+#    "order": 0,
+#    "index_patterns": [
+#        ".infini_*"
+#    ],
+#    "settings": {
+#      "index": {
+#        "max_result_window": "10000000",
+#        "mapping": {
+#          "total_fields": {
+#            "limit": "20000"
+#          }
+#        },
+#        "analysis": {
+#          "analyzer": {
+#            "suggest_text_search": {
+#              "filter": [
+#                  "word_delimiter"
+#              ],
+#              "tokenizer": "classic"
+#            }
+#          }
+#        },
+#        "number_of_shards": "1"
+#      }
+#    },
+#    "mappings": {
+#      "dynamic_templates": [
+#        {
+#          "strings": {
+#            "mapping": {
+#              "ignore_above": 256,
+#              "type": "keyword"
+#            },
+#            "match_mapping_type": "string"
+#          }
+#        }
+#      ]
+#    },
+#    "aliases": {}
+#  }
+#
+#  PUT _ilm/policy/ilm_.infini_metrics-30days-retention
+#  {
+#    "policy": {
+#      "phases": {
+#        "hot": {
+#          "min_age": "0ms",
+#          "actions": {
+#            "rollover": {
+#              "max_age": "30d",
+#              "max_size": "50gb"
+#            },
+#            "set_priority": {
+#              "priority": 100
+#            }
+#          }
+#        },
+#        "delete": {
+#          "min_age": "30d",
+#          "actions": {
+#            "delete": {
+#            }
+#          }
+#        }
+#      }
+#    }
+#  }
+#
+#  PUT _template/.infini_metrics-rollover
+#  {
+#    "order" : 100000,
+#    "index_patterns" : [
+#        ".infini_metrics*"
+#    ],
+#    "settings" : {
+#      "index" : {
+#        "format" : "7",
+#        "lifecycle" : {
+#          "name" : "ilm_.infini_metrics-30days-retention",
+#          "rollover_alias" : ".infini_metrics"
+#        },
+#        "codec" : "best_compression",
+#        "number_of_shards" : "1",
+#        "translog.durability":"async"
+#      }
+#    },
+#    "mappings" : {
+#      "dynamic_templates" : [
+#        {
+#          "strings" : {
+#            "mapping" : {
+#              "ignore_above" : 256,
+#              "type" : "keyword"
+#            },
+#            "match_mapping_type" : "string"
+#          }
+#        }
+#      ]
+#    },
+#    "aliases" : { }
+#  }
+#
+#
+#  PUT .infini_metrics-00001
+#  {
+#    "settings": {
+#        "index.lifecycle.rollover_alias":".infini_metrics"
+#      , "refresh_interval": "5s"
+#    },
+#    "aliases":{
+#      ".infini_metrics":{
+#        "is_write_index":true
+#      }
+#    },
+#    "mappings": {
+#      "dynamic_templates": [
+#        {
+#          "strings": {
+#            "match_mapping_type": "string",
+#            "mapping": {
+#              "ignore_above": 256,
+#              "type": "keyword"
+#            }
+#          }
+#        }
+#      ],
+#      "properties": {
+#        "timestamp": {
+#          "type": "date"
+#        }
+#      }
+#    }
+#  }
+#
+#  PUT _template/.infini_logs-rollover
+#  {
+#    "order": 100000,
+#    "index_patterns": [
+#        ".infini_logs*"
+#    ],
+#    "settings": {
+#      "index": {
+#        "format": "7",
+#        "lifecycle": {
+#          "name" : "ilm_.infini_metrics-30days-retention",
+#          "rollover_alias" : ".infini_logs"
+#        },
+#        "codec": "best_compression",
+#        "number_of_shards": "1",
+#        "translog": {
+#          "durability": "async"
+#        }
+#      }
+#    },
+#    "mappings": {
+#      "dynamic_templates": [
+#        {
+#          "strings": {
+#            "mapping": {
+#              "ignore_above": 256,
+#              "type": "keyword"
+#            },
+#            "match_mapping_type": "string"
+#          }
+#        }
+#      ],
+#      "properties": {
+#        "payload.message": {
+#          "type": "text"
+#        },
+#        "timestamp": {
+#          "type": "date"
+#        }
+#      }
+#    },
+#    "aliases": {}
+#  }
+#
+#  PUT .infini_logs-00001
+#  {
+#    "settings": {
+#        "index.lifecycle.rollover_alias":".infini_logs"
+#      , "refresh_interval": "5s"
+#    },
+#    "aliases":{
+#      ".infini_logs":{
+#        "is_write_index":true
+#      }
+#    }
+#  }
+#
+#
+#  PUT _template/.infini_requests_logging-rollover
+#  {
+#    "order": 100000,
+#    "index_patterns": [
+#        ".infini_requests_logging*"
+#    ],
+#    "settings": {
+#      "index": {
+#        "format": "7",
+#        "lifecycle": {
+#          "name" : "ilm_.infini_metrics-30days-retention",
+#          "rollover_alias" : ".infini_requests_logging"
+#        },
+#        "codec": "best_compression",
+#        "number_of_shards": "1",
+#        "translog": {
+#          "durability": "async"
+#        }
+#      }
+#    },
+#    "mappings": {
+#      "dynamic_templates": [
+#        {
+#          "strings": {
+#            "mapping": {
+#              "ignore_above": 256,
+#              "type": "keyword"
+#            },
+#            "match_mapping_type": "string"
+#          }
+#        }
+#      ],
+#      "properties": {
+#        "request": {
+#          "properties": {
+#            "body": {
+#              "type": "text"
+#            }
+#          }
+#        },
+#        "response": {
+#          "properties": {
+#            "body": {
+#              "type": "text"
+#            }
+#          }
+#        },
+#        "timestamp": {
+#          "type": "date"
+#        }
+#      }
+#    },
+#    "aliases": {}
+#  }
+#
+#  PUT .infini_requests_logging-00001
+#  {
+#    "settings": {
+#        "index.lifecycle.rollover_alias":".infini_requests_logging"
+#      , "refresh_interval": "5s"
+#    },
+#    "aliases":{
+#      ".infini_requests_logging":{
+#        "is_write_index":true
+#      }
+#    }
+#  }
+#
+#
+#  PUT _template/.infini_async_bulk_results-rollover
+#  {
+#    "order": 100000,
+#    "index_patterns": [
+#        ".infini_async_bulk_results*"
+#    ],
+#    "settings": {
+#      "index": {
+#        "format": "7",
+#        "lifecycle": {
+#          "name" : "ilm_.infini_metrics-30days-retention",
+#          "rollover_alias" : ".infini_async_bulk_results"
+#        },
+#        "codec": "best_compression",
+#        "number_of_shards": "1",
+#        "translog": {
+#          "durability": "async"
+#        }
+#      }
+#    },
+#    "mappings": {
+#      "dynamic_templates": [
+#        {
+#          "strings": {
+#            "mapping": {
+#              "ignore_above": 256,
+#              "type": "keyword"
+#            },
+#            "match_mapping_type": "string"
+#          }
+#        }
+#      ],
+#      "properties": {
+#        "request": {
+#          "properties": {
+#            "body": {
+#              "type": "text"
+#            }
+#          }
+#        },
+#        "response": {
+#          "properties": {
+#            "body": {
+#              "type": "text"
+#            }
+#          }
+#        },
+#        "timestamp": {
+#          "type": "date"
+#        }
+#      }
+#    },
+#    "aliases": {}
+#  }
+#
+#  PUT .infini_async_bulk_results-00001
+#  {
+#    "settings": {
+#        "index.lifecycle.rollover_alias":".infini_async_bulk_results"
+#      , "refresh_interval": "5s"
+#    },
+#    "aliases":{
+#      ".infini_async_bulk_results":{
+#        "is_write_index":true
+#      }
+#    }
+#  }
