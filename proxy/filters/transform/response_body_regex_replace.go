@@ -2,13 +2,14 @@ package transform
 
 import (
 	"fmt"
+	"regexp"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
-	"regexp"
 )
 
 type ResponseBodyRegexReplace struct {
@@ -34,15 +35,12 @@ func (filter *ResponseBodyRegexReplace) Filter(ctx *fasthttp.RequestCtx) {
 
 		newBody := filter.p.ReplaceAll(body, util.UnsafeStringToBytes(filter.To))
 
-		//TODO auto handle uncompressed response
-		ctx.Response.Header.Del(fasthttp.HeaderContentEncoding)
-		ctx.Response.Header.Del(fasthttp.HeaderContentEncoding2)
-		ctx.Response.SetBody(newBody)
+		ctx.Response.SetRawBody(newBody)
 	}
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("response_body_regex_replace",NewResponseBodyRegexReplace,&ResponseBodyRegexReplace{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("response_body_regex_replace", NewResponseBodyRegexReplace, &ResponseBodyRegexReplace{})
 }
 
 func NewResponseBodyRegexReplace(c *config.Config) (filter pipeline.Filter, err error) {
