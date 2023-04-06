@@ -172,7 +172,7 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 
 			initScrollID, err := jsonparser.GetString(scrollResponse1, "_scroll_id")
 			if err != nil {
-				log.Errorf("cannot get _scroll_id from json: %v, %v", string(scrollResponse1), err)
+				log.Errorf("cannot get _scroll_id from json: %v, %v", util.SubString(string(scrollResponse1), 0, 1024), err)
 				panic(err)
 			}
 
@@ -186,7 +186,7 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 			version := processor.client.GetVersion()
 			totalHits, err := common.GetScrollHitsTotal(version, scrollResponse1)
 			if err != nil {
-				log.Errorf("cannot get total hits from json: %v, %v", string(scrollResponse1), err)
+				log.Errorf("cannot get total hits from json: %v, %v", util.SubString(string(scrollResponse1), 0, 1024), err)
 				panic(err)
 			}
 
@@ -243,7 +243,7 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 
 					scrollID, err := jsonparser.GetString(data, "_scroll_id")
 					if err != nil {
-						log.Errorf("cannot get _scroll_id from json: %v, %v", string(scrollResponse1), err)
+						log.Errorf("cannot get _scroll_id from json: %v, %v", util.SubString(string(scrollResponse1), 0, 1024), err)
 						panic(err)
 					}
 
