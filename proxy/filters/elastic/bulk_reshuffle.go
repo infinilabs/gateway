@@ -153,6 +153,9 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 					}
 					log.Error("error in bulk_reshuffle,", v)
 				}
+				for _, y := range docBuf {
+					docBufferPool.Put(y)
+				}
 			}
 		}()
 
@@ -484,6 +487,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				log.Warn("zero message,", x, ",", len(data), ",", string(body))
 			}
 			docBufferPool.Put(y)
+			delete(docBuf, x)
 		}
 
 		//fake results
