@@ -264,6 +264,7 @@ pipeline:
             compress: false
             batch_size_in_mb: 20
             batch_size_in_docs: 5000
+            invalid_queue: "bulk_invalid_requests"
             dead_letter_queue: "bulk_dead_requests"
             response_handle:
               bulk_result_message_queue: "bulk_result_messages"
