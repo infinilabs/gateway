@@ -448,7 +448,7 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 	}
 
 	// modify schema，align with elasticsearch's schema
-	originalHost := util.UnsafeBytesToString(myctx.Request.Header.Host())
+	originalHost := string(myctx.Request.Header.Host())
 	originalSchema := myctx.Request.GetSchema()
 	useClient := false
 	schemaChanged := false
@@ -485,7 +485,7 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 		log.Tracef("send request [%v] to upstream [%v]", myctx.Request.PhantomURI().String(), host)
 	}
 
-	curHost := util.UnsafeBytesToString(myctx.Request.Host())
+	curHost := string(myctx.Request.Host())
 	if host != curHost || host != originalHost {
 		myctx.Request.SetHostBytes([]byte(host))
 	}
