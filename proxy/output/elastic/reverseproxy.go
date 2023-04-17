@@ -520,7 +520,7 @@ START:
 				elastic.GetOrInitHost(host, metadata.Config.ID).ReportFailure()
 			}
 			//server failure flow
-		} else if myctx.Response.StatusCode() == 429 {
+		} else if res.StatusCode() == 429 {
 			retry++
 			if p.proxyConfig.MaxRetryTimes > 0 && retry < p.proxyConfig.MaxRetryTimes {
 				if p.proxyConfig.RetryDelayInMs > 0 {
@@ -540,12 +540,12 @@ START:
 		//TODO if backend failure and after reached max retry, should save translog and mark the elasticsearch cluster to downtime, deny any new requests
 		// the translog file should consider to contain dirty writes, could be used to do cross cluster check or manually operations recovery.
 
-		myctx.SetContentType(util.ContentTypeJson)
-		myctx.Response.SwapBody([]byte(fmt.Sprintf("{\"error\":true,\"message\":\"%v\"}", err.Error())))
-		myctx.SetStatusCode(500)
+		res.Header.SetContentType(util.ContentTypeJson)
+		res.SwapBody([]byte(fmt.Sprintf("{\"error\":true,\"message\":\"%v\"}", err.Error())))
+		res.SetStatusCode(500)
 	} else {
 		if global.Env().IsDebug {
-			log.Tracef("request [%v] [%v] [%v] [%v]", myctx.Request.PhantomURI().String(), util.SubString(util.UnsafeBytesToString(myctx.Request.GetRawBody()), 0, 256), myctx.Response.StatusCode(), util.SubString(util.UnsafeBytesToString(myctx.Response.GetRawBody()), 0, 256))
+			log.Tracef("request [%v] [%v] [%v] [%v]", myctx.Request.PhantomURI().String(), util.SubString(util.UnsafeBytesToString(myctx.Request.GetRawBody()), 0, 256), res.StatusCode(), util.SubString(util.UnsafeBytesToString(res.GetRawBody()), 0, 256))
 		}
 	}
 
@@ -563,8 +563,8 @@ START:
 
 	//update
 	if !p.proxyConfig.SkipEnrichMetadata {
-		myctx.Response.Header.Set("X-Backend-Cluster", p.proxyConfig.Elasticsearch)
-		myctx.Response.Header.Set("X-Backend-Server", host)
+		res.Header.Set("X-Backend-Cluster", p.proxyConfig.Elasticsearch)
+		res.Header.Set("X-Backend-Server", host)
 		myctx.SetDestination(host)
 	}
 
