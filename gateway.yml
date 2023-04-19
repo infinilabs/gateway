@@ -350,6 +350,7 @@ floating_ip:
   ip: '' # if empty, will automatically bind to x.x.x.234
   interface: '' # if empty, will automatically find an interface to bind
   local_ip: '' # if empty, will automatically bind to interface's ip address
+  priority: 0 # if <= 0, will random set current node's priority. master will switch to standby if other nodes has higher priority
   echo: # gateway will automatically ping master's echo.port to check whether it's still alive
     port: 61111
     dial_timeout_in_ms: 1000
