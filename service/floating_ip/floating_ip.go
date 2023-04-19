@@ -50,7 +50,7 @@ type FloatingIPConfig struct {
 	BoradcastConfig config.NetworkConfig `config:"broadcast"`
 }
 
-var atomicActiveOrNot atomic.Value
+var actived atomic.Bool
 
 type FloatingIPPlugin struct {
 }
@@ -159,12 +159,12 @@ var haCheckSignal = make(chan bool, 10)
 
 func (module FloatingIPPlugin) SwitchToActiveMode() {
 
-	if ok1, hit := atomicActiveOrNot.Load().(bool); hit && ok1 {
+	if actived.Load() {
 		log.Tracef("already in active mode, skip")
 		return
 	}
 
-	atomicActiveOrNot.Store(true)
+	actived.Store(true)
 
 	log.Debugf("active floating_ip at: %v", floatingIPConfig.IP)
 
@@ -185,7 +185,7 @@ func (module FloatingIPPlugin) SwitchToActiveMode() {
 					return nil
 				}
 			default:
-				if ok1, hit := atomicActiveOrNot.Load().(bool); hit && !ok1 {
+				if !actived.Load() {
 					log.Tracef("not active, quit broadcast")
 					return nil
 				}
@@ -222,7 +222,7 @@ func (module FloatingIPPlugin) SwitchToActiveMode() {
 					return nil
 				}
 			default:
-				if ok1, hit := atomicActiveOrNot.Load().(bool); hit && !ok1 {
+				if !actived.Load() {
 					log.Tracef("not active, quit broadcast")
 					return nil
 				}
@@ -234,19 +234,18 @@ func (module FloatingIPPlugin) SwitchToActiveMode() {
 		return nil
 	})
 
-	actived = true
 	log.Infof("floating_ip listen at: %v, %v, %v", floatingIPConfig.IP, floatingIPConfig.Echo.EchoPort, floatingIPConfig.Priority)
 }
 
 func (module FloatingIPPlugin) Deactivate(silence bool) {
-	if actived || silence {
+	if actived.Load() || silence {
 		log.Debugf("deactivating floating_ip at: %v", floatingIPConfig.IP)
 		err := net.DisableAlias(floatingIPConfig.Interface, floatingIPConfig.IP, floatingIPConfig.Netmask)
 		if err != nil && !silence {
 			log.Error(err)
 		}
 
-		if actived {
+		if actived.Load() {
 			srvSignal <- true
 			multicastSignal <- true
 			arpSignal <- true
@@ -254,16 +253,14 @@ func (module FloatingIPPlugin) Deactivate(silence bool) {
 
 		log.Tracef("floating_ip at: %v deactivated", floatingIPConfig.IP)
 	}
-	actived = false
+	actived.Store(false)
 }
 
 func (module FloatingIPPlugin) SwitchToStandbyMode(latency time.Duration) {
-	if ok1, hit := atomicActiveOrNot.Load().(bool); hit && !ok1 {
+	if !actived.Load() {
 		log.Tracef("already in standby mode, skip")
 		return
 	}
-
-	atomicActiveOrNot.Store(false)
 
 	module.Deactivate(false)
 
@@ -314,8 +311,6 @@ func (module FloatingIPPlugin) SwitchToStandbyMode(latency time.Duration) {
 	})
 
 }
-
-var actived bool
 
 func (module FloatingIPPlugin) Start() error {
 
@@ -373,7 +368,7 @@ func (module FloatingIPPlugin) Start() error {
 			}
 		}()
 
-		if !floatingIPConfig.ForcedSwitchByPriority && !actived {
+		if !floatingIPConfig.ForcedSwitchByPriority && !actived.Load() {
 			log.Tracef("i am standby, no bother multicast message")
 			return
 		}
@@ -392,7 +387,7 @@ func (module FloatingIPPlugin) Start() error {
 			return
 		} else {
 			//active node
-			if actived {
+			if actived.Load() {
 				if v.FixedIP != floatingIPConfig.LocalIP {
 					log.Debugf("received another host declared as active: %v", util.ToJson(v, false))
 					if v.Priority > floatingIPConfig.Priority {
@@ -513,7 +508,7 @@ func (module FloatingIPPlugin) Stop() error {
 
 	log.Tracef("stopping floating_ip module")
 
-	if actived {
+	if actived.Load() {
 		module.Deactivate(false)
 	} else {
 		haCheckSignal <- true
