@@ -36,6 +36,7 @@ pipeline {
                     sh label: 'package-linux-mips64', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-mips64.tar.gz gateway-linux-mips64 gateway.yml  LICENSE NOTICE '
                     sh label: 'package-linux-mips64le', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-mips64le.tar.gz gateway-linux-mips64le gateway.yml  LICENSE NOTICE '
                     sh label: 'package-linux-loong64', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-loong64.tar.gz gateway-linux-loong64 gateway.yml  LICENSE NOTICE '
+                    sh label: 'package-linux-riscv64', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-riscv64.tar.gz gateway-linux-riscv64 gateway.yml  LICENSE NOTICE '
 
                     sh 'cd /home/jenkins/go/src/infini.sh/gateway && git stash && git pull origin master && make config build-arm'
                     sh label: 'copy-configs', script: 'cd /home/jenkins/go/src/infini.sh/gateway &&  cp ../framework/LICENSE bin && cat ../framework/NOTICE NOTICE > bin/NOTICE'
