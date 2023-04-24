@@ -28,14 +28,14 @@ func main() {
 
 func requestHandler(ctx *fasthttp.RequestCtx) {
 	if *debug{
-		fmt.Println(string(ctx.Request.URI().Scheme()))
-		fmt.Println(string(ctx.Request.URI().Host()))
-		fmt.Println(string(ctx.Request.URI().FullURI()))
-		fmt.Println(string(ctx.Request.URI().PathOriginal()))
-		fmt.Println(string(ctx.Request.URI().QueryString()))
-		fmt.Println(string(ctx.Request.URI().Hash()))
-		fmt.Println(string(ctx.Request.URI().Username()))
-		fmt.Println(string(ctx.Request.URI().Password()))
+		fmt.Println(string(ctx.Request.PhantomURI().Scheme()))
+		fmt.Println(string(ctx.Request.PhantomURI().Host()))
+		fmt.Println(string(ctx.Request.PhantomURI().FullURI()))
+		fmt.Println(string(ctx.Request.PhantomURI().PathOriginal()))
+		fmt.Println(string(ctx.Request.PhantomURI().QueryString()))
+		fmt.Println(string(ctx.Request.PhantomURI().Hash()))
+		fmt.Println(string(ctx.Request.PhantomURI().Username()))
+		fmt.Println(string(ctx.Request.PhantomURI().Password()))
 		fmt.Println(ctx.Request.Header.String(),true)
 		fmt.Println(ctx.Request.GetRawBody(),true)
 	}
