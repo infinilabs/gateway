@@ -93,6 +93,10 @@ func (this *Entrypoint) Start() error {
 	if len(this.routerConfig.Rules) > 0 {
 		for _, rule := range this.routerConfig.Rules {
 
+			if this.routerConfig.RuleToggleEnabled && !rule.Enabled{
+				continue
+			}
+
 			flow := common.FilterFlow{}
 			for _, y := range rule.Flow {
 
