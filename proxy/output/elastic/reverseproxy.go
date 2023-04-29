@@ -570,12 +570,21 @@ START:
 
 	if useClient {
 		myctx.Response.SetStatusCode(res.StatusCode())
-		myctx.Response.Header.SetContentTypeBytes(res.Header.ContentType())
+
+		//copy all headers from upstream
+		res.Header.VisitAll(func(key, value []byte) {
+			myctx.Response.Header.SetBytesKV(key,value)
+		})
+
 		myctx.Response.SetBody(res.Body())
 
 		compress, compressType := res.IsCompressed()
 		if compress {
 			myctx.Response.Header.Set(fasthttp.HeaderContentEncoding, string(compressType))
+		}else{
+			//remove content-encoding in case it exists
+			myctx.Response.Header.Del(fasthttp.HeaderContentEncoding)
+			myctx.Response.Header.Del(fasthttp.HeaderContentEncoding2)
 		}
 
 		fasthttp.ReleaseResponse(res)
