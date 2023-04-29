@@ -339,7 +339,7 @@ func (filter *RequestFilter) Filter(ctx *fasthttp.RequestCtx) {
 			ctx.Response.SwapBody([]byte(fmt.Sprintf("{\"error\":true,\"message\":\"%v\"}", filter.Message)))
 		}
 
-		ctx.Response.Header.Add("original_status", util.IntToString(ctx.Response.StatusCode()))
+		ctx.Response.Header.Set("original_status", util.IntToString(ctx.Response.StatusCode()))
 		ctx.Response.SetStatusCode(filter.Status)
 		ctx.Finished()
 		return

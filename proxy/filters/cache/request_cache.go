@@ -359,7 +359,7 @@ func (filter *RequestCacheGet) Filter(ctx *fasthttp.RequestCtx) {
 			log.Trace("check cache:", hash, ", found:", found)
 		}
 
-		ctx.Response.Header.Add("X-Cache-Hash", hash)
+		ctx.Response.Header.Set("X-Cache-Hash", hash)
 
 		if found {
 
@@ -370,7 +370,7 @@ func (filter *RequestCacheGet) Filter(ctx *fasthttp.RequestCtx) {
 				panic(err)
 			}
 			ctx.Response.Cached = true
-			ctx.Response.Header.Add("X-Cache-Hit", "true")
+			ctx.Response.Header.Set("X-Cache-Hit", "true")
 			ctx.SetDestination("cache")
 
 			if global.Env().IsDebug {
@@ -379,7 +379,7 @@ func (filter *RequestCacheGet) Filter(ctx *fasthttp.RequestCtx) {
 
 			ctx.Finished()
 		} else {
-			ctx.Response.Header.Add("X-Cache-Hit", "false")
+			ctx.Response.Header.Set("X-Cache-Hit", "false")
 			stats.Increment("cache", "miss")
 		}
 	} else {
