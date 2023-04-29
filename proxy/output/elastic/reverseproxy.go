@@ -411,7 +411,8 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 		}
 	}
 
-	res := &myctx.Response
+	res := fasthttp.AcquireResponseWithTag("proxy_response")
+	defer fasthttp.ReleaseResponse(res)
 
 	if !p.proxyConfig.SkipCleanupHopHeaders {
 		cleanHopHeaders(&myctx.Request)
@@ -450,7 +451,6 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 	// modify schema，align with elasticsearch's schema
 	originalHost := string(myctx.Request.Header.Host())
 	originalSchema := myctx.Request.GetSchema()
-	useClient := false
 	schemaChanged := false
 	clonedURI := myctx.Request.CloneURI()
 	defer fasthttp.ReleaseURI(clonedURI)
@@ -470,8 +470,6 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 			pc = metadata.GetHttpClient(host)
 		}
 
-		res = fasthttp.AcquireResponseWithTag("proxy_response")
-		useClient = true
 		schemaChanged = true
 	}
 
@@ -563,32 +561,18 @@ START:
 
 	//update
 	if !p.proxyConfig.SkipEnrichMetadata {
+
+		if retry>0{
+			res.Header.Set("X-Retry-Times", util.ToString(retry))
+		}
+
 		res.Header.Set("X-Backend-Cluster", p.proxyConfig.Elasticsearch)
 		res.Header.Set("X-Backend-Server", host)
 		myctx.SetDestination(host)
 	}
 
-	if useClient {
-		myctx.Response.SetStatusCode(res.StatusCode())
-
-		//copy all headers from upstream
-		res.Header.VisitAll(func(key, value []byte) {
-			myctx.Response.Header.SetBytesKV(key,value)
-		})
-
-		myctx.Response.SetBody(res.Body())
-
-		compress, compressType := res.IsCompressed()
-		if compress {
-			myctx.Response.Header.Set(fasthttp.HeaderContentEncoding, string(compressType))
-		}else{
-			//remove content-encoding in case it exists
-			myctx.Response.Header.Del(fasthttp.HeaderContentEncoding)
-			myctx.Response.Header.Del(fasthttp.HeaderContentEncoding2)
-		}
-
-		fasthttp.ReleaseResponse(res)
-	}
+	//merge response
+	myctx.Response.CopyMergeHeader(res)
 
 }
 

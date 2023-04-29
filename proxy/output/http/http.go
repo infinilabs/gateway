@@ -146,6 +146,10 @@ func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err er
 
 	clonedURI := ctx.Request.CloneURI()
 	defer fasthttp.ReleaseURI(clonedURI)
+
+	res := fasthttp.AcquireResponseWithTag("http_response")
+	defer fasthttp.ReleaseResponse(res)
+
 	clonedURI.SetScheme(filter.Schema)
 	ctx.Request.SetURI(clonedURI)
 
@@ -161,18 +165,22 @@ func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err er
 		}
 
 		if filter.FollowRedirects {
-			err = client.DoRedirects(&ctx.Request, &ctx.Response, filter.MaxRedirectsCount)
+			err = client.DoRedirects(&ctx.Request, res, filter.MaxRedirectsCount)
 		} else {
 			if filter.requestTimeout > 0 {
-				err = client.DoTimeout(&ctx.Request, &ctx.Response, filter.requestTimeout)
+				err = client.DoTimeout(&ctx.Request, res, filter.requestTimeout)
 			} else {
-				err = client.Do(&ctx.Request, &ctx.Response)
+				err = client.Do(&ctx.Request, res)
 			}
 		}
 
 		clonedURI.SetScheme(orignalSchema)
 		ctx.Request.SetURI(clonedURI)
 		ctx.Request.SetHost(orignalHost)
+
+
+		//merge response
+		ctx.Response.CopyMergeHeader(res)
 
 		if err != nil {
 			log.Error(err, string(ctx.Response.GetRawBody()))
