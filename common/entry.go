@@ -48,6 +48,7 @@ func (this *EntryConfig) Equals(target *EntryConfig) bool {
 }
 
 type RuleConfig struct {
+	Enabled      bool    `config:"enabled" json:"enabled,omitempty" elastic_mapping:"enabled: { type: boolean }"`
 	Method      []string `config:"method" json:"method,omitempty"      elastic_mapping:"method: { type: keyword }"`
 	PathPattern []string `config:"pattern" json:"pattern,omitempty"      elastic_mapping:"pattern: { type: keyword }"`
 	Flow        []string `config:"flow" json:"flow,omitempty"      elastic_mapping:"flow: { type: keyword }"`
@@ -67,6 +68,8 @@ type RouterConfig struct {
 	DefaultFlow string `config:"default_flow" json:"default_flow,omitempty" elastic_mapping:"default_flow: { type: keyword }"`
 	TracingFlow string `config:"tracing_flow" json:"tracing_flow,omitempty" elastic_mapping:"tracing_flow: { type: keyword }"`
 
+
+	RuleToggleEnabled      bool    `config:"rule_toggle_enabled" json:"rule_toggle_enabled,omitempty" elastic_mapping:"rule_toggle_enabled: { type: boolean }"`
 	Rules              []RuleConfig `config:"rules" json:"rules,omitempty" elastic_mapping:"rules: { type: object }"`
 
 	IPAccessRules IPAccessRules `config:"ip_access_control" json:"ip_access_rules,omitempty" elastic_mapping:"ip_access_rules: { type: object }"`
