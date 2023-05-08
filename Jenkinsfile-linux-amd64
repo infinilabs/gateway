@@ -21,12 +21,12 @@ pipeline {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE'){
 
                     sh 'cd /home/jenkins/go/src/infini.sh/gateway && git stash && git pull origin master && make clean config build-linux-amd64-dev'
-                    sh label: 'copy-configs', script: 'cd /home/jenkins/go/src/infini.sh/gateway &&  cp ../framework/LICENSE bin && cat ../framework/NOTICE NOTICE > bin/NOTICE'
+                    sh label: 'copy-configs', script: 'cd /home/jenkins/go/src/infini.sh/gateway &&  cp ../framework/LICENSE bin && cat ../framework/NOTICE NOTICE > bin/NOTICE && cp README bin'
 
                     sh label: 'package-linux-amd64-dev', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-amd64-dev.tar.gz gateway-linux-amd64-dev gateway.yml LICENSE NOTICE README'
 
                     sh 'cd /home/jenkins/go/src/infini.sh/gateway && git stash && git pull origin master && make clean config build-linux-amd64'
-                    sh label: 'copy-configs', script: 'cd /home/jenkins/go/src/infini.sh/gateway && cp ../framework/LICENSE bin && cat ../framework/NOTICE NOTICE > bin/NOTICE'
+                    sh label: 'copy-configs', script: 'cd /home/jenkins/go/src/infini.sh/gateway && cp ../framework/LICENSE bin && cat ../framework/NOTICE NOTICE > bin/NOTICE && cp README bin'
 
                     sh label: 'package-linux-amd64', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-amd64.tar.gz gateway-linux-amd64 gateway.yml  LICENSE NOTICE README'
 
