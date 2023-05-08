@@ -16,6 +16,11 @@ path.configs: config # directory of additional gateway configurations
 
 configs.auto_reload: false # set true to auto reload gateway configurations
 
+gateway:
+  # By default, gateway will always set entry.network.reuse_port as true.
+  # If the host doesn't support SO_REUSEPORT, set `true` to disable this behavior
+  disable_reuse_port_by_default: false
+
 # Gateway internal stats collecting
 stats:
   enabled: true
@@ -77,6 +82,8 @@ entry:
     max_concurrency: 10000
     network:
       binding: $[[env.GW_BINDING]]
+      # See `gateway.disable_reuse_port_by_default` for more information.
+      reuse_port: true
 #  tls:
 #   enabled: true #auto generate certs, cert_file and key_file are optional
 #   cert_file: /data/gateway/cert/elasticsearch.pem
