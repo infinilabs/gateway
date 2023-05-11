@@ -3,8 +3,8 @@ package elastic
 import "time"
 
 type ProxyConfig struct {
-	Elasticsearch       string `config:"elasticsearch"`
-	Balancer            string `config:"balancer"`
+	Elasticsearch string `config:"elasticsearch"`
+	Balancer      string `config:"balancer"`
 
 	MaxConnection       int `config:"max_connection_per_node"`
 	MaxResponseBodySize int `config:"max_response_size"`
@@ -15,6 +15,7 @@ type ProxyConfig struct {
 	MaxIdleConnDuration   time.Duration `config:"max_idle_conn_duration"`
 	MaxConnDuration       time.Duration `config:"max_conn_duration"`
 	Timeout               time.Duration `config:"timeout"`
+	DialTimeout           time.Duration `config:"dial_timeout"`
 	ReadTimeout           time.Duration `config:"read_timeout"`
 	WriteTimeout          time.Duration `config:"write_timeout"`
 	ReadBufferSize        int           `config:"read_buffer_size"`
@@ -24,8 +25,8 @@ type ProxyConfig struct {
 	FixedClient bool   `config:"fixed_client"`
 	ClientMode  string `config:"client_mode"`
 
-	SkipAvailableCheck  bool `config:"skip_available_check"`
-	CheckClusterHealthWhenNotAvailable  bool `config:"check_cluster_health_when_not_available"`
+	SkipAvailableCheck                 bool `config:"skip_available_check"`
+	CheckClusterHealthWhenNotAvailable bool `config:"check_cluster_health_when_not_available"`
 
 	SkipKeepOriginalURI   bool `config:"skip_keep_original_uri"`
 	SkipCleanupHopHeaders bool `config:"skip_cleanup_hop_headers"`

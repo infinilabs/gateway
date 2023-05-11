@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"math/rand"
+	"net"
 	"sync"
 	"time"
 
@@ -208,6 +209,9 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 				//RetryIf: func(request *fasthttp.Request) bool {
 				//
 				//},
+				Dial: func(addr string) (net.Conn, error) {
+					return fasthttp.DialTimeout(addr, cfg.DialTimeout)
+				},
 				IsTLS: metadata.IsTLS(),
 				TLSConfig: &tls.Config{
 					InsecureSkipVerify: cfg.TLSInsecureSkipVerify,
@@ -230,7 +234,9 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 				WriteTimeout:                  cfg.WriteTimeout,
 				ReadBufferSize:                cfg.ReadBufferSize,
 				WriteBufferSize:               cfg.WriteBufferSize,
-				DialDualStack:                 true,
+				Dial: func(addr string) (net.Conn, error) {
+					return fasthttp.DialDualStackTimeout(addr, cfg.DialTimeout)
+				},
 				TLSConfig: &tls.Config{
 					InsecureSkipVerify: cfg.TLSInsecureSkipVerify,
 				},
@@ -562,7 +568,7 @@ START:
 	//update
 	if !p.proxyConfig.SkipEnrichMetadata {
 
-		if retry>0{
+		if retry > 0 {
 			res.Header.Set("X-Retry-Times", util.ToString(retry))
 		}
 

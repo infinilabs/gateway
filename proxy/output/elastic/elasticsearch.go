@@ -3,6 +3,8 @@ package elastic
 import (
 	"bytes"
 	"fmt"
+	"time"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
@@ -12,7 +14,6 @@ import (
 	"infini.sh/framework/core/rate"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
-	"time"
 )
 
 type Elasticsearch struct {
@@ -39,11 +40,11 @@ func (filter *Elasticsearch) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 	if !filter.config.SkipAvailableCheck && filter.getMetadata() != nil && !filter.getMetadata().IsAvailable() {
-		if  filter.config.CheckClusterHealthWhenNotAvailable {
-			if rate.GetRateLimiter("cluster_check_health", filter.getMetadata().Config.ID, 1, 1, time.Second*1).Allow(){
+		if filter.config.CheckClusterHealthWhenNotAvailable {
+			if rate.GetRateLimiter("cluster_check_health", filter.getMetadata().Config.ID, 1, 1, time.Second*1).Allow() {
 				log.Debugf("Elasticsearch [%v] not available", filter.config.Elasticsearch)
 				result, err := elastic.GetClient(filter.getMetadata().Config.Name).ClusterHealth()
-				if err != nil &&result!=nil && result.StatusCode == 200 {
+				if err != nil && result != nil && result.StatusCode == 200 {
 					filter.getMetadata().ReportSuccess()
 				}
 			}
@@ -61,7 +62,7 @@ func (filter *Elasticsearch) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("elasticsearch", New,&ProxyConfig{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("elasticsearch", New, &ProxyConfig{})
 }
 
 func New(c *config.Config) (pipeline.Filter, error) {
@@ -82,6 +83,7 @@ func New(c *config.Config) (pipeline.Filter, error) {
 		MaxConnDuration: util.GetDurationOrDefault("0s", 0*time.Second),
 
 		Timeout:      util.GetDurationOrDefault("30s", 30*time.Second),
+		DialTimeout:  util.GetDurationOrDefault("3s", 3*time.Second),
 		ReadTimeout:  util.GetDurationOrDefault("0s", 0*time.Hour), //set to other value will cause broken error
 		WriteTimeout: util.GetDurationOrDefault("0s", 0*time.Hour), //same as read timeout
 		//idle alive connection will be closed
