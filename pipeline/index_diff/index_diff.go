@@ -1,6 +1,7 @@
 package index_diff
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path"
@@ -15,6 +16,7 @@ import (
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
+	"infini.sh/framework/core/task"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/bytebufferpool"
 )
@@ -78,8 +80,8 @@ func (processor *IndexDiffProcessor) processMsg(partitionID int, diffResultHandl
 			msgB, okB = <-targetChan
 		}
 
-		//fmt.Println("Pop A:",msgA.Key)
-		//fmt.Println("Pop B:",msgB.Key)
+		// fmt.Println("Pop A:", msgA.Key)
+		// fmt.Println("Pop B:", msgB.Key)
 		if !okA && !okB {
 			return
 		}
@@ -138,10 +140,21 @@ func (processor *IndexDiffProcessor) processMsg(partitionID int, diffResultHandl
 	}
 }
 
+type DiffStat struct {
+	Count int
+	Keys  []string
+}
+
 type IndexDiffProcessor struct {
 	config    Config
 	testChans []CompareChan
 	wg        sync.WaitGroup
+
+	onlyInSource DiffStat
+	onlyInTarget DiffStat
+	diffBoth     DiffStat
+
+	statLock sync.Mutex
 }
 
 func New(c *config.Config) (pipeline.Processor, error) {
@@ -156,6 +169,10 @@ func New(c *config.Config) (pipeline.Processor, error) {
 
 	if err := c.Unpack(&diffConfig); err != nil {
 		return nil, fmt.Errorf("failed to unpack the configuration of index_diff processor: %s", err)
+	}
+
+	if diffConfig.Queue != nil {
+		diffConfig.DiffQueue = diffConfig.Queue.Name
 	}
 
 	diffs := []CompareChan{}
@@ -188,23 +205,39 @@ func (processor *IndexDiffProcessor) Name() string {
 	return "index_diff"
 }
 
+type OutputQueueConfig struct {
+	Name   string                 `config:"name"`
+	Labels map[string]interface{} `config:"labels"`
+}
+
 type Config struct {
 	PartitionSize      int  `config:"partition_size"`
 	TextReportEnabled  bool `config:"text_report"`
 	KeepSourceInResult bool `config:"keep_source"`
 	BufferSize         int  `config:"buffer_size"`
 
-	DiffQueue        string `config:"diff_queue"`
-	SourceInputQueue string `config:"source_queue"`
-	TargetInputQueue string `config:"target_queue"`
+	Queue            *OutputQueueConfig `config:"output_queue"`
+	CleanOldFiles    bool               `config:"clean_old_files"`
+	SourceInputQueue string             `config:"source_queue"`
+	TargetInputQueue string             `config:"target_queue"`
+	// DEPRECATED, use `output_queue` instead
+	DiffQueue string `config:"diff_queue"`
+}
+
+func (cfg *Config) GetLeftQueue(partitionID int) string {
+	return cfg.SourceInputQueue + "-" + util.ToString(partitionID)
+}
+
+func (cfg *Config) GetRightQueue(partitionID int) string {
+	return cfg.TargetInputQueue + "-" + util.ToString(partitionID)
 }
 
 func (cfg *Config) GetSortedLeftQueue(partitionID int) string {
-	return cfg.SourceInputQueue + util.ToString(partitionID) + "_sorted"
+	return cfg.GetLeftQueue(partitionID) + "_sorted"
 }
 
 func (cfg *Config) GetSortedRightQueue(partitionID int) string {
-	return cfg.TargetInputQueue + util.ToString(partitionID) + "_sorted"
+	return cfg.GetRightQueue(partitionID) + "_sorted"
 }
 
 func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
@@ -228,261 +261,285 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 		}
 	}()
 
-	queueNames := []string{processor.config.SourceInputQueue, processor.config.TargetInputQueue}
-
-	for _, q := range queueNames {
-
-		for i := 0; i < processor.config.PartitionSize; i++ {
-			processor.wg.Add(1)
-			go func(q string, f int) {
-				defer func() {
-					close(processor.testChans[f].msgChans[q+"_sorted"])
-					if !global.Env().IsDebug {
-						if r := recover(); r != nil {
-							var v string
-							switch r.(type) {
-							case error:
-								v = r.(error).Error()
-							case runtime.Error:
-								v = r.(runtime.Error).Error()
-							case string:
-								v = r.(string)
-							}
-							log.Error(v)
-						}
-					}
-				}()
-
-				defer processor.wg.Done()
-				buffer := bytebufferpool.Get("index_diff")
-				defer bytebufferpool.Put("index_diff", buffer)
-
-				//build sorted file
-				sorter := extsort.New(nil)
-				file := path.Join(global.Env().GetDataDir(), "diff", q)
-				sortedFile := path.Join(global.Env().GetDataDir(), "diff", q+"_sorted")
-
-				if !util.FileExists(file) {
-					return
-				}
-
-				if !util.FileExists(sortedFile) {
-					err := util.FileLinesWalk(file, func(bytes []byte) {
-						_ = sorter.Append(bytes)
-					})
-					if err != nil {
-						log.Error(err)
-						return
-					}
-
-					defer sorter.Close()
-					// Sort and iterate.
-					iter, err := sorter.Sort()
-					if err != nil {
-						log.Error(err)
-						return
-					}
-					defer iter.Close()
-
-					for iter.Next() {
-						buffer.Write(iter.Data())
-						buffer.WriteByte('\n')
-
-						if buffer.Len() > 10*1024 {
-							util.FileAppendContentWithByte(sortedFile, buffer.Bytes())
-							buffer.Reset()
-						}
-					}
-
-					if buffer.Len() > 0 {
-						util.FileAppendContentWithByte(sortedFile, buffer.Bytes())
-					}
-
-					if err := iter.Err(); err != nil {
-						log.Error(err)
-						return
-					}
-				} else {
-					log.Warn("target file exists:", sortedFile, ",you may need to remove it first")
-				}
-
-				//popup sorted list
-				err := util.FileLinesWalk(sortedFile, func(bytes []byte) {
-					arr := strings.FieldsFunc(string(bytes), func(r rune) bool {
-						return r == ','
-					})
-					if len(arr) != 2 {
-						//log.Error("invalid line:", util.UnsafeBytesToString(bytes))
-						return
-					}
-					id := arr[0]
-					hash := arr[1]
-					item := CompareItem{
-						//Doc:  doc,
-						Key:  id,
-						Hash: hash,
-					}
-					processor.testChans[f].msgChans[q+"_sorted"] <- item
-				})
-				if err != nil {
-					log.Error(err)
-					return
-				}
-
-			}(q+util.ToString(i), i)
-		}
-
+	for i := 0; i < processor.config.PartitionSize; i++ {
+		processor.wg.Add(1)
+		j := i
+		task.RunWithinGroup("index_diff", func(ctx context.Context) error {
+			defer processor.wg.Done()
+			processor.sortFiles(processor.config.GetLeftQueue(j), j)
+			return nil
+		})
 	}
+	for i := 0; i < processor.config.PartitionSize; i++ {
+		processor.wg.Add(1)
+		j := i
+		task.RunWithinGroup("index_diff", func(ctx context.Context) error {
+			defer processor.wg.Done()
+			processor.sortFiles(processor.config.GetRightQueue(j), j)
+			return nil
+		})
+	}
+
+	queueConfig := &queue.QueueConfig{}
+	queueConfig.Source = "dynamic"
+	queueConfig.Labels = util.MapStr{}
+	queueConfig.Labels["type"] = "index_diff"
+	if processor.config.Queue != nil {
+		for k, v := range processor.config.Queue.Labels {
+			queueConfig.Labels[k] = v
+		}
+	}
+	queueConfig.Name = processor.config.DiffQueue
+	queue.RegisterConfig(queueConfig.Name, queueConfig)
 
 	for i := 0; i < processor.config.PartitionSize; i++ {
 		processor.wg.Add(1)
-		go func(j int) {
-			defer func() {
-				if !global.Env().IsDebug {
-					if r := recover(); r != nil {
-						var v string
-						switch r.(type) {
-						case error:
-							v = r.(error).Error()
-						case runtime.Error:
-							v = r.(runtime.Error).Error()
-						case string:
-							v = r.(string)
-						}
-						log.Error(v)
-					}
-				}
-			}()
-
+		j := i
+		task.RunWithinGroup("index_diff", func(ctx context.Context) error {
 			defer processor.wg.Done()
+
 			processor.processMsg(j, func(result DiffResult) {
+				processor.updateStats(&result)
 				queue.Push(queue.GetOrInitConfig(processor.config.DiffQueue), util.MustToJSONBytes(result))
 			})
-		}(i)
+			return nil
+		})
 	}
 
 	processor.wg.Wait()
 
 	if processor.config.TextReportEnabled {
 		processor.wg.Add(1)
-		go func() {
-			defer func() {
-				if !global.Env().IsDebug {
-					if r := recover(); r != nil {
-						var v string
-						switch r.(type) {
-						case error:
-							v = r.(error).Error()
-						case runtime.Error:
-							v = r.(runtime.Error).Error()
-						case string:
-							v = r.(string)
-						}
-						log.Error(v)
-					}
-				}
-			}()
-
+		task.RunWithinGroup("index_diff", func(ctx context.Context) error {
 			defer processor.wg.Done()
-			path1 := path.Join(global.Env().GetLogDir(), "diff_result", fmt.Sprintf("%v_vs_%v", processor.config.SourceInputQueue, processor.config.TargetInputQueue))
-			os.MkdirAll(path1, 0775)
-			file := path.Join(path1, util.FormatTimeForFileName(time.Now())+".log")
-			str := "    ___ _  __  __     __                 _ _   \n"
-			str += "   /   (_)/ _|/ _|   /__\\ ___  ___ _   _| | |_ \n"
-			str += "  / /\\ / | |_| |_   / \\/// _ \\/ __| | | | | __|\n"
-			str += " / /_//| |  _|  _| / _  \\  __/\\__ \\ |_| | | |_ \n"
-			str += "/___,' |_|_| |_|   \\/ \\_/\\___||___/\\__,_|_|\\__|\n"
-
-			strBuilder := strings.Builder{}
-			leftBuilder := strings.Builder{}
-			rightBuilder := strings.Builder{}
-			bothBuilder := strings.Builder{}
-			strBuilder.WriteString(str)
-
-			var i, left, right, both, equal int
-
-			timeOut := 1 * time.Second
-			for {
-
-				v, timeout, err := queue.PopTimeout(queue.GetOrInitConfig(processor.config.DiffQueue), timeOut)
-				if timeout {
-					break
-				}
-
-				i++
-				doc := DiffResult{}
-				err = util.FromJSONBytes(v, &doc)
-				if err != nil {
-					log.Error(err)
-					return
-				}
-				docID := ""
-				docHash := ""
-				if doc.Source != nil {
-					docID = doc.Source.Key
-					docHash = doc.Source.Hash
-				}
-				if doc.Target != nil {
-					docID = doc.Target.Key
-					docHash = doc.Target.Hash
-				}
-
-				switch doc.DiffType {
-				case "OnlyInSource":
-					left++
-					leftBuilder.WriteString(fmt.Sprintf("doc:%v, hash:%v\n", docID, docHash))
-					break
-				case "OnlyInTarget":
-					right++
-					rightBuilder.WriteString(fmt.Sprintf("doc:%v, hash:%v\n", docID, docHash))
-					break
-				case "DiffBoth":
-					both++
-					bothBuilder.WriteString(fmt.Sprintf("doc:%v, hash:%v vs %v\n", docID, doc.Source.Hash, doc.Target.Hash))
-					break
-				case "Equal":
-					equal++
-				}
-			}
-			fmt.Println(strBuilder.String())
-			util.FileAppendNewLine(file, strBuilder.String())
-
-			if leftBuilder.Len() > 0 {
-				str := fmt.Sprintf("%v documents only exists in left side:", left)
-				fmt.Println(str)
-				fmt.Println(leftBuilder.String())
-
-				util.FileAppendNewLine(file, str)
-				util.FileAppendNewLine(file, leftBuilder.String())
-			}
-			if rightBuilder.Len() > 0 {
-
-				str := fmt.Sprintf("%v documents only exists in right side:", right)
-				fmt.Println(str)
-				fmt.Println(rightBuilder.String())
-
-				util.FileAppendNewLine(file, str)
-				util.FileAppendNewLine(file, rightBuilder.String())
-			}
-			if bothBuilder.Len() > 0 {
-
-				str := fmt.Sprintf("%v documents exists but diff in both side:", both)
-				fmt.Println(str)
-				fmt.Println(bothBuilder.String())
-
-				util.FileAppendNewLine(file, str)
-				util.FileAppendNewLine(file, bothBuilder.String())
-			}
-
-			if leftBuilder.Len() == 0 && rightBuilder.Len() == 0 && bothBuilder.Len() == 0 {
-				fmt.Println("Congratulations, the two clusters are consistent!\n")
-			}
-
-		}()
+			processor.generateTextReport()
+			return nil
+		})
 		processor.wg.Wait()
 	}
 
 	log.Infof("index diff finished.")
 
+	processor.statLock.Lock()
+	defer processor.statLock.Unlock()
+
+	ctx.PutValue("index_diff.only_in_target.count", processor.onlyInTarget.Count)
+	ctx.PutValue("index_diff.only_in_target.keys", processor.onlyInTarget.Keys)
+	ctx.PutValue("index_diff.only_in_source.count", processor.onlyInSource.Count)
+	ctx.PutValue("index_diff.only_in_source.keys", processor.onlyInSource.Keys)
+	ctx.PutValue("index_diff.diff_both.count", processor.diffBoth.Count)
+	ctx.PutValue("index_diff.diff_both.keys", processor.diffBoth.Keys)
+
 	return nil
+}
+
+func (processor *IndexDiffProcessor) sortFiles(inputFile string, partitionID int) {
+	defer func() {
+		close(processor.testChans[partitionID].msgChans[inputFile+"_sorted"])
+	}()
+
+	buffer := bytebufferpool.Get("index_diff")
+	defer bytebufferpool.Put("index_diff", buffer)
+
+	//build sorted file
+	sorter := extsort.New(nil)
+	file := path.Join(global.Env().GetDataDir(), "diff", inputFile)
+	sortedFile := path.Join(global.Env().GetDataDir(), "diff", inputFile+"_sorted")
+
+	if !util.FileExists(file) {
+		log.Warnf("dump file [%s] not found, skip diffing", file)
+		return
+	}
+	if util.FileExists(sortedFile) {
+		if processor.config.CleanOldFiles {
+			err := util.FileDelete(sortedFile)
+			log.Infof("deleting old sorted file [%s], err: %v", sortedFile, err)
+		} else {
+			log.Warnf("sorted file [%s] exists, you may need to remove it first", sortedFile)
+		}
+	}
+
+	if !util.FileExists(sortedFile) {
+		err := util.FileLinesWalk(file, func(bytes []byte) {
+			_ = sorter.Append(bytes)
+		})
+		if err != nil {
+			log.Error(err)
+			return
+		}
+
+		defer sorter.Close()
+		// Sort and iterate.
+		iter, err := sorter.Sort()
+		if err != nil {
+			log.Error(err)
+			return
+		}
+		defer iter.Close()
+
+		for iter.Next() {
+			buffer.Write(iter.Data())
+			buffer.WriteByte('\n')
+
+			if buffer.Len() > 10*1024 {
+				util.FileAppendContentWithByte(sortedFile, buffer.Bytes())
+				buffer.Reset()
+			}
+		}
+
+		if buffer.Len() > 0 {
+			util.FileAppendContentWithByte(sortedFile, buffer.Bytes())
+		}
+
+		if err := iter.Err(); err != nil {
+			log.Error(err)
+			return
+		}
+	}
+
+	//popup sorted list
+	err := util.FileLinesWalk(sortedFile, func(bytes []byte) {
+		arr := strings.FieldsFunc(string(bytes), func(r rune) bool {
+			return r == ','
+		})
+		if len(arr) < 2 {
+			//log.Error("invalid line:", util.UnsafeBytesToString(bytes))
+			return
+		}
+		id := arr[0]
+		hash := arr[1]
+		item := CompareItem{
+			Key:  id,
+			Hash: hash,
+		}
+		if processor.config.KeepSourceInResult && len(arr) > 2 {
+			doc := arr[3]
+			item.Doc = doc
+		}
+		processor.testChans[partitionID].msgChans[inputFile+"_sorted"] <- item
+	})
+	if err != nil {
+		log.Error(err)
+		return
+	}
+}
+
+func (processor *IndexDiffProcessor) generateTextReport() {
+	path1 := path.Join(global.Env().GetLogDir(), "diff_result", fmt.Sprintf("%v_vs_%v", processor.config.SourceInputQueue, processor.config.TargetInputQueue))
+	os.MkdirAll(path1, 0775)
+	file := path.Join(path1, util.FormatTimeForFileName(time.Now())+".log")
+	str := "    ___ _  __  __     __                 _ _   \n"
+	str += "   /   (_)/ _|/ _|   /__\\ ___  ___ _   _| | |_ \n"
+	str += "  / /\\ / | |_| |_   / \\/// _ \\/ __| | | | | __|\n"
+	str += " / /_//| |  _|  _| / _  \\  __/\\__ \\ |_| | | |_ \n"
+	str += "/___,' |_|_| |_|   \\/ \\_/\\___||___/\\__,_|_|\\__|\n"
+
+	strBuilder := strings.Builder{}
+	leftBuilder := strings.Builder{}
+	rightBuilder := strings.Builder{}
+	bothBuilder := strings.Builder{}
+	strBuilder.WriteString(str)
+
+	var i, left, right, both, equal int
+
+	timeOut := 1 * time.Second
+	for {
+
+		v, timeout, err := queue.PopTimeout(queue.GetOrInitConfig(processor.config.DiffQueue), timeOut)
+		if timeout {
+			break
+		}
+
+		i++
+		doc := DiffResult{}
+		err = util.FromJSONBytes(v, &doc)
+		if err != nil {
+			log.Error(err)
+			return
+		}
+		docID := ""
+		docHash := ""
+		if doc.Source != nil {
+			docID = doc.Source.Key
+			docHash = doc.Source.Hash
+		}
+		if doc.Target != nil {
+			docID = doc.Target.Key
+			docHash = doc.Target.Hash
+		}
+
+		switch doc.DiffType {
+		case "OnlyInSource":
+			left++
+			leftBuilder.WriteString(fmt.Sprintf("doc:%v, hash:%v\n", docID, docHash))
+			break
+		case "OnlyInTarget":
+			right++
+			rightBuilder.WriteString(fmt.Sprintf("doc:%v, hash:%v\n", docID, docHash))
+			break
+		case "DiffBoth":
+			both++
+			bothBuilder.WriteString(fmt.Sprintf("doc:%v, hash:%v vs %v\n", docID, doc.Source.Hash, doc.Target.Hash))
+			break
+		case "Equal":
+			equal++
+		}
+	}
+	fmt.Println(strBuilder.String())
+	util.FileAppendNewLine(file, strBuilder.String())
+
+	if leftBuilder.Len() > 0 {
+		str := fmt.Sprintf("%v documents only exists in left side:", left)
+		fmt.Println(str)
+		fmt.Println(leftBuilder.String())
+
+		util.FileAppendNewLine(file, str)
+		util.FileAppendNewLine(file, leftBuilder.String())
+	}
+	if rightBuilder.Len() > 0 {
+
+		str := fmt.Sprintf("%v documents only exists in right side:", right)
+		fmt.Println(str)
+		fmt.Println(rightBuilder.String())
+
+		util.FileAppendNewLine(file, str)
+		util.FileAppendNewLine(file, rightBuilder.String())
+	}
+	if bothBuilder.Len() > 0 {
+
+		str := fmt.Sprintf("%v documents exists but diff in both side:", both)
+		fmt.Println(str)
+		fmt.Println(bothBuilder.String())
+
+		util.FileAppendNewLine(file, str)
+		util.FileAppendNewLine(file, bothBuilder.String())
+	}
+
+	if leftBuilder.Len() == 0 && rightBuilder.Len() == 0 && bothBuilder.Len() == 0 {
+		fmt.Println("Congratulations, the two clusters are consistent!\n")
+	}
+
+}
+
+func (processor *IndexDiffProcessor) updateStats(diff *DiffResult) {
+	processor.statLock.Lock()
+	defer processor.statLock.Unlock()
+	switch diff.DiffType {
+	case "OnlyInSource":
+		processor.onlyInSource.Count += 1
+		processor.onlyInSource.Keys = appendStrArr(processor.onlyInSource.Keys, 10, diff.Key)
+	case "OnlyInTarget":
+		processor.onlyInTarget.Count += 1
+		processor.onlyInTarget.Keys = appendStrArr(processor.onlyInTarget.Keys, 10, diff.Key)
+	case "DiffBoth":
+		processor.diffBoth.Count += 1
+		processor.diffBoth.Keys = appendStrArr(processor.diffBoth.Keys, 10, diff.Key)
+	}
+}
+
+func appendStrArr(arr []string, size int, elem string) []string {
+	if len(arr) >= size {
+		return arr
+	}
+	return append(arr, elem)
 }

@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"math"
 	"path"
+	"path/filepath"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/OneOfOne/xxhash"
@@ -30,6 +32,7 @@ import (
 	log "github.com/cihub/seelog"
 	xxhash2 "github.com/pierrec/xxHash/xxHash32"
 	"github.com/segmentio/fasthash/fnv1a"
+
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/global"
@@ -40,24 +43,36 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/bytebufferpool"
 	"infini.sh/framework/lib/fasthttp"
+	es_common "infini.sh/framework/modules/elastic/common"
 	"infini.sh/gateway/common"
 )
 
+var rotateConfig = rotate.RotateConfig{
+	Compress:     false,
+	MaxFileAge:   0,
+	MaxFileCount: 0,
+	MaxFileSize:  1024 * 1000,
+}
+
 type DumpHashProcessor struct {
 	config Config
+	files  sync.Map
 	client elastic.API
 }
 
 type Config struct {
 	//字段名称必须是大写
-	PartitionSize int    `config:"partition_size"`
-	BatchSize     int    `config:"batch_size"`
-	SliceSize     int    `config:"slice_size"`
-	Elasticsearch string `config:"elasticsearch"`
-	Output        string `config:"output_queue"`
-	SortType      string `config:"sort_type"`
-	SortField     string `config:"sort_field"`
-	Indices       string `config:"indices"`
+	PartitionSize       int                          `config:"partition_size"`
+	BatchSize           int                          `config:"batch_size"`
+	SliceSize           int                          `config:"slice_size"`
+	Elasticsearch       string                       `config:"elasticsearch"`
+	ElasticsearchConfig *elastic.ElasticsearchConfig `config:"elasticsearch_config"`
+	Output              string                       `config:"output_queue"`
+	SortType            string                       `config:"sort_type"`
+	SortField           string                       `config:"sort_field"`
+	Indices             string                       `config:"indices"`
+	CleanOldFiles       bool                         `config:"clean_old_files"`
+	KeepSourceInResult  bool                         `config:"keep_source"`
 
 	QueryString string `config:"query_string"`
 	QueryDSL    string `config:"query_dsl"`
@@ -87,14 +102,30 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		return nil, fmt.Errorf("failed to unpack the configuration of dump_hash processor: %s", err)
 	}
 
-	client := elastic.GetClient(cfg.Elasticsearch)
-	if cfg.SliceSize < 1 || client.GetMajorVersion() < 5 {
+	client := elastic.GetClientNoPanic(cfg.Elasticsearch)
+	if client == nil {
+		if cfg.ElasticsearchConfig != nil {
+			cfg.ElasticsearchConfig.Source = "dump_hash"
+			client, _ = es_common.InitElasticInstanceWithoutMetadata(*cfg.ElasticsearchConfig)
+		}
+	}
+	if client == nil {
+		panic("failed to get elasticsearch client")
+	}
+
+	esVersion := client.GetVersion()
+
+	if cfg.SliceSize < 1 {
+		cfg.SliceSize = 1
+	}
+	if esVersion.Distribution == elastic.Elasticsearch && esVersion.Major < 5 {
 		cfg.SliceSize = 1
 	}
 
 	return &DumpHashProcessor{
 		config: cfg,
 		client: client,
+		files:  sync.Map{},
 	}, nil
 
 }
@@ -108,13 +139,22 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 	start := time.Now()
 	wg := sync.WaitGroup{}
 
-	//file := path.Join(global.Env().GetDataDir(), "diff", processor.config.Output)
-	//if util.FileExists(file) {
-	//	util.FileDelete(file)
-	//	log.Warn("target file exists:", file, ",remove it now")
-	//}
+	if processor.config.CleanOldFiles {
+		file := path.Join(global.Env().GetDataDir(), "diff", processor.config.Output)
+		matches, err := filepath.Glob(file + `-[0-9]\+`)
+		if err != nil {
+			log.Errorf("failed to glob files, err: %v", err)
+		} else {
+			for _, f := range matches {
+				err := util.FileDelete(f)
+				log.Infof("deleting old dump file [%s], err: %v", f, err)
+			}
+		}
+	}
 
 	var totalDocsNeedToScroll int64 = 0
+	var totalDocsScrolled int64 = 0
+
 	for slice := 0; slice < processor.config.SliceSize; slice++ {
 
 		tempSlice := slice
@@ -160,9 +200,12 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 				panic(err)
 			}
 
-			totalDocsNeedToScroll += totalHits
+			atomic.AddInt64(&totalDocsNeedToScroll, totalHits)
+			ctx.PutValue("dump_hash.total_hits", atomic.LoadInt64(&totalDocsNeedToScroll))
 
 			docSize := processor.processingDocs(scrollResponse1, processor.config.Output)
+			atomic.AddInt64(&totalDocsScrolled, int64(docSize))
+			ctx.PutValue("dump_hash.scrolled_docs", atomic.LoadInt64(&totalDocsScrolled))
 
 			progress.IncreaseWithTotal(processor.config.Output, "dump-hash-"+util.ToString(tempSlice), docSize, int(totalHits))
 
@@ -222,6 +265,8 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 					}
 
 					docSize := processor.processingDocs(data, processor.config.Output)
+					atomic.AddInt64(&totalDocsScrolled, int64(docSize))
+					ctx.PutValue("dump_hash.scrolled_docs", atomic.LoadInt64(&totalDocsScrolled))
 
 					processedSize += docSize
 					log.Debugf("[%v] slice[%v]:%v,%v-%v", processor.config.Elasticsearch, slice, docSize, processedSize, totalHits)
@@ -280,7 +325,18 @@ func (processor *DumpHashProcessor) processingDocs(data []byte, outputQueueName 
 		if !ok {
 			buffer = bytebufferpool.Get("dump_hash")
 		}
-		_, err = buffer.WriteBytesArray(util.UnsafeStringToBytes(id), []byte(","), hash, []byte("\n"))
+		_, err = buffer.WriteBytesArray(util.UnsafeStringToBytes(id), []byte(","), hash)
+		if err != nil {
+			panic(err)
+		}
+		if processor.config.KeepSourceInResult {
+			_, err = buffer.WriteBytesArray([]byte(","), source)
+			if err != nil {
+				panic(err)
+			}
+		}
+
+		_, err = buffer.WriteBytesArray([]byte("\n"))
 		if err != nil {
 			panic(err)
 		}
@@ -291,7 +347,9 @@ func (processor *DumpHashProcessor) processingDocs(data []byte, outputQueueName 
 	}, "hits", "hits")
 
 	for k, v := range docs {
-		handler := rotate.GetFileHandler(path.Join(global.Env().GetDataDir(), "diff", outputQueueName+util.ToString(k)), rotate.DefaultConfig)
+		file := path.Join(global.Env().GetDataDir(), "diff", outputQueueName+"-"+util.ToString(k))
+		processor.files.Store(file, true)
+		handler := rotate.GetFileHandler(file, rotateConfig)
 		handler.Write(v.Bytes())
 		bytebufferpool.Put("dump_hash", v)
 	}
@@ -299,6 +357,23 @@ func (processor *DumpHashProcessor) processingDocs(data []byte, outputQueueName 
 	stats.IncrementBy("scrolling_processing."+outputQueueName, "docs", int64(docSize))
 
 	return docSize
+}
+
+func (processor *DumpHashProcessor) Release() error {
+	var toRelease []string
+	processor.files.Range(func(key, value any) bool {
+		file, ok := key.(string)
+		if !ok {
+			log.Errorf("invalid file path")
+			return true
+		}
+		toRelease = append(toRelease, file)
+		return true
+	})
+	for _, file := range toRelease {
+		rotate.ReleaseFileHandler(file)
+	}
+	return nil
 }
 
 func (processor *DumpHashProcessor) Hash(hashFunc string, buf *bytebufferpool.ByteBuffer, data []byte) []byte {
