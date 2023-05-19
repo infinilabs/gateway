@@ -102,6 +102,14 @@ func initPool() {
 }
 
 func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
+	elapsedTimeInMs := float32(float64(ctx.GetElapsedTime().Microseconds()) * 0.001)
+
+	if this.config.MinElaspsedTimeInMs > 0 {
+		if this.config.MinElaspsedTimeInMs >= int(elapsedTimeInMs) {
+			ctx.Finished()
+			return
+		}
+	}
 
 	request := requstObjPool.Get().(*model.HttpRequest)
 	request.Request = reqPool.Get().(*model.Request)
@@ -112,12 +120,6 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 	defer resPool.Put(request.Response)
 	defer reqPool.Put(request.Request)
 	defer reqFlowPool.Put(request.DataFlow)
-
-	if this.config.MinElaspsedTimeInMs > 0 {
-		if this.config.MinElaspsedTimeInMs >= int(request.Response.ElapsedTimeInMs) {
-			ctx.Finished()
-		}
-	}
 
 	request.LoggingTime = time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	request.Request.StartTime = ctx.Time().UTC().Format("2006-01-02T15:04:05.000Z")
@@ -164,7 +166,7 @@ func (this *RequestLogging) Filter(ctx *fasthttp.RequestCtx) {
 	request.Request.Body = reqBody
 	request.Request.BodyLength = ctx.Request.GetBodyLength()
 
-	request.Response.ElapsedTimeInMs = float32(float64(ctx.GetElapsedTime().Microseconds()) * 0.001)
+	request.Response.ElapsedTimeInMs = elapsedTimeInMs
 
 	if ctx.Response.LocalAddr() != nil {
 		request.Response.LocalAddr = ctx.Response.LocalAddr().String()
