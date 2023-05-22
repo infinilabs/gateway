@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"math"
 	"path"
-	"path/filepath"
 	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -140,15 +140,10 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 	wg := sync.WaitGroup{}
 
 	if processor.config.CleanOldFiles {
-		file := path.Join(global.Env().GetDataDir(), "diff", processor.config.Output)
-		matches, err := filepath.Glob(file + `-[0-9]\+`)
-		if err != nil {
-			log.Errorf("failed to glob files, err: %v", err)
-		} else {
-			for _, f := range matches {
-				err := util.FileDelete(f)
-				log.Infof("deleting old dump file [%s], err: %v", f, err)
-			}
+		for i := 0; i < processor.config.PartitionSize; i += 1 {
+			file := path.Join(global.Env().GetDataDir(), "diff", processor.config.Output+"-"+strconv.Itoa(i))
+			err := util.FileDelete(file)
+			log.Infof("deleting old dump file [%s], err: %v", file, err)
 		}
 	}
 
@@ -297,10 +292,6 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 }
 
 func (processor *DumpHashProcessor) processingDocs(data []byte, outputQueueName string) int {
-
-	hashBuffer := bytebufferpool.Get("dump_hash")
-	defer bytebufferpool.Put("dump_hash", hashBuffer)
-
 	docSize := 0
 	var docs = map[int]*bytebufferpool.ByteBuffer{}
 	jsonparser.ArrayEach(data, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
@@ -317,7 +308,7 @@ func (processor *DumpHashProcessor) processingDocs(data []byte, outputQueueName 
 
 		util.WalkBytesAndReplace(source, util.NEWLINE, util.SPACE)
 
-		hash := processor.Hash(processor.config.HashFunc, hashBuffer, source)
+		hash := processor.Hash(processor.config.HashFunc, source)
 
 		partitionID := elastic.GetShardID(7, util.UnsafeStringToBytes(id), processor.config.PartitionSize)
 
@@ -325,7 +316,7 @@ func (processor *DumpHashProcessor) processingDocs(data []byte, outputQueueName 
 		if !ok {
 			buffer = bytebufferpool.Get("dump_hash")
 		}
-		_, err = buffer.WriteBytesArray(util.UnsafeStringToBytes(id), []byte(","), hash)
+		_, err = buffer.WriteBytesArray([]byte(id), []byte(","), hash)
 		if err != nil {
 			panic(err)
 		}
@@ -376,7 +367,7 @@ func (processor *DumpHashProcessor) Release() error {
 	return nil
 }
 
-func (processor *DumpHashProcessor) Hash(hashFunc string, buf *bytebufferpool.ByteBuffer, data []byte) []byte {
+func (processor *DumpHashProcessor) Hash(hashFunc string, data []byte) []byte {
 	switch hashFunc {
 	case "xxhash64":
 		hash := xxhash1.Sum64(data)
