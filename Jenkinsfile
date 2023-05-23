@@ -27,6 +27,7 @@ pipeline {
 
 
                     sh 'cd /home/jenkins/go/src/infini.sh/gateway && git stash && git pull origin master && make clean config build-linux'
+                    sh 'cd /home/jenkins/go/src/infini.sh/agent && git stash && git pull origin master && GOROOT="/infini/go-pkgs/go-loongarch" GOPATH="/home/jenkins/go" make build-linux-loong64'
                     sh label: 'copy-configs', script: 'cd /home/jenkins/go/src/infini.sh/gateway && cp ../framework/LICENSE bin && cat ../framework/NOTICE NOTICE > bin/NOTICE && cp README bin'
 
                     sh label: 'package-linux-amd64', script: 'cd /home/jenkins/go/src/infini.sh/gateway/bin && tar cfz ${WORKSPACE}/gateway-$VERSION-$BUILD_NUMBER-linux-amd64.tar.gz gateway-linux-amd64 gateway.yml  LICENSE NOTICE README'
