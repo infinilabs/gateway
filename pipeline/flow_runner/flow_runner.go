@@ -172,6 +172,10 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 			ctx1, messages, timeout, err := queue.Consume(qConfig, consumer, offset)
 			log.Tracef("get %v messages from queue:%v", len(messages), qConfig.Name)
 
+			if len(messages)==0{
+				time.Sleep(time.Millisecond * time.Duration(500))
+			}
+
 			if err != nil && err.Error() != "EOF" {
 				log.Error(err)
 				panic(err)
