@@ -164,7 +164,6 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context, count *
 READ_DOCS:
 	initOfffset, _ = queue.GetOffset(qConfig, consumer)
 	offset = initOfffset
-
 	for {
 
 		if ctx.IsCanceled() {
@@ -191,6 +190,10 @@ READ_DOCS:
 		}
 
 		_, messages, _, err := queue.Consume(qConfig, consumer, offset)
+		if len(messages)==0{
+			time.Sleep(time.Millisecond * time.Duration(500))
+		}
+
 		if len(messages) > 0 {
 			for _, pop := range messages {
 				if err != nil {
