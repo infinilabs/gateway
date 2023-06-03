@@ -56,7 +56,7 @@ EOF
 
   docker buildx build -t infinilabs/$PNAME-$t:latest --platform=linux/$t -o type=docker .
 
-  docker tag infinilabs/$PNAME-$t:latest infinilabs/$PNAME-t:$VERSION-$BUILD_NUMBE
+  docker tag infinilabs/$PNAME-$t:latest infinilabs/$PNAME-$t:$VERSION-$BUILD_NUMBE
   docker push infinilabs/$PNAME-$t:latest
   docker push infinilabs/$PNAME-$t:$VERSION-$BUILD_NUMBER
 done
