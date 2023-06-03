@@ -4,6 +4,10 @@
 PNAME=gateway
 WORKBASE=/home/jenkins/go/src/infini.sh
 WORKDIR=$WORKBASE/$PNAME
+
+if [[ $VERSION =~ NIGHTLY ]]; then
+  BUILD_NUMBER=$BUILD_DAY
+fi
 export DOCKER_CLI_EXPERIMENTAL=enabled
 
 #clean all
