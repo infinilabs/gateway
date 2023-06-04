@@ -22,7 +22,8 @@ make clean config build-linux
 make config build-arm
 make config build-darwin
 make config build-win
-GOROOT="/infini/go-pkgs/go-loongarch" GOPATH="/home/jenkins/go" make build-linux-loong64
+GOROOT="/infini/go-pkgs/go-loongarch" PATH=$GOROOT/bin:$PATH make build-linux-loong64
+#GOROOT="/infini/go-pkgs/go-swarch" PATH=$GOROOT/bin:$PATH make build-linux-sw64
 
 #copy-configs
 cp -rf $WORKBASE/framework/LICENSE $WORKDIR/bin && cat $WORKBASE/framework/NOTICE $WORKDIR/NOTICE > $WORKDIR/bin/NOTICE
