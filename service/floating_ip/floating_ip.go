@@ -28,8 +28,8 @@ import (
 
 type EchoConfig struct {
 	EchoPort        int `config:"port"`               //61111
-	EchoDialTimeout int `config:"dial_timeout_in_ms"` //1s
-	EchoTimeout     int `config:"timeout_in_ms"`      //1s
+	EchoDialTimeout int `config:"dial_timeout_in_ms"` //10s
+	EchoTimeout     int `config:"timeout_in_ms"`      //10s
 }
 
 type FloatingIPConfig struct {
@@ -65,8 +65,8 @@ var (
 		Netmask: "255.255.255.0",
 		Echo: EchoConfig{
 			EchoPort:        61111,
-			EchoTimeout:     5000,
-			EchoDialTimeout: 1000,
+			EchoTimeout:     10000,
+			EchoDialTimeout: 10000,
 		},
 		BoradcastConfig: config.NetworkConfig{
 			Binding: "224.3.2.2:7654",
