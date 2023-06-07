@@ -44,7 +44,7 @@ for t in amd64 arm64 ; do
 
   cat <<EOF>Dockerfile
 FROM --platform=linux/$t alpine:3.16.5
-MAINTAINER "hardy <luohoufu@gmail.com>"
+MAINTAINER "hardy <luohf@infinilabs.com>"
 ARG APP_NAME=$PNAME
 ARG APP_HOME=/opt/\${APP_NAME}
 ENV APP=\${APP_NAME}
