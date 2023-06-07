@@ -480,7 +480,13 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 	}
 
 	if !p.proxyConfig.SkipEnrichMetadata {
-		myctx.Request.Header.Add(fasthttp.HeaderXForwardedFor, myctx.RemoteAddr().String())
+		forwardedFor := myctx.Request.Header.Peek(fasthttp.HeaderXForwardedFor)
+		remoteAddr := myctx.RemoteAddr().String()
+		if len(forwardedFor) == 0 {
+			myctx.Request.Header.Set(fasthttp.HeaderXForwardedFor, remoteAddr)
+		} else {
+			myctx.Request.Header.Set(fasthttp.HeaderXForwardedFor, string(forwardedFor)+", "+remoteAddr)
+		}
 		myctx.Request.Header.Add(fasthttp.HeaderXRealIP, myctx.RemoteAddr().String())
 		myctx.Request.Header.Add(fasthttp.HeaderXForwardedHost, originalHost)
 	}
