@@ -46,7 +46,7 @@ func Broadcast(config *FloatingIPConfig, req *Request) {
 		log.Warn("broadcast requests was throttled(5s)")
 		return
 	}
-	addr, err := net.ResolveUDPAddr("udp", config.BoradcastConfig.GetBindingAddr())
+	addr, err := net.ResolveUDPAddr("udp", config.BroadcastConfig.GetBindingAddr())
 	if err != nil {
 		log.Error(err)
 		return
@@ -73,7 +73,7 @@ func ServeMulticastDiscovery(config *FloatingIPConfig, h func(*net.UDPAddr, int,
 		panic("invalid config")
 	}
 
-	addr, err := net.ResolveUDPAddr("udp", config.BoradcastConfig.GetBindingAddr())
+	addr, err := net.ResolveUDPAddr("udp", config.BroadcastConfig.GetBindingAddr())
 	if err != nil {
 		log.Error(err)
 		return
