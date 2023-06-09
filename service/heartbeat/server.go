@@ -3,23 +3,23 @@ package heartbeat
 // golang achieve tcp long heartbeat connection with
 // server
 import (
+	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/global"
 	"net"
 	"runtime"
-	log "github.com/cihub/seelog"
 	"sync"
 	"time"
 )
 
 var (
-	//Req_REGISTER byte = 1 // 1 --- c register cid
-	//Res_REGISTER byte = 2 // 2 --- s response
-	//
-	//Req_HEARTBEAT byte = 3 // 3 --- s send heartbeat req
-	//Res_HEARTBEAT byte = 4 // 4 --- c send heartbeat res
-	//
-	//Req byte = 5 // 5 --- cs send data
-	//Res byte = 6 // 6 --- cs send ack
+//Req_REGISTER byte = 1 // 1 --- c register cid
+//Res_REGISTER byte = 2 // 2 --- s response
+//
+//Req_HEARTBEAT byte = 3 // 3 --- s send heartbeat req
+//Res_HEARTBEAT byte = 4 // 4 --- c send heartbeat res
+//
+//Req byte = 5 // 5 --- cs send data
+//Res byte = 6 // 6 --- cs send ack
 )
 
 type CS struct {
@@ -37,7 +37,7 @@ var CMap map[string]*CS
 
 var lock sync.RWMutex
 
-func StartServer(host string,port int) error  {
+func StartServer(host string, port int) error {
 	CMap = make(map[string]*CS)
 	listen, err := net.ListenTCP("tcp", &net.TCPAddr{net.ParseIP(host), port, ""})
 	if err != nil {
@@ -47,10 +47,9 @@ func StartServer(host string,port int) error  {
 	}
 	//fmt.Println("initialized connection, connection requests from clients ...")
 	go PushGRT()
-	Server(listen)
+	server(listen)
 	return nil
 }
-
 
 func PushGRT() {
 	defer func() {
@@ -79,7 +78,7 @@ func PushGRT() {
 	}
 }
 
-func Server(listen *net.TCPListener) {
+func server(listen *net.TCPListener) {
 	for {
 		conn, err := listen.AcceptTCP()
 		if err != nil {

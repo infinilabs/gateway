@@ -78,5 +78,5 @@ cd $WORKDIR && git reset --hard
 #clean weeks ago image
 NEEDCLEN=$(docker images |grep "$PNAME" |grep "weeks ago")
 if [ ! -z "$NEEDCLEN" ]; then
-  docker images |grep "$PNAME" |grep "weeks ago" |awk '{print $3}' |xargs docker rmi
+  docker images |grep "$PNAME" |grep "weeks ago" |awk '{print $3}' |xargs docker rmi -f >/dev/null 2>&1
 fi

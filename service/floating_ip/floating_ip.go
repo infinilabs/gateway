@@ -38,7 +38,6 @@ type FloatingIPConfig struct {
 	Netmask   string `config:"netmask"`
 	Interface string `config:"interface"`
 
-	//
 	LocalIP string `config:"local_ip"` //local ip address
 	PeerIP  string `config:"peer_ip"`  //remote ip to failover
 
@@ -47,7 +46,7 @@ type FloatingIPConfig struct {
 	Priority               int  `config:"priority"`
 	ForcedSwitchByPriority bool `config:"forced_by_priority"`
 
-	BoradcastConfig config.NetworkConfig `config:"broadcast"`
+	BroadcastConfig config.NetworkConfig `config:"broadcast"`
 }
 
 var atomicActiveOrNot atomic.Value
@@ -68,7 +67,7 @@ var (
 			EchoTimeout:     10000,
 			EchoDialTimeout: 10000,
 		},
-		BoradcastConfig: config.NetworkConfig{
+		BroadcastConfig: config.NetworkConfig{
 			Binding: "224.3.2.2:7654",
 		},
 	}
@@ -275,6 +274,7 @@ func (module FloatingIPPlugin) SwitchToStandbyMode(latency time.Duration) {
 
 	task.RunWithinGroup("standby", func(ctx context.Context) error {
 		aliveChan := make(chan bool)
+		client:=heartbeat.New()
 		go func() {
 			defer func() {
 				if !global.Env().IsDebug {
@@ -293,9 +293,8 @@ func (module FloatingIPPlugin) SwitchToStandbyMode(latency time.Duration) {
 				}
 				aliveChan <- false
 			}()
-
 			log.Tracef("check floating_ip echo_port:%v", floatingIPConfig.Echo.EchoPort)
-			heartbeat.StartClient(floatingIPConfig.IP, floatingIPConfig.Echo.EchoPort, floatingIPConfig.Echo.EchoDialTimeout, floatingIPConfig.Echo.EchoTimeout, func() {
+			client.Start(floatingIPConfig.IP, floatingIPConfig.Echo.EchoPort, floatingIPConfig.Echo.EchoDialTimeout, floatingIPConfig.Echo.EchoTimeout, func() {
 				aliveChan <- true
 			}, func() {
 				aliveChan <- false
@@ -306,6 +305,7 @@ func (module FloatingIPPlugin) SwitchToStandbyMode(latency time.Duration) {
 		alive := <-aliveChan
 		if !alive {
 			log.Debug("floating_ip is not responding, promoting self")
+			client.Stop()
 			module.SwitchToActiveMode()
 		} else {
 			goto WAIT
@@ -455,6 +455,7 @@ func (module FloatingIPPlugin) StateMachine() {
 		}
 	}()
 
+	client:=heartbeat.New()
 	aliveChan := make(chan bool)
 	go func() {
 		defer func() {
@@ -474,7 +475,7 @@ func (module FloatingIPPlugin) StateMachine() {
 			}
 		}()
 
-		err := heartbeat.StartClient(floatingIPConfig.IP, floatingIPConfig.Echo.EchoPort, floatingIPConfig.Echo.EchoDialTimeout, floatingIPConfig.Echo.EchoTimeout, func() {
+		err := client.Start(floatingIPConfig.IP, floatingIPConfig.Echo.EchoPort, floatingIPConfig.Echo.EchoDialTimeout, floatingIPConfig.Echo.EchoTimeout, func() {
 			aliveChan <- true
 		}, func() {
 			aliveChan <- false
@@ -487,6 +488,9 @@ func (module FloatingIPPlugin) StateMachine() {
 	alive := <-aliveChan
 
 	if !alive {
+
+		client.Stop()
+
 		time.Sleep(10 * time.Second)
 		//target floating_ip can't connect, but ip ping is alive
 		if util.TestTCPPort(floatingIPConfig.IP, floatingIPConfig.Echo.EchoPort, 10*time.Second) && pingActiveNode(floatingIPConfig.IP) {
