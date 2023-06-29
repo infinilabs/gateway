@@ -14,9 +14,9 @@ import (
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/framework/lib/guardian/auth"
+	"infini.sh/framework/lib/guardian/auth/strategies/ldap"
 	"infini.sh/gateway/common"
-	"infini.sh/gateway/lib/guardian/auth"
-	"infini.sh/gateway/lib/guardian/auth/strategies/ldap"
 	"net/http"
 	"time"
 )
