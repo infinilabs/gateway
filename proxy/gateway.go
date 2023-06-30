@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"runtime"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/api"
 	. "infini.sh/framework/core/config"
@@ -10,7 +12,6 @@ import (
 	api2 "infini.sh/gateway/api"
 	"infini.sh/gateway/common"
 	"infini.sh/gateway/proxy/entry"
-	"runtime"
 )
 
 type GatewayModule struct {
@@ -49,9 +50,9 @@ func (module *GatewayModule) Setup() {
 
 }
 
-func (module *GatewayModule) handleConfigureChange(){
+func (module *GatewayModule) handleConfigureChange() {
 
-	NotifyOnConfigSectionChange("flow", func(pCfg,cCfg *Config) {
+	NotifyOnConfigSectionChange("flow", func(pCfg, cCfg *Config) {
 
 		defer func() {
 			if !global.Env().IsDebug {
@@ -70,7 +71,7 @@ func (module *GatewayModule) handleConfigureChange(){
 			}
 		}()
 
-		if cCfg!=nil{
+		if cCfg != nil {
 			//TODO diff previous and current config
 			newConfig := []common.FlowConfig{}
 			err := cCfg.Unpack(&newConfig)
@@ -90,19 +91,19 @@ func (module *GatewayModule) handleConfigureChange(){
 			}
 
 			//修改完Flow，需要重启服务入口
-			for _,v:=range module.entryPoints{
+			for _, v := range module.entryPoints {
 				//TODO skip unnecessary restart
-				log.Trace("stopping ",v.GetNameOrID())
+				log.Trace("stopping ", v.GetNameOrID())
 				v.Stop()
-				log.Trace("stopped ",v.GetNameOrID())
+				log.Trace("stopped ", v.GetNameOrID())
 				v.Start()
-				log.Trace("started ",v.GetNameOrID())
+				log.Trace("started ", v.GetNameOrID())
 
 			}
 		}
 	})
 
-	NotifyOnConfigSectionChange("router", func(pCfg,cCfg *Config) {
+	NotifyOnConfigSectionChange("router", func(pCfg, cCfg *Config) {
 		defer func() {
 			if !global.Env().IsDebug {
 				if r := recover(); r != nil {
@@ -120,15 +121,15 @@ func (module *GatewayModule) handleConfigureChange(){
 			}
 		}()
 
-		if cCfg!=nil{
-			newConfig:= []common.RouterConfig{}
-			err:=cCfg.Unpack(&newConfig)
-			if err!=nil{
+		if cCfg != nil {
+			newConfig := []common.RouterConfig{}
+			err := cCfg.Unpack(&newConfig)
+			if err != nil {
 				log.Error(err)
 				return
 			}
 
-			keys:=map[string]string{}
+			keys := map[string]string{}
 			for _, v := range newConfig {
 				if v.ID == "" && v.Name != "" {
 					v.ID = v.Name
@@ -139,9 +140,9 @@ func (module *GatewayModule) handleConfigureChange(){
 			}
 
 			//修改完路由，需要重启服务入口
-			for _,v:=range module.entryPoints{
-				_,ok:=keys[v.GetConfig().RouterConfigName]
-				if ok{
+			for _, v := range module.entryPoints {
+				_, ok := keys[v.GetConfig().RouterConfigName]
+				if ok {
 					v.Stop()
 					v.Start()
 				}
@@ -149,7 +150,7 @@ func (module *GatewayModule) handleConfigureChange(){
 		}
 	})
 
-	NotifyOnConfigSectionChange("entry", func(pCfg,cCfg *Config) {
+	NotifyOnConfigSectionChange("entry", func(pCfg, cCfg *Config) {
 
 		defer func() {
 			if !global.Env().IsDebug {
@@ -206,32 +207,32 @@ func (module *GatewayModule) handleConfigureChange(){
 				entryPoints[v.ID] = e
 			}
 
-			if len(entryPoints)==0{
+			if len(entryPoints) == 0 {
 				return
 			}
 
 			log.Debug("starting new entry points")
-			for _,v:=range entryPoints{
+			for _, v := range entryPoints {
 				v.Start()
 			}
 
 			log.Debug("stopping old entry points")
-			for _,v:=range old{
-				_,ok:=skipKeys[v.GetConfig().ID]
-				if ok{
-					entryPoints[v.GetConfig().ID]=v
+			for _, v := range old {
+				_, ok := skipKeys[v.GetConfig().ID]
+				if ok {
+					entryPoints[v.GetConfig().ID] = v
 					continue
 				}
 				v.Stop()
 			}
 
-			module.entryPoints=entryPoints
+			module.entryPoints = entryPoints
 		}
 	})
 
 }
 
-func (module *GatewayModule) loadEntryPoints()map[string]*entry.Entrypoint {
+func (module *GatewayModule) loadEntryPoints() map[string]*entry.Entrypoint {
 
 	routerConfigs := []common.RouterConfig{}
 	flowConfigs := []common.FlowConfig{}
@@ -285,7 +286,6 @@ func (module *GatewayModule) loadEntryPoints()map[string]*entry.Entrypoint {
 	}
 	return entryPoints
 }
-
 
 func (module *GatewayModule) Start() error {
 

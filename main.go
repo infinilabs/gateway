@@ -18,6 +18,8 @@ package main
 
 import (
 	_ "expvar"
+	"infini.sh/framework/modules/security"
+
 	"infini.sh/framework"
 	"infini.sh/framework/core/module"
 	"infini.sh/framework/core/util"
@@ -41,7 +43,7 @@ import (
 	"infini.sh/gateway/service/forcemerge"
 )
 
-func setup()  {
+func setup() {
 	module.RegisterSystemModule(&stats2.SimpleStatsModule{})
 	module.RegisterUserPlugin(&stats.StatsDModule{})
 	module.RegisterSystemModule(&s3.S3Module{})
@@ -57,10 +59,10 @@ func setup()  {
 	module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
 	module.RegisterSystemModule(&api.APIModule{})
 	module.RegisterUserPlugin(&metrics.MetricsModule{})
-
+	module.RegisterSystemModule(&security.Module{})
 }
 
-func start()  {
+func start() {
 	module.Start()
 }
 
@@ -75,15 +77,14 @@ func main() {
 	terminalFooter := ""
 
 	app := framework.NewApp("gateway", "A light-weight, powerful and high-performance search gateway.",
-		util.TrimSpaces(config.Version),util.TrimSpaces(config.BuildNumber), util.TrimSpaces(config.LastCommitLog), util.TrimSpaces(config.BuildDate), util.TrimSpaces(config.EOLDate), terminalHeader, terminalFooter)
+		util.TrimSpaces(config.Version), util.TrimSpaces(config.BuildNumber), util.TrimSpaces(config.LastCommitLog), util.TrimSpaces(config.BuildDate), util.TrimSpaces(config.EOLDate), terminalHeader, terminalFooter)
 
 	app.Init(nil)
 
 	defer app.Shutdown()
 
-	if app.Setup(setup, start,nil){
+	if app.Setup(setup, start, nil) {
 		app.Run()
 	}
-
 
 }
