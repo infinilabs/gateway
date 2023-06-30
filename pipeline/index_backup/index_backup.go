@@ -156,6 +156,8 @@ func New(c *config.Config) (pipeline.Processor, error) {
 
 		intervalDuration := time.Second * time.Duration(cfg.UploadIntervalInSecond)
 		timer := util.AcquireTimer(intervalDuration)
+		defer util.ReleaseTimer(timer)
+
 		for {
 			select {
 			case item := <-runner.changesChan:
@@ -212,7 +214,7 @@ func (processor *IndexBackupProcessor) Process(ctx *pipeline.Context) error {
 					v = r.(string)
 				}
 				log.Errorf("error in processor [%v], [%v]", processor.Name(), v)
-				ctx.Error(fmt.Errorf("index backup panic: %v", r))
+				ctx.RecordError(fmt.Errorf("index backup panic: %v", r))
 			}
 		}
 	}()

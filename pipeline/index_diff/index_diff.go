@@ -256,7 +256,7 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 					v = r.(string)
 				}
 				log.Error("error in index_diff service", v)
-				ctx.Error(fmt.Errorf("index diff panic: %v", r))
+				ctx.RecordError(fmt.Errorf("index diff panic: %v", r))
 			}
 		}
 	}()

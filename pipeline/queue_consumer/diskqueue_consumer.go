@@ -131,7 +131,7 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context, count *
 					v = r.(string)
 				}
 				log.Error("error in json indexing worker,", v)
-				ctx.Error(fmt.Errorf("queue consumer panic: %v", r))
+				ctx.RecordError(fmt.Errorf("queue consumer panic: %v", r))
 			}
 		}
 		wg.Done()

@@ -411,7 +411,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string, ctx *pipeline.
 					v = r.(string)
 				}
 				log.Errorf("error in bulk_indexing worker[%v],queue:[%v],%v", workerID, qConfig.Id, v)
-				ctx.Error(fmt.Errorf("NewBulkWorker panic: %v", r))
+				ctx.RecordError(fmt.Errorf("NewBulkWorker panic: %v", r))
 			}
 		}
 
@@ -523,7 +523,7 @@ READ_DOCS:
 
 		if len(msg) == 0 {
 			log.Tracef("0 messages found in queue:[%v]", qConfig.Name)
-			ctx.Error(errors.New("no message"))
+			ctx.RecordError(errors.New("no message"))
 			return
 		}
 

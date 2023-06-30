@@ -127,7 +127,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 					v = r.(string)
 				}
 				log.Errorf("error in flow_runner [%v], [%v]", processor.config.FlowName, v)
-				ctx.Error(fmt.Errorf("flow runner panic: %v", r))
+				ctx.RecordError(fmt.Errorf("flow runner panic: %v", r))
 				skipFinalDocsProcess = true
 			}
 		}
@@ -140,7 +140,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 			ok, err := queue.CommitOffset(qConfig, consumer, offset)
 			log.Tracef("%v,%v commit offset:%v", qConfig.Name, consumer.Name, offset)
 			if !ok || err != nil {
-				ctx.Error(fmt.Errorf("failed to commit offset, ok: %v, err: %v", ok, err))
+				ctx.RecordError(fmt.Errorf("failed to commit offset, ok: %v, err: %v", ok, err))
 			} else {
 				initOfffset = offset
 			}

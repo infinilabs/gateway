@@ -156,7 +156,7 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 							v = r.(string)
 						}
 						log.Error("error in processor,", v)
-						ctx.Error(fmt.Errorf("es_scroll panic: %v", r))
+						ctx.RecordError(fmt.Errorf("es_scroll panic: %v", r))
 					}
 				}
 				log.Debug("exit detector for active queue")
