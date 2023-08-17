@@ -221,9 +221,11 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 					ctx.SetFlowID(processor.config.FlowName)
 
 					flowProcessor(ctx)
+
 					if global.Env().IsDebug {
-						log.Tracef("start forward request to flow:%v", processor.config.FlowName)
+						log.Tracef("end forward request to flow:%v", processor.config.FlowName)
 					}
+					
 					if processor.config.CommitOnTag != "" {
 						tags, ok := ctx.GetTags()
 						if ok {
