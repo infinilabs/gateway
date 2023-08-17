@@ -11,15 +11,15 @@ import (
 type EntryConfig struct {
 	orm.ORMObjectBase
 
-	Name                string `config:"name" json:"name,omitempty" elastic_mapping:"name:{type:keyword,fields:{text: {type: text}}}"`
-	Enabled             bool   `config:"enabled" json:"enabled,omitempty" elastic_mapping:"enabled: { type: boolean }"`
-	DirtyShutdown       bool   `config:"dirty_shutdown" json:"dirty_shutdown,omitempty" elastic_mapping:"dirty_shutdown: { type: boolean }"`
-	SkipReduceMemoryUsage   bool   `config:"skip_reduce_memory" json:"skip_reduce_memory,omitempty" elastic_mapping:"skip_reduce_memory: { type: boolean }"`
-	ReadTimeout         int    `config:"read_timeout" json:"read_timeout,omitempty" elastic_mapping:"read_timeout: { type: integer }"`
-	WriteTimeout        int    `config:"write_timeout" json:"write_timeout,omitempty" elastic_mapping:"write_timeout: { type: integer }"`
-	DisableTCPKeepalive        bool   `config:"disable_tcp_keepalive" json:"disable_tcp_keepalive,omitempty" elastic_mapping:"disable_tcp_keepalive: { type: boolean }"`
-	TCPKeepaliveSeconds int    `config:"tcp_keepalive_in_seconds" json:"tcp_keepalive_in_seconds,omitempty" elastic_mapping:"tcp_keepalive_in_seconds: { type: integer }"`
-	IdleTimeout         int    `config:"idle_timeout" json:"idle_timeout,omitempty" elastic_mapping:"idle_timeout: { type: integer }"`
+	Name                  string `config:"name" json:"name,omitempty" elastic_mapping:"name:{type:keyword,fields:{text: {type: text}}}"`
+	Enabled               bool   `config:"enabled" json:"enabled,omitempty" elastic_mapping:"enabled: { type: boolean }"`
+	DirtyShutdown         bool   `config:"dirty_shutdown" json:"dirty_shutdown,omitempty" elastic_mapping:"dirty_shutdown: { type: boolean }"`
+	SkipReduceMemoryUsage bool   `config:"skip_reduce_memory" json:"skip_reduce_memory,omitempty" elastic_mapping:"skip_reduce_memory: { type: boolean }"`
+	ReadTimeout           int    `config:"read_timeout" json:"read_timeout,omitempty" elastic_mapping:"read_timeout: { type: integer }"`
+	WriteTimeout          int    `config:"write_timeout" json:"write_timeout,omitempty" elastic_mapping:"write_timeout: { type: integer }"`
+	DisableTCPKeepalive   bool   `config:"disable_tcp_keepalive" json:"disable_tcp_keepalive,omitempty" elastic_mapping:"disable_tcp_keepalive: { type: boolean }"`
+	TCPKeepaliveSeconds   int    `config:"tcp_keepalive_in_seconds" json:"tcp_keepalive_in_seconds,omitempty" elastic_mapping:"tcp_keepalive_in_seconds: { type: integer }"`
+	IdleTimeout           int    `config:"idle_timeout" json:"idle_timeout,omitempty" elastic_mapping:"idle_timeout: { type: integer }"`
 
 	MaxIdleWorkerDurationSeconds       int `config:"max_idle_worker_duration_in_seconds" json:"max_idle_worker_duration_in_seconds,omitempty" elastic_mapping:"max_idle_worker_duration_in_seconds: { type: integer }"`
 	SleepWhenConcurrencyLimitsExceeded int `config:"sleep_when_concurrency_limits_exceeded_in_seconds" json:"sleep_when_concurrency_limits_exceeded_in_seconds,omitempty" elastic_mapping:"sleep_when_concurrency_limits_exceeded_in_seconds: { type: integer }"`
@@ -48,7 +48,7 @@ func (this *EntryConfig) Equals(target *EntryConfig) bool {
 }
 
 type RuleConfig struct {
-	Enabled      bool    `config:"enabled" json:"enabled,omitempty" elastic_mapping:"enabled: { type: boolean }"`
+	Enabled     bool     `config:"enabled" json:"enabled,omitempty" elastic_mapping:"enabled: { type: boolean }"`
 	Method      []string `config:"method" json:"method,omitempty"      elastic_mapping:"method: { type: keyword }"`
 	PathPattern []string `config:"pattern" json:"pattern,omitempty"      elastic_mapping:"pattern: { type: keyword }"`
 	Flow        []string `config:"flow" json:"flow,omitempty"      elastic_mapping:"flow: { type: keyword }"`
@@ -68,18 +68,17 @@ type RouterConfig struct {
 	DefaultFlow string `config:"default_flow" json:"default_flow,omitempty" elastic_mapping:"default_flow: { type: keyword }"`
 	TracingFlow string `config:"tracing_flow" json:"tracing_flow,omitempty" elastic_mapping:"tracing_flow: { type: keyword }"`
 
-
-	RuleToggleEnabled      bool    `config:"rule_toggle_enabled" json:"rule_toggle_enabled,omitempty" elastic_mapping:"rule_toggle_enabled: { type: boolean }"`
-	Rules              []RuleConfig `config:"rules" json:"rules,omitempty" elastic_mapping:"rules: { type: object }"`
+	RuleToggleEnabled bool         `config:"rule_toggle_enabled" json:"rule_toggle_enabled,omitempty" elastic_mapping:"rule_toggle_enabled: { type: boolean }"`
+	Rules             []RuleConfig `config:"rules" json:"rules,omitempty" elastic_mapping:"rules: { type: object }"`
 
 	IPAccessRules IPAccessRules `config:"ip_access_control" json:"ip_access_rules,omitempty" elastic_mapping:"ip_access_rules: { type: object }"`
 }
 
 type IPAccessRules struct {
-	Enabled             bool   `config:"enabled" json:"enabled,omitempty" elastic_mapping:"enabled: { type: boolean }"`
-	ClientIP struct{
-		DeniedList []string     `config:"denied" json:"denied,omitempty" elastic_mapping:"denied: { type: keyword }"`
-		PermittedList []string     `config:"permitted" json:"permitted,omitempty" elastic_mapping:"permitted: { type: keyword }"`
+	Enabled  bool `config:"enabled" json:"enabled,omitempty" elastic_mapping:"enabled: { type: boolean }"`
+	ClientIP struct {
+		DeniedList    []string `config:"denied" json:"denied,omitempty" elastic_mapping:"denied: { type: keyword }"`
+		PermittedList []string `config:"permitted" json:"permitted,omitempty" elastic_mapping:"permitted: { type: keyword }"`
 	} `config:"client_ip" json:"client_ip,omitempty" elastic_mapping:"client_ip: { type: object }"`
 }
 

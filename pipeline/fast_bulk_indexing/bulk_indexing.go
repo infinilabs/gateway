@@ -95,10 +95,11 @@ func New(c *config.Config) (pipeline.Processor, error) {
 			Group:             "group-001",
 			Name:              "consumer-001",
 			FetchMinBytes:     1,
-			FetchMaxBytes:     10 * 1024 * 1024,
+			FetchMaxBytes:     20 * 1024 * 1024,
 			FetchMaxMessages:  500,
 			EOFRetryDelayInMs: 500,
 			FetchMaxWaitMs:    10000,
+			ClientExpiredInSeconds: 60,
 		},
 
 		DetectActiveQueue: true,
@@ -211,7 +212,7 @@ func (processor *BulkIndexingProcessor) Process(c *pipeline.Context) error {
 						}
 						//if have depth and not in flight
 						if queue.HasLag(v) {
-							_, ok := processor.inFlightQueueConfigs.Load(v.Id)
+							_, ok := processor.inFlightQueueConfigs.Load(v.ID)
 							if !ok {
 								log.Tracef("detecting new queue: %v", v.Name)
 								processor.HandleQueueConfig(v, c)
@@ -350,7 +351,7 @@ func (processor *BulkIndexingProcessor) HandleQueueConfig(v *queue.QueueConfig, 
 	}
 
 	host := meta.GetActiveHost()
-	log.Debugf("random choose node [%v] to consume queue [%v]", host, v.Id)
+	log.Debugf("random choose node [%v] to consume queue [%v]", host, v.ID)
 	for i := 0; i < processor.config.NumOfWorkers; i++ {
 		processor.wg.Add(1)
 		go processor.NewBulkWorker("bulk_indexing_"+host, c, processor.config.BulkConfig.GetBulkSizeInBytes(), v, host)
@@ -378,7 +379,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string, ctx *pipeline.
 		log.Trace("exit bulk indexing processor")
 	}()
 
-	key := fmt.Sprintf("%v", qConfig.Id)
+	key := fmt.Sprintf("%v", qConfig.ID)
 
 	if processor.config.MaxWorkers > 0 && util.MapLength(&processor.inFlightQueueConfigs) > processor.config.MaxWorkers {
 		log.Debugf("reached max num of workers, skip init [%v]", qConfig.Name)
@@ -391,7 +392,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string, ctx *pipeline.
 	log.Debugf("starting worker:[%v], queue:[%v], host:[%v]", workerID, qConfig.Name, host)
 
 	mainBuf := elastic.AcquireBulkBuffer()
-	mainBuf.Queue = qConfig.Id
+	mainBuf.Queue = qConfig.ID
 	defer elastic.ReturnBulkBuffer(mainBuf)
 
 	var bulkProcessor elastic.BulkProcessor
@@ -410,7 +411,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string, ctx *pipeline.
 				case string:
 					v = r.(string)
 				}
-				log.Errorf("error in bulk_indexing worker[%v],queue:[%v],%v", workerID, qConfig.Id, v)
+				log.Errorf("error in bulk_indexing worker[%v],queue:[%v],%v", workerID, qConfig.ID, v)
 				ctx.RecordError(fmt.Errorf("NewBulkWorker panic: %v", r))
 			}
 		}
@@ -420,14 +421,14 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string, ctx *pipeline.
 		//cleanup buffer before exit worker
 		continueNext, err := processor.submitBulkRequest(tag, esClusterID, meta, host, bulkProcessor, mainBuf)
 		if !continueNext {
-			log.Errorf("error in queue:[%v], err:%v", qConfig.Id, err)
+			log.Errorf("error in queue:[%v], err:%v", qConfig.ID, err)
 			if mainBuf.GetMessageSize() > 0 {
 				queue.Push(qConfig, mainBuf.GetMessageBytes())
 			}
 			return
 		}
 		mainBuf.ResetData()
-		log.Debugf("exit worker[%v], queue:[%v]", workerID, qConfig.Id)
+		log.Debugf("exit worker[%v], queue:[%v]", workerID, qConfig.ID)
 	}()
 
 	idleDuration := time.Duration(processor.config.IdleTimeoutInSecond) * time.Second
@@ -546,7 +547,7 @@ READ_DOCS:
 				//submit request
 				continueRequest, err := processor.submitBulkRequest(tag, esClusterID, meta, host, bulkProcessor, mainBuf)
 				if !continueRequest {
-					log.Errorf("error in queue:[%v], err:%v", qConfig.Id, err)
+					log.Errorf("error in queue:[%v], err:%v", qConfig.ID, err)
 					if mainBuf.GetMessageSize() > 0 {
 						queue.Push(qConfig, mainBuf.GetMessageBytes())
 					}
@@ -573,7 +574,7 @@ CLEAN_BUFFER:
 		// check bulk result, if ok, then commit offset, or retry non-200 requests, or save failure offset
 		continueNext, err := processor.submitBulkRequest(tag, esClusterID, meta, host, bulkProcessor, mainBuf)
 		if !continueNext {
-			log.Errorf("error in queue:[%v], err:%v", qConfig.Id, err)
+			log.Errorf("error in queue:[%v], err:%v", qConfig.ID, err)
 			if mainBuf.GetMessageSize() > 0 {
 				queue.Push(qConfig, mainBuf.GetMessageBytes())
 			}

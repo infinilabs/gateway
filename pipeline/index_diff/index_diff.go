@@ -290,7 +290,7 @@ func (processor *IndexDiffProcessor) Process(ctx *pipeline.Context) error {
 		}
 	}
 	queueConfig.Name = processor.config.DiffQueue
-	queue.RegisterConfig(queueConfig.Name, queueConfig)
+	queue.RegisterConfig(queueConfig)
 
 	for i := 0; i < processor.config.PartitionSize; i++ {
 		processor.wg.Add(1)

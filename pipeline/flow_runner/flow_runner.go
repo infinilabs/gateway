@@ -67,13 +67,14 @@ func init() {
 func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
 		Consumer: queue.ConsumerConfig{
-			Group:             "group-001",
-			Name:              "consumer-001",
-			FetchMinBytes:     1,
-			FetchMaxBytes:     10 * 1024 * 1024,
-			FetchMaxMessages:  500,
-			EOFRetryDelayInMs: 500,
-			FetchMaxWaitMs:    10000,
+			Group:                  "group-001",
+			Name:                   "consumer-001",
+			FetchMinBytes:          1,
+			FetchMaxBytes:          20 * 1024 * 1024,
+			FetchMaxMessages:       500,
+			EOFRetryDelayInMs:      500,
+			FetchMaxWaitMs:         10000,
+			ClientExpiredInSeconds: 60,
 		},
 		SkipEmptyQueue:                 true,
 		CommitOnTag:                    "",
@@ -101,10 +102,13 @@ func (processor *FlowRunnerProcessor) Name() string {
 }
 
 func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
-	var initOfffset string
-	var offset string
+
+	//log.Errorf("start flow_runner [%v]", processor.config.FlowName)
+
+	var initOfffset queue.Offset
+	var offset queue.Offset
 	qConfig := queue.GetOrInitConfig(processor.config.InputQueue)
-	var consumer = queue.GetOrInitConsumerConfig(qConfig.Id, processor.config.Consumer.Group, processor.config.Consumer.Name)
+	var consumer = queue.GetOrInitConsumerConfig(qConfig.ID, processor.config.Consumer.Group, processor.config.Consumer.Name)
 	initOfffset, _ = queue.GetOffset(qConfig, consumer)
 	offset = initOfffset
 	if processor.config.SkipEmptyQueue && !queue.ConsumerHasLag(qConfig, consumer) {
@@ -126,7 +130,10 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 				case string:
 					v = r.(string)
 				}
-				log.Errorf("error in flow_runner [%v], [%v]", processor.config.FlowName, v)
+
+				if !util.ContainStr(v, "acquired by another node") {
+					log.Errorf("error in flow_runner [%v], [%v]", processor.config.FlowName, v)
+				}
 				ctx.RecordError(fmt.Errorf("flow runner panic: %v", r))
 				skipFinalDocsProcess = true
 			}
@@ -136,7 +143,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 			return
 		}
 
-		if offset != "" && offset != initOfffset {
+		if !offset.Equals(initOfffset) {
 			ok, err := queue.CommitOffset(qConfig, consumer, offset)
 			log.Tracef("%v,%v commit offset:%v", qConfig.Name, consumer.Name, offset)
 			if !ok || err != nil {
@@ -150,12 +157,29 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 	t1 := util.AcquireTimer(time.Duration(processor.config.FlowMaxRunningTimeoutInSeconds) * time.Second)
 	defer util.ReleaseTimer(t1)
 
+	//acquire consumer
+	consumerInstance, err := queue.AcquireConsumer(qConfig, consumer)
+	if consumerInstance != nil {
+		defer consumerInstance.Close()
+	}
+
+	if err != nil || consumerInstance == nil {
+		panic(err)
+	}
+
+	ctx1 := &queue.Context{}
+
 	lastCommitTime := time.Now()
 	var commitIdle = time.Duration(processor.config.CommitTimeoutInSeconds) * time.Second
 	for {
 		if ctx.IsCanceled() {
 			return nil
 		}
+
+		if global.ShuttingDown() {
+			return nil
+		}
+
 		select {
 		case <-t1.C:
 			return nil
@@ -169,10 +193,10 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 			}
 
 			log.Tracef("star to consume queue:%v", qConfig.Name)
-			ctx1, messages, timeout, err := queue.Consume(qConfig, consumer, offset)
+			messages, timeout, err :=consumerInstance.FetchMessages(ctx1, processor.config.Consumer.FetchMaxMessages)
 			log.Tracef("get %v messages from queue:%v", len(messages), qConfig.Name)
 
-			if len(messages)==0{
+			if len(messages) == 0 {
 				time.Sleep(time.Millisecond * time.Duration(500))
 			}
 
@@ -190,10 +214,16 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 						panic(err)
 					}
 
+					if global.Env().IsDebug {
+						log.Tracef("start forward request to flow:%v", processor.config.FlowName)
+					}
+
 					ctx.SetFlowID(processor.config.FlowName)
 
 					flowProcessor(ctx)
-
+					if global.Env().IsDebug {
+						log.Tracef("start forward request to flow:%v", processor.config.FlowName)
+					}
 					if processor.config.CommitOnTag != "" {
 						tags, ok := ctx.GetTags()
 						if ok {
@@ -213,7 +243,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 
 				if time.Since(lastCommitTime) > commitIdle {
 					//commit on idle timeout
-					if offset != "" && offset != initOfffset {
+					if !offset.Equals(initOfffset) {
 						ok, err := queue.CommitOffset(qConfig, consumer, offset)
 						lastCommitTime = time.Now()
 						log.Tracef("%v,%v commit offset:%v", qConfig.Name, consumer.Name, offset)
@@ -223,12 +253,10 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 						initOfffset = offset
 					}
 				}
-
 			}
-			offset = ctx1.NextOffset.String() //TODO
 
 			if timeout || len(messages) == 0 {
-				log.Debugf("[%v][%v] %v messages, timeout:%v, sleep 1s", qConfig.Name, consumer.Name, len(messages), timeout)
+				log.Debugf("exit flow_runner, [%v][%v] %v messages, timeout:%v", qConfig.Name, consumer.Name, len(messages), timeout)
 				return nil
 			}
 

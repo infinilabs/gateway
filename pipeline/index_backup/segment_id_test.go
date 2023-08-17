@@ -7,7 +7,16 @@ package index_backup
 import (
 	"fmt"
 	"testing"
+	"time"
 )
+
+func TestUnixstamp(t *testing.T) {
+	t1:=time.Now()
+	fmt.Println(t1.Unix())
+	fmt.Println(t1.Add(time.Second*30).Unix())
+
+	fmt.Println(time.Time{}.Unix())
+}
 
 func TestParseSegmentID(t *testing.T) {
 	fileName:="_3g_Lucene85FieldsIndexfile_pointers_6x"

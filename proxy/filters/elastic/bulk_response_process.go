@@ -20,9 +20,12 @@ import (
 )
 
 type BulkResponseProcess struct {
-	id        string
-	config    *Config
-	retryFlow *common.FilterFlow
+	id          string
+	config      *Config
+	retryFlow   *common.FilterFlow
+	successFlow *common.FilterFlow
+	failureFlow *common.FilterFlow
+	invalidFlow *common.FilterFlow
 }
 
 func (this *BulkResponseProcess) Name() string {
@@ -69,8 +72,11 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 		if containError {
 
 			url := ctx.Request.PhantomURI().String()
-			if rate.GetRateLimiter("bulk_error", url, 1, 1, 5*time.Second).Allow() {
-				log.Error("error in bulk requests,", url, ",", ctx.Response.StatusCode(), ",invalid:", nonRetryableItems.GetMessageCount(), ",failure:", retryableItems.GetMessageCount(), ",", util.SubString(util.UnsafeBytesToString(resbody), 0, this.config.MessageTruncateSize))
+
+			if this.config.ShowBulkErrorMessage{
+				if rate.GetRateLimiter("bulk_error", url, 1, 1, 5*time.Second).Allow() {
+					log.Error("error in bulk requests,", url, ",", ctx.Response.StatusCode(), ",invalid:", nonRetryableItems.GetMessageCount(), ",failure:", retryableItems.GetMessageCount(), ",", util.SubString(util.UnsafeBytesToString(resbody), 0, this.config.MessageTruncateSize))
+				}
 			}
 
 			if len(this.config.TagsOnAnyError) > 0 {
@@ -78,6 +84,11 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 			}
 
 			if nonRetryableItems.GetMessageCount() > 0 {
+
+				if this.invalidFlow != nil {
+					ctx.AddFlowProcess("invalid_flow:" + this.invalidFlow.ID)
+					this.invalidFlow.Process(ctx)
+				}
 
 				if this.config.InvalidQueue != "" {
 					nonRetryableItems.SafetyEndWithNewline()
@@ -97,6 +108,11 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 			}
 
 			if retryableItems.GetMessageCount() > 0 {
+
+				if this.failureFlow != nil {
+					ctx.AddFlowProcess("failure_flow:" + this.failureFlow.ID)
+					this.failureFlow.Process(ctx)
+				}
 
 				if this.config.FailureQueue != "" {
 					retryableItems.SafetyEndWithNewline()
@@ -133,6 +149,11 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 					queue.Push(queue.GetOrInitConfig(this.config.SuccessQueue), bytes)
 				}
 
+				if this.successFlow != nil {
+					ctx.AddFlowProcess("success_flow:" + this.successFlow.ID)
+					this.successFlow.Process(ctx)
+				}
+
 				if len(this.config.TagsOnPartialSuccess) > 0 {
 					ctx.UpdateTags(this.config.TagsOnPartialSuccess, nil)
 				}
@@ -153,6 +174,11 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 				queue.Push(queue.GetOrInitConfig(this.config.SuccessQueue), ctx.Request.Encode())
 			}
 
+			if this.successFlow != nil {
+				ctx.AddFlowProcess("success_flow:" + this.successFlow.ID)
+				this.successFlow.Process(ctx)
+			}
+
 			if !this.config.ContinueOnSuccess {
 				ctx.Finished()
 				return
@@ -162,6 +188,11 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 
 		if len(this.config.TagsOnNone2xx) > 0 {
 			ctx.UpdateTags(this.config.TagsOnNone2xx, nil)
+		}
+
+		if this.failureFlow != nil {
+			ctx.AddFlowProcess("failure_flow:" + this.failureFlow.ID)
+			this.failureFlow.Process(ctx)
 		}
 
 		if this.config.FailureQueue != "" {
@@ -183,11 +214,18 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 
 type Config struct {
 	StatsOnly    bool   `config:"stats_only"`
+
 	SuccessQueue string `config:"success_queue"`
 	InvalidQueue string `config:"invalid_queue"`
 	FailureQueue string `config:"failure_queue"`
 
+	SuccessFlow string `config:"success_flow"`
+	InvalidFlow string `config:"invalid_flow"`
+	FailureFlow string `config:"failure_flow"`
+
 	MessageTruncateSize int `config:"message_truncate_size"`
+
+	ShowBulkErrorMessage bool `config:"show_bulk_error_message"`
 
 	PartialFailureRetry                 bool `config:"partial_failure_retry"`               //是否主动重试，只有部分失败的请求，避免大量没有意义的 409
 	PartialFailureMaxRetryTimes         int  `config:"partial_failure_max_retry_times"`     //是否主动重试，只有部分失败的请求，避免大量没有意义的 409
@@ -245,6 +283,22 @@ func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 		flow := common.MustGetFlow(runner.config.RetryFlow)
 		runner.retryFlow = &flow
 	}
+
+	if runner.config.SuccessFlow != "" {
+		flow := common.MustGetFlow(runner.config.SuccessFlow)
+		runner.successFlow = &flow
+	}
+
+	if runner.config.FailureFlow != "" {
+		flow := common.MustGetFlow(runner.config.FailureFlow)
+		runner.failureFlow = &flow
+	}
+	if runner.config.InvalidFlow != "" {
+		flow := common.MustGetFlow(runner.config.InvalidFlow)
+		runner.invalidFlow = &flow
+	}
+
+
 
 	return &runner, nil
 }

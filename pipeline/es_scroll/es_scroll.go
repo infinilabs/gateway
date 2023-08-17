@@ -384,7 +384,7 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 			}
 		}
 		queueConfig.Name = outputQueueName + util.ToString(k)
-		queue.RegisterConfig(queueConfig.Name, queueConfig)
+		queue.RegisterConfig(queueConfig)
 		pushQueue := queue.GetOrInitConfig(outputQueueName + util.ToString(k))
 		if global.Env().IsDebug {
 			log.Trace("queue config: ", pushQueue)

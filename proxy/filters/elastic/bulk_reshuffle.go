@@ -161,6 +161,8 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 		var hitMetadataNotFound bool
 
+		var cfgCache = map[string]*queue.QueueConfig{}
+
 		docCount, err := elastic.WalkBulkRequests(body, func(eachLine []byte) (skipNextLine bool) {
 			if validEachLine {
 				obj := map[string]interface{}{}
@@ -373,11 +375,28 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			if !ok {
 				buff = docBufferPool.Get()
 				docBuf[queueConfig.Name] = buff
-				var exists bool
-				exists, err = queue.RegisterConfig(queueConfig.Name, queueConfig)
-				if !exists && err != nil {
-					panic(err)
+				//var exists bool
+				cfg1, ok := cfgCache[queueConfig.Name]
+				if !ok {
+					oldConfig, ok := queue.GetConfigByKey(queueConfig.Name)
+					if ok {
+						//exists = true
+						queueConfig = oldConfig
+						cfgCache[queueConfig.Name] = queueConfig
+						if global.Env().IsDebug {
+							log.Debugf("config already exists, replace to:", util.MustToJSON(queueConfig))
+						}
+					} else {
+						exists, err := queue.RegisterConfig(queueConfig)
+						if !exists && err != nil {
+							panic(err)
+						}
+					}
+				} else {
+					//exists=true
+					queueConfig = cfg1
 				}
+
 			}
 
 			//add to major buffer
@@ -473,11 +492,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 			if len(data) > 0 {
 
-				cfg, ok := queue.SmartGetConfig(x)
-				if !ok {
-					panic(errors.Errorf("queue config [%v] not exists", x))
-				}
-
+				cfg := queue.GetOrInitConfig(x)
 				err := queue.Push(cfg, bytes.Copy(data))
 				if err != nil {
 					panic(err)

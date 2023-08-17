@@ -64,10 +64,11 @@ func New(c *config.Config) (pipeline.Processor, error) {
 			Group:             "group-001",
 			Name:              "consumer-001",
 			FetchMinBytes:     1,
-			FetchMaxBytes:     10 * 1024 * 1024,
+			FetchMaxBytes:     20 * 1024 * 1024,
 			FetchMaxMessages:  500,
 			EOFRetryDelayInMs: 500,
 			FetchMaxWaitMs:    10000,
+			ClientExpiredInSeconds: 60,
 		},
 		FlowMaxRunningTimeoutInSeconds: 60,
 	}

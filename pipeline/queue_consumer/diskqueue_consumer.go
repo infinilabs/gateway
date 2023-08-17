@@ -157,13 +157,26 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context, count *
 	}
 
 	qConfig := queue.GetOrInitConfig(processor.config.InputQueue)
-	var consumer = queue.GetOrInitConsumerConfig(qConfig.Id, "group-001", "consumer-001")
-	var initOfffset string
-	var offset string
+	var consumer = queue.GetOrInitConsumerConfig(qConfig.ID, "group-001", "consumer-001")
+	var initOfffset queue.Offset
+	var offset queue.Offset
+
+
+	//acquire consumer
+	consumerInstance, err := queue.AcquireConsumer(qConfig, consumer)
+	if consumerInstance != nil {
+		defer consumerInstance.Close()
+	}
+	if err != nil || consumerInstance == nil {
+		panic(err)
+	}
+
+	ctx1 := &queue.Context{}
 
 READ_DOCS:
 	initOfffset, _ = queue.GetOffset(qConfig, consumer)
 	offset = initOfffset
+
 	for {
 
 		if ctx.IsCanceled() {
@@ -189,7 +202,8 @@ READ_DOCS:
 			}
 		}
 
-		_, messages, _, err := queue.Consume(qConfig, consumer, offset)
+		messages, _, err :=consumerInstance.FetchMessages(ctx1, consumer.FetchMaxMessages)
+
 		if len(messages)==0{
 			time.Sleep(time.Millisecond * time.Duration(500))
 		}
@@ -229,7 +243,7 @@ READ_DOCS:
 				offset = pop.NextOffset
 			}
 
-			if offset != "" && offset != initOfffset {
+			if !offset.Equals(initOfffset){
 				ok, err := queue.CommitOffset(qConfig, consumer, offset)
 				if !ok || err != nil {
 					panic(err)
