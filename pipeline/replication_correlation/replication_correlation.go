@@ -10,7 +10,6 @@ import (
 	"github.com/emirpasic/gods/sets/hashset"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
-	"infini.sh/framework/core/param"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/util"
@@ -22,28 +21,27 @@ import (
 )
 
 type Config struct {
-	WALMessageField         param.ParaKey `config:"wal_message_field"`
-	FirstStageMessageField  param.ParaKey `config:"first_stage_message_field"`
-	FinalStageMessageField  param.ParaKey `config:"final_stage_message_field"`
-	WALMessageCheckingLimit uint64        `config:"wal_message_checking_limit"`
-	SafetyCheckSize         int64         `config:"safety_check_size"`
+	SafetyCommitOffsetPaddingSize int64 `config:"safety_commit_offset_padding_size"` //offset between last and wal
+	SafetyCommitIntervalInSeconds int64 `config:"safety_commit_interval_in_seconds"` //time between last and wal
 }
 
 type ReplicationCorrectionProcessor struct {
 	config *Config
+
 	walBitmap        *hashset.Set
 	preStageBitmap   *hashset.Set
 	firstStageBitmap *hashset.Set
+	finalRecords     sync.Map
 
-	finalRecords sync.Map
+	requestMap sync.Map
 
-	requestMap             sync.Map
 	lastOffsetInFirstStage int64     //last offset of first stage message
 	lastOffsetInFinalStage int64     //last offset of final stage message
 	lastOffsetInWAL        int64     //last offset of final stage message
 	lastFetchedMessage     time.Time //last time fetched any message
 
-	totalWALMessageProcessed         int
+	totalWALMessageProcessed int
+
 	finishedMessage                  int
 	unfinishedMessage                int
 	finalMessageCount                int
@@ -60,11 +58,8 @@ func init() {
 
 func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
-		WALMessageField:         "wal_messages",
-		FirstStageMessageField:  "first_stage_messages",
-		FinalStageMessageField:  "final_stage_messages",
-		WALMessageCheckingLimit: 5000,
-		SafetyCheckSize:         5000,
+		SafetyCommitOffsetPaddingSize: 10000,
+		SafetyCommitIntervalInSeconds: 60,
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -73,6 +68,10 @@ func New(c *config.Config) (pipeline.Processor, error) {
 	}
 
 	runner := ReplicationCorrectionProcessor{config: &cfg}
+
+	if cfg.SafetyCommitIntervalInSeconds <= 0 {
+		cfg.SafetyCommitIntervalInSeconds = 60
+	}
 
 	runner.preStageBitmap = hashset.New()   //roaring.NewBitmap()
 	runner.firstStageBitmap = hashset.New() //roaring.NewBitmap()
@@ -92,10 +91,6 @@ func (processor *ReplicationCorrectionProcessor) Name() string {
 }
 
 func (processor *ReplicationCorrectionProcessor) fetchMessages(consumer queue.ConsumerAPI, handler func(consumer queue.ConsumerAPI, msg []queue.Message) bool, wg *sync.WaitGroup) {
-	//var offset queue.Offset
-
-	//var skipCommit bool = true
-
 	defer func() {
 		if !global.Env().IsDebug {
 			if r := recover(); r != nil {
@@ -111,17 +106,9 @@ func (processor *ReplicationCorrectionProcessor) fetchMessages(consumer queue.Co
 				if !util.ContainStr(v, "owning this topic") {
 					log.Errorf("error in processor [%v], [%v]", processor.Name(), v)
 				}
-				//skipCommit = true
 			}
 		}
-		////TODO, only commit align to WAL message offset
-		//if !skipCommit && offset.Position > 0 {
-		//	if consumer != nil {
-		//		consumer.CommitOffset(offset)
-		//	}
-		//}
 		wg.Done()
-		//log.Errorf("finished process %v", queueName)
 	}()
 
 	ctx1 := queue.Context{}
@@ -131,8 +118,6 @@ Fetch:
 		panic(err)
 	}
 
-	//log.Infof("get %v messages from queue: %v", len(messages), queueName)
-
 	if len(messages) > 0 {
 
 		processor.lastFetchedMessage = time.Now()
@@ -140,23 +125,6 @@ Fetch:
 		if !handler(consumer, messages) {
 			return
 		}
-		//
-		//lstMsg := messages[len(messages)-1]
-		//msgTimestamp := util.FromUnixTimestamp(lstMsg.Timestamp)
-		//msgTimestamp.Add(-60 * time.Second)
-		//if processor.lastWALCommitableTimestamp > 0 && msgTimestamp.Unix() < processor.lastWALCommitableTimestamp {
-		//	log.Error("committable timestamp is less than last committable timestamp:", processor.lastWALCommitableTimestamp, ""+
-		//		",", msgTimestamp.Unix())
-		//	skipCommit = false
-		//	offset = lstMsg.NextOffset
-		//} else {
-		//	skipCommit = true
-		//}
-		//err := consumer.CommitOffset(messages[len(messages)-1].NextOffset)
-		////log.Error("commit offset:", qConfig.Name, ",", cConfig.ID, ",", ctx1.NextOffset,",",err)
-		//if err != nil {
-		//	panic(err)
-		//}
 	}
 
 	if len(messages) == 0 {
@@ -187,11 +155,6 @@ func parseIDAndOffset(v string) (id, offset string) {
 
 func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) error {
 
-	//ok, _ := locker.Hold("tasks", "replication_correlation", global.Env().SystemConfig.NodeConfig.ID, time.Duration(60)*time.Second, true)
-	//if !ok {
-	//	log.Infof("another replication_correlation processor is running, skip this time")
-	//}
-
 	defer func() {
 		if !global.Env().IsDebug {
 			if r := recover(); r != nil {
@@ -211,18 +174,10 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 	}()
 
 	lastTimestampFetchedAnyMessageInFinalStage := time.Now()
-	//timestampMessageFetchedInWAL := time.Now()
-	//messagesInWAL := 0
-
 	var timestampMessageFetchedInFinalStage int64 = -1
 
 	wg := sync.WaitGroup{}
-	//fetch messages within time window
 
-	//endTime := time.Now().Add(30 * time.Second * -1).Unix()
-	endTime := time.Now().Unix()
-	endTimeForRestCommit := time.Now().Unix()
-	var lastOffsetInPreCommit queue.Offset
 	numOfPreMessages := 0
 	wg.Add(1)
 
@@ -232,25 +187,12 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 		for _, message := range messages {
 
 			if processor.commitable(message) {
-
-				//log.Error("committable timestamp is less than last committable timestamp:", processor.lastWALCommitableTimestamp, ""+
-				//	",", message.Timestamp)
-
 				processor.lastPreCommitableMessageOffset = message.NextOffset
 			}
-
 			numOfPreMessages++
-			if message.Timestamp >= endTime {
-				//return false
-			}
-
-			lastOffsetInPreCommit = message.Offset
-
 			v := string(message.Data)
 			id, _ := parseIDAndOffset(v)
-
 			processor.preStageBitmap.Add(id)
-
 		}
 		return true
 	}, &wg)
@@ -261,12 +203,8 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 	go processor.fetchMessages(firstCommitLogConsumer, func(consumer queue.ConsumerAPI, messages []queue.Message) bool {
 		for _, message := range messages {
 
-			if processor.commitable(message)  {
+			if processor.commitable(message) {
 				processor.lastFirstCommitableMessageOffset = message.NextOffset
-			}
-
-			if message.Timestamp > endTimeForRestCommit {
-				//return false
 			}
 
 			processor.lastOffsetInFirstStage = message.Offset.Position
@@ -275,16 +213,6 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 
 			id, _ := parseIDAndOffset(v)
 
-			//arr := strings.Split(v, "#")
-			//if len(arr) != 2 {
-			//	panic("invalid message format:" + v)
-			//}
-			//id, er := util.ToInt64(arr[0])
-			//if er != nil {
-			//	panic("invalid id:" + arr[0] + ",error:" + er.Error())
-			//}
-			//offset := arr[1]
-			//log.Error(id, ",", offset, ",size:", util.ByteSize(processor.walBitmap.GetSizeInBytes()))
 			processor.firstStageBitmap.Add((id))
 		}
 		return true
@@ -300,46 +228,24 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 		for _, message := range messages {
 
 			//commit log less then wal log more than 60s, then it should be safety to commit
-			if processor.commitable(message)  {
+			if processor.commitable(message) {
 				processor.lastFinalCommitableMessageOffset = message.NextOffset
 			}
 
 			processor.finalMessageCount++
 			timestampMessageFetchedInFinalStage = message.Timestamp
-			if message.Timestamp > endTimeForRestCommit {
-				//return false
-			}
 
 			processor.lastOffsetInFinalStage = message.Offset.Position
 
 			v := string(message.Data)
 			id, _ := parseIDAndOffset(v)
-			//offset := arr[1]
-			//log.Error(id, ",", message.Offset.String(), ",", message.Timestamp)
-			//if processor.finalStageBitmap.Contains(id) {
-			//	//log.Errorf("final, duplicate id: %v",id)
-			//}
-
-			//if v,ok:=processor.finalRecords.Load(id);ok{
-			//	log.Errorf("final, duplicate id: %v, offset: %v",id,v)
-			//}
-
 			processor.finalRecords.Store(id, message.Offset.String())
-
-			//processor.finalStageBitmap.Add(id)
 		}
-
-		//log.Errorf("final stage message count: %v, hash: %v, map:%v", processor.finalMessageCount, processor.finalStageBitmap.Size(), util.GetSyncMapSize(&processor.finalRecords))
-
+		log.Debugf("final stage message count: %v, map:%v", processor.finalMessageCount, util.GetSyncMapSize(&processor.finalRecords))
 		return true
 	}, &wg)
 
 	time.Sleep(10 * time.Second)
-
-	////processor.requestMap = sync.Map{}
-	//var lastCommitTime = time.Now()
-
-	//var lastCheckTime = time.Now()
 
 	wg.Add(1)
 	WALConsumer := processor.getConsumer("primary_write_ahead_log")
@@ -366,39 +272,23 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 			}
 
 			if WALConsumer != nil && lastCommitableMessageOffset.Position > 0 {
-
-				//log.Errorf("start to commit: %v", lastCommitableMessageOffset)
 				WALConsumer.CommitOffset(lastCommitableMessageOffset)
-
 				if processor.lastPreCommitableMessageOffset.Position > 0 {
-					//log.Errorf("commit pre log: %v", processor.lastPreCommitableMessageOffset)
 					preCommitLogConsumer.CommitOffset(processor.lastPreCommitableMessageOffset)
 				}
-
 				if processor.lastFirstCommitableMessageOffset.Position > 0 {
-					//log.Errorf("commit first log: %v", processor.lastFirstCommitableMessageOffset)
 					firstCommitLogConsumer.CommitOffset(processor.lastFirstCommitableMessageOffset)
 				}
-
 				if processor.lastFinalCommitableMessageOffset.Position > 0 {
-					//log.Errorf("commit final log: %v", processor.lastFinalCommitableMessageOffset)
 					finalCommitLogConsumer.CommitOffset(processor.lastFinalCommitableMessageOffset)
 				}
 			}
 
 		}()
 
-		//log.Errorf("WAL message size: %v", len(messages))
-		//hitSizeLimit:=false
-		//if processor.walBitmap.GetCardinality() > processor.config.WALMessageCheckingLimit {
-		//	log.Error("too large wal bitmap size:", processor.walBitmap.GetCardinality(), ",sleep 1 second")
-		//	hitSizeLimit=true
-		//}
-
 		req := fasthttp.AcquireRequest()
 		for _, message := range messages {
 			processor.totalWALMessageProcessed++
-			//messagesInWAL++
 			processor.lastOffsetInWAL = message.Offset.Position
 			if global.ShuttingDown() {
 				return false
@@ -408,41 +298,28 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 			if err != nil {
 				panic(err)
 			}
-			uID := string(req.Header.Peek("X-Replicated-ID"))
-			//id, err := util.ToInt64(string(idstr))
-			//if err != nil {
-			//	panic("invalid id:" + string(idstr) + ",error:" + err.Error())
-			//}
+			idByte := req.Header.Peek("X-Replicated-ID")
+			if idByte == nil || len(idByte) == 0 {
+				panic("invalid id")
+			}
 
-			//log.Error(id, ",", message.Offset, ",size:", util.ByteSize(processor.walBitmap.GetSizeInBytes()))
-
-			//uID := (id)
-
-			retry_times := 0
+			uID := string(idByte)
 
 			//update commit offset
 			lastCommitableMessageOffset = message.NextOffset
-			processor.lastWALCommitableTimestamp = message.Timestamp - 60 //TODO: remove this hard code
+			processor.lastWALCommitableTimestamp = message.Timestamp - processor.config.SafetyCommitIntervalInSeconds
+
+			retry_times := 0
 
 		RETRY:
 			//check final stage
-			if _, ok := processor.finalRecords.Load(uID); ok { //.Contains(uID)
+			if _, ok := processor.finalRecords.Load(uID); ok {
 				//valid request, cleanup
 				processor.cleanup(uID)
 				processor.finishedMessage++
-				//log.Error("OK:",uID,",",message.Offset)
-
-				//err := consumer.CommitOffset(message.NextOffset)
-				//if err != nil {
-				//	panic(err)
-				//}
-
 			} else {
-
 				hit := false
-				gap := processor.lastOffsetInFinalStage - processor.lastOffsetInWAL
-
-				if gap > processor.config.SafetyCheckSize {
+				if (processor.lastOffsetInFinalStage - processor.lastOffsetInWAL) > processor.config.SafetyCommitOffsetPaddingSize {
 					hit = true
 					//log.Error("hit gap:", gap)
 				}
@@ -478,8 +355,6 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 						errLog = fmt.Sprintf("request %v, offset: %v, %v exists in wal but not in any stage", uID, message.Offset, message.Timestamp)
 					}
 
-					//log.Error("FAIL:",uID,",",errLog)
-
 					queue.Push(queue.GetOrInitConfig("replicate_failure_log"), []byte(errLog))
 
 					err := queue.Push(queue.GetOrInitConfig("primary-failure"), message.Data)
@@ -490,124 +365,47 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 					processor.unfinishedMessage++
 					processor.cleanup(uID)
 
-					//lastCommitableMessageOffset = message.NextOffset
-					//processor.lastWALCommitableTimestamp = message.Timestamp
-
-					//save message for later usage
-					//processor.requestMap.Store(uID, message) //TODO
-
-					//unknown request status, add to wal, and will check later
-					//processor.walBitmap.Add(uID)
-
 					retry_times = 0
 				} else {
-					//log.Infof("request %v, offset: %v,"+
-					//	" retry_times: %v, docs_in_wal_stage: %v,docs_in_final_stage: %v, last_offset: %v, last_wal_offset: %v, gap: %v",
-					//	uID, message.Offset,
-					//	retry_times, processor.walBitmap.Size(), processor.finalStageBitmap.Size(), processor.lastOffsetInFinalStage, processor.lastOffsetInWAL, gap)
+					if global.Env().IsDebug {
+						log.Debugf("request %v, offset: %v,"+
+							" retry_times: %v, docs_in_wal_stage: %v,docs_in_final_stage: %v, last_offset: %v, last_wal_offset: %v, gap: %v",
+							uID, message.Offset,
+							retry_times, processor.walBitmap.Size(), util.GetSyncMapSize(&processor.finalRecords), processor.lastOffsetInFinalStage, processor.lastOffsetInWAL)
+					}
 					time.Sleep(1 * time.Second)
 					retry_times++
-
 					//retry
 					goto RETRY
 				}
 			}
 
 		}
-
-		//y := processor.walBitmap.Clone()
-		//y.And(processor.finalStageBitmap)
-		//
-		//if y() > 0 {
-		//	log.Error("wal bitmap and final stage bitmap has intersection, size:", y.GetCardinality())
-		//	z := y.ToArray()
-		//	for _, x := range z {
-		//		processor.cleanup(x)
-		//	}
-		//}
-
-		//if time.Since(lastCheckTime).Seconds() > 30||hitSizeLimit {
-		//	lastCheckTime=time.Now()
-		//	arr:=processor.walBitmap.ToArray()
-		//	var errLog string
-		//	for _,x:=range arr{
-		//		v,ok:=processor.requestMap.Load(x)
-		//		if ok{
-		//			msg,ok:=v.(queue.Message)
-		//			if ok{
-		//				if time.Since(util.FromUnixTimestamp(msg.Timestamp)).Seconds()>30{
-		//					//check if in first stage
-		//					if processor.firstStageBitmap.Contains(x) {
-		//						errLog = fmt.Sprintf("request %v, offset: %v, %v in first stage but not in final stage", x, msg.Offset,msg.Timestamp)
-		//					} else {
-		//						errLog = fmt.Sprintf("request %v, offset: %v, %v exists in wal but not in any stage", x, msg.Offset,msg.Timestamp)
-		//					}
-		//
-		//					queue.Push(queue.GetOrInitConfig("replicate_failure_log"), []byte(errLog))
-		//
-		//					err := queue.Push(queue.GetOrInitConfig("primary-failure"), msg.Data)
-		//					if err != nil {
-		//						panic(err)
-		//					}
-		//
-		//					processor.cleanup(x)
-		//				}
-		//			}
-		//		}
-		//
-		//	}
-		//}
-
-		////remove from wal
-		//if processor.walBitmap.GetCardinality() == 0 {
-		//if time.Since(lastCommitTime) > time.Second*10 {
-		if consumer != nil && lastCommitableMessageOffset.Position > 0 {
-			//consumer.CommitOffset(lastCommitableMessageOffset)
-			//lastCommitTime = time.Now()
-		}
-		//}
-		//}
-
 		return true
-
 	}, &wg)
 
 	wg.Wait()
-
-	//log.Errorf("total:%v,finished:%v,unfinished:%v,pre:%v, %v, %v,first:%v,final:%v, last_pre_offset:%v", processor.totalWALMessageProcessed,processor.finishedMessage,processor.unfinishedMessage,
-	//	numOfPreMessages, len(processor.preStageBitmap.ToArray()), processor.preStageBitmap.GetCardinality(), processor.firstStageBitmap.GetCardinality(), processor.finalStageBitmap.GetCardinality(),
-	//	lastOffsetInPreCommit.String())
 
 	//cleanup
 	if time.Since(processor.timestampMessageFetchedInWAL) > time.Second*60 {
 
 		if processor.lastPreCommitableMessageOffset.Position > 0 {
-			//log.Errorf("commit pre log: %v", processor.lastPreCommitableMessageOffset)
 			preCommitLogConsumer.CommitOffset(processor.lastPreCommitableMessageOffset)
 		}
 
 		if processor.lastFirstCommitableMessageOffset.Position > 0 {
-			//log.Errorf("commit first log: %v", processor.lastFirstCommitableMessageOffset)
 			firstCommitLogConsumer.CommitOffset(processor.lastFirstCommitableMessageOffset)
 		}
 
 		if processor.lastFinalCommitableMessageOffset.Position > 0 {
-			//log.Errorf("commit final log: %v", processor.lastFinalCommitableMessageOffset)
 			finalCommitLogConsumer.CommitOffset(processor.lastFinalCommitableMessageOffset)
 		}
 	}
 
-	log.Debugf("total:%v,finished:%v,unfinished:%v, final_docs: %v, final_records:%v ,pre:%v, %v, %v,first:%v, last_pre_offset:%v, idle:%v",
+	log.Debugf("total:%v,finished:%v,unfinished:%v, final_docs: %v, final_records:%v ,pre:%v, %v, %v,first:%v, idle:%v",
 		processor.totalWALMessageProcessed, processor.finishedMessage, processor.unfinishedMessage, processor.finalMessageCount, util.GetSyncMapSize(&processor.finalRecords),
 		numOfPreMessages, processor.preStageBitmap.Size(), processor.preStageBitmap.Size(), processor.firstStageBitmap.Size(),
-		lastOffsetInPreCommit.String(), time.Since(processor.timestampMessageFetchedInWAL))
-
-	////get 3 bitmap
-	//x := processor.preStageBitmap.Clone()
-	//x.Xor(processor.finalStageBitmap)
-	//x.And(processor.preStageBitmap)
-	//
-	//log.Errorf("pre and final intersection size:%v, result: %v", x.GetCardinality(), x.ToArray())
+		time.Since(processor.timestampMessageFetchedInWAL))
 
 	return nil
 }
@@ -625,6 +423,6 @@ func (processor *ReplicationCorrectionProcessor) getConsumer(queueName string) q
 
 func (processor *ReplicationCorrectionProcessor) commitable(message queue.Message) bool {
 	//old message than wal, or wal fetched but idle for 30s
-	return processor.lastWALCommitableTimestamp > 0 && message.Timestamp > 0 && message.Timestamp < processor.lastWALCommitableTimestamp||
-		(processor.totalWALMessageProcessed>0&&time.Since(processor.timestampMessageFetchedInWAL) > time.Second*30)
+	return processor.lastWALCommitableTimestamp > 0 && message.Timestamp > 0 && message.Timestamp < processor.lastWALCommitableTimestamp ||
+		(processor.totalWALMessageProcessed > 0 && time.Since(processor.timestampMessageFetchedInWAL) > time.Second*30)
 }
