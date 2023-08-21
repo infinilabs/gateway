@@ -164,9 +164,8 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context, count *
 
 	//acquire consumer
 	consumerInstance, err := queue.AcquireConsumer(qConfig, consumer)
-	if consumerInstance != nil {
-		defer consumerInstance.Close()
-	}
+	defer queue.ReleaseConsumer(qConfig, consumer,consumerInstance)
+
 	if err != nil || consumerInstance == nil {
 		panic(err)
 	}

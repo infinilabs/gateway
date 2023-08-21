@@ -159,9 +159,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 
 	//acquire consumer
 	consumerInstance, err := queue.AcquireConsumer(qConfig, consumer)
-	if consumerInstance != nil {
-		defer consumerInstance.Close()
-	}
+	defer queue.ReleaseConsumer(qConfig, consumer,consumerInstance)
 
 	if err != nil || consumerInstance == nil {
 		panic(err)
@@ -225,7 +223,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 					if global.Env().IsDebug {
 						log.Tracef("end forward request to flow:%v", processor.config.FlowName)
 					}
-					
+
 					if processor.config.CommitOnTag != "" {
 						tags, ok := ctx.GetTags()
 						if ok {

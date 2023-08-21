@@ -75,7 +75,7 @@ func (filter *DiskEnqueueFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	res, err := filter.producer.Produce(&[]queue.ProduceRequest{req})
 	if err != nil || res == nil {
-		panic(errors.Errorf("queue: %v, err: %v",filter.queueConfig,err))
+		panic(errors.Errorf("queue: %v, err: %v", filter.queueConfig, err))
 	}
 
 	offset := (*res)[0].Offset.String()
@@ -97,7 +97,7 @@ func NewDiskEnqueueFilter(c *config.Config) (pipeline.Filter, error) {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	runner.queueConfig = queue.GetOrInitConfig(runner.QueueName)
+	runner.queueConfig = queue.AdvancedGetOrInitConfig(runner.Type, runner.QueueName, runner.Labels)
 
 	if runner.queueConfig != nil {
 		queue.IniQueue(runner.queueConfig)
@@ -114,7 +114,7 @@ func NewDiskEnqueueFilter(c *config.Config) (pipeline.Filter, error) {
 		}
 	}
 
-	handler, err := queue.AcquireProducer(runner.Type)
+	handler, err := queue.AcquireProducer(runner.queueConfig)
 	if err != nil {
 		panic(err)
 	}
