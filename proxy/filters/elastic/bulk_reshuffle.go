@@ -25,7 +25,8 @@ import (
 var JSON_CONTENT_TYPE = "application/json"
 
 type BulkReshuffle struct {
-	config *BulkReshuffleConfig
+	config   *BulkReshuffleConfig
+	esConfig *elastic.ElasticsearchConfig
 }
 
 func (this *BulkReshuffle) Name() string {
@@ -89,6 +90,12 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 
 	runner := BulkReshuffle{config: &cfg}
 
+	if cfg.Elasticsearch == "" {
+		panic(errors.New("elasticsearch is required"))
+	}
+
+	runner.esConfig = elastic.GetConfig(cfg.Elasticsearch)
+
 	return &runner, nil
 }
 
@@ -103,17 +110,12 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 		ctx.Set(common.CACHEABLE, false)
 
-		clusterName := this.config.Elasticsearch
-
-		esConfig := elastic.GetConfig(clusterName)
-
-		metadata := elastic.GetOrInitMetadata(esConfig)
+		metadata := elastic.GetOrInitMetadata(this.esConfig)
 
 		if metadata == nil {
-			if rate.GetRateLimiter("cluster_metadata", clusterName, 1, 1, 5*time.Second).Allow() {
-				log.Warnf("elasticsearch [%v] metadata is nil, skip reshuffle", clusterName)
+			if rate.GetRateLimiter("cluster_metadata", this.config.Elasticsearch, 1, 1, 5*time.Second).Allow() {
+				log.Warnf("elasticsearch [%v] metadata is nil, skip reshuffle", this.config.Elasticsearch)
 			}
-			//time.Sleep(1 * time.Second)
 			return
 		}
 
@@ -325,7 +327,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			queueConfig.Labels = util.MapStr{}
 			queueConfig.Labels["type"] = "bulk_reshuffle"
 			queueConfig.Labels["level"] = reshuffleType
-			queueConfig.Labels["elasticsearch"] = esConfig.ID
+			queueConfig.Labels["elasticsearch"] = this.esConfig.ID
 
 			//partition
 			var partitionSuffix = ""
@@ -339,7 +341,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			//注册队列到元数据中，消费者自动订阅该队列列表，并根据元数据来分别进行相应的处理
 			switch reshuffleType {
 			case ClusterLevel:
-				queueConfig.Name = this.config.QueuePrefix + "##cluster##" + esConfig.ID + partitionSuffix
+				queueConfig.Name = this.config.QueuePrefix + "##cluster##" + this.esConfig.ID + partitionSuffix
 				break
 			case NodeLevel:
 
@@ -348,11 +350,11 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				}
 
 				queueConfig.Labels["node_id"] = nodeID //need metadata
-				queueConfig.Name = this.config.QueuePrefix + "##node##" + esConfig.ID + "##" + nodeID + partitionSuffix
+				queueConfig.Name = this.config.QueuePrefix + "##node##" + this.esConfig.ID + "##" + nodeID + partitionSuffix
 				break
 			case IndexLevel:
 				queueConfig.Labels["index"] = index
-				queueConfig.Name = this.config.QueuePrefix + "##index##" + esConfig.ID + "##" + index + partitionSuffix
+				queueConfig.Name = this.config.QueuePrefix + "##index##" + this.esConfig.ID + "##" + index + partitionSuffix
 				break
 			case ShardLevel:
 
@@ -362,7 +364,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 				queueConfig.Labels["index"] = index
 				queueConfig.Labels["shard"] = shardID //need metadata
-				queueConfig.Name = this.config.QueuePrefix + "##shard##" + esConfig.ID + "##" + index + "##" + ShardIDStr + partitionSuffix
+				queueConfig.Name = this.config.QueuePrefix + "##shard##" + this.esConfig.ID + "##" + index + "##" + ShardIDStr + partitionSuffix
 				break
 			}
 
@@ -384,7 +386,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 						queueConfig = oldConfig
 						cfgCache[queueConfig.Name] = queueConfig
 						if global.Env().IsDebug {
-							log.Debugf("config already exists, replace to:", util.MustToJSON(queueConfig))
+							log.Debug("config already exists, replace to:", util.MustToJSON(queueConfig))
 						}
 					} else {
 						exists, err := queue.RegisterConfig(queueConfig)
@@ -446,22 +448,22 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			ctx.Set("bulk_index_stats", indexStatsData)
 			for k, v := range indexStatsData {
 				//统计索引次数
-				stats.IncrementBy("elasticsearch."+clusterName+".indices", elastic.RemoveDotFromIndexName(k, "#"), int64(v))
+				stats.IncrementBy("elasticsearch."+this.config.Elasticsearch+".indices", elastic.RemoveDotFromIndexName(k, "#"), int64(v))
 			}
 		}
 		if actionAnalysis {
 			ctx.Set("bulk_action_stats", actionStatsData)
 			for k, v := range actionStatsData {
 				//统计操作次数
-				stats.IncrementBy("elasticsearch."+clusterName+".operations", elastic.RemoveDotFromIndexName(k, "#"), int64(v))
+				stats.IncrementBy("elasticsearch."+this.config.Elasticsearch+".operations", elastic.RemoveDotFromIndexName(k, "#"), int64(v))
 			}
 		}
 
 		if ctx.Has("elastic_cluster_name") {
 			es1 := ctx.MustGetStringArray("elastic_cluster_name")
-			ctx.Set("elastic_cluster_name", append(es1, clusterName))
+			ctx.Set("elastic_cluster_name", append(es1, this.config.Elasticsearch))
 		} else {
-			ctx.Set("elastic_cluster_name", []string{clusterName})
+			ctx.Set("elastic_cluster_name", []string{this.config.Elasticsearch})
 		}
 
 		//skip async or not
@@ -497,7 +499,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				if err != nil {
 					panic(err)
 				}
-				ctx.SetDestination(fmt.Sprintf("%v:%v", "async", x))
+				ctx.SetDestination(fmt.Sprintf("%v:%v", "queue", x))
 			} else {
 				log.Warn("zero message,", x, ",", len(data), ",", string(body))
 			}
@@ -527,6 +529,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		}
 
 		ctx.Response.Header.Set("X-Async-Bulk", "true")
+		ctx.Response.Header.Set("X-Bulk-Reshuffled", "true")
 
 		if !this.config.ContinueAfterReshuffle {
 			ctx.Response.SetStatusCode(200)

@@ -93,7 +93,7 @@ func (processor *ReplicationCorrectionProcessor) Name() string {
 	return "replication_correlation"
 }
 
-func (processor *ReplicationCorrectionProcessor) fetchMessages(consumer queue.ConsumerAPI, handler func(consumer queue.ConsumerAPI, msg []queue.Message) bool, wg *sync.WaitGroup) {
+func (processor *ReplicationCorrectionProcessor) fetchMessages(ctx *pipeline.Context,consumer queue.ConsumerAPI, handler func(consumer queue.ConsumerAPI, msg []queue.Message) bool, wg *sync.WaitGroup) {
 	defer func() {
 		if !global.Env().IsDebug {
 			if r := recover(); r != nil {
@@ -116,6 +116,11 @@ func (processor *ReplicationCorrectionProcessor) fetchMessages(consumer queue.Co
 
 	ctx1 := queue.Context{}
 Fetch:
+
+	if ctx.IsCanceled(){
+		return
+	}
+
 	messages, _, err := consumer.FetchMessages(&ctx1, 5000)
 	if err != nil {
 		panic(err)
@@ -135,6 +140,10 @@ Fetch:
 	}
 
 	if global.ShuttingDown() {
+		return
+	}
+
+	if ctx.IsCanceled(){
 		return
 	}
 
@@ -184,7 +193,7 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 	firstCommitqConfig,firstCommitConsumerConfig,firstCommitLogConsumer := processor.getConsumer("primary_first_commit_log")
 	defer queue.ReleaseConsumer(firstCommitqConfig, firstCommitConsumerConfig,firstCommitLogConsumer)
 	//check first stage commit
-	go processor.fetchMessages(firstCommitLogConsumer, func(consumer queue.ConsumerAPI, messages []queue.Message) bool {
+	go processor.fetchMessages(ctx,firstCommitLogConsumer, func(consumer queue.ConsumerAPI, messages []queue.Message) bool {
 		for _, message := range messages {
 
 			if processor.commitable(message) {
@@ -203,9 +212,8 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 	wg.Add(1)
 	finalCommitqConfig,finalCommitConsumerConfig,finalCommitLogConsumer := processor.getConsumer("primary_final_commit_log")
 	defer queue.ReleaseConsumer(finalCommitqConfig, finalCommitConsumerConfig,finalCommitLogConsumer)
-
 	//check second stage commit
-	go processor.fetchMessages(finalCommitLogConsumer, func(consumer queue.ConsumerAPI, messages []queue.Message) bool {
+	go processor.fetchMessages(ctx,finalCommitLogConsumer, func(consumer queue.ConsumerAPI, messages []queue.Message) bool {
 
 		lastTimestampFetchedAnyMessageInFinalStage = time.Now()
 
@@ -234,9 +242,8 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 	wg.Add(1)
 	walCommitqConfig, walCommitConsumerConfig,WALConsumer := processor.getConsumer("primary_write_ahead_log")
 	defer queue.ReleaseConsumer(walCommitqConfig, walCommitConsumerConfig,WALConsumer)
-
 	//fetch the message from the wal queue
-	go processor.fetchMessages(WALConsumer, func(consumer queue.ConsumerAPI, messages []queue.Message) bool {
+	go processor.fetchMessages(ctx,WALConsumer, func(consumer queue.ConsumerAPI, messages []queue.Message) bool {
 		processor.lastMessageFetchedTimeInPrepareStage = time.Now()
 		var lastCommitableMessageOffset queue.Offset
 		defer func() {
@@ -384,7 +391,7 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 		}
 	}
 
-	log.Debugf("total:%v,finished:%v,unfinished:%v, final: %v, final_records:%v, first:%v, idle:%v",
+	log.Infof("finished replication correlation, total:%v,finished:%v,unfinished:%v, final: %v, final_records:%v, first:%v, idle:%v",
 		processor.totalMessageProcessedInPrepareStage, processor.totalFinishedMessage, processor.totalUnFinishedMessage,
 		processor.totalMessageProcessedInFinalStage,
 		util.GetSyncMapSize(&processor.finalStageRecords),

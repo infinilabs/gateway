@@ -5,6 +5,7 @@ package elastic
 
 import (
 	"fmt"
+	"infini.sh/framework/core/global"
 	"net/http"
 	"time"
 
@@ -73,7 +74,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 
 			url := ctx.Request.PhantomURI().String()
 
-			if this.config.ShowBulkErrorMessage{
+			if this.config.ShowBulkErrorMessage {
 				if rate.GetRateLimiter("bulk_error", url, 1, 1, 5*time.Second).Allow() {
 					log.Error("error in bulk requests,", url, ",", ctx.Response.StatusCode(), ",invalid:", nonRetryableItems.GetMessageCount(), ",failure:", retryableItems.GetMessageCount(), ",", util.SubString(util.UnsafeBytesToString(resbody), 0, this.config.MessageTruncateSize))
 				}
@@ -101,6 +102,9 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 				}
 
 				if successItems.GetMessageCount() == 0 && retryableItems.GetMessageCount() == 0 {
+					if global.Env().IsDebug {
+						log.Info("tags on all invalid")
+					}
 					if len(this.config.TagsOnAllInvalid) > 0 {
 						ctx.UpdateTags(this.config.TagsOnAllInvalid, nil)
 					}
@@ -159,8 +163,15 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
+			if global.Env().IsDebug {
+				log.Debug("msg:", successItems.GetMessageCount(), ",none-retry:", nonRetryableItems.GetMessageCount(), ",retry:", retryableItems.GetMessageCount())
+			}
+
 			//出错不继续交由后续流程，直接结束处理
 			if !this.config.ContinueOnAnyError {
+				if global.Env().IsDebug {
+					log.Info("set context to finished since not continue on any requests error")
+				}
 				ctx.Finished()
 				return
 			}
@@ -180,6 +191,9 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 			}
 
 			if !this.config.ContinueOnSuccess {
+				if global.Env().IsDebug {
+					log.Info("set context to finished since all requests success")
+				}
 				ctx.Finished()
 				return
 			}
@@ -206,6 +220,9 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 		}
 
 		if !this.config.ContinueOnAllError {
+			if global.Env().IsDebug {
+				log.Info("set context to finished since all requests failed")
+			}
 			ctx.Finished()
 			return
 		}
@@ -213,7 +230,7 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 type Config struct {
-	StatsOnly    bool   `config:"stats_only"`
+	StatsOnly bool `config:"stats_only"`
 
 	SuccessQueue string `config:"success_queue"`
 	InvalidQueue string `config:"invalid_queue"`
@@ -297,8 +314,6 @@ func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 		flow := common.MustGetFlow(runner.config.InvalidFlow)
 		runner.invalidFlow = &flow
 	}
-
-
 
 	return &runner, nil
 }
