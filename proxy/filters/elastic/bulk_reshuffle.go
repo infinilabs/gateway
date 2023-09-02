@@ -2,6 +2,7 @@ package elastic
 
 import (
 	"fmt"
+	"github.com/OneOfOne/xxhash"
 	"runtime"
 	"time"
 
@@ -27,6 +28,7 @@ var JSON_CONTENT_TYPE = "application/json"
 type BulkReshuffle struct {
 	config   *BulkReshuffleConfig
 	esConfig *elastic.ElasticsearchConfig
+	//cfgCache sync.Map
 }
 
 func (this *BulkReshuffle) Name() string {
@@ -95,6 +97,7 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 	}
 
 	runner.esConfig = elastic.GetConfig(cfg.Elasticsearch)
+	//runner.cfgCache = sync.Map{}
 
 	return &runner, nil
 }
@@ -134,7 +137,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		fixNullID := this.config.FixNullID
 
 		var buff *bytebufferpool.ByteBuffer
-		var ok bool
 		var queueConfig *queue.QueueConfig
 		//var queueName string
 		indexAnalysis := this.config.IndexStatsAnalysis   //sync and async
@@ -162,8 +164,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		}()
 
 		var hitMetadataNotFound bool
-
-		var cfgCache = map[string]*queue.QueueConfig{}
 
 		docCount, err := elastic.WalkBulkRequests(body, func(eachLine []byte) (skipNextLine bool) {
 			if validEachLine {
@@ -322,50 +322,90 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
-			queueConfig = &queue.QueueConfig{}
-			queueConfig.Source = "dynamic"
-			queueConfig.Labels = util.MapStr{}
-			queueConfig.Labels["type"] = "bulk_reshuffle"
-			queueConfig.Labels["level"] = reshuffleType
-			queueConfig.Labels["elasticsearch"] = this.esConfig.ID
-
 			//partition
+			var partitionID int
 			var partitionSuffix = ""
+
+			//get queue config
+
+			//reset queueConfig
+			queueConfig = nil
+			queueKey := "" //TODO
+
 			if this.config.PartitionSize > 1 {
-				queueConfig.Labels["partition_size"] = this.config.PartitionSize
-				partitionID := elastic.GetShardID(metadata.GetMajorVersion(), []byte(id), this.config.PartitionSize)
-				queueConfig.Labels["partition"] = partitionID
+				if reshuffleType != ShardLevel {
+					xxHash := xxHashPool.Get().(*xxhash.XXHash32)
+					xxHash.Reset()
+					xxHash.WriteString(id)
+					partitionID = int(xxHash.Sum32()) % this.config.PartitionSize
+					xxHashPool.Put(xxHash)
+				} else {
+					partitionID = elastic.GetShardID(metadata.GetMajorVersion(), []byte(id), this.config.PartitionSize)
+				}
 				partitionSuffix = "##" + util.IntToString(partitionID)
 			}
 
-			//注册队列到元数据中，消费者自动订阅该队列列表，并根据元数据来分别进行相应的处理
 			switch reshuffleType {
 			case ClusterLevel:
-				queueConfig.Name = this.config.QueuePrefix + "##cluster##" + this.esConfig.ID + partitionSuffix
+				queueKey = this.config.QueuePrefix + "##cluster##" + this.esConfig.ID + partitionSuffix
 				break
 			case NodeLevel:
-
 				if nodeID == "" {
 					nodeID = "UNASSIGNED"
 				}
-
-				queueConfig.Labels["node_id"] = nodeID //need metadata
-				queueConfig.Name = this.config.QueuePrefix + "##node##" + this.esConfig.ID + "##" + nodeID + partitionSuffix
+				queueKey = this.config.QueuePrefix + "##node##" + this.esConfig.ID + "##" + nodeID + partitionSuffix
 				break
 			case IndexLevel:
-				queueConfig.Labels["index"] = index
-				queueConfig.Name = this.config.QueuePrefix + "##index##" + this.esConfig.ID + "##" + index + partitionSuffix
+				queueKey = this.config.QueuePrefix + "##index##" + this.esConfig.ID + "##" + index + partitionSuffix
 				break
 			case ShardLevel:
-
 				if ShardIDStr == "" {
 					ShardIDStr = "UNASSIGNED"
 				}
-
-				queueConfig.Labels["index"] = index
-				queueConfig.Labels["shard"] = shardID //need metadata
-				queueConfig.Name = this.config.QueuePrefix + "##shard##" + this.esConfig.ID + "##" + index + "##" + ShardIDStr + partitionSuffix
+				queueKey = this.config.QueuePrefix + "##shard##" + this.esConfig.ID + "##" + index + "##" + ShardIDStr + partitionSuffix
 				break
+			}
+
+			if queueKey == "" {
+				panic(errors.Error("queue key can't be nil"))
+			}
+
+			cfg1, ok := queue.SmartGetConfig(queueKey)
+
+			if ok &&len(cfg1.Labels)>0{
+				queueConfig = cfg1
+			}else {
+				//create new queue config
+				labels:=map[string]interface{}{}
+				labels["type"] = "bulk_reshuffle"
+				labels["level"] = reshuffleType
+				labels["elasticsearch"] = this.esConfig.ID
+
+				if this.config.PartitionSize > 1 {
+					labels["partition_size"] = this.config.PartitionSize
+					labels["partition"] = partitionID
+				}
+
+				//注册队列到元数据中，消费者自动订阅该队列列表，并根据元数据来分别进行相应的处理
+				switch reshuffleType {
+				case ClusterLevel:
+					break
+				case NodeLevel:
+					labels["node_id"] = nodeID //need metadata
+					break
+				case IndexLevel:
+					labels["index"] = index
+					break
+				case ShardLevel:
+					labels["index"] = index
+					labels["shard"] = shardID //need metadata
+					break
+				}
+
+				queueConfig=queue.AdvancedGetOrInitConfig("",queueKey,labels)
+				if queueConfig==nil{
+					panic(errors.Error("queue config can't be nil"))
+				}
 			}
 
 			if global.Env().IsDebug {
@@ -377,28 +417,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			if !ok {
 				buff = docBufferPool.Get()
 				docBuf[queueConfig.Name] = buff
-				//var exists bool
-				cfg1, ok := cfgCache[queueConfig.Name]
-				if !ok {
-					oldConfig, ok := queue.GetConfigByKey(queueConfig.Name)
-					if ok {
-						//exists = true
-						queueConfig = oldConfig
-						cfgCache[queueConfig.Name] = queueConfig
-						if global.Env().IsDebug {
-							log.Debug("config already exists, replace to:", util.MustToJSON(queueConfig))
-						}
-					} else {
-						exists, err := queue.RegisterConfig(queueConfig)
-						if !exists && err != nil {
-							panic(err)
-						}
-					}
-				} else {
-					//exists=true
-					queueConfig = cfg1
-				}
-
 			}
 
 			//add to major buffer
