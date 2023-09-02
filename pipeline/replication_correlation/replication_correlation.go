@@ -9,6 +9,7 @@ import (
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
+	"infini.sh/framework/core/locker"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/stats"
@@ -24,10 +25,16 @@ type Config struct {
 	SafetyCommitOffsetPaddingSize int64 `config:"safety_commit_offset_padding_size"` //offset between last and wal
 	SafetyCommitIntervalInSeconds int64 `config:"safety_commit_interval_in_seconds"` //time between last and wal
 	SafetyCommitRetryTimes        int   `config:"safety_commit_retry_times"`         //retry times
+	PartitionSize                 int   `config:"partition_size"`                    //retry times
 }
 
-type ReplicationCorrectionProcessor struct {
-	config *Config
+type ReplicationCorrectionGroup struct {
+	partitionID int
+
+	config              *Config
+	PreStageQueueName   string `config:"pre_stage_queue"`
+	FirstStageQueueName string `config:"first_stage_queue"`
+	FinalStageQueueName string `config:"final_stage_queue"`
 
 	prepareStageBitmap sync.Map
 	firstStageBitmap   sync.Map
@@ -45,18 +52,45 @@ type ReplicationCorrectionProcessor struct {
 	totalFinishedMessage   int
 	totalUnFinishedMessage int
 
-	commitableTimestampInPrepareStage   int64 //last message timestamp in wal -60s
-	commitableMessageOffsetInFinalStage queue.Offset
-	commitableMessageOffsetInFirstStage queue.Offset
+	commitableTimestampInPrepareStage          int64 //last message timestamp in wal -60s
+	commitableMessageOffsetInFinalStage        queue.Offset
+	commitableMessageOffsetInFirstStage        queue.Offset
+	lastTimestampFetchedAnyMessageInFinalStage time.Time
+}
+
+type ReplicationCorrectionProcessor struct {
+	config *Config
+
+	group map[string]ReplicationCorrectionGroup
 }
 
 func init() {
 	pipeline.RegisterProcessorPlugin("replication_correlation", New)
 }
 
+func (runner *ReplicationCorrectionProcessor) newGroup(id int) *ReplicationCorrectionGroup {
+	suffix := ""
+
+	if runner.config.PartitionSize > 0 {
+		suffix = fmt.Sprintf("##%d", id)
+	}
+
+	group := ReplicationCorrectionGroup{
+		partitionID: id,
+		PreStageQueueName:   "primary_write_ahead_log" + suffix,
+		FirstStageQueueName: "primary_first_commit_log" + suffix,
+		FinalStageQueueName: "primary_final_commit_log" + suffix,
+	}
+	group.config = runner.config
+	group.firstStageBitmap = sync.Map{}
+	group.prepareStageBitmap = sync.Map{}
+	group.finalStageRecords = sync.Map{}
+	return &group
+}
+
 func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
-		SafetyCommitOffsetPaddingSize: 10000,
+		SafetyCommitOffsetPaddingSize: 1000000,
 		SafetyCommitIntervalInSeconds: 60,
 		SafetyCommitRetryTimes:        60,
 	}
@@ -66,8 +100,6 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		return nil, fmt.Errorf("failed to unpack the configuration of flow_runner processor: %s", err)
 	}
 
-	runner := ReplicationCorrectionProcessor{config: &cfg}
-
 	if cfg.SafetyCommitIntervalInSeconds <= 0 {
 		cfg.SafetyCommitIntervalInSeconds = 60
 	}
@@ -75,12 +107,10 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		cfg.SafetyCommitIntervalInSeconds = 60
 	}
 	if cfg.SafetyCommitOffsetPaddingSize <= 0 {
-		cfg.SafetyCommitOffsetPaddingSize = 10000
+		cfg.SafetyCommitOffsetPaddingSize = 1000000
 	}
 
-	runner.firstStageBitmap = sync.Map{}
-	runner.prepareStageBitmap = sync.Map{}
-	runner.finalStageRecords = sync.Map{}
+	runner := ReplicationCorrectionProcessor{config: &cfg}
 
 	return &runner, nil
 }
@@ -93,7 +123,7 @@ func (processor *ReplicationCorrectionProcessor) Name() string {
 	return "replication_correlation"
 }
 
-func (processor *ReplicationCorrectionProcessor) fetchMessages(ctx *pipeline.Context,consumer queue.ConsumerAPI, handler func(consumer queue.ConsumerAPI, msg []queue.Message) bool, wg *sync.WaitGroup) {
+func (processor *ReplicationCorrectionGroup) fetchMessages(ctx *pipeline.Context, consumer queue.ConsumerAPI, handler func(consumer queue.ConsumerAPI, msg []queue.Message) bool, wg *sync.WaitGroup) {
 	defer func() {
 		if !global.Env().IsDebug {
 			if r := recover(); r != nil {
@@ -117,7 +147,7 @@ func (processor *ReplicationCorrectionProcessor) fetchMessages(ctx *pipeline.Con
 	ctx1 := queue.Context{}
 Fetch:
 
-	if ctx.IsCanceled(){
+	if ctx.IsCanceled() {
 		return
 	}
 
@@ -143,17 +173,17 @@ Fetch:
 		return
 	}
 
-	if ctx.IsCanceled(){
+	if ctx.IsCanceled() {
 		return
 	}
 
 	goto Fetch
 }
 
-func (processor *ReplicationCorrectionProcessor) cleanup(uID interface{}) {
+func (processor *ReplicationCorrectionGroup) cleanup(uID interface{}) {
 	processor.prepareStageBitmap.Delete(uID)
-	processor.firstStageBitmap.Delete(uID)
-	processor.finalStageRecords.Delete(uID)
+	//processor.firstStageBitmap.Delete(uID)
+	//processor.finalStageRecords.Delete(uID)
 }
 
 func parseIDAndOffset(v string) (id, offset string) {
@@ -165,6 +195,43 @@ func parseIDAndOffset(v string) (id, offset string) {
 }
 
 func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) error {
+	defer func() {
+		if !global.Env().IsDebug {
+			if r := recover(); r != nil {
+				var v string
+				switch r.(type) {
+				case error:
+					v = r.(error).Error()
+				case runtime.Error:
+					v = r.(runtime.Error).Error()
+				case string:
+					v = r.(string)
+				}
+				if !util.ContainStr(v, "already acquired") {
+					log.Errorf("error in processor [%v], [%v]", processor.Name(), v)
+				}
+				ctx.RecordError(fmt.Errorf("replay processor panic: %v", r))
+			}
+		}
+	}()
+
+	wg := sync.WaitGroup{}
+	if processor.config.PartitionSize > 0 {
+		for i := 0; i < processor.config.PartitionSize; i++ {
+			group := processor.newGroup(i)
+			log.Debugf("start to process partition %v", i)
+			wg.Add(1)
+			go group.process(ctx, &wg)
+		}
+	}
+	wg.Wait()
+
+	log.Debug("all partitions are done")
+
+	return nil
+}
+
+func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *sync.WaitGroup) error {
 
 	defer func() {
 		if !global.Env().IsDebug {
@@ -178,22 +245,46 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 				case string:
 					v = r.(string)
 				}
-				log.Errorf("error in processor [%v], [%v]", processor.Name(), v)
+				if !util.ContainStr(v, "already acquired") {
+					log.Errorf("error in processor [%v], [%v]", processor.Name(), v)
+				}
 				ctx.RecordError(fmt.Errorf("replay processor panic: %v", r))
 			}
 		}
+		w.Done()
+		processor.firstStageBitmap = sync.Map{}
+		processor.prepareStageBitmap = sync.Map{}
+		processor.finalStageRecords = sync.Map{}
 	}()
 
-	lastTimestampFetchedAnyMessageInFinalStage := time.Now()
+	//skip empty queue
+	cfg,ok:=queue.GetConfigByKey(processor.PreStageQueueName)
+	if !ok{
+		log.Debugf("empty queue, skip processing")
+		return nil
+	}
+	if queue.LatestOffset(cfg).Position <= 0 {
+		log.Debugf("empty queue, skip processing")
+		time.Sleep(1 * time.Second)
+		return nil
+	}
+
+	if ok, _ := locker.Hold("tasks", "replication_correlation", global.Env().SystemConfig.NodeConfig.ID, 180*time.Second, true); !ok {
+		log.Infof("replication_correlation already running some where, skip processing")
+		time.Sleep(1 * time.Second)
+		return nil
+	}
+
+	processor.lastTimestampFetchedAnyMessageInFinalStage = time.Now()
 	var timestampMessageFetchedInFinalStage int64 = -1
 
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
-	firstCommitqConfig,firstCommitConsumerConfig,firstCommitLogConsumer := processor.getConsumer("primary_first_commit_log")
-	defer queue.ReleaseConsumer(firstCommitqConfig, firstCommitConsumerConfig,firstCommitLogConsumer)
+	firstCommitqConfig, firstCommitConsumerConfig, firstCommitLogConsumer := processor.getConsumer(processor.FirstStageQueueName)
+	defer queue.ReleaseConsumer(firstCommitqConfig, firstCommitConsumerConfig, firstCommitLogConsumer)
 	//check first stage commit
-	go processor.fetchMessages(ctx,firstCommitLogConsumer, func(consumer queue.ConsumerAPI, messages []queue.Message) bool {
+	go processor.fetchMessages(ctx, firstCommitLogConsumer, func(consumer queue.ConsumerAPI, messages []queue.Message) bool {
 		for _, message := range messages {
 
 			if processor.commitable(message) {
@@ -210,12 +301,12 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 	}, &wg)
 
 	wg.Add(1)
-	finalCommitqConfig,finalCommitConsumerConfig,finalCommitLogConsumer := processor.getConsumer("primary_final_commit_log")
-	defer queue.ReleaseConsumer(finalCommitqConfig, finalCommitConsumerConfig,finalCommitLogConsumer)
+	finalCommitqConfig, finalCommitConsumerConfig, finalCommitLogConsumer := processor.getConsumer(processor.FinalStageQueueName)
+	defer queue.ReleaseConsumer(finalCommitqConfig, finalCommitConsumerConfig, finalCommitLogConsumer)
 	//check second stage commit
-	go processor.fetchMessages(ctx,finalCommitLogConsumer, func(consumer queue.ConsumerAPI, messages []queue.Message) bool {
+	go processor.fetchMessages(ctx, finalCommitLogConsumer, func(consumer queue.ConsumerAPI, messages []queue.Message) bool {
 
-		lastTimestampFetchedAnyMessageInFinalStage = time.Now()
+		processor.lastTimestampFetchedAnyMessageInFinalStage = time.Now()
 
 		for _, message := range messages {
 
@@ -240,10 +331,10 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 	time.Sleep(10 * time.Second)
 
 	wg.Add(1)
-	walCommitqConfig, walCommitConsumerConfig,WALConsumer := processor.getConsumer("primary_write_ahead_log")
-	defer queue.ReleaseConsumer(walCommitqConfig, walCommitConsumerConfig,WALConsumer)
+	walCommitqConfig, walCommitConsumerConfig, WALConsumer := processor.getConsumer(processor.PreStageQueueName)
+	defer queue.ReleaseConsumer(walCommitqConfig, walCommitConsumerConfig, WALConsumer)
 	//fetch the message from the wal queue
-	go processor.fetchMessages(ctx,WALConsumer, func(consumer queue.ConsumerAPI, messages []queue.Message) bool {
+	go processor.fetchMessages(ctx, WALConsumer, func(consumer queue.ConsumerAPI, messages []queue.Message) bool {
 		processor.lastMessageFetchedTimeInPrepareStage = time.Now()
 		var lastCommitableMessageOffset queue.Offset
 		defer func() {
@@ -305,6 +396,11 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 			retry_times := 0
 
 		RETRY:
+
+			if global.ShuttingDown(){
+				return false
+			}
+
 			//check final stage
 			if _, ok := processor.finalStageRecords.Load(uID); ok {
 				//valid request, cleanup
@@ -322,18 +418,19 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 					hit = true
 				}
 
-				if time.Since(processor.lastMessageFetchedTimeInAnyStage) > time.Second*30 {
-					stats.Increment("replication_crc", "no_message_fetched_in_any_stage_more_than_30s")
+				//if time.Since(processor.lastMessageFetchedTimeInAnyStage) > time.Second*120 {
+				//	stats.Increment("replication_crc", "no_message_fetched_in_any_stage_more_than_120s")
+				//	hit = true
+				//}
+
+				if time.Since(processor.lastTimestampFetchedAnyMessageInFinalStage) > time.Second*120 && (processor.lastTimestampFetchedAnyMessageInFinalStage.Unix()- message.Timestamp>120){
+					stats.Increment("replication_crc", "no_message_fetched_in_final_stage_more_than_120s")
+					log.Error("no message fetched in final stage more than 120s, ",time.Since(processor.lastTimestampFetchedAnyMessageInFinalStage))
 					hit = true
 				}
 
-				if time.Since(lastTimestampFetchedAnyMessageInFinalStage) > time.Second*30 {
-					stats.Increment("replication_crc", "no_message_fetched_in_final_stage_more_than_30s")
-					hit = true
-				}
-
-				if timestampMessageFetchedInFinalStage > 0 && (timestampMessageFetchedInFinalStage-60) > message.Timestamp {
-					stats.Increment("replication_crc", "message_fetched_in_final_stage_more_than_60s")
+				if timestampMessageFetchedInFinalStage > 0 && (timestampMessageFetchedInFinalStage-120) > message.Timestamp {
+					stats.Increment("replication_crc", "message_fetched_in_final_stage_more_than_120s")
 					hit = true
 				}
 
@@ -342,7 +439,7 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 
 					var errLog string
 					//check if in first stage
-					if _,ok:=processor.firstStageBitmap.Load(uID);ok {
+					if _, ok := processor.firstStageBitmap.Load(uID); ok {
 						errLog = fmt.Sprintf("request %v, offset: %v, %v in first stage but not in final stage", uID, message.Offset, message.Timestamp)
 					} else {
 						errLog = fmt.Sprintf("request %v, offset: %v, %v exists in wal but not in any stage", uID, message.Offset, message.Timestamp)
@@ -361,13 +458,14 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 					retry_times = 0
 				} else {
 					if global.Env().IsDebug {
-						log.Debugf("request %v, offset: %v,"+
-							" retry_times: %v, docs_in_wal_stage: %v,docs_in_final_stage: %v, last_offset: %v, last_wal_offset: %v, gap: %v",
-							uID, message.Offset,
-							retry_times, util.GetSyncMapSize(&processor.prepareStageBitmap), util.GetSyncMapSize(&processor.finalStageRecords), processor.lastOffsetInFinalStage, processor.lastOffsetInPrepareStage)
+					log.Infof("request %v, offset: %v,"+
+						" retry_times: %v, docs_in_wal_stage: %v,docs_in_final_stage: %v, last_offset: %v, last_wal_offset: %v",
+						uID, message.Offset,
+						retry_times, util.GetSyncMapSize(&processor.prepareStageBitmap), util.GetSyncMapSize(&processor.finalStageRecords), processor.lastOffsetInFinalStage, processor.lastOffsetInPrepareStage)
 					}
 					time.Sleep(1 * time.Second)
 					retry_times++
+
 					//retry
 					goto RETRY
 				}
@@ -379,8 +477,9 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 
 	wg.Wait()
 
+	//wal done, and no more message in other queue as well, then commit
 	//cleanup
-	if time.Since(processor.lastMessageFetchedTimeInPrepareStage) > time.Second*60 {
+	if !ctx.IsCanceled()&&!global.ShuttingDown()&&time.Since(processor.lastMessageFetchedTimeInPrepareStage) > time.Second*60 && time.Since(processor.lastMessageFetchedTimeInAnyStage) > time.Second*60 {
 
 		if processor.commitableMessageOffsetInFirstStage.Position > 0 {
 			firstCommitLogConsumer.CommitOffset(processor.commitableMessageOffsetInFirstStage)
@@ -391,17 +490,19 @@ func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) 
 		}
 	}
 
-	log.Infof("finished replication correlation, total:%v,finished:%v,unfinished:%v, final: %v, final_records:%v, first:%v, idle:%v",
-		processor.totalMessageProcessedInPrepareStage, processor.totalFinishedMessage, processor.totalUnFinishedMessage,
-		processor.totalMessageProcessedInFinalStage,
-		util.GetSyncMapSize(&processor.finalStageRecords),
+	log.Infof("#%v finished correlation, prepare:%v, finished:%v, unfinished:%v, first_map:%v, final_map:%v, prepare_idle:%v",
+		processor.partitionID,
+		processor.totalMessageProcessedInPrepareStage,
+		processor.totalFinishedMessage,
+		processor.totalUnFinishedMessage,
 		util.GetSyncMapSize(&processor.firstStageBitmap),
+		util.GetSyncMapSize(&processor.finalStageRecords),
 		time.Since(processor.lastMessageFetchedTimeInPrepareStage))
 
 	return nil
 }
 
-func (processor *ReplicationCorrectionProcessor) getConsumer(queueName string) (*queue.QueueConfig,*queue.ConsumerConfig,queue.ConsumerAPI) {
+func (processor *ReplicationCorrectionGroup) getConsumer(queueName string) (*queue.QueueConfig, *queue.ConsumerConfig, queue.ConsumerAPI) {
 	qConfig := queue.GetOrInitConfig(queueName)
 	cConfig := queue.GetOrInitConsumerConfig(qConfig.ID, "crc", "name1")
 	consumer, err := queue.AcquireConsumer(qConfig,
@@ -409,11 +510,15 @@ func (processor *ReplicationCorrectionProcessor) getConsumer(queueName string) (
 	if err != nil {
 		panic(err)
 	}
-	return qConfig,cConfig,consumer
+	return qConfig, cConfig, consumer
 }
 
-func (processor *ReplicationCorrectionProcessor) commitable(message queue.Message) bool {
+func (processor *ReplicationCorrectionGroup) commitable(message queue.Message) bool {
 	//old message than wal, or wal fetched but idle for 30s
 	return processor.commitableTimestampInPrepareStage > 0 && message.Timestamp > 0 && message.Timestamp < processor.commitableTimestampInPrepareStage ||
-		(processor.totalMessageProcessedInPrepareStage > 0 && time.Since(processor.lastMessageFetchedTimeInPrepareStage) > time.Second*30)
+		(processor.totalMessageProcessedInPrepareStage > 0 && time.Since(processor.lastMessageFetchedTimeInPrepareStage) > time.Second*120)
+}
+
+func (processor *ReplicationCorrectionGroup) Name() string {
+	return processor.PreStageQueueName
 }
