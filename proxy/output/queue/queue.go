@@ -9,6 +9,7 @@ import (
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"io"
 	"strings"
@@ -16,17 +17,19 @@ import (
 )
 
 type DiskEnqueueFilter struct {
-	Type              string                 `config:"type"`
-	DepthThreshold    int64                  `config:"depth_threshold"`
-	Message           string                 `config:"message"` //override the message in the request
-	QueueName         string                 `config:"queue_name"`
-	Labels            map[string]interface{} `config:"labels,omitempty"`
-	messageBytes      []byte
-	queueNameTemplate *fasttemplate.Template
-	messageTemplate   *fasttemplate.Template
-	labelsTemplate    map[string]*fasttemplate.Template
-	producers         sync.Map//map[string]queue.ProducerAPI
-	qConfigs         sync.Map// map[string]*queue.QueueConfig
+	Type                         string                 `config:"type"`
+	DepthThreshold               int64                  `config:"depth_threshold"`
+	Message                      string                 `config:"message"` //override the message in the request
+	QueueName                    string                 `config:"queue_name"`
+	Labels                       map[string]interface{} `config:"labels,omitempty"`
+	SaveMessageOffset            bool                   `config:"save_last_produced_message_offset,omitempty"`
+	LastProducedMessageOffsetKey string                 `config:"last_produced_message_offset_key,omitempty"`
+	messageBytes                 []byte
+	queueNameTemplate            *fasttemplate.Template
+	messageTemplate              *fasttemplate.Template
+	labelsTemplate               map[string]*fasttemplate.Template
+	producers                    sync.Map //map[string]queue.ProducerAPI
+	qConfigs                     sync.Map // map[string]*queue.QueueConfig
 }
 
 func (filter *DiskEnqueueFilter) Name() string {
@@ -39,20 +42,17 @@ func (filter *DiskEnqueueFilter) Filter(ctx *fasthttp.RequestCtx) {
 	if filter.queueNameTemplate != nil {
 		qName = filter.queueNameTemplate.ExecuteFuncString(func(w io.Writer, tag string) (int, error) {
 			variable, err := ctx.GetValue(tag)
-			x, ok := variable.(string)
-			if ok {
-				if x != "" {
-					return w.Write([]byte(x))
-				}
+			if err == nil {
+				return w.Write([]byte(util.ToString(variable)))
 			}
 			return -1, err
 		})
 	}
 
-	qConfig := filter.getQueueConfig(qName,ctx)
+	qConfig := filter.getQueueConfig(qName, ctx)
 
-	if global.Env().IsDebug{
-		log.Trace("get queue config:",qName, "->", qConfig)
+	if global.Env().IsDebug {
+		log.Trace("get queue config:", qName, "->", qConfig)
 	}
 
 	if filter.DepthThreshold > 0 {
@@ -73,11 +73,8 @@ func (filter *DiskEnqueueFilter) Filter(ctx *fasthttp.RequestCtx) {
 		if filter.messageTemplate != nil {
 			str := filter.messageTemplate.ExecuteFuncString(func(w io.Writer, tag string) (int, error) {
 				variable, err := ctx.GetValue(tag)
-				x, ok := variable.(string)
-				if ok {
-					if x != "" {
-						return w.Write([]byte(x))
-					}
+				if err == nil {
+					return w.Write([]byte(util.ToString(variable)))
 				}
 				return -1, err
 			})
@@ -105,8 +102,10 @@ func (filter *DiskEnqueueFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	offset := (*res)[0].Offset.String()
 
-	ctx.PutValue("LAST_PRODUCED_MESSAGE_OFFSET", offset)
-	ctx.Request.Header.Set("LAST_PRODUCED_MESSAGE_OFFSET", offset)
+	if filter.SaveMessageOffset {
+		ctx.PutValue(filter.LastProducedMessageOffsetKey, offset)
+		ctx.Request.Header.Set(filter.LastProducedMessageOffsetKey, offset)
+	}
 
 }
 
@@ -124,7 +123,7 @@ func (filter *DiskEnqueueFilter) getProducer(qConfig *queue.QueueConfig) queue.P
 	if err != nil {
 		panic(err)
 	}
-	filter.producers.Store(qConfig.ID,handler)
+	filter.producers.Store(qConfig.ID, handler)
 	return handler
 }
 
@@ -132,27 +131,24 @@ func (filter *DiskEnqueueFilter) getQueueConfig(qName string, ctx *fasthttp.Requ
 
 	obj, ok := filter.qConfigs.Load(qName)
 	if ok {
-		qConfig,ok:=obj.(*queue.QueueConfig)
-		if ok{
+		qConfig, ok := obj.(*queue.QueueConfig)
+		if ok {
 			//log.Error("hit config cache:",qName, "->", qConfig)
 			return qConfig
 		}
 	}
 
-	labels:=map[string]interface{}{}
+	labels := map[string]interface{}{}
 	for k, v := range filter.Labels {
 		labels[k] = v
 	}
 
-	if filter.labelsTemplate != nil &&len(filter.labelsTemplate)>0 {
+	if filter.labelsTemplate != nil && len(filter.labelsTemplate) > 0 {
 		for k, v := range filter.labelsTemplate {
 			label := v.ExecuteFuncString(func(w io.Writer, tag string) (int, error) {
 				variable, err := ctx.GetValue(tag)
-				x, ok := variable.(string)
-				if ok {
-					if x != "" {
-						return w.Write([]byte(x))
-					}
+				if err == nil {
+					return w.Write([]byte(util.ToString(variable)))
 				}
 				return -1, err
 			})
@@ -160,8 +156,7 @@ func (filter *DiskEnqueueFilter) getQueueConfig(qName string, ctx *fasthttp.Requ
 		}
 	}
 
-
-	tmp:= queue.AdvancedGetOrInitConfig(filter.Type, qName, labels)
+	tmp := queue.AdvancedGetOrInitConfig(filter.Type, qName, labels)
 	if tmp != nil {
 		queue.IniQueue(tmp)
 	}
@@ -170,8 +165,8 @@ func (filter *DiskEnqueueFilter) getQueueConfig(qName string, ctx *fasthttp.Requ
 		panic(errors.Errorf("invalid queue config: %v", qName))
 	}
 
-	log.Trace("set config cache:",qName, "->", tmp)
-	filter.qConfigs.Store(qName,tmp)
+	log.Trace("set config cache:", qName, "->", tmp)
+	filter.qConfigs.Store(qName, tmp)
 	return tmp
 }
 
@@ -181,7 +176,9 @@ func init() {
 
 func NewDiskEnqueueFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := DiskEnqueueFilter{}
+	runner := DiskEnqueueFilter{
+		LastProducedMessageOffsetKey: "LAST_PRODUCED_MESSAGE_OFFSET",
+	}
 
 	if err := c.Unpack(&runner); err != nil {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
@@ -206,8 +203,8 @@ func NewDiskEnqueueFilter(c *config.Config) (pipeline.Filter, error) {
 		}
 	}
 
-	runner.producers = sync.Map{}//map[string]queue.ProducerAPI{}
-	runner.qConfigs = sync.Map{}//map[string]*queue.QueueConfig{}
+	runner.producers = sync.Map{} //map[string]queue.ProducerAPI{}
+	runner.qConfigs = sync.Map{}  //map[string]*queue.QueueConfig{}
 	runner.labelsTemplate = map[string]*fasttemplate.Template{}
 
 	for k, v := range runner.Labels {
