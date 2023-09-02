@@ -12,18 +12,21 @@ import (
 	"infini.sh/framework/lib/fasthttp"
 	"io"
 	"strings"
+	"sync"
 )
 
 type DiskEnqueueFilter struct {
-	Type           string                 `config:"type"`
-	DepthThreshold int64                  `config:"depth_threshold"`
-	Message        string                 `config:"message"` //override the message in the request
-	QueueName      string                 `config:"queue_name"`
-	Labels         map[string]interface{} `config:"labels,omitempty"`
-	queueConfig    *queue.QueueConfig
-	producer       queue.ProducerAPI
-	messageBytes   []byte
-	template       *fasttemplate.Template
+	Type              string                 `config:"type"`
+	DepthThreshold    int64                  `config:"depth_threshold"`
+	Message           string                 `config:"message"` //override the message in the request
+	QueueName         string                 `config:"queue_name"`
+	Labels            map[string]interface{} `config:"labels,omitempty"`
+	messageBytes      []byte
+	queueNameTemplate *fasttemplate.Template
+	messageTemplate   *fasttemplate.Template
+	labelsTemplate    map[string]*fasttemplate.Template
+	producers         sync.Map//map[string]queue.ProducerAPI
+	qConfigs         sync.Map// map[string]*queue.QueueConfig
 }
 
 func (filter *DiskEnqueueFilter) Name() string {
@@ -32,8 +35,28 @@ func (filter *DiskEnqueueFilter) Name() string {
 
 func (filter *DiskEnqueueFilter) Filter(ctx *fasthttp.RequestCtx) {
 
+	qName := filter.QueueName
+	if filter.queueNameTemplate != nil {
+		qName = filter.queueNameTemplate.ExecuteFuncString(func(w io.Writer, tag string) (int, error) {
+			variable, err := ctx.GetValue(tag)
+			x, ok := variable.(string)
+			if ok {
+				if x != "" {
+					return w.Write([]byte(x))
+				}
+			}
+			return -1, err
+		})
+	}
+
+	qConfig := filter.getQueueConfig(qName,ctx)
+
+	if global.Env().IsDebug{
+		log.Trace("get queue config:",qName, "->", qConfig)
+	}
+
 	if filter.DepthThreshold > 0 {
-		depth := queue.Depth(filter.queueConfig)
+		depth := queue.Depth(qConfig)
 
 		if global.Env().IsDebug {
 			log.Trace(filter.QueueName, " depth:", depth, " vs threshold:", filter.DepthThreshold)
@@ -47,8 +70,8 @@ func (filter *DiskEnqueueFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	var data []byte
 	if filter.messageBytes != nil {
-		if filter.template != nil {
-			str := filter.template.ExecuteFuncString(func(w io.Writer, tag string) (int, error) {
+		if filter.messageTemplate != nil {
+			str := filter.messageTemplate.ExecuteFuncString(func(w io.Writer, tag string) (int, error) {
 				variable, err := ctx.GetValue(tag)
 				x, ok := variable.(string)
 				if ok {
@@ -67,15 +90,17 @@ func (filter *DiskEnqueueFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 	var err error
-	req := queue.ProduceRequest{Topic: filter.queueConfig.ID, Data: data}
+	req := queue.ProduceRequest{Topic: qConfig.ID, Data: data}
 
-	if filter.producer == nil {
+	producer := filter.getProducer(qConfig)
+
+	if producer == nil {
 		panic(errors.New("invalid producer"))
 	}
 
-	res, err := filter.producer.Produce(&[]queue.ProduceRequest{req})
+	res, err := producer.Produce(&[]queue.ProduceRequest{req})
 	if err != nil || res == nil {
-		panic(errors.Errorf("queue: %v, err: %v", filter.queueConfig, err))
+		panic(errors.Errorf("queue: %v, err: %v", qConfig, err))
 	}
 
 	offset := (*res)[0].Offset.String()
@@ -83,6 +108,71 @@ func (filter *DiskEnqueueFilter) Filter(ctx *fasthttp.RequestCtx) {
 	ctx.PutValue("LAST_PRODUCED_MESSAGE_OFFSET", offset)
 	ctx.Request.Header.Set("LAST_PRODUCED_MESSAGE_OFFSET", offset)
 
+}
+
+func (filter *DiskEnqueueFilter) getProducer(qConfig *queue.QueueConfig) queue.ProducerAPI {
+	if qConfig.ID == "" {
+		panic(errors.Errorf("invalid queue config: %v", qConfig))
+	}
+
+	obj, ok := filter.producers.Load(qConfig.ID)
+	if ok {
+		return obj.(queue.ProducerAPI)
+	}
+
+	handler, err := queue.AcquireProducer(qConfig)
+	if err != nil {
+		panic(err)
+	}
+	filter.producers.Store(qConfig.ID,handler)
+	return handler
+}
+
+func (filter *DiskEnqueueFilter) getQueueConfig(qName string, ctx *fasthttp.RequestCtx) *queue.QueueConfig {
+
+	obj, ok := filter.qConfigs.Load(qName)
+	if ok {
+		qConfig,ok:=obj.(*queue.QueueConfig)
+		if ok{
+			//log.Error("hit config cache:",qName, "->", qConfig)
+			return qConfig
+		}
+	}
+
+	labels:=map[string]interface{}{}
+	for k, v := range filter.Labels {
+		labels[k] = v
+	}
+
+	if filter.labelsTemplate != nil &&len(filter.labelsTemplate)>0 {
+		for k, v := range filter.labelsTemplate {
+			label := v.ExecuteFuncString(func(w io.Writer, tag string) (int, error) {
+				variable, err := ctx.GetValue(tag)
+				x, ok := variable.(string)
+				if ok {
+					if x != "" {
+						return w.Write([]byte(x))
+					}
+				}
+				return -1, err
+			})
+			labels[k] = label
+		}
+	}
+
+
+	tmp:= queue.AdvancedGetOrInitConfig(filter.Type, qName, labels)
+	if tmp != nil {
+		queue.IniQueue(tmp)
+	}
+
+	if tmp == nil {
+		panic(errors.Errorf("invalid queue config: %v", qName))
+	}
+
+	log.Trace("set config cache:",qName, "->", tmp)
+	filter.qConfigs.Store(qName,tmp)
+	return tmp
 }
 
 func init() {
@@ -97,28 +187,41 @@ func NewDiskEnqueueFilter(c *config.Config) (pipeline.Filter, error) {
 		return nil, fmt.Errorf("failed to unpack the filter configuration : %s", err)
 	}
 
-	runner.queueConfig = queue.AdvancedGetOrInitConfig(runner.Type, runner.QueueName, runner.Labels)
-
-	if runner.queueConfig != nil {
-		queue.IniQueue(runner.queueConfig)
-	}
-
 	if runner.Message != "" {
 		runner.messageBytes = []byte(runner.Message)
 		if strings.Contains(runner.Message, "$[[") {
 			var err error
-			runner.template, err = fasttemplate.NewTemplate(runner.Message, "$[[", "]]")
+			runner.messageTemplate, err = fasttemplate.NewTemplate(runner.Message, "$[[", "]]")
 			if err != nil {
 				panic(err)
 			}
 		}
 	}
 
-	handler, err := queue.AcquireProducer(runner.queueConfig)
-	if err != nil {
-		panic(err)
+	if strings.Contains(runner.QueueName, "$[[") {
+		var err error
+		runner.queueNameTemplate, err = fasttemplate.NewTemplate(runner.QueueName, "$[[", "]]")
+		if err != nil {
+			panic(err)
+		}
 	}
-	runner.producer = handler
+
+	runner.producers = sync.Map{}//map[string]queue.ProducerAPI{}
+	runner.qConfigs = sync.Map{}//map[string]*queue.QueueConfig{}
+	runner.labelsTemplate = map[string]*fasttemplate.Template{}
+
+	for k, v := range runner.Labels {
+		str, ok := v.(string)
+		if ok {
+			if strings.Contains(str, "$[[") {
+				var err error
+				runner.labelsTemplate[k], err = fasttemplate.NewTemplate(str, "$[[", "]]")
+				if err != nil {
+					panic(err)
+				}
+			}
+		}
+	}
 
 	return &runner, nil
 }
