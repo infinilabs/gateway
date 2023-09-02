@@ -113,12 +113,9 @@ func NewElasticsearchRequestReshuffleFilter(c *config.Config) (pipeline.Filter, 
 	runner.esConfig = elastic.GetConfig(runner.Elasticsearch)
 
 	if runner.PartitionSize>1{
-		qName := runner.QueuePrefix
-
 
 		for i:=0;i<runner.PartitionSize;i++{
-			qName = fmt.Sprintf("%v##cluster##%v##%v", qName, runner.esConfig.ID, i)
-
+			qName:= fmt.Sprintf("%v##cluster##%v##%v", runner.QueuePrefix, runner.esConfig.ID, i)
 			labels := util.MapStr{}
 			labels["type"] = "request_reshuffle"
 			labels["elasticsearch"] = runner.esConfig.ID
