@@ -42,11 +42,8 @@ func (filter *SetContext) Filter(ctx *fasthttp.RequestCtx) {
 							if t != nil {
 								str = t.ExecuteFuncString(func(w io.Writer, tag string) (int, error) {
 									variable, err := ctx.GetValue(tag)
-									x, ok := variable.(string)
-									if ok {
-										if x != "" {
-											return w.Write([]byte(x))
-										}
+									if err==nil{
+										return w.Write([]byte(util.ToString(variable)))
 									}
 									return -1, err
 								})

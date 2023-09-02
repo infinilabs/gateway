@@ -9,6 +9,7 @@ import (
 	"github.com/valyala/fasttemplate"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/pipeline"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"io"
 	"strings"
@@ -70,11 +71,8 @@ func (filter *Echo) Filter(ctx *fasthttp.RequestCtx) {
 	if filter.template != nil {
 		str = filter.template.ExecuteFuncString(func(w io.Writer, tag string) (int, error) {
 			variable, err := ctx.GetValue(tag)
-			x, ok := variable.(string)
-			if ok {
-				if x != "" {
-					return w.Write([]byte(x))
-				}
+			if err==nil{
+				return w.Write([]byte(util.ToString(variable)))
 			}
 			return -1, err
 		})
