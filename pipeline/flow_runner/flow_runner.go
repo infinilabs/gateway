@@ -221,8 +221,6 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 
 					ctx.SetFlowID(processor.config.FlowName)
 
-					//log.Error("start process message:",i,"=>",pop.Offset,",",pop.NextOffset)
-
 					flowProcessor(ctx)
 
 					if global.Env().IsDebug {
@@ -262,9 +260,10 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 						initOfffset = offset
 					}
 				}
+
+				log.Infof("success replay %v messages from queue:[%v,%v], elapsed:%v",len(messages), qConfig.ID,qConfig.Name, time.Since(start1))
 			}
 
-			log.Infof("success replay %v messages from queue:[%v,%v], elapsed:%v",len(messages), qConfig.ID,qConfig.Name, time.Since(start1))
 
 			if timeout || len(messages) == 0 {
 				log.Debugf("exit flow_runner, [%v][%v] %v messages, timeout:%v", qConfig.Name, consumer.Name, len(messages), timeout)
