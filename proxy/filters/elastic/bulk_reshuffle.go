@@ -28,7 +28,6 @@ var JSON_CONTENT_TYPE = "application/json"
 type BulkReshuffle struct {
 	config   *BulkReshuffleConfig
 	esConfig *elastic.ElasticsearchConfig
-	//cfgCache sync.Map
 }
 
 func (this *BulkReshuffle) Name() string {
@@ -97,7 +96,6 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 	}
 
 	runner.esConfig = elastic.GetConfig(cfg.Elasticsearch)
-	//runner.cfgCache = sync.Map{}
 
 	return &runner, nil
 }
@@ -138,7 +136,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 		var buff *bytebufferpool.ByteBuffer
 		var queueConfig *queue.QueueConfig
-		//var queueName string
 		indexAnalysis := this.config.IndexStatsAnalysis   //sync and async
 		actionAnalysis := this.config.ActionStatsAnalysis //sync and async
 		validateRequest := this.config.ValidateRequest
@@ -569,9 +566,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func batchUpdateJson(scannedByte []byte, action string, set, del map[string]string) (newBytes []byte, err error) {
-
-	//newBytes = make([]byte, len(scannedByte))
-	//copy(newBytes, scannedByte)
 
 	for k, _ := range del {
 		scannedByte = jsonparser.Delete(scannedByte, action, k)

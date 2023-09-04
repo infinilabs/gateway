@@ -16,7 +16,7 @@ import (
 	"sync"
 )
 
-type DiskEnqueueFilter struct {
+type EnqueueFilter struct {
 	Type                         string                 `config:"type"`
 	DepthThreshold               int64                  `config:"depth_threshold"`
 	Message                      string                 `config:"message"` //override the message in the request
@@ -32,11 +32,11 @@ type DiskEnqueueFilter struct {
 	qConfigs                     sync.Map // map[string]*queue.QueueConfig
 }
 
-func (filter *DiskEnqueueFilter) Name() string {
+func (filter *EnqueueFilter) Name() string {
 	return "queue"
 }
 
-func (filter *DiskEnqueueFilter) Filter(ctx *fasthttp.RequestCtx) {
+func (filter *EnqueueFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	qName := filter.QueueName
 	if filter.queueNameTemplate != nil {
@@ -109,7 +109,7 @@ func (filter *DiskEnqueueFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 }
 
-func (filter *DiskEnqueueFilter) getProducer(qConfig *queue.QueueConfig) queue.ProducerAPI {
+func (filter *EnqueueFilter) getProducer(qConfig *queue.QueueConfig) queue.ProducerAPI {
 	if qConfig.ID == "" {
 		panic(errors.Errorf("invalid queue config: %v", qConfig))
 	}
@@ -127,7 +127,7 @@ func (filter *DiskEnqueueFilter) getProducer(qConfig *queue.QueueConfig) queue.P
 	return handler
 }
 
-func (filter *DiskEnqueueFilter) getQueueConfig(qName string, ctx *fasthttp.RequestCtx) *queue.QueueConfig {
+func (filter *EnqueueFilter) getQueueConfig(qName string, ctx *fasthttp.RequestCtx) *queue.QueueConfig {
 
 	obj, ok := filter.qConfigs.Load(qName)
 	if ok {
@@ -171,12 +171,12 @@ func (filter *DiskEnqueueFilter) getQueueConfig(qName string, ctx *fasthttp.Requ
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("queue", NewDiskEnqueueFilter, &DiskEnqueueFilter{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("queue", NewDiskEnqueueFilter, &EnqueueFilter{})
 }
 
 func NewDiskEnqueueFilter(c *config.Config) (pipeline.Filter, error) {
 
-	runner := DiskEnqueueFilter{
+	runner := EnqueueFilter{
 		LastProducedMessageOffsetKey: "LAST_PRODUCED_MESSAGE_OFFSET",
 	}
 
