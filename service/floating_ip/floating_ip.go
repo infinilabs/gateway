@@ -20,7 +20,7 @@ import (
 	"infini.sh/framework/core/env"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
-	"infini.sh/framework/core/net"
+	"infini.sh/framework/core/wrapper/net"
 	"infini.sh/framework/core/task"
 	"infini.sh/framework/core/util"
 	"infini.sh/gateway/service/heartbeat"
