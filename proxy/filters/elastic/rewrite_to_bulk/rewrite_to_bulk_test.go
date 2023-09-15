@@ -6,7 +6,7 @@ package rewrite_to_bulk
 
 import (
 	"fmt"
-	"src/github.com/magiconair/properties/assert"
+	"github.com/magiconair/properties/assert"
 	"testing"
 )
 
