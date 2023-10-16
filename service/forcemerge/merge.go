@@ -63,7 +63,7 @@ var mergeConfig = MergeConfig{}
 func (module ForceMergeModule) Setup() {
 
 	ok, err := env.ParseConfig("force_merge", &mergeConfig)
-	if ok && err != nil {
+	if ok && err != nil  &&global.Env().SystemConfig.Configs.PanicOnConfigError{
 		panic(err)
 	}
 

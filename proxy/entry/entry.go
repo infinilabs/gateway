@@ -81,7 +81,7 @@ func (this *Entrypoint) Start() error {
 	}
 
 	if err != nil {
-		panic(errors.Errorf("error in listener: %s", err))
+		panic(errors.Errorf("error in listener(%v): %s", this.listenAddress,err))
 	}
 
 	this.router = r.New()

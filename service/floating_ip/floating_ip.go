@@ -75,7 +75,7 @@ var (
 
 func (module FloatingIPPlugin) Setup() {
 	ok, err := env.ParseConfig("floating_ip", &floatingIPConfig)
-	if ok && err != nil {
+	if ok && err != nil  &&global.Env().SystemConfig.Configs.PanicOnConfigError{
 		panic(err)
 	}
 

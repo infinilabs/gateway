@@ -200,9 +200,9 @@ func (module *GatewayModule) handleConfigureChange() {
 					}
 				}
 
-				if !module.DisableReusePortByDefault {
-					v.NetworkConfig.ReusePort = true
-				}
+				//if !module.DisableReusePortByDefault {
+				//	v.NetworkConfig.ReusePort = true
+				//}
 				e := entry.NewEntrypoint(v)
 				entryPoints[v.ID] = e
 			}
@@ -239,19 +239,19 @@ func (module *GatewayModule) loadEntryPoints() map[string]*entry.Entrypoint {
 	entryConfigs := []common.EntryConfig{}
 
 	ok, err := env.ParseConfig("gateway", &module)
-	if ok && err != nil {
+	if ok && err != nil  &&global.Env().SystemConfig.Configs.PanicOnConfigError{
 		panic(err)
 	}
 
 	ok, err = env.ParseConfig("entry", &entryConfigs)
-	if ok && err != nil {
+	if ok && err != nil  &&global.Env().SystemConfig.Configs.PanicOnConfigError{
 		panic(err)
 	}
 
 	log.Trace(util.ToJson(entryConfigs, true))
 
 	ok, err = env.ParseConfig("flow", &flowConfigs)
-	if ok && err != nil {
+	if ok && err != nil  &&global.Env().SystemConfig.Configs.PanicOnConfigError{
 		panic(err)
 	}
 
@@ -275,9 +275,9 @@ func (module *GatewayModule) loadEntryPoints() map[string]*entry.Entrypoint {
 	log.Trace("num of entry configs:", len(entryConfigs))
 	entryPoints := map[string]*entry.Entrypoint{}
 	for _, v := range entryConfigs {
-		if !module.DisableReusePortByDefault {
-			v.NetworkConfig.ReusePort = true
-		}
+		//if !module.DisableReusePortByDefault {
+		//	v.NetworkConfig.ReusePort = true
+		//}
 		e := entry.NewEntrypoint(v)
 		if v.ID == "" && v.Name != "" {
 			v.ID = v.Name
