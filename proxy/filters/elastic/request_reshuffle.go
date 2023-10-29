@@ -7,6 +7,7 @@ package elastic
 import (
 	"fmt"
 	"github.com/OneOfOne/xxhash"
+	"github.com/savsgio/gotils/bytes"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/errors"
@@ -14,7 +15,6 @@ import (
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
-	"github.com/savsgio/gotils/bytes"
 	"strings"
 	"sync"
 )
@@ -25,6 +25,7 @@ type ElasticsearchRequestReshuffle struct {
 	SkipBulk               bool     `config:"skip_bulk"`
 	PartitionSize          int      `config:"partition_size"`
 	QueuePrefix            string   `config:"queue_name_prefix"`
+	HashFactor             string   `config:"hash_factor"`
 	ContinueAfterReshuffle bool     `config:"continue_after_reshuffle"`
 	esConfig               *elastic.ElasticsearchConfig
 }
@@ -63,7 +64,7 @@ func (this *ElasticsearchRequestReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 		}
 
 		cfg := queue.AdvancedGetOrInitConfig("", qName, labels)
-		data:=ctx.Request.Encode()
+		data := ctx.Request.Encode()
 		err := queue.Push(cfg, bytes.Copy(data))
 		if err != nil {
 			panic(err)
@@ -112,10 +113,10 @@ func NewElasticsearchRequestReshuffleFilter(c *config.Config) (pipeline.Filter, 
 
 	runner.esConfig = elastic.GetConfig(runner.Elasticsearch)
 
-	if runner.PartitionSize>1{
+	if runner.PartitionSize > 1 {
 
-		for i:=0;i<runner.PartitionSize;i++{
-			qName:= fmt.Sprintf("%v##cluster##%v##%v", runner.QueuePrefix, runner.esConfig.ID, i)
+		for i := 0; i < runner.PartitionSize; i++ {
+			qName := fmt.Sprintf("%v##cluster##%v##%v", runner.QueuePrefix, runner.esConfig.ID, i)
 			labels := util.MapStr{}
 			labels["type"] = "request_reshuffle"
 			labels["elasticsearch"] = runner.esConfig.ID

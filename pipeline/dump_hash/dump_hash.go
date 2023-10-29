@@ -245,7 +245,7 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 					panic(err)
 				}
 
-				if data != nil && len(data) > 0 {
+				if len(data) > 0 {
 
 					scrollID, err := jsonparser.GetString(data, "_scroll_id")
 					if err != nil {
@@ -264,7 +264,10 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 					ctx.PutValue("dump_hash.scrolled_docs", atomic.LoadInt64(&totalDocsScrolled))
 
 					processedSize += docSize
-					log.Debugf("[%v] slice[%v]:%v,%v-%v", processor.config.Elasticsearch, slice, docSize, processedSize, totalHits)
+
+					if global.Env().IsDebug{
+						log.Debugf("[%v] slice[%v]:%v,%v-%v", processor.config.Elasticsearch, slice, docSize, processedSize, totalHits)
+					}
 
 					initScrollID = scrollID
 

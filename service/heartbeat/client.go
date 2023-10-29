@@ -47,15 +47,11 @@ func (client *Client) Start(host string, port int, dialTimeoutInMs, rwTimeoutInM
 	coo, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%v", host, port), time.Duration(dialTimeoutInMs)*time.Millisecond)
 	if err != nil {
 		onDisconnect()
+		return err
 	}
 
 	conn, ok := coo.(*net.TCPConn)
 	if !ok {
-		onDisconnect()
-		return err
-	}
-
-	if err != nil {
 		onDisconnect()
 		return err
 	}

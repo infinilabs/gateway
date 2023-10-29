@@ -1,10 +1,13 @@
+allow_multi_instance: true
+#for more config examples, please visit: https://github.com/infinilabs/testing
+
 #the env section used for setup default settings, it can be overwritten by system environments.
 #eg: PROD_ES_ENDPOINT=http://192.168.3.185:9200 LOGGING_ES_ENDPOINT=http://192.168.3.185:9201  ./bin/gateway
 env: #use $[[env.LOGGING_ES_ENDPOINT]] in config instead
-  LOGGING_ES_ENDPOINT: https://localhost:9200
+  LOGGING_ES_ENDPOINT: http://localhost:9200/
   LOGGING_ES_USER: admin
   LOGGING_ES_PASS: admin
-  PROD_ES_ENDPOINT: https://localhost:9200
+  PROD_ES_ENDPOINT: http://localhost:9200/
   PROD_ES_USER: admin
   PROD_ES_PASS: admin
   GW_BINDING: "0.0.0.0:8000"
@@ -15,6 +18,19 @@ path.logs: log
 path.configs: config # directory of additional gateway configurations
 
 configs.auto_reload: false # set true to auto reload gateway configurations
+
+## modules can be disabled by setting enabled to false
+#modules:
+#  - name: pipeline
+#    enabled: false
+#  - name: elasticsearch
+#    enabled: false
+#plugins:
+#  - name: gateway
+#    enabled: false
+#  - name: metrics
+#    enabled: false
+
 
 gateway:
   # By default, gateway will always set entry.network.reuse_port as true.
@@ -337,6 +353,7 @@ disk_queue:
 
 ## badger kv storage configuration
 badger:
+  enabled: true
   single_bucket_mode: true
   path: '' # defaults to {path.data}/gateway/node/{nodeID}/badger/
   memory_mode: false # don't persist data to disk

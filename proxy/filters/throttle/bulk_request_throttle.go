@@ -74,7 +74,7 @@ func (this *ElasticsearchBulkRequestThrottle) Filter(ctx *fasthttp.RequestCtx) {
 			} else {
 				indexPayloadStats[index] = v + len(payloadBytes)
 			}
-		})
+		},nil)
 
 		if global.Env().IsDebug {
 			log.Debug(indexOpStats)

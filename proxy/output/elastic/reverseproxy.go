@@ -170,7 +170,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 			}
 
 			host := y.GetHttpPublishHost()
-			if elastic.IsHostAvailable(host) {
+			if host != "" && elastic.IsHostAvailable(host) {
 				hosts = append(hosts, host)
 			}
 		}

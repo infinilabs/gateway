@@ -42,7 +42,7 @@ type ReplicationCorrectionGroup struct {
 
 	config              *Config
 	PreStageQueueName   string `config:"pre_stage_queue"`
-	FirstStageQueueName string `config:"first_stage_queue"`
+	//FirstStageQueueName string `config:"first_stage_queue"`
 	FinalStageQueueName string `config:"final_stage_queue"`
 
 	firstStageRecords sync.Map
@@ -85,7 +85,7 @@ func (runner *ReplicationCorrectionProcessor) newGroup(id int) *ReplicationCorre
 	group := ReplicationCorrectionGroup{
 		partitionID:         id,
 		PreStageQueueName:   "primary_write_ahead_log" + suffix,
-		FirstStageQueueName: "primary_first_commit_log" + suffix,
+		//FirstStageQueueName: "primary_first_commit_log" + suffix,
 		FinalStageQueueName: "primary_final_commit_log" + suffix,
 	}
 	group.config = runner.config
@@ -291,24 +291,24 @@ func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *s
 
 	wg := sync.WaitGroup{}
 
-	wg.Add(1)
-	firstCommitqConfig, firstCommitConsumerConfig, firstCommitLogConsumer := processor.getConsumer(processor.FirstStageQueueName)
-	defer queue.ReleaseConsumer(firstCommitqConfig, firstCommitConsumerConfig, firstCommitLogConsumer)
-	//check first stage commit
-	go processor.fetchMessages(ctx, "first",firstCommitLogConsumer, func(consumer queue.ConsumerAPI, messages []queue.Message) bool {
-		for _, message := range messages {
-
-			if processor.commitable(message) {
-				processor.commitableMessageOffsetInFirstStage = message.NextOffset
-			}
-
-			v := string(message.Data)
-
-			id, offset,timestamp := parseIDAndOffset(v)
-			processor.firstStageRecords.Store(id, MessageRecord{MessageOffset:message.NextOffset,RecordOffset: offset,RecordTimestamp: timestamp})
-		}
-		return true
-	}, &wg)
+	//wg.Add(1)
+	//firstCommitqConfig, firstCommitConsumerConfig, firstCommitLogConsumer := processor.getConsumer(processor.FirstStageQueueName)
+	//defer queue.ReleaseConsumer(firstCommitqConfig, firstCommitConsumerConfig, firstCommitLogConsumer)
+	////check first stage commit
+	//go processor.fetchMessages(ctx, "first",firstCommitLogConsumer, func(consumer queue.ConsumerAPI, messages []queue.Message) bool {
+	//	for _, message := range messages {
+	//
+	//		if processor.commitable(message) {
+	//			processor.commitableMessageOffsetInFirstStage = message.NextOffset
+	//		}
+	//
+	//		v := string(message.Data)
+	//
+	//		id, offset,timestamp := parseIDAndOffset(v)
+	//		processor.firstStageRecords.Store(id, MessageRecord{MessageOffset:message.NextOffset,RecordOffset: offset,RecordTimestamp: timestamp})
+	//	}
+	//	return true
+	//}, &wg)
 
 	wg.Add(1)
 	finalCommitqConfig, finalCommitConsumerConfig, finalCommitLogConsumer := processor.getConsumer(processor.FinalStageQueueName)
@@ -432,7 +432,7 @@ func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *s
 				}
 
 				if retry_times > processor.config.SafetyCommitRetryTimes {
-					stats.Increment("replication_crc", "retry_times_exceed_10")
+					stats.Increment("replication_crc", fmt.Sprintf("retry_times_exceed_%v",processor.config.SafetyCommitRetryTimes))
 					hit = true
 				}
 
@@ -515,8 +515,8 @@ func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *s
 
 		//first
 		var lastFirstCommitAbleMessageRecord MessageRecord
-		var lastFirstCommit time.Time
-		var needCommitFirstStage bool
+		//var lastFirstCommit time.Time
+		//var needCommitFirstStage bool
 
 		//final
 		var lastFinalCommitAbleMessageRecord MessageRecord
@@ -571,22 +571,22 @@ func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *s
 						x.recordTime=msgTime
 						lastFirstCommitAbleMessageRecord=x
 						processor.commitableMessageOffsetInFirstStage=x.MessageOffset
-						needCommitFirstStage=true
+						//needCommitFirstStage=true
 						log.Debug("update first commit:",x.MessageOffset)
 					}
 				}
 
 
-				if needCommitFirstStage{
-					if time.Since(lastFirstCommit)>time.Second*10{
-						log.Debug("committing first offset:",processor.commitableMessageOffsetInFirstStage)
-						firstCommitLogConsumer.CommitOffset(processor.commitableMessageOffsetInFirstStage)
-						lastFirstCommit=time.Now()
-						needCommitFirstStage=false
-						timegap1:=msgTime- lastFirstCommitAbleMessageRecord.recordTime
-						log.Trace(x.RecordTimestamp,",",x.RecordOffset,",time_gap: ",timegap,"s, ",timegap1,"s, record:",msgTime," vs latest:",processor.latestRecordTimestampInPrepareStage,", updating to commit:",x.MessageOffset,lastFirstCommitAbleMessageRecord,",",processor.config.SafetyCommitIntervalInSeconds)
-					}
-				}
+				//if needCommitFirstStage{
+				//	if time.Since(lastFirstCommit)>time.Second*10{
+				//		log.Debug("committing first offset:",processor.commitableMessageOffsetInFirstStage)
+				//		firstCommitLogConsumer.CommitOffset(processor.commitableMessageOffsetInFirstStage)
+				//		lastFirstCommit=time.Now()
+				//		needCommitFirstStage=false
+				//		timegap1:=msgTime- lastFirstCommitAbleMessageRecord.recordTime
+				//		log.Trace(x.RecordTimestamp,",",x.RecordOffset,",time_gap: ",timegap,"s, ",timegap1,"s, record:",msgTime," vs latest:",processor.latestRecordTimestampInPrepareStage,", updating to commit:",x.MessageOffset,lastFirstCommitAbleMessageRecord,",",processor.config.SafetyCommitIntervalInSeconds)
+				//	}
+				//}
 				return true
 			})
 
@@ -652,23 +652,23 @@ func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *s
 	//cleanup
 	if !ctx.IsCanceled() && !global.ShuttingDown() && time.Since(processor.lastMessageFetchedTimeInPrepareStage) > time.Second*60 && time.Since(processor.lastMessageFetchedTimeInAnyStage) > time.Second*60 {
 
-		if processor.commitableMessageOffsetInFirstStage.Position > 0 {
-			firstCommitLogConsumer.CommitOffset(processor.commitableMessageOffsetInFirstStage)
-		}
+		//if processor.commitableMessageOffsetInFirstStage.Position > 0 {
+		//	firstCommitLogConsumer.CommitOffset(processor.commitableMessageOffsetInFirstStage)
+		//}
 
 		if processor.commitableMessageOffsetInFinalStage.Position > 0 {
 			finalCommitLogConsumer.CommitOffset(processor.commitableMessageOffsetInFinalStage)
 		}
 	}
 
-	log.Infof("#%v finished correlation, prepare:%v, finished:%v, unfinished:%v, first_map:%v, final_map:%v, prepare_idle:%v",
-		processor.partitionID,
-		processor.totalMessageProcessedInPrepareStage,
-		processor.totalFinishedMessage,
-		processor.totalUnFinishedMessage,
-		util.GetSyncMapSize(&processor.firstStageRecords),
-		util.GetSyncMapSize(&processor.finalStageRecords),
-		time.Since(processor.lastMessageFetchedTimeInPrepareStage))
+	//log.Infof("#%v finished correlation, prepare:%v, finished:%v, unfinished:%v, first_map:%v, final_map:%v, prepare_idle:%v",
+	//	processor.partitionID,
+	//	processor.totalMessageProcessedInPrepareStage,
+	//	processor.totalFinishedMessage,
+	//	processor.totalUnFinishedMessage,
+	//	util.GetSyncMapSize(&processor.firstStageRecords),
+	//	util.GetSyncMapSize(&processor.finalStageRecords),
+	//	time.Since(processor.lastMessageFetchedTimeInPrepareStage))
 
 	return nil
 }

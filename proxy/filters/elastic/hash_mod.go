@@ -6,6 +6,7 @@ package elastic
 import (
 	"fmt"
 	"github.com/OneOfOne/xxhash"
+	log "github.com/cihub/seelog"
 	"github.com/valyala/fasttemplate"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
@@ -14,7 +15,6 @@ import (
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
 	"io"
-	log "github.com/cihub/seelog"
 	"strings"
 )
 
@@ -64,41 +64,46 @@ func (filter *HashModFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 	str := filter.Source
 
-	if filter.template != nil {
-		str = filter.template.ExecuteFuncString(func(w io.Writer, tag string) (int, error) {
-			variable, err := ctx.GetValue(tag)
-			if err==nil{
-				return w.Write([]byte(util.ToString(variable)))
+	var idStr string
+	if filter.PartitionSize == 1 {
+		idStr = "0"
+	} else {
+		if filter.template != nil {
+			str = filter.template.ExecuteFuncString(func(w io.Writer, tag string) (int, error) {
+				variable, err := ctx.GetValue(tag)
+				if err == nil {
+					return w.Write([]byte(util.ToString(variable)))
+				}
+				return -1, err
+			})
+		}
+
+		if str != "" {
+
+			xxHash := xxHashPool.Get().(*xxhash.XXHash32)
+			xxHash.Reset()
+			xxHash.WriteString(str)
+			partitionID := int(xxHash.Sum32()) % filter.PartitionSize
+
+			idStr = fmt.Sprintf("%d", partitionID)
+			xxHashPool.Put(xxHash)
+
+			if global.Env().IsDebug {
+				log.Debug("hash_mod filter: ", filter.Name(), ", input:", str, ", partition_id: ", idStr, ", partition_size: ", filter.partitionSizeStr)
 			}
-			return -1, err
-		})
+		}
 	}
 
-	if str != "" {
+	ctx.Set(param.ParaKey(filter.TargetContextKey), idStr)
 
-		xxHash := xxHashPool.Get().(*xxhash.XXHash32)
-		xxHash.Reset()
-		xxHash.WriteString(str)
-		partitionID := int(xxHash.Sum32()) % filter.PartitionSize
+	if filter.AddToRequestHeader {
+		ctx.Request.Header.Set("X-Partition-ID", idStr)
+		ctx.Request.Header.Set("X-Partition-Size", filter.partitionSizeStr)
+	}
 
-		idStr := fmt.Sprintf("%d", partitionID)
-		xxHashPool.Put(xxHash)
-		ctx.Set(param.ParaKey(filter.TargetContextKey), idStr)
-
-		if filter.AddToRequestHeader {
-			ctx.Request.Header.Set("X-Partition-ID", idStr)
-			ctx.Request.Header.Set("X-Partition-Size", filter.partitionSizeStr)
-		}
-
-		if filter.AddToResponseHeader {
-			ctx.Response.Header.Set("X-Partition-ID", idStr)
-			ctx.Response.Header.Set("X-Partition-Size", filter.partitionSizeStr)
-		}
-
-		if global.Env().IsDebug {
-			log.Debug("hash_mod filter: ", filter.Name(), ", input:", str, ", partition_id: ", idStr, ", partition_size: ", filter.partitionSizeStr)
-		}
-
+	if filter.AddToResponseHeader {
+		ctx.Response.Header.Set("X-Partition-ID", idStr)
+		ctx.Response.Header.Set("X-Partition-Size", filter.partitionSizeStr)
 	}
 
 }

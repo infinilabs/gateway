@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"infini.sh/framework/core/param"
+	"infini.sh/framework/core/stats"
 	"infini.sh/framework/lib/bytebufferpool"
 	"sync"
 	"time"
@@ -18,7 +19,11 @@ import (
 )
 
 type Config struct {
-	MessageField  param.ParaKey `config:"message_field"`
+	QueueField   param.ParaKey `config:"queue_name_field"`
+	MessageField param.ParaKey `config:"message_field"`
+
+	MessageIncludeResponse         bool   `config:"message_include_response"`
+	KeepTags                       bool   `config:"keep_tags"`
 	FlowName                       string `config:"flow"`
 	FlowMaxRunningTimeoutInSeconds int    `config:"flow_max_running_timeout_in_second"`
 	CommitOnTag                    string `config:"commit_on_tag"`
@@ -61,6 +66,7 @@ func init() {
 
 func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
+		QueueField:                     "queue_name",
 		MessageField:                   "messages",
 		CommitOnTag:                    "",
 		IdleWaitTimeoutInSeconds:       1,
@@ -93,6 +99,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 	}
 
 	//get message from queue
+	queueName := ctx.Get(processor.config.QueueField)
 	obj := ctx.Get(processor.config.MessageField)
 	if obj != nil {
 		flowProcessor := common.GetFlowProcess(processor.config.FlowName)
@@ -112,12 +119,20 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 		var err error
 		for _, pop := range messages {
 
-			if global.ShuttingDown(){
+			stats.Increment("flow_replay", "message_received")
+
+			if global.ShuttingDown() {
 				return errors.New("shutting down")
 			}
 
-			ctx := acquireCtx()
-			err = ctx.Request.Decode(pop.Data)
+			filterCtx := acquireCtx()
+
+			if processor.config.MessageIncludeResponse {
+				err = filterCtx.Decode(pop.Data)
+			} else {
+				err = filterCtx.Request.Decode(pop.Data)
+			}
+
 			if err != nil {
 				log.Error(err)
 				panic(err)
@@ -127,34 +142,50 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 				log.Tracef("start forward request to flow:%v", processor.config.FlowName)
 			}
 
-			ctx.SetFlowID(processor.config.FlowName)
+			filterCtx.SetFlowID(processor.config.FlowName)
 
-			flowProcessor(ctx)
+			filterCtx.Set("MESSAGE_QUEUE_NAME", queueName)
+			filterCtx.Set("MESSAGE_OFFSET", pop.Offset)
+			filterCtx.Set("NEXT_MESSAGE_OFFSET", pop.NextOffset)
+
+			flowProcessor(filterCtx)
+
+			if processor.config.KeepTags {
+				tags, ok := filterCtx.GetTags()
+				if ok{
+					ts:=[]string{}
+					for _,v:=range tags{
+						ts=append(ts,v)
+					}
+					ctx.AddTags(ts)
+				}
+			}
 
 			if global.Env().IsDebug {
 				log.Tracef("end forward request to flow:%v", processor.config.FlowName)
 			}
 
 			if processor.config.CommitOnTag != "" {
-				tags, ok := ctx.GetTags()
+				tags, ok := filterCtx.GetTags()
 				if ok {
 					_, ok = tags[processor.config.CommitOnTag]
 				}
 
-				if !ok{
-					log.Error("commit tag was not found")
+				if !ok {
 					return errors.New("commit tag was not found")
 				}
 
 				if !ok {
-					releaseCtx(ctx)
+					releaseCtx(filterCtx)
 					return nil
 				}
+				stats.Increment("flow_replay", "message_succeed")
 			}
-			releaseCtx(ctx)
+			releaseCtx(filterCtx)
 		}
 
-		log.Infof("replay %v messages flow:[%v], elapsed:%v", len(messages), processor.config.FlowName, time.Since(start1))
+
+		log.Debugf("replay %v messages flow:[%v], elapsed:%v", len(messages), processor.config.FlowName, time.Since(start1))
 
 	}
 

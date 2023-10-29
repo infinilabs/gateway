@@ -76,6 +76,7 @@ func New(c *config.Config) (pipeline.Filter, error) {
 		TLSInsecureSkipVerify: true,
 		ReadBufferSize:        4096 * 4,
 		WriteBufferSize:       4096 * 4,
+		CheckClusterHealthWhenNotAvailable: true,
 		//maxt wait timeout for free connection
 		MaxConnWaitTimeout: util.GetDurationOrDefault("30s", 30*time.Second),
 

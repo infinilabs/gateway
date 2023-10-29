@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"bytes"
 	"fmt"
 	log "github.com/cihub/seelog"
 	"github.com/valyala/fasttemplate"
@@ -17,12 +18,15 @@ import (
 )
 
 type EnqueueFilter struct {
-	Type                         string                 `config:"type"`
 	DepthThreshold               int64                  `config:"depth_threshold"`
 	Message                      string                 `config:"message"` //override the message in the request
+
+	Type                         string                 `config:"type"`
 	QueueName                    string                 `config:"queue_name"`
 	Labels                       map[string]interface{} `config:"labels,omitempty"`
+
 	SaveMessageOffset            bool                   `config:"save_last_produced_message_offset,omitempty"`
+	IncludeResponse              bool                   `config:"include_response,omitempty"`
 	LastProducedMessageOffsetKey string                 `config:"last_produced_message_offset_key,omitempty"`
 	messageBytes                 []byte
 	queueNameTemplate            *fasttemplate.Template
@@ -83,7 +87,16 @@ func (filter *EnqueueFilter) Filter(ctx *fasthttp.RequestCtx) {
 			data = filter.messageBytes
 		}
 	} else {
-		data = ctx.Request.Encode()
+		if filter.IncludeResponse{
+			buffer:=bytes.Buffer{}
+			err:= ctx.Encode(&buffer)
+			if err!=nil{
+				panic(err)
+			}
+			data=buffer.Bytes()
+		}else{
+			data = ctx.Request.Encode()
+		}
 	}
 
 	var err error

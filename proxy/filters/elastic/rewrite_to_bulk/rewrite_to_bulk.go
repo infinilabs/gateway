@@ -55,6 +55,8 @@ func (filter *RewriteToBulk) Filter(ctx *fasthttp.RequestCtx) {
 
 		routing:=ctx.PhantomURI().QueryArgs().Peek("routing")
 		pipeline:=ctx.PhantomURI().QueryArgs().Peek("pipeline")
+		versionType:=ctx.PhantomURI().QueryArgs().Peek("version_type")
+		version:=ctx.PhantomURI().QueryArgs().Peek("version")
 
 		action:="index"
 		if typePath=="_update"{
@@ -79,11 +81,12 @@ func (filter *RewriteToBulk) Filter(ctx *fasthttp.RequestCtx) {
 
 		//url
 		uri := ctx.Request.CloneURI()
-		uri.SetPath(fmt.Sprintf("/%s/_bulk", indexPath))
+		uri.SetPath("/_bulk")
 		ctx.Request.SetURI(uri)
 		fasthttp.ReleaseURI(uri)
 
 		docBuf := bytebufferpool.Get("rewrite_to_bulk")
+		docBuf.Reset()
 		defer bytebufferpool.Put("rewrite_to_bulk", docBuf)
 
 		//write index part
@@ -103,6 +106,14 @@ func (filter *RewriteToBulk) Filter(ctx *fasthttp.RequestCtx) {
 
 		if routing != nil {
 			docBuf.WriteString(fmt.Sprintf(", \"routing\" : \"%s\" ", string(routing)))
+		}
+
+		if versionType != nil {
+			docBuf.WriteString(fmt.Sprintf(", \"version_type\" : \"%s\" ", string(versionType)))
+		}
+
+		if version != nil {
+			docBuf.WriteString(fmt.Sprintf(", \"version\" : \"%s\" ", string(version)))
 		}
 
 		if pipeline != nil {

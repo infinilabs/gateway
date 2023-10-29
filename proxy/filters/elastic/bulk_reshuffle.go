@@ -449,7 +449,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 					}
 				}
 			}
-		})
+		},nil)
 
 		if err != nil {
 			if global.Env().IsDebug {
