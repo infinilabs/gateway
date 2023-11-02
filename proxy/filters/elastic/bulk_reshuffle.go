@@ -229,11 +229,12 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				}
 
 				//stats
-				v, ok := indexStatsData[index]
+				indexName := elastic.RemoveDotFromIndexName(index, "#")
+				v, ok := indexStatsData[indexName]
 				if !ok {
-					indexStatsData[index] = 1
+					indexStatsData[indexName] = 1
 				} else {
-					indexStatsData[index] = v + 1
+					indexStatsData[indexName] = v + 1
 				}
 			}
 
