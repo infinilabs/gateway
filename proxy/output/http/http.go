@@ -5,8 +5,8 @@
 package http
 
 import (
-	"crypto/tls"
 	"fmt"
+	"infini.sh/framework/core/api"
 	"math/rand"
 	"sync"
 	"time"
@@ -47,6 +47,8 @@ type HTTPFilter struct {
 	ReadBufferSize        int           `config:"read_buffer_size"`
 	WriteBufferSize       int           `config:"write_buffer_size"`
 	TLSInsecureSkipVerify bool          `config:"tls_insecure_skip_verify"`
+
+	TLSConfig *config.TLSConfig `config:"tls"` //client tls config
 
 	MaxRedirectsCount int  `config:"max_redirects_count"`
 	FollowRedirects   bool `config:"follow_redirects"`
@@ -178,7 +180,6 @@ func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err er
 		ctx.Request.SetURI(clonedURI)
 		ctx.Request.SetHost(orignalHost)
 
-
 		//merge response
 		ctx.Response.CopyMergeHeader(res)
 
@@ -256,12 +257,12 @@ func NewHTTPFilter(c *config.Config) (pipeline.Filter, error) {
 			ReadBufferSize:                runner.ReadBufferSize,
 			WriteBufferSize:               runner.WriteBufferSize,
 			DialDualStack:                 true,
-			TLSConfig: &tls.Config{
-				InsecureSkipVerify: runner.TLSInsecureSkipVerify,
-			},
+			TLSConfig:                     api.GetFastHTTPClientTLSConfig(runner.TLSConfig),
 		}
+
 		runner.clients.Store(host, c)
 	}
 
 	return &runner, nil
 }
+

@@ -238,8 +238,10 @@ func (this *Entrypoint) Start() error {
 				tls.X25519, // Go 1.8 only
 			},
 			PreferServerCipherSuites: true,
-			InsecureSkipVerify:       true,
+			InsecureSkipVerify:       this.config.TLSConfig.TLSInsecureSkipVerify,
 			SessionTicketsDisabled:   false,
+			//		ClientAuth:   tls.RequireAndVerifyClientCert,
+			//		ClientCAs:    caCertPool,
 			ClientSessionCache:       tls.NewLRUClientSessionCache(this.config.TLSConfig.ClientSessionCacheSize),
 			CipherSuites: []uint16{
 				//tls.TLS_AES_128_GCM_SHA256,
@@ -254,6 +256,11 @@ func (this *Entrypoint) Start() error {
 				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 			},
+			ServerName: this.config.TLSConfig.DefaultDomain,
+		}
+
+		if cfg.ServerName == "" {
+			cfg.ServerName = "localhost"
 		}
 
 		var ca, cert, key string
