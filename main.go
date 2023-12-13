@@ -6,7 +6,6 @@ package main
 
 import (
 	_ "expvar"
-	log "github.com/cihub/seelog"
 	"infini.sh/framework"
 	"infini.sh/framework/core/module"
 	"infini.sh/framework/core/util"
@@ -18,11 +17,9 @@ import (
 	queue2 "infini.sh/framework/modules/queue/disk_queue"
 	"infini.sh/framework/modules/redis"
 	"infini.sh/framework/modules/s3"
-	"infini.sh/framework/modules/security"
 	stats2 "infini.sh/framework/modules/stats"
 	"infini.sh/framework/modules/task"
 	_ "infini.sh/framework/plugins"
-	"infini.sh/framework/plugins/managed/client"
 	stats "infini.sh/framework/plugins/stats_statsd"
 	"infini.sh/gateway/config"
 	_ "infini.sh/gateway/pipeline"
@@ -39,7 +36,6 @@ func setup() {
 	module.RegisterSystemModule(&redis.RedisModule{})
 	module.RegisterSystemModule(&elastic.ElasticModule{})
 	module.RegisterSystemModule(&queue.Module{})
-	module.RegisterSystemModule(&security.Module{})
 	module.RegisterSystemModule(&task.TaskModule{})
 	module.RegisterSystemModule(&api.APIModule{})
 	module.RegisterModuleWithPriority(&pipeline.PipeModule{},100)
@@ -52,17 +48,6 @@ func setup() {
 
 func start() {
 	module.Start()
-
-	err:= client.ConnectToManager()
-	if err!=nil{
-		log.Warn(err)
-	}
-
-	err= client.ListenConfigChanges()
-	if err!=nil{
-		log.Warn(err)
-	}
-
 }
 
 func main() {

@@ -1,15 +1,16 @@
 /* ©INFINI, All Rights Reserved.
  * mail: contact#infini.ltd */
 
-package security
+package native
 
 import (
 	"bytes"
 	"fmt"
-	"infini.sh/framework/core/util"
 	"github.com/buger/jsonparser"
+	"infini.sh/cloud/core/security"
+	"infini.sh/cloud/modules/system/security/realm"
+	"infini.sh/framework/core/util"
 	"infini.sh/framework/modules/elastic/adapter"
-	"infini.sh/framework/modules/security/realm"
 	"strings"
 	"sync"
 	"time"
@@ -17,11 +18,10 @@ import (
 	log "github.com/cihub/seelog"
 	"github.com/dgraph-io/ristretto"
 
-	"infini.sh/framework/core/api/rbac"
+	"infini.sh/cloud/modules/system/security/realm/authc/native"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/framework/modules/security/realm/authc/native"
 )
 
 type SecurityFilter struct {
@@ -70,7 +70,7 @@ func (filter *SecurityFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 
 	req := ctx.Request
-	permission, params, matched := rbac.SearchAPIPermission("elasticsearch", string(req.Header.Method()), string(req.PhantomURI().Path()))
+	permission, params, matched := security.SearchAPIPermission("elasticsearch", string(req.Header.Method()), string(req.PhantomURI().Path()))
 	if matched && permission != "" {
 		tryRefreshRolesAndPermission()
 		rolePermission := getRolePermissions(currentRoles)
@@ -79,13 +79,13 @@ func (filter *SecurityFilter) Filter(ctx *fasthttp.RequestCtx) {
 
 			indices := strings.Split(indexName, ",")
 			for _, index := range indices {
-				indexReq := rbac.IndexRequest{
+				indexReq := security.IndexRequest{
 					Cluster:   filter.clusterUUID,
 					Index:     index,
 					Privilege: []string{permission},
 				}
 
-				err := rbac.ValidateIndex(indexReq, rolePermission)
+				err := security.ValidateIndex(indexReq, rolePermission)
 				if err != nil {
 					log.Debugf("validate index [%s] privilege error: %v", index, err)
 					ctx.Error(AccessDeniedMessage, 401)
@@ -94,12 +94,12 @@ func (filter *SecurityFilter) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 		} else {
-			clusterReq := rbac.ClusterRequest{
+			clusterReq := security.ClusterRequest{
 				Cluster:   filter.clusterUUID,
 				Privilege: []string{permission},
 			}
 			if permission == "cluster.search" {
-				hasAll, indices :=  rbac.GetRoleIndex(currentRoles, filter.clusterUUID)
+				hasAll, indices :=  security.GetRoleIndex(currentRoles, filter.clusterUUID)
 				if !hasAll && len(indices) == 0 {
 					log.Debugf("empty index privilege")
 					ctx.Error(AccessDeniedMessage, 401)
@@ -125,7 +125,7 @@ func (filter *SecurityFilter) Filter(ctx *fasthttp.RequestCtx) {
 					ctx.Request.SetBody(body)
 				}
 			}
-			err := rbac.ValidateCluster(clusterReq, rolePermission)
+			err := security.ValidateCluster(clusterReq, rolePermission)
 			if err != nil {
 				log.Debugf("validate cluster privilege error: %v", err)
 				ctx.Error(AccessDeniedMessage, 401)
@@ -164,9 +164,9 @@ func NewSecurityFilter(c *config.Config) (pipeline.Filter, error) {
 	return &runner, err
 }
 
-func getUser(username string, password string) (*rbac.User, error) {
+func getUser(username string, password string) (*security.User, error) {
 	if v, ok := users.Get(username); ok {
-		if su, ok := v.(*rbac.User); ok {
+		if su, ok := v.(*security.User); ok {
 			return su, nil
 		}
 	}
@@ -199,10 +199,10 @@ func tryRefreshRolesAndPermission(){
 	lastRefreshTime = time.Now()
 }
 
-func getRolePermissions(roleNames []string) rbac.RolePermission {
-	rolePermission := rbac.CombineUserRoles(roleNames)
+func getRolePermissions(roleNames []string) security.RolePermission {
+	rolePermission := security.CombineUserRoles(roleNames)
 	//copy privilege used for map cluster_uuid privilege
-	var newClusterPrivilege = rbac.ElasticsearchAPIPrivilege{}
+	var newClusterPrivilege = security.ElasticsearchAPIPrivilege{}
 	for clusterID, privileges := range rolePermission.ElasticPrivilege.Cluster {
 		newClusterPrivilege[clusterID] = privileges
 		clusterUUID, err := adapter.GetClusterUUID(clusterID)
@@ -213,7 +213,7 @@ func getRolePermissions(roleNames []string) rbac.RolePermission {
 		newClusterPrivilege[clusterUUID] = privileges
 	}
 	rolePermission.ElasticPrivilege.Cluster = newClusterPrivilege
-	newIndexPrivilege := map[string]rbac.ElasticsearchAPIPrivilege{}
+	newIndexPrivilege := map[string]security.ElasticsearchAPIPrivilege{}
 	for clusterID, privileges := range rolePermission.ElasticPrivilege.Index {
 		newIndexPrivilege[clusterID] = privileges
 		clusterUUID, err := adapter.GetClusterUUID(clusterID)
