@@ -517,6 +517,9 @@ START:
 	}
 
 	if err != nil {
+
+		retryAble:=false
+
 		if util.ContainsAnyInArray(err.Error(), failureMessage) {
 			stats.Increment("reverse_proxy", "backend_failure")
 			//record translog, update failure ticket
@@ -531,6 +534,12 @@ START:
 			}
 			//server failure flow
 		} else if res.StatusCode() == 429 {
+			if p.proxyConfig.RetryOnBackendBusy{
+				retryAble=true
+			}
+		}
+
+		if retryAble{
 			retry++
 			if p.proxyConfig.MaxRetryTimes > 0 && retry < p.proxyConfig.MaxRetryTimes {
 				if p.proxyConfig.RetryDelayInMs > 0 {
@@ -541,7 +550,7 @@ START:
 			} else {
 				log.Debugf("reached max retries, failed to proxy request: %v, %v", err, string(myctx.Request.Header.RequestURI()))
 			}
-		} else {
+		}else {
 			if rate.GetRateLimiterPerSecond(metadata.Config.ID, host+"backend_failure_on_error", 1).Allow() {
 				log.Warnf("failed to proxy request: %v to host %v, %v, retried: #%v, error:%v", string(myctx.Request.Header.RequestURI()), host, retry, retry, err)
 			}

@@ -6,10 +6,12 @@ type ProxyConfig struct {
 	Elasticsearch string `config:"elasticsearch"`
 	Balancer      string `config:"balancer"`
 
-	MaxConnection       int `config:"max_connection_per_node"`
-	MaxResponseBodySize int `config:"max_response_size"`
-	MaxRetryTimes       int `config:"max_retry_times"`
-	RetryDelayInMs      int `config:"retry_delay_in_ms"`
+	MaxConnection         int  `config:"max_connection_per_node"`
+	MaxResponseBodySize   int  `config:"max_response_size"`
+	MaxRetryTimes         int  `config:"max_retry_times"`
+	RetryOnBackendFailure bool `config:"retry_on_backend_failure"`
+	RetryOnBackendBusy    bool `config:"retry_on_backend_busy"`
+	RetryDelayInMs        int  `config:"retry_delay_in_ms"`
 
 	MaxConnWaitTimeout    time.Duration `config:"max_conn_wait_timeout"`
 	MaxIdleConnDuration   time.Duration `config:"max_idle_conn_duration"`
