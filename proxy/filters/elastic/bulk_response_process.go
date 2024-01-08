@@ -21,12 +21,13 @@ import (
 )
 
 type BulkResponseProcess struct {
-	id          string
-	config      *Config
-	retryFlow   *common.FilterFlow
-	successFlow *common.FilterFlow
-	failureFlow *common.FilterFlow
-	invalidFlow *common.FilterFlow
+	id             string
+	config         *Config
+	retryFlow      *common.FilterFlow
+	successFlow    *common.FilterFlow
+	failureFlow    *common.FilterFlow
+	invalidFlow    *common.FilterFlow
+	bulkBufferPool *elastic.BulkBufferPool
 }
 
 func (this *BulkResponseProcess) Name() string {
@@ -43,17 +44,17 @@ func (this *BulkResponseProcess) Filter(ctx *fasthttp.RequestCtx) {
 		var resbody = ctx.Response.GetRawBody()
 		requestBytes := ctx.Request.GetRawBody()
 
-		successItems := elastic.AcquireBulkBuffer()
-		nonRetryableItems := elastic.AcquireBulkBuffer()
-		retryableItems := elastic.AcquireBulkBuffer()
+		successItems := this.bulkBufferPool.AcquireBulkBuffer()
+		nonRetryableItems := this.bulkBufferPool.AcquireBulkBuffer()
+		retryableItems := this.bulkBufferPool.AcquireBulkBuffer()
 
 		var containError bool
 		var bulkResults *elastic.BulkResult
 
 		defer func() {
-			elastic.ReturnBulkBuffer(successItems)
-			elastic.ReturnBulkBuffer(nonRetryableItems)
-			elastic.ReturnBulkBuffer(retryableItems)
+			this.bulkBufferPool.ReturnBulkBuffer(successItems)
+			this.bulkBufferPool.ReturnBulkBuffer(nonRetryableItems)
+			this.bulkBufferPool.ReturnBulkBuffer(retryableItems)
 
 		}()
 
@@ -295,6 +296,8 @@ func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 		config: &cfg}
 
 	runner.id = util.GetUUID()
+
+	runner.bulkBufferPool=elastic.NewBulkBufferPool("bulk_response_process",1024*1024*1024,100000)
 
 	if runner.config.RetryFlow != "" && runner.config.PartialFailureRetry {
 		flow := common.MustGetFlow(runner.config.RetryFlow)

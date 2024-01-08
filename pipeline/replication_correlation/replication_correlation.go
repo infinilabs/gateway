@@ -198,6 +198,8 @@ func (processor *ReplicationCorrectionGroup) cleanup(uID interface{}) {
 	//processor.finalStageRecords.Delete(uID)
 }
 
+var defaultHTTPPool=fasthttp.NewRequestResponsePool("replication_crc")
+
 func parseIDAndOffset(v string) (id, offset,timestamp string) {
 	arr := strings.Split(v, "#")
 	if len(arr) != 3 {
@@ -378,7 +380,7 @@ func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *s
 				return false
 			}
 
-			req := fasthttp.AcquireRequest()
+			req := defaultHTTPPool.AcquireRequest()
 			err := req.Decode(message.Data)
 			if err != nil {
 				panic(err)
@@ -401,7 +403,7 @@ func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *s
 			//timestamp:= util.FromUnixTimestamp(tn)
 			processor.latestRecordTimestampInPrepareStage = tn
 
-			fasthttp.ReleaseRequest(req)
+			defaultHTTPPool.ReleaseRequest(req)
 
 			//update commit offset
 			lastCommitableMessageOffset = message.NextOffset

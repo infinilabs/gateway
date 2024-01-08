@@ -52,6 +52,7 @@ type HTTPFilter struct {
 
 	MaxRedirectsCount int  `config:"max_redirects_count"`
 	FollowRedirects   bool `config:"follow_redirects"`
+	HTTPPool          *fasthttp.RequestResponsePool
 }
 
 func (filter *HTTPFilter) Name() string {
@@ -149,8 +150,8 @@ func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err er
 	clonedURI := ctx.Request.CloneURI()
 	defer fasthttp.ReleaseURI(clonedURI)
 
-	res := fasthttp.AcquireResponseWithTag("http_response")
-	defer fasthttp.ReleaseResponse(res)
+	res := filter.HTTPPool.AcquireResponseWithTag("http_response")
+	defer filter.HTTPPool.ReleaseResponse(res)
 
 	clonedURI.SetScheme(filter.Schema)
 	ctx.Request.SetURI(clonedURI)
@@ -262,6 +263,9 @@ func NewHTTPFilter(c *config.Config) (pipeline.Filter, error) {
 
 		runner.clients.Store(host, c)
 	}
+
+	runner.HTTPPool=fasthttp.NewRequestResponsePool("http_filter")
+
 
 	return &runner, nil
 }

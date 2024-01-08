@@ -55,9 +55,10 @@ var rotateConfig = rotate.RotateConfig{
 }
 
 type DumpHashProcessor struct {
-	config Config
-	files  sync.Map
-	client elastic.API
+	config   Config
+	files    sync.Map
+	client   elastic.API
+	HTTPPool *fasthttp.RequestResponsePool
 }
 
 type Config struct {
@@ -126,6 +127,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		config: cfg,
 		client: client,
 		files:  sync.Map{},
+		HTTPPool:fasthttp.NewRequestResponsePool("dump_hash"),
 	}, nil
 
 }
@@ -212,10 +214,10 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 				return
 			}
 
-			var req = fasthttp.AcquireRequest()
-			var res = fasthttp.AcquireResponse()
-			defer fasthttp.ReleaseRequest(req)
-			defer fasthttp.ReleaseResponse(res)
+			var req = processor.HTTPPool.AcquireRequest()
+			var res = processor.HTTPPool.AcquireResponse()
+			defer processor.HTTPPool.ReleaseRequest(req)
+			defer processor.HTTPPool.ReleaseResponse(res)
 
 			meta := elastic.GetMetadata(processor.config.Elasticsearch)
 			apiCtx := &elastic.APIContext{

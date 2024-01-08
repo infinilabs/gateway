@@ -34,6 +34,7 @@ type ReverseProxy struct {
 	fixedClient bool
 	client      fasthttp.ClientAPI
 	host        string
+	HTTPPool    *fasthttp.RequestResponsePool
 }
 
 func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
@@ -307,6 +308,8 @@ func NewReverseProxy(cfg *ProxyConfig) *ReverseProxy {
 		}
 	}
 
+	p.HTTPPool=fasthttp.NewRequestResponsePool("es_proxy_"+cfg.Elasticsearch)
+
 	return &p
 }
 
@@ -417,8 +420,8 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 		}
 	}
 
-	res := fasthttp.AcquireResponseWithTag("proxy_response")
-	defer fasthttp.ReleaseResponse(res)
+	res := p.HTTPPool.AcquireResponseWithTag("proxy_response")
+	defer p.HTTPPool.ReleaseResponse(res)
 
 	if !p.proxyConfig.SkipCleanupHopHeaders {
 		cleanHopHeaders(&myctx.Request)

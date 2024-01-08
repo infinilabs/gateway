@@ -26,8 +26,9 @@ import (
 var JSON_CONTENT_TYPE = "application/json"
 
 type BulkReshuffle struct {
-	config   *BulkReshuffleConfig
-	esConfig *elastic.ElasticsearchConfig
+	config        *BulkReshuffleConfig
+	esConfig      *elastic.ElasticsearchConfig
+	docBufferPool *bytebufferpool.Pool
 }
 
 func (this *BulkReshuffle) Name() string {
@@ -67,6 +68,10 @@ type BulkReshuffleConfig struct {
 	ValidPayload  bool  `config:"validate_payload"`
 	StickToNode   bool  `config:"stick_to_node"`
 	EnabledShards []int `config:"shards"`
+
+	BufferPoolEnabled bool   `config:"bytes_buffer_enabled"`
+	MaxBufferCount    uint32 `config:"max_buffer_items"`
+	MaxBufferSize     uint32 `config:"max_buffer_size"`
 }
 
 func init() {
@@ -82,6 +87,8 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 		IndexStatsAnalysis:  true,
 		ActionStatsAnalysis: true,
 		FixNullID:           true,
+		MaxBufferCount:      10000,
+		MaxBufferSize:       1024 * 1024 * 1024,
 		Level:               NodeLevel,
 	}
 
@@ -97,10 +104,12 @@ func NewBulkReshuffle(c *config.Config) (pipeline.Filter, error) {
 
 	runner.esConfig = elastic.GetConfig(cfg.Elasticsearch)
 
+	if cfg.BufferPoolEnabled {
+		runner.docBufferPool = bytebufferpool.NewTaggedPool("bulk_reshuffle_request_docs"+util.GetUUID(), 0, cfg.MaxBufferSize, cfg.MaxBufferCount)
+	}
+
 	return &runner, nil
 }
-
-var docBufferPool = bytebufferpool.NewTaggedPool("bulk_reshuffle_request_docs", 0, 1024*1024*1024, 100000)
 
 func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
@@ -154,8 +163,10 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 					}
 					log.Error("error in bulk_reshuffle,", v)
 				}
-				for _, y := range docBuf {
-					docBufferPool.Put(y)
+				if this.config.BufferPoolEnabled {
+					for _, y := range docBuf {
+						this.docBufferPool.Put(y)
+					}
 				}
 			}
 		}()
@@ -370,11 +381,11 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 			cfg1, ok := queue.SmartGetConfig(queueKey)
 
-			if ok &&len(cfg1.Labels)>0{
+			if ok && len(cfg1.Labels) > 0 {
 				queueConfig = cfg1
-			}else {
+			} else {
 				//create new queue config
-				labels:=map[string]interface{}{}
+				labels := map[string]interface{}{}
 				labels["type"] = "bulk_reshuffle"
 				labels["level"] = reshuffleType
 				labels["elasticsearch"] = this.esConfig.ID
@@ -400,8 +411,8 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 					break
 				}
 
-				queueConfig=queue.AdvancedGetOrInitConfig("",queueKey,labels)
-				if queueConfig==nil{
+				queueConfig = queue.AdvancedGetOrInitConfig("", queueKey, labels)
+				if queueConfig == nil {
 					panic(errors.Error("queue config can't be nil"))
 				}
 			}
@@ -413,7 +424,11 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			////update actionItem
 			buff, ok = docBuf[queueConfig.Name]
 			if !ok {
-				buff = docBufferPool.Get()
+				if this.config.BufferPoolEnabled {
+					buff = this.docBufferPool.Get()
+				}else{
+					buff=&bytebufferpool.ByteBuffer{}
+				}
 				docBuf[queueConfig.Name] = buff
 			}
 
@@ -428,7 +443,11 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			if collectedMeta {
 				buff, ok := docBuf[queueConfig.Name]
 				if !ok {
-					buff = docBufferPool.Get()
+					if this.config.BufferPoolEnabled {
+						buff = this.docBufferPool.Get()
+					}else{
+						buff=&bytebufferpool.ByteBuffer{}
+					}
 					docBuf[queueConfig.Name] = buff
 				}
 
@@ -450,7 +469,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 					}
 				}
 			}
-		},nil)
+		}, nil)
 
 		if err != nil {
 			if global.Env().IsDebug {
@@ -519,8 +538,9 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			} else {
 				log.Warn("zero message,", x, ",", len(data), ",", string(body))
 			}
-			docBufferPool.Put(y)
-			delete(docBuf, x)
+			if this.config.BufferPoolEnabled {
+				this.docBufferPool.Put(y)
+			}
 		}
 
 		//fake results

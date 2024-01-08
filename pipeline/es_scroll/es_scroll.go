@@ -41,8 +41,9 @@ import (
 )
 
 type ScrollProcessor struct {
-	config Config
-	client elastic.API
+	config   Config
+	client   elastic.API
+	HTTPPool *fasthttp.RequestResponsePool
 }
 
 type OutputQueueConfig struct {
@@ -120,6 +121,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 	return &ScrollProcessor{
 		config: cfg,
 		client: client,
+		HTTPPool:fasthttp.NewRequestResponsePool("es_scroll"),
 	}, nil
 
 }
@@ -206,10 +208,10 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 				return
 			}
 
-			var req = fasthttp.AcquireRequest()
-			var res = fasthttp.AcquireResponse()
-			defer fasthttp.ReleaseRequest(req)
-			defer fasthttp.ReleaseResponse(res)
+			var req = processor.HTTPPool.AcquireRequest()
+			var res = processor.HTTPPool.AcquireResponse()
+			defer processor.HTTPPool.ReleaseRequest(req)
+			defer processor.HTTPPool.ReleaseResponse(res)
 
 			meta := elastic.GetMetadata(processor.config.Elasticsearch)
 			apiCtx := &elastic.APIContext{

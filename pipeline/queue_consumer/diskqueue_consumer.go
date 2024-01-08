@@ -21,6 +21,8 @@ import (
 	"infini.sh/framework/lib/fasthttp"
 )
 
+var defaultHTTPPool=fasthttp.NewRequestResponsePool("queue_consumer")
+
 type DiskQueueConsumer struct {
 	config Config
 }
@@ -269,8 +271,8 @@ func gzipBest(a *[]byte) []byte {
 }
 
 func (processor *DiskQueueConsumer) processMessage(metadata *elastic.ElasticsearchMetadata, msg *queue.Message) (bool, int, error) {
-	req := fasthttp.AcquireRequestWithTag("disk_consumer_request")
-	defer fasthttp.ReleaseRequest(req)
+	req := defaultHTTPPool.AcquireRequestWithTag("disk_consumer_request")
+	defer defaultHTTPPool.ReleaseRequest(req)
 	err := req.Decode(msg.Data)
 	if err != nil {
 		log.Error("failed to decode request, ", metadata.Config.Name)
@@ -295,8 +297,8 @@ func (processor *DiskQueueConsumer) processMessage(metadata *elastic.Elasticsear
 
 	host := metadata.GetActiveHost()
 	req.SetHost(host)
-	resp := fasthttp.AcquireResponseWithTag("disk_consumer_response")
-	defer fasthttp.ReleaseResponse(resp)
+	resp := defaultHTTPPool.AcquireResponseWithTag("disk_consumer_response")
+	defer defaultHTTPPool.ReleaseResponse(resp)
 
 	acceptGzipped := req.AcceptGzippedResponse()
 	compressed := false

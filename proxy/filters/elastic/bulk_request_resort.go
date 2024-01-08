@@ -59,6 +59,7 @@ type BulkRequestResort struct {
 	batchSizeInBytes    int
 	inputQueueConfig    *queue.QueueConfig
 	inputConsumerConfig *queue.ConsumerConfig
+	bulkBufferPool      *elastic.BulkBufferPool
 }
 
 func init() {
@@ -94,6 +95,8 @@ func NewBulkRequestResort(c *config.Config) (pipeline.Filter, error) {
 	if runner.Elasticsearch != "" {
 		runner.OutputQueue.Labels["elasticsearch"] = runner.Elasticsearch
 	}
+
+	runner.bulkBufferPool=elastic.NewBulkBufferPool("bulk_request_resort",1024*1024*1024,100000)
 
 	runner.idleTimeout = util.GetDurationOrDefault(runner.IdleTimeoutInSeconds, 10*time.Second)
 	runner.commitTimeout = util.GetDurationOrDefault(runner.CommitConfig.CommitInterval, 10*time.Second)
@@ -366,9 +369,9 @@ func (s *Sorter) run() {
 	var lastCommitTime time.Time = util.GetLowPrecisionCurrentTime()
 	var hit = false
 
-	bulkBuffer := elastic.AcquireBulkBuffer()
+	bulkBuffer := s.filter.bulkBufferPool.AcquireBulkBuffer()
 
-	defer elastic.ReturnBulkBuffer(bulkBuffer)
+	defer s.filter.bulkBufferPool.ReturnBulkBuffer(bulkBuffer)
 	for {
 		if bulkBuffer.GetMessageCount() == 0 {
 			if global.ShuttingDown() {

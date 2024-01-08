@@ -1,8 +1,8 @@
 package bulk_indexing
 
 import (
-	ctx "context"
 	"fmt"
+	"golang.org/x/net/context"
 	"runtime"
 	"sync"
 	"time"
@@ -82,6 +82,8 @@ func init() {
 	pipeline.RegisterProcessorPlugin("fast_bulk_indexing", New)
 }
 
+var bulkBufferPool=elastic.NewBulkBufferPool("fast_bulk_indexing",1024*1024*1024,100000)
+
 func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
 		NumOfWorkers:         1,
@@ -99,6 +101,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 			FetchMaxMessages:  500,
 			EOFRetryDelayInMs: 500,
 			FetchMaxWaitMs:    10000,
+			EOFMaxRetryTimes:         10,
 			ClientExpiredInSeconds: 60,
 		},
 
@@ -391,9 +394,9 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string, ctx *pipeline.
 	processor.inFlightQueueConfigs.Store(key, workerID)
 	log.Debugf("starting worker:[%v], queue:[%v], host:[%v]", workerID, qConfig.Name, host)
 
-	mainBuf := elastic.AcquireBulkBuffer()
+	mainBuf := bulkBufferPool.AcquireBulkBuffer()
 	mainBuf.Queue = qConfig.ID
-	defer elastic.ReturnBulkBuffer(mainBuf)
+	defer bulkBufferPool.ReturnBulkBuffer(mainBuf)
 
 	var bulkProcessor elastic.BulkProcessor
 	var esClusterID string
@@ -451,13 +454,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string, ctx *pipeline.
 		host = meta.GetActiveHost()
 	}
 
-	bulkProcessor = elastic.BulkProcessor{
-		Config: processor.config.BulkConfig,
-	}
-
-	if bulkProcessor.Config.DeadletterRequestsQueue == "" {
-		bulkProcessor.Config.DeadletterRequestsQueue = fmt.Sprintf("%v-bulk-dead_letter-items", esClusterID)
-	}
+	bulkProcessor = elastic.NewBulkProcessor("fast_bulk_indexing",esClusterID,processor.config.BulkConfig)
 
 	var lastCommit time.Time = time.Now()
 
@@ -601,7 +598,10 @@ func (processor *BulkIndexingProcessor) submitBulkRequest(tag, esClusterID strin
 	if mainBuf.GetMessageCount() > 0 && mainBuf.GetMessageSize() > 0 {
 		log.Trace(meta.Config.Name, ", starting submit bulk request")
 		start := time.Now()
-		ctx := ctx.Background()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second*60))
+		defer cancel()
+
 		continueRequest, statsMap, _, err := bulkProcessor.Bulk(ctx, tag, meta, host, mainBuf)
 		if global.Env().IsDebug {
 			stats.Timing("elasticsearch."+esClusterID+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
