@@ -149,7 +149,7 @@ func (this *Entrypoint) Start() error {
 	}
 
 	if this.config.MaxConcurrency <= 0 {
-		this.config.MaxConcurrency = 10000
+		this.config.MaxConcurrency = 5000
 	}
 
 	if this.config.ReadTimeout <= 0 {
@@ -188,6 +188,10 @@ func (this *Entrypoint) Start() error {
 		this.config.MaxRequestBodySize = 200 * 1024 * 1024
 	}
 
+	if this.config.MaxInflightRequestSize <= 0 {
+		this.config.MaxInflightRequestSize = 1024 * 1024 * 1024
+	}
+
 	this.server = &fasthttp.Server{
 		Name:                               "INFINI",
 		NoDefaultServerHeader:              true,
@@ -207,6 +211,7 @@ func (this *Entrypoint) Start() error {
 		TCPKeepalive:                       !this.config.DisableTCPKeepalive,
 		TCPKeepalivePeriod:                 time.Duration(this.config.TCPKeepaliveSeconds) * time.Second,
 		MaxIdleWorkerDuration:              time.Duration(this.config.MaxIdleWorkerDurationSeconds) * time.Second,
+		MaxInflightRequestSize:             this.config.MaxInflightRequestSize,
 		IdleTimeout:                        time.Duration(this.config.IdleTimeout) * time.Second,
 		ReadTimeout:                        time.Duration(this.config.ReadTimeout) * time.Second,
 		WriteTimeout:                       time.Duration(this.config.WriteTimeout) * time.Second,
