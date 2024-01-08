@@ -27,9 +27,10 @@ type EntryConfig struct {
 	ReadBufferSize  int `config:"read_buffer_size" json:"read_buffer_size,omitempty" elastic_mapping:"read_buffer_size: { type: integer }"`
 	WriteBufferSize int `config:"write_buffer_size" json:"write_buffer_size,omitempty" elastic_mapping:"write_buffer_size: { type: integer }"`
 
-	MaxRequestBodySize int `config:"max_request_body_size" json:"max_request_body_size,omitempty" elastic_mapping:"max_request_body_size: { type: integer }"`
-	MaxConcurrency     int `config:"max_concurrency" json:"max_concurrency,omitempty" elastic_mapping:"max_concurrency: { type: integer }"`
-	MaxConnsPerIP      int `config:"max_conns_per_ip" json:"max_conns_per_ip,omitempty" elastic_mapping:"max_conns_per_ip: { type: integer }"`
+	MaxRequestBodySize     int `config:"max_request_body_size" json:"max_request_body_size,omitempty" elastic_mapping:"max_request_body_size: { type: integer }"`
+	MaxInflightRequestSize int `config:"max_inflight_request_size" json:"max_inflight_request_size" elastic_mapping:"max_inflight_request_size: { type: integer }"`
+	MaxConcurrency         int `config:"max_concurrency" json:"max_concurrency,omitempty" elastic_mapping:"max_concurrency: { type: integer }"`
+	MaxConnsPerIP          int `config:"max_conns_per_ip" json:"max_conns_per_ip,omitempty" elastic_mapping:"max_conns_per_ip: { type: integer }"`
 
 	TLSConfig        config.TLSConfig     `config:"tls" json:"tls,omitempty" elastic_mapping:"tls: { type: object }"`
 	NetworkConfig    config.NetworkConfig `config:"network" json:"network,omitempty" elastic_mapping:"network: { type: object }"`
