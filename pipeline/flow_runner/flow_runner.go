@@ -74,6 +74,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 			FetchMaxMessages:       1000,
 			EOFRetryDelayInMs:      500,
 			FetchMaxWaitMs:         10000,
+			EOFMaxRetryTimes:         10,
 			ClientExpiredInSeconds: 60,
 		},
 		SkipEmptyQueue:                 true,
