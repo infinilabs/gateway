@@ -170,7 +170,7 @@ func getUser(username string, password string) (*security.User, error) {
 			return su, nil
 		}
 	}
-	ok, user, err := realm.Authenticate(username, password)
+	ok, user, err := realm.Authenticate(username, password, "")
 	if err != nil {
 		return nil, err
 	}
