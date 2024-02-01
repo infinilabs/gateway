@@ -258,7 +258,7 @@ func NewHTTPFilter(c *config.Config) (pipeline.Filter, error) {
 			ReadBufferSize:                runner.ReadBufferSize,
 			WriteBufferSize:               runner.WriteBufferSize,
 			DialDualStack:                 true,
-			TLSConfig:                     api.GetFastHTTPClientTLSConfig(runner.TLSConfig),
+			TLSConfig:                     api.SimpleGetTLSConfig(runner.TLSConfig),
 		}
 
 		runner.clients.Store(host, c)
