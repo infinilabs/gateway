@@ -47,13 +47,6 @@ import (
 	"infini.sh/gateway/common"
 )
 
-var rotateConfig = rotate.RotateConfig{
-	Compress:     false,
-	MaxFileAge:   0,
-	MaxFileCount: 0,
-	MaxFileSize:  1024 * 1000,
-}
-
 type DumpHashProcessor struct {
 	config   Config
 	files    sync.Map
@@ -78,9 +71,11 @@ type Config struct {
 	QueryString string `config:"query_string"`
 	QueryDSL    string `config:"query_dsl"`
 
-	HashFunc   string `config:"hash_func"`
-	ScrollTime string `config:"scroll_time"`
-	Fields     string `config:"fields"`
+	HashFunc     string              `config:"hash_func"`
+	ScrollTime   string              `config:"scroll_time"`
+	Fields       string              `config:"fields"`
+	RotateConfig rotate.RotateConfig `config:"rotate"`
+
 	//SortDocumentFields bool   `config:"sort_document_fields"`
 }
 
@@ -96,6 +91,12 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		ScrollTime:    "5m",
 		SortType:      "asc",
 		HashFunc:      "xxhash32",
+		RotateConfig: rotate.RotateConfig{
+			Compress:     false,
+			MaxFileAge:   0,
+			MaxFileCount: 0,
+			MaxFileSize:  1024 * 1000,
+		},
 	}
 
 	if err := c.Unpack(&cfg); err != nil {
@@ -124,10 +125,10 @@ func New(c *config.Config) (pipeline.Processor, error) {
 	}
 
 	return &DumpHashProcessor{
-		config: cfg,
-		client: client,
-		files:  sync.Map{},
-		HTTPPool:fasthttp.NewRequestResponsePool("dump_hash"),
+		config:   cfg,
+		client:   client,
+		files:    sync.Map{},
+		HTTPPool: fasthttp.NewRequestResponsePool("dump_hash"),
 	}, nil
 
 }
@@ -267,7 +268,7 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 
 					processedSize += docSize
 
-					if global.Env().IsDebug{
+					if global.Env().IsDebug {
 						log.Debugf("[%v] slice[%v]:%v,%v-%v", processor.config.Elasticsearch, slice, docSize, processedSize, totalHits)
 					}
 
