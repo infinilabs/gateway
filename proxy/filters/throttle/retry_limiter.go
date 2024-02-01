@@ -4,6 +4,7 @@ import (
 	"fmt"
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
+	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/util"
@@ -34,9 +35,12 @@ func (filter *RetryLimiter) Filter(ctx *fasthttp.RequestCtx) {
 			times = t
 		}
 	}
+	if global.Env().IsDebug{
+		log.Debugf("retry times: %v > %v",times,filter.MaxRetryTimes)
+	}
 
 	if times > filter.MaxRetryTimes {
-		log.Debugf("hit max retry times")
+		log.Debugf("hit max retry times: %v > %v",times,filter.MaxRetryTimes)
 		ctx.Finished()
 		ctx.Request.Header.Del(RetryKey)
 		queue.Push(queue.GetOrInitConfig(filter.Queue), ctx.Request.Encode())
