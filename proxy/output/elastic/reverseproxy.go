@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"sort"
 	"sync"
 	"time"
 
@@ -257,6 +258,8 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		log.Errorf("upstream for [%v] is empty", esConfig.Name)
 		return
 	}
+
+	sort.Strings(newHosts)
 
 	if util.JoinArray(newHosts, ", ") == util.JoinArray(p.endpoints, ", ") {
 		log.Debugf("hosts of [%v] no change, skip", esConfig.Name)
