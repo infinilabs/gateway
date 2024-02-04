@@ -61,6 +61,7 @@ type Config struct {
 	SliceSize     int    `config:"slice_size"`
 	SortType      string `config:"sort_type"`
 	SortField     string `config:"sort_field"`
+	BulkOperation string `config:"bulk_operation"`
 	Indices       string `config:"indices"`
 	QueryString   string `config:"query_string"`
 	QueryDSL      string `config:"query_dsl"`
@@ -356,7 +357,11 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 		//trim newline to space
 		util.WalkBytesAndReplace(source, util.NEWLINE, util.SPACE)
 
-		buffer.WriteString(fmt.Sprintf("{ \"index\" : { \"_index\" : \"%s\", ", index))
+		bulkOperation := "index"
+		if len(processor.config.BulkOperation) > 0 {
+			bulkOperation = processor.config.BulkOperation
+		}
+		buffer.WriteString(fmt.Sprintf("{ \"%s\" : { \"_index\" : \"%s\", ", bulkOperation, index))
 		if typeStr != "" {
 			buffer.WriteString(fmt.Sprintf("\"_type\" : \"%s\",", typeStr))
 		}
