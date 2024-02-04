@@ -379,14 +379,20 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				panic(errors.Error("queue key can't be nil"))
 			}
 
+			var skipInit=false
 			cfg1, ok := queue.SmartGetConfig(queueKey)
-
 			if ok && len(cfg1.Labels) > 0 {
-				queueConfig = cfg1
-			} else {
+				_,ok:=cfg1.Labels["type"] //check label bulk_reshuffle exists
+				if ok{
+					queueConfig = cfg1
+					skipInit=true
+				}
+			}
+
+			if !skipInit {
 				//create new queue config
 				labels := map[string]interface{}{}
-				labels["type"] = "bulk_reshuffle"
+				labels["type"] = "bulk_reshuffle" //type must have
 				labels["level"] = reshuffleType
 				labels["elasticsearch"] = this.esConfig.ID
 
