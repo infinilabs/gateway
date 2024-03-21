@@ -76,11 +76,13 @@ docker buildx imagetools create -t infinilabs/$PNAME:$VERSION-$BUILD_NUMBER \
 
 #publish
 for t in 386 amd64 arm64 armv5 armv6 armv7 loong64 mips mips64 mips64le mipsle riscv64 ; do
-  [ -f ${WORKSPACE}/$PNAME-$VERSION-$BUILD_NUMBER-linux-$t.tar.gz ] && cp -rf ${WORKSPACE}/$PNAME-$VERSION-$BUILD_NUMBER-linux-$t.tar.gz $DEST
+  [ -f ${WORKSPACE}/$PNAME-$VERSION-$BUILD_NUMBER-linux-$t.tar.gz ] && ossuploader upload -p $PNAME -f ${WORKSPACE}/$PNAME-$VERSION-$BUILD_NUMBER-linux-$t.tar.gz
+  #cp -rf ${WORKSPACE}/$PNAME-$VERSION-$BUILD_NUMBER-linux-$t.tar.gz $DEST
 done
 
 for t in mac-amd64 mac-arm64 windows-amd64 windows-386 ; do
-  [ -f ${WORKSPACE}/$PNAME-$VERSION-$BUILD_NUMBER-$t.zip ] && cp -rf ${WORKSPACE}/$PNAME-$VERSION-$BUILD_NUMBER-$t.zip $DEST
+  [ -f ${WORKSPACE}/$PNAME-$VERSION-$BUILD_NUMBER-$t.zip ] && ossuploader upload -p $PNAME -f ${WORKSPACE}/$PNAME-$VERSION-$BUILD_NUMBER-$t.zip
+  #cp -rf ${WORKSPACE}/$PNAME-$VERSION-$BUILD_NUMBER-$t.zip $DEST
 done
 
 #git reset
