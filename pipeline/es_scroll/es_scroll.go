@@ -307,7 +307,11 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 
 		typeStr, err := jsonparser.GetString(value, "_type")
 		if err != nil {
-			log.Debugf("no _type field found")
+			log.Debugf("get _type field error: %v", err)
+		}
+		routing, err := jsonparser.GetString(value, "_routing")
+		if err != nil {
+			log.Debugf("get _routing field error: %v", err)
 		}
 
 		if index != "" && len(processor.config.IndexNameRename) > 0 {
@@ -364,6 +368,9 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 		buffer.WriteString(fmt.Sprintf("{ \"%s\" : { \"_index\" : \"%s\", ", bulkOperation, index))
 		if typeStr != "" {
 			buffer.WriteString(fmt.Sprintf("\"_type\" : \"%s\",", typeStr))
+		}
+		if routing != "" {
+			buffer.WriteString(fmt.Sprintf("\"routing\" : \"%s\",", routing))
 		}
 		buffer.WriteString(fmt.Sprintf("\"_id\" : \"%s\" } }\n", id))
 		buffer.Write(source)
