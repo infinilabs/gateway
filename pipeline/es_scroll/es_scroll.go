@@ -120,9 +120,9 @@ func New(c *config.Config) (pipeline.Processor, error) {
 	}
 
 	return &ScrollProcessor{
-		config: cfg,
-		client: client,
-		HTTPPool:fasthttp.NewRequestResponsePool("es_scroll"),
+		config:   cfg,
+		client:   client,
+		HTTPPool: fasthttp.NewRequestResponsePool("es_scroll"),
 	}, nil
 
 }
@@ -404,7 +404,10 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 			log.Trace("queue config: ", pushQueue)
 		}
 
-		queue.Push(pushQueue, v.Bytes())
+		if err := queue.Push(pushQueue, v.Bytes()); err != nil {
+			log.Errorf("failed to push data to queue: %v, %v", outputQueueName+util.ToString(k), err)
+			panic(err)
+		}
 
 		//handler := rotate.GetFileHandler(path.Join(global.Env().GetDataDir(), "diff", outputQueueName+util.ToString(k)), rotate.DefaultConfig)
 		//handler.Write(v.Bytes())

@@ -82,7 +82,7 @@ func init() {
 	pipeline.RegisterProcessorPlugin("fast_bulk_indexing", New)
 }
 
-var bulkBufferPool=elastic.NewBulkBufferPool("fast_bulk_indexing",1024*1024*1024,100000)
+var bulkBufferPool = elastic.NewBulkBufferPool("fast_bulk_indexing", 1024*1024*1024, 100000)
 
 func New(c *config.Config) (pipeline.Processor, error) {
 	cfg := Config{
@@ -94,14 +94,14 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		Queues:               map[string]interface{}{},
 
 		Consumer: queue.ConsumerConfig{
-			Group:             "group-001",
-			Name:              "consumer-001",
-			FetchMinBytes:     1,
-			FetchMaxBytes:     20 * 1024 * 1024,
-			FetchMaxMessages:  500,
-			EOFRetryDelayInMs: 500,
-			FetchMaxWaitMs:    10000,
-			EOFMaxRetryTimes:         10,
+			Group:                  "group-001",
+			Name:                   "consumer-001",
+			FetchMinBytes:          1,
+			FetchMaxBytes:          20 * 1024 * 1024,
+			FetchMaxMessages:       500,
+			EOFRetryDelayInMs:      500,
+			FetchMaxWaitMs:         10000,
+			EOFMaxRetryTimes:       10,
 			ClientExpiredInSeconds: 60,
 		},
 
@@ -454,7 +454,7 @@ func (processor *BulkIndexingProcessor) NewBulkWorker(tag string, ctx *pipeline.
 		host = meta.GetActiveHost()
 	}
 
-	bulkProcessor = elastic.NewBulkProcessor("fast_bulk_indexing",esClusterID,processor.config.BulkConfig)
+	bulkProcessor = elastic.NewBulkProcessor("fast_bulk_indexing", esClusterID, processor.config.BulkConfig)
 
 	var lastCommit time.Time = time.Now()
 
@@ -515,6 +515,9 @@ READ_DOCS:
 		if err != nil {
 			log.Tracef("error on queue:[%v]", qConfig.Name)
 			panic(err)
+		}
+		if timeout {
+			log.Errorf("pop timeout on queue:[%v]", qConfig.Name)
 		}
 
 		log.Tracef("messages:%v, timeout:%v, err:%v", len(msg), timeout, err)
