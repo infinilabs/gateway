@@ -268,3 +268,23 @@ func TestDatePrecisionTuning5(t *testing.T) {
 
 }
 
+
+func TestDatePrecisionTuning6(t *testing.T) {
+
+	filter:= DatePrecisionTuning{config: &defaultConfig}
+	ctx:=&fasthttp.RequestCtx{}
+	ctx.Request=fasthttp.Request{}
+	ctx.Request.SetRequestURI("/_search")
+	ctx.Request.Header.SetMethod(fasthttp.MethodPost)
+
+	data:=[]byte("{\"size\":0,\"query\":{\"bool\":{\"filter\":[{\"range\":{\"@timestamp\":{\"gte\":\"2024-04-24T08:23:13.301Z\",\"lte\":\"2024-04-24T09:21:12.152Z\",\"format\":\"strict_date_optional_time\"}}},{\"query_string\":{\"analyze_wildcard\":true,\"query\":\"*\"}}]}},\"aggs\":{\"2\":{\"date_histogram\":{\"interval\":\"200ms\",\"field\":\"@timestamp\",\"min_doc_count\":0,\"format\":\"epoch_millis\"},\"aggs\":{}}}}")
+	ctx.Request.SetBody(data)
+
+	filter.config.TimePrecision=4
+	filter.Filter(ctx)
+	rePrecisedBody:=string(ctx.Request.Body())
+	fmt.Println(rePrecisedBody)
+	assert.Equal(t,rePrecisedBody,"{\"size\":0,\"query\":{\"bool\":{\"filter\":[{\"range\":{\"@timestamp\":{\"gte\":\"2024-04-24T08:23:00.000Z\",\"lte\":\"2024-04-24T09:21:59.999Z\",\"format\":\"strict_date_optional_time\"}}},{\"query_string\":{\"analyze_wildcard\":true,\"query\":\"*\"}}]}},\"aggs\":{\"2\":{\"date_histogram\":{\"interval\":\"200ms\",\"field\":\"@timestamp\",\"min_doc_count\":0,\"format\":\"epoch_millis\"},\"aggs\":{}}}}")
+
+}
+
