@@ -213,7 +213,7 @@ func NewHTTPFilter(c *config.Config) (pipeline.Filter, error) {
 		TLSInsecureSkipVerify: true,
 		ReadBufferSize:        4096 * 4,
 		WriteBufferSize:       4096 * 4,
-		//maxt wait timeout for free connection
+		//max wait timeout for free connection
 		MaxConnWaitTimeout: util.GetDurationOrDefault("30s", 30*time.Second),
 
 		//keep alived connection
