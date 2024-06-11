@@ -165,7 +165,7 @@ func (processor *DiskQueueConsumer) NewBulkWorker(ctx *pipeline.Context, count *
 
 
 	//acquire consumer
-	consumerInstance, err := queue.AcquireConsumer(qConfig, consumer)
+	consumerInstance, err := queue.AcquireConsumer(qConfig, consumer,ctx.ID())
 	defer queue.ReleaseConsumer(qConfig, consumer,consumerInstance)
 
 	if err != nil || consumerInstance == nil {
@@ -204,6 +204,7 @@ READ_DOCS:
 		}
 
 		messages, _, err :=consumerInstance.FetchMessages(ctx1, consumer.FetchMaxMessages)
+		consumer.KeepTouch()
 
 		if len(messages)==0{
 			time.Sleep(time.Millisecond * time.Duration(500))

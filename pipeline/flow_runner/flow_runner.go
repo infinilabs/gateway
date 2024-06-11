@@ -74,6 +74,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 			FetchMaxMessages:       1000,
 			EOFRetryDelayInMs:      500,
 			FetchMaxWaitMs:         10000,
+			ConsumeTimeoutInSeconds:         60,
 			EOFMaxRetryTimes:         10,
 			ClientExpiredInSeconds: 60,
 		},
@@ -164,7 +165,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 	defer util.ReleaseTimer(t1)
 
 	//acquire consumer
-	consumerInstance, err := queue.AcquireConsumer(qConfig, consumer)
+	consumerInstance, err := queue.AcquireConsumer(qConfig, consumer,ctx.ID())
 	defer queue.ReleaseConsumer(qConfig, consumer,consumerInstance)
 
 	if err != nil || consumerInstance == nil {
@@ -199,6 +200,7 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 
 			log.Debugf("star to consume queue:%v, %v", qConfig.Name,ctx1)
 			messages, timeout, err :=consumerInstance.FetchMessages(ctx1, processor.config.Consumer.FetchMaxMessages)
+			processor.config.Consumer.KeepTouch()
 			log.Debugf("get %v messages from queue:%v, %v", len(messages), qConfig.Name,ctx1)
 
 			if err != nil && err.Error() != "EOF" {

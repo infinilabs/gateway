@@ -679,7 +679,7 @@ func (processor *ReplicationCorrectionGroup) getConsumer(queueName string) (*que
 	qConfig := queue.GetOrInitConfig(queueName)
 	cConfig := queue.GetOrInitConsumerConfig(qConfig.ID, "crc", "name1")
 	consumer, err := queue.AcquireConsumer(qConfig,
-		cConfig)
+		cConfig,"worker_id")
 	if err != nil {
 		panic(err)
 	}
