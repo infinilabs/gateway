@@ -203,8 +203,8 @@ READ_DOCS:
 			}
 		}
 
+		consumer.KeepActive()
 		messages, _, err :=consumerInstance.FetchMessages(ctx1, consumer.FetchMaxMessages)
-		consumer.KeepTouch()
 
 		if len(messages)==0{
 			time.Sleep(time.Millisecond * time.Duration(500))

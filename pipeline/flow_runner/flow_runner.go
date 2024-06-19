@@ -199,8 +199,8 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 			}
 
 			log.Debugf("star to consume queue:%v, %v", qConfig.Name,ctx1)
+			processor.config.Consumer.KeepActive()
 			messages, timeout, err :=consumerInstance.FetchMessages(ctx1, processor.config.Consumer.FetchMaxMessages)
-			processor.config.Consumer.KeepTouch()
 			log.Debugf("get %v messages from queue:%v, %v", len(messages), qConfig.Name,ctx1)
 
 			if err != nil && err.Error() != "EOF" {
