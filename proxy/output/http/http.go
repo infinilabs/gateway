@@ -6,10 +6,11 @@ package http
 
 import (
 	"fmt"
-	"infini.sh/framework/core/api"
 	"math/rand"
 	"sync"
 	"time"
+
+	"infini.sh/framework/core/api"
 
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
@@ -125,7 +126,7 @@ func cleanHopHeaders(req *fasthttp.Request) {
 
 func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err error) {
 
-	if !filter.SkipCleanupHopHeaders {
+	if !filter.SkipCleanupHopHeaders && !isWebSocketRequest(ctx) {
 		cleanHopHeaders(&ctx.Request)
 	}
 
@@ -264,9 +265,7 @@ func NewHTTPFilter(c *config.Config) (pipeline.Filter, error) {
 		runner.clients.Store(host, c)
 	}
 
-	runner.HTTPPool=fasthttp.NewRequestResponsePool("http_filter")
-
+	runner.HTTPPool = fasthttp.NewRequestResponsePool("http_filter")
 
 	return &runner, nil
 }
-
