@@ -91,10 +91,6 @@ func (filter *WildcardDomainFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 }
 
-func isWebSocketRequest(ctx *fasthttp.RequestCtx) bool {
-	return ctx.Request.Header.IsGet() && strings.ToLower(string(ctx.Request.Header.Peek("Upgrade"))) == "websocket"
-}
-
 func (filter *WildcardDomainFilter) forward(host string, ctx *fasthttp.RequestCtx) (err error) {
 
 	if !filter.SkipCleanupHopHeaders && !isWebSocketRequest(ctx) {
@@ -134,6 +130,8 @@ func (filter *WildcardDomainFilter) forward(host string, ctx *fasthttp.RequestCt
 
 	if filter.FollowRedirects {
 		err = filter.client.DoRedirects(&ctx.Request, res, filter.MaxRedirectsCount)
+	} else if isWebSocketRequest(ctx) {
+		return doWS(host, ctx)
 	} else {
 		if filter.requestTimeout > 0 {
 			err = filter.client.DoTimeout(&ctx.Request, res, filter.requestTimeout)
