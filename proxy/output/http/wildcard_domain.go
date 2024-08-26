@@ -6,11 +6,12 @@ package http
 
 import (
 	"fmt"
-	"infini.sh/framework/core/api"
-	"infini.sh/framework/lib/fasttemplate"
 	"io"
 	"strings"
 	"time"
+
+	"infini.sh/framework/core/api"
+	"infini.sh/framework/lib/fasttemplate"
 
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
@@ -26,7 +27,7 @@ type WildcardDomainFilter struct {
 	Schema          string `config:"schema"`
 	SkipFailureHost bool   `config:"skip_failure_host"`
 	Suffix          string `config:"suffix"`
-	Domain            string `config:"domain"`
+	Domain          string `config:"domain"`
 
 	//host
 	MaxConnection       int `config:"max_connection_per_node"`
@@ -49,7 +50,7 @@ type WildcardDomainFilter struct {
 
 	TLSConfig *config.TLSConfig `config:"tls"` //client tls config
 
-	suffixTemplate            *fasttemplate.Template
+	suffixTemplate *fasttemplate.Template
 
 	MaxRedirectsCount int  `config:"max_redirects_count"`
 	FollowRedirects   bool `config:"follow_redirects"`
@@ -82,7 +83,7 @@ func (filter *WildcardDomainFilter) Filter(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	host := suffix+"."+filter.Domain
+	host := suffix + "." + filter.Domain
 	err = filter.forward(host, ctx)
 	if err != nil {
 		ctx.Response.SetBodyString(err.Error())
@@ -90,9 +91,13 @@ func (filter *WildcardDomainFilter) Filter(ctx *fasthttp.RequestCtx) {
 	}
 }
 
+func isWebSocketRequest(ctx *fasthttp.RequestCtx) bool {
+	return ctx.Request.Header.IsGet() && strings.ToLower(string(ctx.Request.Header.Peek("Upgrade"))) == "websocket"
+}
+
 func (filter *WildcardDomainFilter) forward(host string, ctx *fasthttp.RequestCtx) (err error) {
 
-	if !filter.SkipCleanupHopHeaders {
+	if !filter.SkipCleanupHopHeaders && !isWebSocketRequest(ctx) {
 		cleanHopHeaders(&ctx.Request)
 	}
 
