@@ -204,6 +204,7 @@ func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err er
 	ctx.Request.SetHost(host)
 
 	//keep original host
+	ctx.Request.UseHostHeader = true
 	ctx.Request.Header.SetHost(orignalHost)
 
 	if !filter.SkipEnrichMetadata {
