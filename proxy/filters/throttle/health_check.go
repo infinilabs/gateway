@@ -23,7 +23,7 @@ func (filter *ElasticsearchHealthCheckFilter) Name() string {
 
 func (filter *ElasticsearchHealthCheckFilter) Filter(ctx *fasthttp.RequestCtx) {
 	if rate.GetRateLimiter("cluster_check_health", filter.Elasticsearch, 1, 1, time.Second*time.Duration(filter.Interval)).Allow() {
-		result, _ := elastic.GetClient(filter.Elasticsearch).ClusterHealth()
+		result, _ := elastic.GetClient(filter.Elasticsearch).ClusterHealth(nil)
 		if global.Env().IsDebug {
 			seelog.Trace(filter.Elasticsearch, result)
 		}
