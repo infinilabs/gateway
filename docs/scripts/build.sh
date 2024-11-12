@@ -1,5 +1,5 @@
 export PRODUCT="gateway"
-export VERSION="v1.3.0"
+export VERSION="latest"
 export VERSIONS="latest,v1.3.0"
 export BRANCH="main"
 export OUTPUT="/tmp/gateway-docs"
