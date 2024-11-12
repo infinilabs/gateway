@@ -1,6 +1,11 @@
-# INFINI Gateway - Bug and Issue Tracker
+# INFINI Gateway -
 
-## The issue list
+![](https://raw.githubusercontent.com/infinilabs/gateway/refs/heads/main/docs/static/img/logo-en.svg)
+
+🎉🎉🎉🎉 Congratulations! You’ve found the ultimate gateway solution for Elasticsearch and OpenSearch! 🔥🔥🔥🔥
+
+
+## Report Bug and Issues
 
 Head straight to https://github.com/infinilabs/gateway/issues for a list of all issues or click `Issues` in the navigation bar on the almost-top.
 
