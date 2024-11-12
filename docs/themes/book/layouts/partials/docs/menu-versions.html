@@ -1,0 +1,31 @@
+<div class="heading">
+{{ $currentVersion := getenv "CURRENT_VERSION" }}
+{{ $versionString := getenv "VERSIONS" }}
+{{ $versions := split $versionString "," }}
+{{ $latestVersion := index $versions 0 }}
+
+{{ $VersionString := getenv "VERSIONS" }}
+{{ $Versions := split $VersionString "," }}
+<select class="version-selector">
+  {{ range $i, $version := $Versions }}
+  {{ if eq $i 0 }}
+  <option value="">{{ $version }} (latest)</option>
+  {{ else }}
+  {{ $shortVer := split $version "." }}
+  {{ if ge (len $shortVer) 3 }}
+  <option value="{{$version}}">{{ index $shortVer 0 }}.{{ index $shortVer 1 }}.x</option>
+  {{ else }}
+  {{ if eq $i 1 }}
+  <option value="{{$version}}">{{ $version }} </option>
+  {{ else }}
+  {{ if eq $i 2 }}
+  <option value="{{$version}}">{{ $version }} </option>
+  {{ else }}
+  <option value="{{$version}}">{{ $version }} </option>
+  {{ end }}
+  {{ end }}
+  {{ end }}
+  {{ end }}
+  {{ end }}
+</select>
+</div>

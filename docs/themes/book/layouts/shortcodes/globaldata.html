@@ -1,0 +1,3 @@
+{{- $product := .Get 0 -}}
+{{- $key := .Get 1 -}}
+{{- printf "%s" (index .Site.Data.quick_start $product $key) -}}

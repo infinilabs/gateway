@@ -1,0 +1,6 @@
+{{ $url := .Get 0}}
+{{ $alt := .Get 1}}
+{{ $link := .Get 2}}
+<div class="img-link">
+    <a href="{{ $link }}" target="_blank"><img src="{{ .Site.BaseURL }}{{ $url }}" alt="{{ $alt }}" /></a>
+</div>
