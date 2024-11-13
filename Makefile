@@ -22,7 +22,7 @@ config:
 
 build: config
 	echo $(VERSIONS)
-	cd docs && hugo.old --minify --theme book --destination="$(OUTPUT)/$(PRODUCT)/$(VERSION)" \
+	cd docs && hugo --minify --theme book --destination="$(OUTPUT)/$(PRODUCT)/$(VERSION)" \
         --baseURL="/$(PRODUCT)/$(VERSION)" 1> /dev/null
 	@$(MAKE) restore-generated-file
 
