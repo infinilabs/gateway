@@ -16,9 +16,15 @@ default: build
 
 config:
 	cp docs/config.yaml config.bak
-	# Replace placeholder (e.g., "BRANCH") in config.toml with the VERSION environment variable
-	sed -i '' "s/BRANCH/$(BRANCH)/g" docs/config.yaml
-
+	# Check the OS and set the sed command accordingly
+	if [ "$(uname)" == "Darwin" ]; then \
+	    sed_command="sed -i ''"; \
+	else \
+	    sed_command="sed -i"; \
+	fi
+	# Replace "BRANCH" in config.yaml with the value of VERSION
+	$(sed_command) "s/BRANCH/$(VERSION)/g" docs/config.yaml
+	
 build: config
 	echo $(VERSIONS)
 	cd docs && hugo.old --minify --theme book --destination="$(OUTPUT)/$(PRODUCT)/$(VERSION)" \
