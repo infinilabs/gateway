@@ -69,3 +69,38 @@ jobs:
           else
             echo "No changes to commit."
           fi
+      - name: Rebuild Docs for Latest Version (main), if not already on main
+        run: |
+          # Only rebuild the main branch docs if the current ref is not "main"
+          if [[ "$CURRENT_REF" != "main" ]]; then
+            echo "Switching to main branch and rebuilding docs for 'latest'"
+
+            # Checkout the main branch of the product repo to rebuild docs for "latest"
+            git checkout main
+
+            # Ensure the latest changes are pulled
+            git pull origin main
+
+            # Prepare Config for Main Branch Docs
+            make config
+
+            # Build Docs for Main Branch (latest)
+            OUTPUT=$(pwd)/docs-output make build
+
+            # Now handle the docs repository (docs-output), commit and push changes there
+            cd docs-output  # Switch to the docs-output directory (docs repo)
+
+            git config user.name "GitHub Actions"
+            git config user.email "actions@github.com"
+            
+            if [[ -n $(git status --porcelain) ]]; then
+              git add .
+              git commit -m "Rebuild docs for main branch with latest version"
+              git push origin main
+            else
+              echo "No changes to commit for docs."
+            fi
+          else
+            echo "Current ref is 'main', skipping rebuild for 'latest'."
+          fi
+        working-directory: ./  # Working in the product repo, no commit here          
