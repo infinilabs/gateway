@@ -7,9 +7,6 @@ VERSION?= $(shell [[ "$(BRANCH)" == "main" ]] && echo "latest" || echo "$(BRANCH
 VERSIONS?= "latest"
 OUTPUT?= "/tmp/gateway-docs"
 
-# Temporary file path for branches
-BRANCH_FILE := $(OUTPUT)/branch_list.txt
-
 .PHONY: build
 
 default: build
