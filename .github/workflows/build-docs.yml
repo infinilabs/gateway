@@ -1,0 +1,73 @@
+name: Build and Deploy Docs
+
+on:
+  push:
+    branches:
+      - main
+      - 'v*'
+
+jobs:
+  build-deploy-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Product Repo
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Set Variables Based on Branch
+        id: vars
+        run: |
+          CURRENT_BRANCH=${GITHUB_REF##*/}
+          if [[ "$CURRENT_BRANCH" == "main" ]]; then
+            echo "VERSION=latest" >> $GITHUB_ENV
+            echo "BRANCH=main" >> $GITHUB_ENV
+            echo "VERSIONS=latest,`git branch -r --list "origin/v*" | sed 's|origin/||' | sort -Vr | tr '\n' ',' | sed 's/,$//'`" >> $GITHUB_ENV
+          elif [[ "$CURRENT_BRANCH" =~ ^v.* ]]; then
+            echo "VERSION=$CURRENT_BRANCH" >> $GITHUB_ENV
+            echo "BRANCH=$CURRENT_BRANCH" >> $GITHUB_ENV
+            # Create VERSIONS with "latest" and current VERSION, separated by commas
+            #echo "VERSIONS=latest,$CURRENT_BRANCH" >> $GITHUB_ENV
+            echo "VERSIONS=latest,`git branch -r --list "origin/v*" | sed 's|origin/||' | sort -Vr | tr '\n' ',' | sed 's/,$//'`" >> $GITHUB_ENV
+          else
+            echo "Skipping docs build, branch doesn't match versioning pattern."
+            exit 0
+          fi
+
+      - name: Install Hugo
+        run: |
+          wget https://github.com/gohugoio/hugo/releases/download/v0.79.1/hugo_extended_0.79.1_Linux-64bit.tar.gz
+          tar -xzvf hugo_extended_0.79.1_Linux-64bit.tar.gz
+          sudo mv hugo /usr/local/bin/
+
+      - name: Prepare Config File
+        run: make config
+
+      - name: Checkout Docs Repo
+        uses: actions/checkout@v2
+        with:
+          repository: infinilabs/docs
+          path: docs-output
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Documentation
+        run: |
+          OUTPUT=$(pwd)/docs-output make build
+
+      - name: Commit and Push Changes
+        working-directory: docs-output
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          if [[ -n $(git status --porcelain) ]]; then
+            git add .
+            git commit -m "$(git log -1 --pretty=%B)"
+            git push origin main
+          else
+            echo "No changes to commit."
+          fi
+
+      - name: Clean Up Config File
+        if: success()
+        run: make restore-generated-file
