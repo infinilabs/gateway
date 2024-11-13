@@ -31,6 +31,7 @@ jobs:
           else
             echo "VERSION=$CURRENT_REF" >> $GITHUB_ENV
             echo "BRANCH=$CURRENT_REF" >> $GITHUB_ENV
+          fi
 
           # Gather branches and tags, sort, remove duplicates
           VERSIONS=$(git for-each-ref refs/remotes/origin refs/tags --format="%(refname:short)" | \
