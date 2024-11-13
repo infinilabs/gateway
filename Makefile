@@ -14,27 +14,17 @@ BRANCH_FILE := $(OUTPUT)/branch_list.txt
 
 default: build
 
+
 config:
 	cp docs/config.yaml config.bak
-	# Check if config.yaml exists
-	if [ ! -f docs/config.yaml ]; then \
-	    echo "docs/config.yaml not found!"; \
-	    exit 1; \
-	fi
-
-	# Check the OS and set the sed command accordingly
-	if [ "$(uname)" == "Darwin" ]; then \
-	    sed_command="sed -i .bak"; \
+	# Detect OS and apply the appropriate sed command
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		echo "Running on macOS"; \
+		sed -i '' "s/BRANCH/$(VERSION)/g" docs/config.yaml; \
 	else \
-	    sed_command="sed -i"; \
+		echo "Running on Linux"; \
+		sed -i 's/BRANCH/$(VERSION)/g' docs/config.yaml; \
 	fi
-
-	# Debug the sed command and version variable
-	echo "Using sed command: $(sed_command)"
-	echo "VERSION: $(VERSION)"
-
-	# Replace "BRANCH" in config.yaml with the value of VERSION
-	$(sed_command) 's/BRANCH/$(VERSION)/g' docs/config.yaml
 
 build: config
 	echo $(VERSIONS)
