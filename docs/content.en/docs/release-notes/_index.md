@@ -7,6 +7,40 @@ title: "Release Notes"
 
 Information about release notes of INFINI Gateway is provided here.
 
+## Latest (In development)
+
+### Breaking changes
+- chore: update default branch for vendor	
+### Features
+- feat: auto issue certificates for domain
+- feat: support filter config file (#620)
+- feat: add configs param `allow_generated_metrics_tasks`
+- feat: add param context for es api ClusterHealth and ClusterStats
+- fix: getting cluster version with timeout	
+- feat: support passing query param level to cluster health api
+- feat: crontab task support timezone	
+- feat: support tz draft	
+- feat: support customize event queue	
+
+### Bug fix
+- fix: rollback for client register
+- fix: reload when file is in dirty read	
+- fix: prevent consumer from advancing beyond writer's segment	
+- fix: wait group usage in bulk_indexing processor	
+- fix: query_string query was ignored (#588) 	
+
+### Improvements
+- refactor: refactoring system config
+- chore: add uuid to websocket session
+- chore: add util to parse parameter, panic on missing	
+- chore: adjust logging format	
+- fix: refactoring inflight check
+- chore: update license header	
+- chore: add util to register schema	
+- chore: log with ip and agent register when restart agent
+- chore: update cli naming style (#589) 
+
+
 ## 1.26.1 (2024-08-13)
 
 ### Improvements
