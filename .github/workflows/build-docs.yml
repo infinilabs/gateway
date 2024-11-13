@@ -4,9 +4,9 @@ on:
   push:
     branches:
       - main
-      - 'v*'  # To trigger for any version branches (e.g., v1.0.0)
+      - 'v*'
     tags:
-      - 'v*'  # To trigger for any version tags (e.g., v1.0.0)
+      - 'v*'
 
 jobs:
   build-deploy-docs:
@@ -18,24 +18,24 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set Variables Based on Branch or Tag
+      - name: Set Variables Based on Ref
         id: vars
         run: |
           CURRENT_REF=${GITHUB_REF##*/}
-          
-          # Check if the trigger is a tag or a branch
           if [[ "$CURRENT_REF" == "main" ]]; then
             echo "VERSION=latest" >> $GITHUB_ENV
             echo "BRANCH=main" >> $GITHUB_ENV
-            echo "VERSIONS=latest,`git branch -r --list "origin/v*" | sed 's|origin/||' | sort -Vr | tr '\n' ',' | sed 's/,$//'`" >> $GITHUB_ENV
-          elif [[ "$CURRENT_REF" =~ ^v.* ]]; then
+          elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             echo "VERSION=$CURRENT_REF" >> $GITHUB_ENV
             echo "BRANCH=$CURRENT_REF" >> $GITHUB_ENV
-            echo "VERSIONS=latest,`git branch -r --list "origin/v*" | sed 's|origin/||' | sort -Vr | tr '\n' ',' | sed 's/,$//'`" >> $GITHUB_ENV
           else
-            echo "Skipping docs build, branch/tag doesn't match versioning pattern."
-            exit 0
-          fi
+            echo "VERSION=$CURRENT_REF" >> $GITHUB_ENV
+            echo "BRANCH=$CURRENT_REF" >> $GITHUB_ENV
+
+          # Gather branches and tags, sort, remove duplicates
+          VERSIONS=$(git for-each-ref refs/remotes/origin refs/tags --format="%(refname:short)" | \
+            grep -E "^v[0-9.]+$" | sort -Vr | uniq | tr '\n' ',' | sed 's/,$//')
+          echo "VERSIONS=latest,$VERSIONS" >> $GITHUB_ENV
 
       - name: Install Hugo
         run: |
@@ -57,50 +57,41 @@ jobs:
         run: |
           OUTPUT=$(pwd)/docs-output make build
 
-      - name: Commit and Push Changes
+      - name: Commit and Push Changes to Docs Repo
         working-directory: docs-output
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
+          
           if [[ -n $(git status --porcelain) ]]; then
             git add .
-            git commit -m "$(git log -1 --pretty=%B)"
+            git commit -m "Rebuild docs for version $VERSION"
             git push origin main
           else
             echo "No changes to commit."
           fi
+
       - name: Rebuild Docs for Latest Version (main), if not already on main
         run: |
-          # Only rebuild the main branch docs if the current ref is not "main"
           if [[ "$CURRENT_REF" != "main" ]]; then
             echo "Switching to main branch and rebuilding docs for 'latest'"
-
-            # Checkout the main branch of the product repo to rebuild docs for "latest"
-            git checkout main
-
-            # Ensure the latest changes are pulled
-            git pull origin main
+            git -C . checkout main
+            git -C . pull origin main
 
             # Prepare Config for Main Branch Docs
             make config
-
-            # Build Docs for Main Branch (latest)
             OUTPUT=$(pwd)/docs-output make build
 
-            # Now handle the docs repository (docs-output), commit and push changes there
-            cd docs-output  # Switch to the docs-output directory (docs repo)
-
-            git config user.name "GitHub Actions"
-            git config user.email "actions@github.com"
-            
-            if [[ -n $(git status --porcelain) ]]; then
-              git add .
-              git commit -m "Rebuild docs for main branch with latest version"
-              git push origin main
+            # Commit and Push Latest Docs to Main in the Docs Repo
+            git -C docs-output config user.name "GitHub Actions"
+            git -C docs-output config user.email "actions@github.com"
+            if [[ -n $(git -C docs-output status --porcelain) ]]; then
+              git -C docs-output add .
+              git -C docs-output commit -m "Rebuild docs for main branch with latest version"
+              git -C docs-output push origin main
             else
-              echo "No changes to commit for docs."
+              echo "No changes to commit for main."
             fi
           else
             echo "Current ref is 'main', skipping rebuild for 'latest'."
           fi
-        working-directory: ./  # Working in the product repo, no commit here          
