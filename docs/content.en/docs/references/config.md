@@ -198,7 +198,32 @@ Common network configurations.
 
 ## TLS Configuration
 
+Example:
+
+```
+web:
+  enabled: true
+  embedding_api: true
+  network:
+    binding: $[[env.SERV_BINDING]]
+  tls:
+    enabled: false
+    skip_insecure_verify: true
+    default_domain: "api.coco.rs"
+    auto_issue:
+      enabled: true
+      email: "hello@infinilabs.com"
+      include_default_domain: true
+      domains:
+        - "www.coco.rs"
+      provider:
+        tencent_dns:
+          secret_id: $[[keystore.TENCENT_DNS_ID]] #./bin/coco keystore add TENCENT_DNS_ID
+          secret_key: $[[keystore.TENCENT_DNS_KEY]] #./bin/coco keystore add TENCENT_DNS_KEY
+```
+
 Common TLS configurations.
+
 | Name                       | Type   | Description                                                         |
 | -------------------------- | ------ | ------------------------------------------------------------------- |
 | *.tls.enabled                | bool   | Whether TLS secure transmission is enabled or not, can auto generate cert files if not specified any cert files                                          |
@@ -209,6 +234,35 @@ Common TLS configurations.
 | *.tls.default_domain   | string   | The default domain for auto generated certs                                    |
 | *.tls.skip_domain_verify   | bool   | Whether to skip domain verify or not                                |
 | *.tls.client_session_cache_size   | int   | Set the max cache of ClientSessionState entries for TLS session resumption   |
+
+
+### Auto-Issue TLS Certificates
+
+Both the `api` and `web` modules support auto-issuing TLS certificates via Let's Encrypt. This feature can be configured under `*.tls.auto_issue`:
+
+| Name                                | Type    | Description                                                                                       |
+|-------------------------------------|---------|---------------------------------------------------------------------------------------------------|
+| *.tls.auto_issue.enabled        | bool    | Enables automatic issuance of TLS certificates using Let's Encrypt.                               |
+| *.tls.auto_issue.path             | string  | Directory path where auto-issued certificates should be stored.                                   |
+| *.tls.auto_issue.email            | string  | Contact email for certificate issuance notifications and expiry warnings.                         |
+| *.tls.auto_issue.include_default_domain | bool | Whether to include the `default_domain` in the list of domains for auto-issuance.                 |
+| *.tls.auto_issue.domains          | []string | List of additional domains for which TLS certificates will be issued.                             |
+| *.tls.auto_issue.provider         | object  | Specifies the DNS provider configuration for DNS-based domain validation.                         |
+
+#### DNS Provider Configuration (Tencent Cloud)
+
+To support DNS-based verification with Tencent Cloud, configure the following within `*.tls.auto_issue.provider`:
+
+| Name                     | Type    | Description                                                                                       |
+|--------------------------|---------|---------------------------------------------------------------------------------------------------|
+| `tencent_dns.secret_id`  | string  | Secret ID for Tencent Cloud API access.                                                           |
+| `tencent_dns.secret_key` | string  | Secret Key for Tencent Cloud API access.                                                          |
+
+To set up and store the Tencent Cloud credentials securely, use the keystore commands:
+```bash
+./bin/coco keystore add TENCENT_DNS_ID
+./bin/coco keystore add TENCENT_DNS_KEY
+```
 
 
 ## API
