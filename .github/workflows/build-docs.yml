@@ -49,7 +49,7 @@ jobs:
         with:
           repository: infinilabs/docs
           path: docs-output
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.DOCS_DEPLOYMENT_TOKEN }}
 
       - name: Build Documentation
         run: |
