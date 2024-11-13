@@ -67,7 +67,3 @@ jobs:
           else
             echo "No changes to commit."
           fi
-
-      - name: Clean Up Config File
-        if: success()
-        run: make restore-generated-file
