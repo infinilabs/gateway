@@ -1,7 +1,4 @@
-# VERSIONS=latest,v1.0 hugo    --minify --baseURL="/gateway/v1.0/"  -d public/gateway/v1.0
-
-#baseURL: http://gateway.infini.ltd/
-#baseURL: /gateway/v1.0/
+# VERSIONS=latest,v1.0 hugo    --minify --baseURL="/product/v1.0/"  -d public/product/v1.0
 
 title: INFINI Gateway
 theme: book
@@ -31,11 +28,11 @@ languages:
 
 
 menu:
-  # before: []
-#  after:
-#    - name: "Github"
-#      url: "https://github.com/medcl/infini-gateway"
-#      weight: 10
+  before: []
+  after:
+    - name: "Github"
+      url: "https://github.com/infinilabs/gateway"
+      weight: 10
 
 params:
   # (Optional, default light) Sets color theme: light, dark or auto.
@@ -67,7 +64,7 @@ params:
   # Enable "Edit this page" links for 'doc' page type.
   # Disabled by default. Uncomment to enable. Requires 'BookRepo' param.
   # Edit path must point to root directory of repo.
-  BookEditPath: edit/main/docs
+  BookEditPath: edit/BRANCH/docs
 
   # Configure the date format used on the pages
   # - In git information

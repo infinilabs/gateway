@@ -22,30 +22,29 @@ jobs:
         id: vars
         run: |
           CURRENT_REF=${GITHUB_REF##*/}
-          if [[ "$CURRENT_REF" == "main" ]]; then
-            echo "VERSION=latest" >> $GITHUB_ENV
-            echo "BRANCH=main" >> $GITHUB_ENV
-          elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+          if [[ "${GITHUB_REF_TYPE}" == "branch" ]]; then
+            if [[ "$CURRENT_REF" == "main" ]]; then
+              echo "VERSION=main" >> $GITHUB_ENV
+              echo "BRANCH=main" >> $GITHUB_ENV
+            else
+              echo "VERSION=$CURRENT_REF" >> $GITHUB_ENV
+              echo "BRANCH=$CURRENT_REF" >> $GITHUB_ENV
+            fi
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             echo "VERSION=$CURRENT_REF" >> $GITHUB_ENV
-            echo "BRANCH=$CURRENT_REF" >> $GITHUB_ENV
-          else
-            echo "VERSION=$CURRENT_REF" >> $GITHUB_ENV
-            echo "BRANCH=$CURRENT_REF" >> $GITHUB_ENV
+            echo "BRANCH=main" >> $GITHUB_ENV  # Set BRANCH to 'main' for tags
           fi
 
           # Gather branches and tags, sort, remove duplicates
           VERSIONS=$(git for-each-ref refs/remotes/origin refs/tags --format="%(refname:short)" | \
             grep -E "^v[0-9.]+$" | sort -Vr | uniq | tr '\n' ',' | sed 's/,$//')
-          echo "VERSIONS=latest,$VERSIONS" >> $GITHUB_ENV
+          echo "VERSIONS=main,$VERSIONS" >> $GITHUB_ENV
 
       - name: Install Hugo
         run: |
           wget https://github.com/gohugoio/hugo/releases/download/v0.79.1/hugo_extended_0.79.1_Linux-64bit.tar.gz
           tar -xzvf hugo_extended_0.79.1_Linux-64bit.tar.gz
           sudo mv hugo /usr/local/bin/
-
-      - name: Prepare Config File
-        run: make config
 
       - name: Checkout Docs Repo
         uses: actions/checkout@v2
@@ -56,7 +55,7 @@ jobs:
 
       - name: Build Documentation
         run: |
-          OUTPUT=$(pwd)/docs-output make build
+          (cd docs && OUTPUT=$(pwd)/../docs-output make docs-build docs-place-redirect)
 
       - name: Commit and Push Changes to Docs Repo
         working-directory: docs-output
@@ -83,12 +82,9 @@ jobs:
 
             # Ensure the latest changes are pulled
             git pull origin main
-
-            # Prepare Config for Main Branch Docs
-            make config
             
             # Build Docs for Main Branch (latest)
-            OUTPUT=$(pwd)/docs-output VERSION="latest" BRANCH="main" make build
+            (cd docs && OUTPUT=$(pwd)/../docs-output VERSION="main" BRANCH="main" make docs-build docs-place-redirect)
 
             # Commit and Push Latest Docs to Main
             cd docs-output
