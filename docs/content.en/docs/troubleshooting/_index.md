@@ -12,6 +12,7 @@ FAQs about INFINI Gateway and handling methods are provided here. You are welcom
 ### The Auth section in Elasticsearch configuration
 
 Q：I see that when configuring Elasticsearch, I need to specify user information, what is use for?
+
 A：INFINI Gateway is a transparent gateway, the parameters that are passed before the gateway placed,
 just keep them same, such as identity information or any other parameters that need to be passed.
 The auth information in the gateway mainly used to obtain the internal running status or metadata info of the cluster,
@@ -29,6 +30,7 @@ But there are other benefits of using `bulk_reshuffle`, for example, the impact 
 ### Elasticsearch 401 Error
 
 Q：I see some error when switch to INFINI Gateway: `missing authentication credentials for REST request [/]`
+
 A：The INFINI gateway is a transparent gateway. The auth information configured in the gateway only used for the communication between the gateway and Elasticsearch. Clients still need to pass appropriate auth information to access Elasticsearch resources.
 
 ## Common Faults
