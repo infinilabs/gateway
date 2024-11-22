@@ -5,11 +5,16 @@
 package http
 
 import (
+	"bufio"
 	"fmt"
-	"infini.sh/framework/core/api"
+	"io"
 	"math/rand"
+	"net"
+	"strings"
 	"sync"
 	"time"
+
+	"infini.sh/framework/core/api"
 
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
@@ -123,9 +128,69 @@ func cleanHopHeaders(req *fasthttp.Request) {
 	}
 }
 
+// 判断是否为 WebSocket 请求
+func isWebSocketRequest(ctx *fasthttp.RequestCtx) bool {
+	return ctx.Request.Header.IsGet() && strings.ToLower(string(ctx.Request.Header.Peek("Upgrade"))) == "websocket"
+}
+
+// 转发数据
+func forwardData(src io.Reader, dst io.Writer) {
+	buf := make([]byte, 4096)
+	for {
+		n, err := src.Read(buf)
+		if err != nil {
+			if err != io.EOF {
+				log.Warn("Error reading data:", err)
+			}
+			break
+		}
+		if _, err := dst.Write(buf[:n]); err != nil {
+			log.Warn("Error writing data:", err)
+			break
+		}
+	}
+}
+
+func doWS(host string, ctx *fasthttp.RequestCtx) error {
+	conn := ctx.Conn()
+	defer conn.Close()
+
+	backendConn, err := net.Dial("tcp", host)
+	if err != nil {
+		return fmt.Errorf("failed to connect to backend WebSocket server: %w", err)
+	}
+	defer backendConn.Close()
+
+	req := &ctx.Request
+	if _, err := req.WriteTo(backendConn); err != nil {
+		return fmt.Errorf("failed to send handshake request to backend server: %w", err)
+	}
+
+	// 使用 bufio.Reader 读取后端服务器的响应
+	br := bufio.NewReader(backendConn)
+	var backendResp fasthttp.Response
+	if err := backendResp.Read(br); err != nil {
+		return fmt.Errorf("failed to read handshake response from backend server: %w", err)
+	}
+
+	// 将后端服务器的握手响应转发给客户端
+	bw := bufio.NewWriter(conn)
+	if err := backendResp.Write(bw); err != nil {
+		return fmt.Errorf("failed to send handshake response to client: %w", err)
+	}
+	if err := bw.Flush(); err != nil {
+		return fmt.Errorf("failed to flush buffered data to client: %w", err)
+	}
+
+	go forwardData(conn, backendConn)
+	forwardData(backendConn, conn)
+
+	return nil
+}
+
 func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err error) {
 
-	if !filter.SkipCleanupHopHeaders {
+	if !filter.SkipCleanupHopHeaders && !isWebSocketRequest(ctx) {
 		cleanHopHeaders(&ctx.Request)
 	}
 
@@ -139,6 +204,7 @@ func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err er
 	ctx.Request.SetHost(host)
 
 	//keep original host
+	ctx.Request.UseHostHeader = true
 	ctx.Request.Header.SetHost(orignalHost)
 
 	if !filter.SkipEnrichMetadata {
@@ -169,6 +235,8 @@ func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err er
 
 		if filter.FollowRedirects {
 			err = client.DoRedirects(&ctx.Request, res, filter.MaxRedirectsCount)
+		} else if isWebSocketRequest(ctx) {
+			return doWS(host, ctx)
 		} else {
 			if filter.requestTimeout > 0 {
 				err = client.DoTimeout(&ctx.Request, res, filter.requestTimeout)
@@ -264,9 +332,7 @@ func NewHTTPFilter(c *config.Config) (pipeline.Filter, error) {
 		runner.clients.Store(host, c)
 	}
 
-	runner.HTTPPool=fasthttp.NewRequestResponsePool("http_filter")
-
+	runner.HTTPPool = fasthttp.NewRequestResponsePool("http_filter")
 
 	return &runner, nil
 }
-
