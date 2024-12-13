@@ -259,7 +259,7 @@ pipeline:
     keep_running: true
     processor:
       - bulk_indexing:
-          num_of_slices: 3 #runtime slicing
+          num_of_slices: 1 #runtime slicing
           bulk:
             compress: false
             batch_size_in_mb: 10
@@ -287,7 +287,7 @@ pipeline:
     processor:
       - bulk_indexing:
           max_connection_per_node: 1000
-          num_of_slices: 2 #runtime slice
+          num_of_slices: 1 #runtime slice
           max_worker_size: 200
           idle_timeout_in_seconds: 10
           bulk:
