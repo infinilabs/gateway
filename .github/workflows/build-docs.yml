@@ -21,23 +21,38 @@ jobs:
       - name: Set Variables Based on Ref
         id: vars
         run: |
+          PRODUCT_NAME=$(basename $(pwd))  # Get the directory name as the product name
+          echo "PRODUCT_NAME=$PRODUCT_NAME" >> $GITHUB_ENV
           CURRENT_REF=${GITHUB_REF##*/}
+          IS_SEMVER=false
+          SEMVER_REGEX="^v([0-9]+)\.([0-9]+)\.([0-9]+)$"
+
           if [[ "${GITHUB_REF_TYPE}" == "branch" ]]; then
             if [[ "$CURRENT_REF" == "main" ]]; then
               echo "VERSION=main" >> $GITHUB_ENV
               echo "BRANCH=main" >> $GITHUB_ENV
-            else
+            elif [[ "$CURRENT_REF" =~ $SEMVER_REGEX ]]; then
+              IS_SEMVER=true
               echo "VERSION=$CURRENT_REF" >> $GITHUB_ENV
               echo "BRANCH=$CURRENT_REF" >> $GITHUB_ENV
+            else
+              echo "Branch '$CURRENT_REF' is not a valid semantic version. Skipping build."
+              exit 0
             fi
           elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            echo "VERSION=$CURRENT_REF" >> $GITHUB_ENV
-            echo "BRANCH=main" >> $GITHUB_ENV  # Set BRANCH to 'main' for tags
+            if [[ "$CURRENT_REF" =~ $SEMVER_REGEX ]]; then
+              IS_SEMVER=true
+              echo "VERSION=$CURRENT_REF" >> $GITHUB_ENV
+              echo "BRANCH=main" >> $GITHUB_ENV  # Set BRANCH to 'main' for tags
+            else
+              echo "Tag '$CURRENT_REF' is not a valid semantic version. Skipping build."
+              exit 0
+            fi
           fi
 
-          # Gather branches and tags, sort, remove duplicates
+          # Gather branches and tags, filter for semantic versions, sort, remove duplicates
           VERSIONS=$(git for-each-ref refs/remotes/origin refs/tags --format="%(refname:short)" | \
-            grep -E "^v[0-9.]+$" | sort -Vr | uniq | tr '\n' ',' | sed 's/,$//')
+            grep -E "^v[0-9]+\.[0-9]+\.[0-9]+$" | sort -Vr | uniq | tr '\n' ',' | sed 's/,$//')
           echo "VERSIONS=main,$VERSIONS" >> $GITHUB_ENV
 
       - name: Install Hugo
@@ -65,7 +80,7 @@ jobs:
           
           if [[ -n $(git status --porcelain) ]]; then
             git add .
-            git commit -m "Rebuild docs for version $VERSION"
+            git commit -m "Rebuild $PRODUCT_NAME docs for version $VERSION"
             git push origin main
           else
             echo "No changes to commit."
@@ -93,7 +108,7 @@ jobs:
             
             if [[ -n $(git status --porcelain) ]]; then
               git add .
-              git commit -m "Rebuild docs for main branch with latest version"
+              git commit -m "Rebuild $PRODUCT_NAME docs for main branch with latest version"
               git push origin main
             else
               echo "No changes to commit for main."
