@@ -6,6 +6,6 @@ gateway: {
       contacts: ' -v ',
     }
   ],
-  version: '1.26.1-1472',
+  version: '1.27.0-1937',
   doc: "/docs/latest/gateway/getting-started/install/"
 }
