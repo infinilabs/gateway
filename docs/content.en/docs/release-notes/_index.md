@@ -10,6 +10,16 @@ Information about release notes of INFINI Gateway is provided here.
 ## Latest (In development)
 
 ### Breaking changes
+
+### Features
+
+### Bug fix
+
+### Improvements
+
+## 1.27.0 (2024-12-13)
+
+### Breaking changes
 - chore: update default branch for vendor	
 ### Features
 - feat: auto issue certificates for domain
