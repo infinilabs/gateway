@@ -19,37 +19,36 @@ Information about release notes of INFINI Gateway is provided here.
 
 ## 1.27.0 (2024-12-13)
 
-### Breaking changes
-- chore: update default branch for vendor	
-### Features
-- feat: auto issue certificates for domain
-- feat: support filter config file (#620)
-- feat: add configs param `allow_generated_metrics_tasks`
-- feat: add param context for es api ClusterHealth and ClusterStats
-- fix: getting cluster version with timeout	
-- feat: support passing query param level to cluster health api
-- feat: crontab task support timezone	
-- feat: support tz draft	
-- feat: support customize event queue	
+### Breaking Changes
+- Update default branch for vendor
 
-### Bug fix
-- fix: rollback for client register
-- fix: reload when file is in dirty read	
-- fix: prevent consumer from advancing beyond writer's segment	
-- fix: wait group usage in bulk_indexing processor	
-- fix: query_string query was ignored (#588) 	
+### Features
+- Auto-issue certificates for domains
+- Support filter config file (#620)
+- Add configs parameter allow_generated_metrics_tasks
+- Add parameter context for ES API ClusterHealth and ClusterStats
+- Support passing query parameter level to cluster health API
+- Crontab task support for timezones
+- Support timezone draft
+- Customize event queue
+
+### Bug Fixes
+- Rollback for client registration
+- Reload when file is in dirty read
+- Prevent consumer from advancing beyond writer’s segment
+- Fix wait group usage in bulk indexing processor
+- Query string query was ignored (#588)
 
 ### Improvements
-- refactor: refactoring system config
-- chore: add uuid to websocket session
-- chore: add util to parse parameter, panic on missing	
-- chore: adjust logging format	
-- fix: refactoring inflight check
-- chore: update license header	
-- chore: add util to register schema	
-- chore: log with ip and agent register when restart agent
-- chore: update cli naming style (#589) 
-
+- Refactor system configuration
+- Add UUID to WebSocket session
+- Add utility to parse parameters, panic on missing
+- Adjust logging format
+- Refactor inflight check
+- Update license header
+- Add utility to register schema
+- Log with IP and agent register during agent restart
+- Update CLI naming style (#589)
 
 ## 1.26.1 (2024-08-13)
 
@@ -62,14 +61,14 @@ Information about release notes of INFINI Gateway is provided here.
 
 ### Improvements
 
-- feat: add wildcard_domain filter
-- chore: remove security filter and translog_viewer
+- Add wildcard_domain filter
+- Remove security filter and translog_viewer
 
 ## 1.25.0 (2024-04-30)
 
 ### Improvements
 
-- add push err and log pop timeout err
+- Add push err and log pop timeout err
 
 ### Bug fix
 
