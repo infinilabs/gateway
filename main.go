@@ -79,11 +79,11 @@ func main() {
 	terminalHeader += (" / /_\\///_\\\\  / /\\/_\\  \\ \\/  \\/ //_\\\\\\_ _/\n")
 	terminalHeader += ("/ /_\\\\/  _  \\/ / //__   \\  /\\  /  _  \\/ \\ \n")
 	terminalHeader += ("\\____/\\_/ \\_/\\/  \\__/    \\/  \\/\\_/ \\_/\\_/ \n\n")
-	terminalHeader += ("Web: https://github.com/infinilabs/gateway/\n\n")
+	terminalHeader += ("HOME: https://github.com/infinilabs/gateway/\n\n")
 
 	terminalFooter := ""
 
-	app := framework.NewApp("gateway", "A light-weight, powerful and high-performance search gateway, open sourced under the GNU Affero General Public License v3.0.\n\n\n",
+	app := framework.NewApp("gateway", "A light-weight, powerful and high-performance search gateway, open-sourced under the GNU AGPLv3.",
 		config.Version, config.BuildNumber, config.LastCommitLog, config.BuildDate, config.EOLDate, terminalHeader, terminalFooter)
 
 	app.Init(nil)
