@@ -33,7 +33,7 @@ pipeline:
 
 | Name                    | Type   | Description                                                                                                                                                                                       |
 | ----------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| input_queue             | int    | Name of a subscribed queue                                                                                                                                                                        |
+| input_queue             | string | Name of a subscribed queue                                                                                                                                                                        |
 | worker_size             | int    | Number of threads that concurrently execute consumption tasks, which is set to `1` by default.                                                                                                    |
 | idle_timeout_in_seconds | int    | Timeout duration of the consumption queue, in seconds. The default value is `5`.                                                                                                                  |
 | bulk_size_in_kb         | int    | Size of a bulk request, in `KB`.                                                                                                                                                                  |
