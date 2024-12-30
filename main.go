@@ -31,7 +31,6 @@ import (
 	_ "expvar"
 	"infini.sh/framework"
 	"infini.sh/framework/core/module"
-	"infini.sh/framework/core/util"
 	"infini.sh/framework/modules/api"
 	"infini.sh/framework/modules/elastic"
 	"infini.sh/framework/modules/metrics"
@@ -80,11 +79,12 @@ func main() {
 	terminalHeader += (" / /_\\///_\\\\  / /\\/_\\  \\ \\/  \\/ //_\\\\\\_ _/\n")
 	terminalHeader += ("/ /_\\\\/  _  \\/ / //__   \\  /\\  /  _  \\/ \\ \n")
 	terminalHeader += ("\\____/\\_/ \\_/\\/  \\__/    \\/  \\/\\_/ \\_/\\_/ \n\n")
+	terminalHeader += ("Web: https://github.com/infinilabs/gateway/\n\n")
 
 	terminalFooter := ""
 
-	app := framework.NewApp("gateway", "A light-weight, powerful and high-performance search gateway.",
-		util.TrimSpaces(config.Version), util.TrimSpaces(config.BuildNumber), util.TrimSpaces(config.LastCommitLog), util.TrimSpaces(config.BuildDate), util.TrimSpaces(config.EOLDate), terminalHeader, terminalFooter)
+	app := framework.NewApp("gateway", "A light-weight, powerful and high-performance search gateway, open sourced under the GNU Affero General Public License v3.0.\n\n\n",
+		config.Version, config.BuildNumber, config.LastCommitLog, config.BuildDate, config.EOLDate, terminalHeader, terminalFooter)
 
 	app.Init(nil)
 
