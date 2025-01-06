@@ -27,7 +27,6 @@ jobs:
                 repository: infinilabs/framework
                 path: framework
 
-
             - name: Checkout framework-vendor
               uses: actions/checkout@v4
               with:
