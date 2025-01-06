@@ -46,16 +46,6 @@ jobs:
             - name: Check go toolchain
               run: go version
 
-            - name: Cache Build Output
-              uses: actions/cache@v4
-              with:
-                path: |
-                 .public
-                key: ${{ runner.os }}-build-${{ hashFiles('**/package.json') }}-${{ github.sha }}
-                restore-keys: |
-                 ${{ runner.os }}-build-${{ hashFiles('**/package.json') }}-
-                 ${{ runner.os }}-build-
-
             - name: Unit test
               run: |
                 echo Home path is $HOME
