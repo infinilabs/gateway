@@ -26,12 +26,15 @@ package ldap
 import (
 	"context"
 	"fmt"
-	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/lib/guardian/auth/strategies/ldap"
 	"testing"
+
+	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/framework/lib/guardian/auth/strategies/ldap"
 )
 
 func TestLDAPFunctions(t *testing.T) {
+
+	t.Skip()
 
 	cfg := ldap.Config{
 		BaseDN:       "dc=example,dc=com",
@@ -39,10 +42,10 @@ func TestLDAPFunctions(t *testing.T) {
 		Port:         389,
 		Host:         "ldap.forumsys.com",
 		BindPassword: "password",
-		UserFilter:       "(uid=%s)",
+		UserFilter:   "(uid=%s)",
 	}
 
-	r:=fasthttp.AcquireRequest()
+	r := &fasthttp.Request{}
 	r.SetBasicAuth("galieleo", "password")
 
 	user, err := ldap.New(&cfg).Authenticate(context.Background(), r)
@@ -52,6 +55,5 @@ func TestLDAPFunctions(t *testing.T) {
 	fmt.Println(user.GetID())
 	fmt.Println(user.GetGroups())
 	fmt.Println(user.GetExtensions())
-
 
 }
