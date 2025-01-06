@@ -1,0 +1,99 @@
+name: Gateway Go Test
+
+on:
+    pull_request:
+        branches: [ "main" ]
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        env:
+            GO_VERSION: 1.23.4
+            NODEJS_VERSION: 16.20.2
+        steps:
+            - name: Checkout current repository
+              uses: actions/checkout@v4
+              with:
+                fetch-depth: 0
+                path: gateway
+
+            - name: Checkout framework repository
+              uses: actions/checkout@v4
+              with:
+                fetch-depth: 0
+                repository: infinilabs/framework
+                path: framework
+
+
+            - name: Checkout framework-vendor
+              uses: actions/checkout@v4
+              with:
+                ref: main
+                fetch-depth: 0
+                repository: infinilabs/framework-vendor
+                path: vendor
+
+            - name: Set up nodejs toolchain
+              uses: actions/setup-node@v4
+              with:
+                node-version: ${{ env.NODEJS_VERSION }}
+
+            - name: Cache dependencies
+              uses: actions/cache@v4
+              with:
+                path: |
+                  node_modules
+                key: ${{ runner.os }}-cnpm-${{ hashFiles('**/package.json') }}
+                restore-keys: |
+                  ${{ runner.os }}-cnpm-
+
+            - name: Check nodejs toolchain
+              run: |
+                if ! command -v cnpm >/dev/null 2>&1; then
+                  npm install -g rimraf --quiet --no-progress
+                  npm install -g cnpm@9.2.0 --quiet --no-progress
+                fi
+                node -v && npm -v && cnpm -v
+
+            - name: Set up go toolchain
+              uses: actions/setup-go@v5
+              with:
+                go-version: ${{ env.GO_VERSION }}
+                check-latest: false
+                cache: true
+
+            - name: Check go toolchain
+              run: go version
+
+            - name: Cache Build Output
+              uses: actions/cache@v4
+              with:
+                path: |
+                 .public
+                key: ${{ runner.os }}-build-${{ hashFiles('**/package.json') }}-${{ github.sha }}
+                restore-keys: |
+                 ${{ runner.os }}-build-${{ hashFiles('**/package.json') }}-
+                 ${{ runner.os }}-build-
+
+            - name: Test gateway code
+              run: |
+                echo Home path is $HOME
+                export WORKBASE=$HOME/go/src/infini.sh
+                export WORK=$WORKBASE/gateway
+
+                # for test workspace
+                mkdir -p $HOME/go/src/
+                ln -s $GITHUB_WORKSPACE $WORKBASE
+                
+                # check work folder
+                ls -lrt $WORKBASE/
+                ls -alrt $WORK
+
+                # for unit test
+                cd $WORK
+                echo Testing code at $PWD ...
+                make test
