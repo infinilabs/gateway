@@ -1,4 +1,4 @@
-name: Gateway Go Test
+name: Unit Test
 
 on:
     pull_request:
@@ -13,7 +13,6 @@ jobs:
         runs-on: ubuntu-latest
         env:
             GO_VERSION: 1.23.4
-            NODEJS_VERSION: 16.20.2
         steps:
             - name: Checkout current repository
               uses: actions/checkout@v4
@@ -37,28 +36,6 @@ jobs:
                 repository: infinilabs/framework-vendor
                 path: vendor
 
-            - name: Set up nodejs toolchain
-              uses: actions/setup-node@v4
-              with:
-                node-version: ${{ env.NODEJS_VERSION }}
-
-            - name: Cache dependencies
-              uses: actions/cache@v4
-              with:
-                path: |
-                  node_modules
-                key: ${{ runner.os }}-cnpm-${{ hashFiles('**/package.json') }}
-                restore-keys: |
-                  ${{ runner.os }}-cnpm-
-
-            - name: Check nodejs toolchain
-              run: |
-                if ! command -v cnpm >/dev/null 2>&1; then
-                  npm install -g rimraf --quiet --no-progress
-                  npm install -g cnpm@9.2.0 --quiet --no-progress
-                fi
-                node -v && npm -v && cnpm -v
-
             - name: Set up go toolchain
               uses: actions/setup-go@v5
               with:
@@ -79,7 +56,7 @@ jobs:
                  ${{ runner.os }}-build-${{ hashFiles('**/package.json') }}-
                  ${{ runner.os }}-build-
 
-            - name: Test gateway code
+            - name: Unit test
               run: |
                 echo Home path is $HOME
                 export WORKBASE=$HOME/go/src/infini.sh
