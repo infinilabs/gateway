@@ -1,7 +1,7 @@
 package config
 
 type UIConfig struct {
-	Enabled bool `config:"enabled"`
+	Enabled      bool   `config:"enabled"`
 	LocalPath    string `config:"path"`
 	LocalEnabled bool   `config:"local"`
 	VFSEnabled   bool   `config:"vfs"`

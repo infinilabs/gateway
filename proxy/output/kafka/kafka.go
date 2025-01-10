@@ -78,7 +78,7 @@ func (filter *Kafka) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("kafka",NewKafkaFilter,&Kafka{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("kafka", NewKafkaFilter, &Kafka{})
 }
 
 func NewKafkaFilter(c *config.Config) (pipeline.Filter, error) {
@@ -109,8 +109,7 @@ func NewKafkaFilter(c *config.Config) (pipeline.Filter, error) {
 
 	runner.taskContext = context.Background()
 	runner.messages = []kafka.Message{}
-	runner.lock=sync.Mutex{}
-
+	runner.lock = sync.Mutex{}
 
 	return &runner, nil
 }

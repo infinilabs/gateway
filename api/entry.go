@@ -146,8 +146,8 @@ func (h *GatewayAPI) searchEntry(w http.ResponseWriter, req *http.Request, ps ht
 	var (
 		name        = h.GetParameterOrDefault(req, "name", "")
 		queryDSL    = `{"query":{"bool":{"must":[%s]}}, "size": %d, "from": %d}`
-		size     = h.GetIntOrDefault(req, "size", 20)
-		from     = h.GetIntOrDefault(req, "from", 0)
+		size        = h.GetIntOrDefault(req, "size", 20)
+		from        = h.GetIntOrDefault(req, "from", 0)
 		mustBuilder = &strings.Builder{}
 	)
 	if name != "" {

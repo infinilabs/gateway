@@ -57,8 +57,8 @@ type LDAPFilter struct {
 	GroupAttribute string   `config:"group_attribute"`
 	Attributes     []string `config:"attributes"`
 	RequireGroup   bool     `config:"require_group"`
-	MaxCacheItems   int     `config:"max_cache_items"`
-	CacheTTL   string     `config:"cache_ttl"`
+	MaxCacheItems  int      `config:"max_cache_items"`
+	CacheTTL       string   `config:"cache_ttl"`
 
 	BypassAPIKey bool `config:"bypass_api_key"`
 	ldapQuery    auth.Strategy
@@ -113,7 +113,7 @@ func (filter *LDAPFilter) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("ldap_auth",pipeline.FilterConfigChecked(NewLDAPFilter, pipeline.RequireFields("host","bind_dn","base_dn")),&LDAPFilter{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("ldap_auth", pipeline.FilterConfigChecked(NewLDAPFilter, pipeline.RequireFields("host", "bind_dn", "base_dn")), &LDAPFilter{})
 }
 
 func NewLDAPFilter(c *config.Config) (pipeline.Filter, error) {
@@ -122,7 +122,7 @@ func NewLDAPFilter(c *config.Config) (pipeline.Filter, error) {
 		Tls:            false,
 		RequireGroup:   true,
 		Port:           389,
-		CacheTTL: "300s",
+		CacheTTL:       "300s",
 		UserFilter:     "(uid=%s)",
 		GroupFilter:    "(memberUid=%s)",
 		UidAttribute:   "uid",
@@ -153,14 +153,14 @@ func NewLDAPFilter(c *config.Config) (pipeline.Filter, error) {
 	}
 
 	cacheObj := libcache.LRU.New(runner.MaxCacheItems)
-	if runner.CacheTTL!=""{
-		cacheObj.SetTTL(util.GetDurationOrDefault(runner.CacheTTL,time.Minute*5))
+	if runner.CacheTTL != "" {
+		cacheObj.SetTTL(util.GetDurationOrDefault(runner.CacheTTL, time.Minute*5))
 	}
 	cacheObj.RegisterOnExpired(func(key, _ interface{}) {
 		cacheObj.Peek(key)
 	})
 
-	runner.ldapQuery = ldap.NewCached(&cfg,cacheObj)
+	runner.ldapQuery = ldap.NewCached(&cfg, cacheObj)
 
 	return &runner, nil
 }

@@ -76,8 +76,8 @@ func main() {
 
 	// Upload the zip file
 	filePath := "/Users/medcl/Downloads/coraza-waf-master.zip"
-	folder:="myfolder"
-	objectName := path.Join(folder,filepath.Base(filePath))
+	folder := "myfolder"
+	objectName := path.Join(folder, filepath.Base(filePath))
 
 	contentType := "application/zip"
 
@@ -90,4 +90,3 @@ func main() {
 	log.Printf("Successfully uploaded %s of size %d\n", objectName, info.Size)
 
 }
-

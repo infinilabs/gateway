@@ -66,7 +66,7 @@ func TestAnomalyzer(t *testing.T) {
 
 	prob := anomalyzer.Push(1.6)
 	fmt.Println(prob)
-	assert.Equal(t, prob > 0.5,true, "Anomalyzer returned a probability that was too small")
+	assert.Equal(t, prob > 0.5, true, "Anomalyzer returned a probability that was too small")
 }
 
 func Example() {

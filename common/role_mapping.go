@@ -26,13 +26,11 @@
 
 package common
 
-
-func GetLDAPGroupsMappingRoles(str []string)[]string  {
+func GetLDAPGroupsMappingRoles(str []string) []string {
 	var roles []string
-	roles=append(roles,"admin")
+	roles = append(roles, "admin")
 	return roles
 }
-
 
 type Roles struct {
 	ClusterAllowedRoles map[string][]Role
@@ -41,7 +39,7 @@ type Roles struct {
 
 type Role struct {
 	Cluster []ClusterPermission //A list of cluster privileges.
-	Indices []IndexPermission //A list of indices permissions entries.
+	Indices []IndexPermission   //A list of indices permissions entries.
 }
 
 type ClusterPermission struct {
@@ -50,10 +48,10 @@ type ClusterPermission struct {
 }
 
 type IndexPermission struct {
-	Name []string
-	Privileges []string
-	FieldSecurity []string
-	Query string
+	Name                   []string
+	Privileges             []string
+	FieldSecurity          []string
+	Query                  string
 	AllowRestrictedIndices string
 }
 

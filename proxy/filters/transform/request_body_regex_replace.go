@@ -58,7 +58,7 @@ func (filter *RequestBodyRegexReplace) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("request_body_regex_replace",NewRequestBodyRegexReplace,&RequestBodyRegexReplace{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_body_regex_replace", NewRequestBodyRegexReplace, &RequestBodyRegexReplace{})
 }
 
 func NewRequestBodyRegexReplace(c *config.Config) (filter pipeline.Filter, err error) {

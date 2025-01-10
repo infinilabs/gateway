@@ -39,10 +39,10 @@ func TestLDAPFunctions(t *testing.T) {
 		Port:         389,
 		Host:         "ldap.forumsys.com",
 		BindPassword: "password",
-		UserFilter:       "(uid=%s)",
+		UserFilter:   "(uid=%s)",
 	}
 
-	r:=fasthttp.AcquireRequest()
+	r := fasthttp.AcquireRequest()
 	r.SetBasicAuth("galieleo", "password")
 
 	user, err := ldap.New(&cfg).Authenticate(context.Background(), r)
@@ -52,6 +52,5 @@ func TestLDAPFunctions(t *testing.T) {
 	fmt.Println(user.GetID())
 	fmt.Println(user.GetGroups())
 	fmt.Println(user.GetExtensions())
-
 
 }

@@ -41,16 +41,16 @@ import (
 )
 
 type EnqueueFilter struct {
-	DepthThreshold               int64                  `config:"depth_threshold"`
-	Message                      string                 `config:"message"` //override the message in the request
+	DepthThreshold int64  `config:"depth_threshold"`
+	Message        string `config:"message"` //override the message in the request
 
-	Type                         string                 `config:"type"`
-	QueueName                    string                 `config:"queue_name"`
-	Labels                       map[string]interface{} `config:"labels,omitempty"`
+	Type      string                 `config:"type"`
+	QueueName string                 `config:"queue_name"`
+	Labels    map[string]interface{} `config:"labels,omitempty"`
 
-	SaveMessageOffset            bool                   `config:"save_last_produced_message_offset,omitempty"`
-	IncludeResponse              bool                   `config:"include_response,omitempty"`
-	LastProducedMessageOffsetKey string                 `config:"last_produced_message_offset_key,omitempty"`
+	SaveMessageOffset            bool   `config:"save_last_produced_message_offset,omitempty"`
+	IncludeResponse              bool   `config:"include_response,omitempty"`
+	LastProducedMessageOffsetKey string `config:"last_produced_message_offset_key,omitempty"`
 	messageBytes                 []byte
 	queueNameTemplate            *fasttemplate.Template
 	messageTemplate              *fasttemplate.Template
@@ -110,14 +110,14 @@ func (filter *EnqueueFilter) Filter(ctx *fasthttp.RequestCtx) {
 			data = filter.messageBytes
 		}
 	} else {
-		if filter.IncludeResponse{
-			buffer:=bytes.Buffer{}
-			err:= ctx.Encode(&buffer)
-			if err!=nil{
+		if filter.IncludeResponse {
+			buffer := bytes.Buffer{}
+			err := ctx.Encode(&buffer)
+			if err != nil {
 				panic(err)
 			}
-			data=buffer.Bytes()
-		}else{
+			data = buffer.Bytes()
+		} else {
 			data = ctx.Request.Encode()
 		}
 	}

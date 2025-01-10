@@ -60,7 +60,7 @@ func (filter *ContextRegexReplace) Filter(ctx *fasthttp.RequestCtx) {
 		valueStr := util.ToString(value)
 		if len(valueStr) > 0 {
 			newBody := filter.p.ReplaceAll([]byte(valueStr), util.UnsafeStringToBytes(filter.To))
-			_,err := ctx.PutValue(filter.Context, string(newBody))
+			_, err := ctx.PutValue(filter.Context, string(newBody))
 			if err != nil {
 				log.Error(err)
 				return
@@ -70,7 +70,7 @@ func (filter *ContextRegexReplace) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("context_regex_replace",NewContextRegexReplace,&ContextRegexReplace{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("context_regex_replace", NewContextRegexReplace, &ContextRegexReplace{})
 }
 
 func NewContextRegexReplace(c *config.Config) (filter pipeline.Filter, err error) {

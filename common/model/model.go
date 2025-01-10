@@ -61,14 +61,14 @@ type DataFlow struct {
 }
 
 type HttpRequest struct {
-	ID           uint64    `json:"id,omitempty"`
-	LoggingTime  string    `json:"timestamp,omitempty"`
-	LocalIP      string    `json:"local_ip,omitempty"`
-	RemoteIP     string    `json:"remote_ip,omitempty"`
-	IsTLS        bool      `json:"tls"`
-	TLSDidResume bool      `json:"tls_reuse,omitempty"`
-	Request      *Request  `json:"request,omitempty"`
-	Response     *Response `json:"response,omitempty"`
-	DataFlow     *DataFlow `json:"flow,omitempty"`
-	Elastic map[string]interface{} `json:"elastic,omitempty"`
+	ID           uint64                 `json:"id,omitempty"`
+	LoggingTime  string                 `json:"timestamp,omitempty"`
+	LocalIP      string                 `json:"local_ip,omitempty"`
+	RemoteIP     string                 `json:"remote_ip,omitempty"`
+	IsTLS        bool                   `json:"tls"`
+	TLSDidResume bool                   `json:"tls_reuse,omitempty"`
+	Request      *Request               `json:"request,omitempty"`
+	Response     *Response              `json:"response,omitempty"`
+	DataFlow     *DataFlow              `json:"flow,omitempty"`
+	Elastic      map[string]interface{} `json:"elastic,omitempty"`
 }

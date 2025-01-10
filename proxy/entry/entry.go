@@ -67,7 +67,7 @@ type Entrypoint struct {
 	rootCert      *x509.Certificate
 	rootKey       *rsa.PrivateKey
 	rootCertPEM   []byte
-	schema string
+	schema        string
 	listenAddress string
 	router        *r.Router
 	server        *fasthttp.Server
@@ -96,7 +96,7 @@ func (this *Entrypoint) Start() error {
 	var ln net.Listener
 	var err error
 
-	if this.config.NetworkConfig.ReusePort&&!strings.Contains(this.listenAddress,"::") {
+	if this.config.NetworkConfig.ReusePort && !strings.Contains(this.listenAddress, "::") {
 		log.Debug("reuse port ", this.listenAddress)
 		ln, err = reuseport.Listen("tcp4", this.config.NetworkConfig.GetBindingAddr())
 	} else {
@@ -104,7 +104,7 @@ func (this *Entrypoint) Start() error {
 	}
 
 	if err != nil {
-		panic(errors.Errorf("error in listener(%v): %s", this.listenAddress,err))
+		panic(errors.Errorf("error in listener(%v): %s", this.listenAddress, err))
 	}
 
 	this.router = r.New()
@@ -116,15 +116,15 @@ func (this *Entrypoint) Start() error {
 	if len(this.routerConfig.Rules) > 0 {
 		for _, rule := range this.routerConfig.Rules {
 
-			if this.routerConfig.RuleToggleEnabled && !rule.Enabled{
+			if this.routerConfig.RuleToggleEnabled && !rule.Enabled {
 				continue
 			}
 
 			flow := common.FilterFlow{}
 			for _, y := range rule.Flow {
 
-				cfg,err := common.GetFlowConfig(y)
-				if err!=nil{
+				cfg, err := common.GetFlowConfig(y)
+				if err != nil {
 					panic(err)
 				}
 
@@ -152,9 +152,9 @@ func (this *Entrypoint) Start() error {
 
 	if this.routerConfig.DefaultFlow != "" {
 		this.router.DefaultFlow = this.routerConfig.DefaultFlow
-		if this.router.DefaultFlow!=""{
+		if this.router.DefaultFlow != "" {
 			//init func
-			this.router.NotFound=common.GetFlowProcess(this.router.DefaultFlow)
+			this.router.NotFound = common.GetFlowProcess(this.router.DefaultFlow)
 		}
 	} else {
 		this.router.NotFound = func(ctx *fasthttp.RequestCtx) {
@@ -188,7 +188,7 @@ func (this *Entrypoint) Start() error {
 	}
 
 	if this.config.TCPKeepaliveSeconds <= 0 {
-		this.config.TCPKeepaliveSeconds = 15*60
+		this.config.TCPKeepaliveSeconds = 15 * 60
 	}
 
 	if this.config.WriteTimeout <= 0 {
@@ -216,12 +216,12 @@ func (this *Entrypoint) Start() error {
 	}
 
 	this.server = &fasthttp.Server{
-		Name:                               "INFINI",
-		NoDefaultServerHeader:              true,
-		NoDefaultDate:                      true,
-		NoDefaultContentType:               true,
-		DisableHeaderNamesNormalizing:      true,
-		DisablePreParseMultipartForm:       true,
+		Name:                          "INFINI",
+		NoDefaultServerHeader:         true,
+		NoDefaultDate:                 true,
+		NoDefaultContentType:          true,
+		DisableHeaderNamesNormalizing: true,
+		DisablePreParseMultipartForm:  true,
 		//CloseOnShutdown:       true, //TODO
 		//StreamRequestBody:       true, //TODO
 		Handler:                            this.router.Handler,
@@ -244,14 +244,14 @@ func (this *Entrypoint) Start() error {
 		MaxConnsPerIP:                      this.config.MaxConnsPerIP,
 	}
 
-	if this.routerConfig.IPAccessRules.Enabled&&len(this.routerConfig.IPAccessRules.ClientIP.DeniedList) > 0 {
+	if this.routerConfig.IPAccessRules.Enabled && len(this.routerConfig.IPAccessRules.ClientIP.DeniedList) > 0 {
 		log.Tracef("adding %v client ip to denied list", len(this.routerConfig.IPAccessRules.ClientIP.DeniedList))
 		for _, ip := range this.routerConfig.IPAccessRules.ClientIP.DeniedList {
 			this.server.AddBlackIPList(ip)
 		}
 	}
 
-	if this.routerConfig.IPAccessRules.Enabled&&len(this.routerConfig.IPAccessRules.ClientIP.PermittedList) > 0 {
+	if this.routerConfig.IPAccessRules.Enabled && len(this.routerConfig.IPAccessRules.ClientIP.PermittedList) > 0 {
 		log.Tracef("adding %v client ip to permitted list", len(this.routerConfig.IPAccessRules.ClientIP.PermittedList))
 		for _, ip := range this.routerConfig.IPAccessRules.ClientIP.PermittedList {
 			this.server.AddWhiteIPList(ip)
@@ -270,7 +270,7 @@ func (this *Entrypoint) Start() error {
 			SessionTicketsDisabled:   false,
 			//		ClientAuth:   tls.RequireAndVerifyClientCert,
 			//		ClientCAs:    caCertPool,
-			ClientSessionCache:       tls.NewLRUClientSessionCache(this.config.TLSConfig.ClientSessionCacheSize),
+			ClientSessionCache: tls.NewLRUClientSessionCache(this.config.TLSConfig.ClientSessionCacheSize),
 			CipherSuites: []uint16{
 				//tls.TLS_AES_128_GCM_SHA256,
 				//tls.TLS_AES_256_GCM_SHA384,
@@ -292,14 +292,13 @@ func (this *Entrypoint) Start() error {
 		}
 
 		var ca, cert, key string
-		cert=this.config.TLSConfig.TLSCertFile
-		key=this.config.TLSConfig.TLSKeyFile
+		cert = this.config.TLSConfig.TLSCertFile
+		key = this.config.TLSConfig.TLSKeyFile
 
 		log.Trace("using tls connection")
 
 		if cert != "" && key != "" {
 			log.Debug("using pre-defined cert files")
-
 
 		} else {
 			ca = path.Join(global.Env().GetDataDir(), "certs", "root.cert")
@@ -414,7 +413,7 @@ func (this *Entrypoint) Start() error {
 		panic(err)
 	}
 
-	stats.RegisterStats(fmt.Sprintf("entry.%v.open_connections",this.GetNameOrID()), func() interface{} {
+	stats.RegisterStats(fmt.Sprintf("entry.%v.open_connections", this.GetNameOrID()), func() interface{} {
 		return this.server.GetOpenConnectionsCount()
 	})
 
@@ -423,24 +422,23 @@ func (this *Entrypoint) Start() error {
 	return nil
 }
 
-func (this *Entrypoint) GetNameOrID()string{
-	if this.config.Name!=""{
+func (this *Entrypoint) GetNameOrID() string {
+	if this.config.Name != "" {
 		return this.config.Name
-	}else if this.config.ID!=""{
+	} else if this.config.ID != "" {
 		return this.config.ID
-	}else{
+	} else {
 		return "undefined"
 	}
 }
 
-
-func (this *Entrypoint) GetSchema()string{
-	if this.schema!=""{
+func (this *Entrypoint) GetSchema() string {
+	if this.schema != "" {
 		return this.schema
 	}
-	if this.config.TLSConfig.TLSEnabled{
+	if this.config.TLSConfig.TLSEnabled {
 		return "https://"
-	}else{
+	} else {
 		return "http://"
 	}
 }
@@ -454,20 +452,20 @@ func (this *Entrypoint) GetRouterConfig() common.RouterConfig {
 }
 
 func (this *Entrypoint) GetFlows() map[string]common.FilterFlow {
-	cfgs:=map[string]common.FilterFlow{}
+	cfgs := map[string]common.FilterFlow{}
 
-	defaultFlow,err:=common.GetFlow(this.routerConfig.DefaultFlow)
-	if err!=nil{
+	defaultFlow, err := common.GetFlow(this.routerConfig.DefaultFlow)
+	if err != nil {
 		panic(err)
 	}
-	cfgs[this.routerConfig.DefaultFlow]=defaultFlow
+	cfgs[this.routerConfig.DefaultFlow] = defaultFlow
 
-	if this.routerConfig.TracingFlow!=""{
-		tracingFlow,err:=common.GetFlow(this.routerConfig.TracingFlow)
-		if err!=nil{
+	if this.routerConfig.TracingFlow != "" {
+		tracingFlow, err := common.GetFlow(this.routerConfig.TracingFlow)
+		if err != nil {
 			panic(err)
 		}
-		cfgs[this.routerConfig.TracingFlow]=tracingFlow
+		cfgs[this.routerConfig.TracingFlow] = tracingFlow
 	}
 
 	return cfgs
@@ -530,23 +528,24 @@ func (this *Entrypoint) Stop() error {
 				}
 			}()
 
-			if r := recover(); r != nil {}
-			ticker := time.NewTicker(3*time.Second)
+			if r := recover(); r != nil {
+			}
+			ticker := time.NewTicker(3 * time.Second)
 			for {
 				select {
 				case <-ticker.C:
-					time.Sleep(1*time.Second)
-					if util.ContainStr(this.listenAddress,"0.0.0.0"){
-						this.listenAddress=strings.Replace(this.listenAddress,"0.0.0.0","127.0.0.1",-1)
+					time.Sleep(1 * time.Second)
+					if util.ContainStr(this.listenAddress, "0.0.0.0") {
+						this.listenAddress = strings.Replace(this.listenAddress, "0.0.0.0", "127.0.0.1", -1)
 					}
-					util.HttpGet(this.GetSchema()+this.listenAddress+"/")
+					util.HttpGet(this.GetSchema() + this.listenAddress + "/")
 				case <-ctx.Done():
 					return
 				}
 			}
 		}(ctx)
 
-		if this.server!=nil{
+		if this.server != nil {
 			this.server.Shutdown()
 		}
 	}

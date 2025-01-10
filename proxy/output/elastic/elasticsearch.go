@@ -91,14 +91,14 @@ func init() {
 func New(c *config.Config) (pipeline.Filter, error) {
 
 	cfg := ProxyConfig{
-		Balancer:              "weight",
-		MaxResponseBodySize:   100 * 1024 * 1024,
-		MaxConnection:         5000,
-		MaxRetryTimes:         0,
-		RetryDelayInMs:        1000,
-		TLSInsecureSkipVerify: true,
-		ReadBufferSize:        4096 * 4,
-		WriteBufferSize:       4096 * 4,
+		Balancer:                           "weight",
+		MaxResponseBodySize:                100 * 1024 * 1024,
+		MaxConnection:                      5000,
+		MaxRetryTimes:                      0,
+		RetryDelayInMs:                     1000,
+		TLSInsecureSkipVerify:              true,
+		ReadBufferSize:                     4096 * 4,
+		WriteBufferSize:                    4096 * 4,
 		CheckClusterHealthWhenNotAvailable: true,
 		//maxt wait timeout for free connection
 		MaxConnWaitTimeout: util.GetDurationOrDefault("30s", 30*time.Second),

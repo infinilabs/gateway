@@ -179,7 +179,7 @@ func (h *GatewayAPI) searchFlow(w http.ResponseWriter, req *http.Request, ps htt
 
 func (h *GatewayAPI) getFlowFilters(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 
-	meta:=pipeline.GetFilterMetadata()
+	meta := pipeline.GetFilterMetadata()
 
-	h.WriteJSON(w, meta,200)
+	h.WriteJSON(w, meta, 200)
 }

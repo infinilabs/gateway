@@ -43,7 +43,7 @@ func (filter *DropFilter) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("drop", NewDropFilter,&DropFilter{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("drop", NewDropFilter, &DropFilter{})
 }
 
 func NewDropFilter(c *config.Config) (pipeline.Filter, error) {

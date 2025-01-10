@@ -40,7 +40,7 @@ type FilterFlow struct {
 }
 
 func (flow *FilterFlow) JoinFilter(filter pipeline.Filter) *FilterFlow {
-	if filter==nil||filter.Filter==nil{
+	if filter == nil || filter.Filter == nil {
 		panic("invalid filer")
 	}
 	flow.Filters = append(flow.Filters, filter)
@@ -62,7 +62,7 @@ func (flow *FilterFlow) ToString() string {
 
 func (flow *FilterFlow) Process(ctx *fasthttp.RequestCtx) {
 	for _, v := range flow.Filters {
-		if v==nil{
+		if v == nil {
 			panic("invalid filter")
 		}
 		if !ctx.ShouldContinue() {
@@ -79,22 +79,23 @@ func (flow *FilterFlow) Process(ctx *fasthttp.RequestCtx) {
 		v.Filter(ctx)
 	}
 }
-var nilIDFlowError=errors.New("flow id can't be nil")
 
-func GetFlow(flowID string) (FilterFlow,error) {
+var nilIDFlowError = errors.New("flow id can't be nil")
+
+func GetFlow(flowID string) (FilterFlow, error) {
 	v := FilterFlow{}
-	if flowID==""{
-		return v,nilIDFlowError
+	if flowID == "" {
+		return v, nilIDFlowError
 	}
 
-	v1,ok:=flows.Load(flowID)
-	if ok{
-		return v1.(FilterFlow),nil
+	v1, ok := flows.Load(flowID)
+	if ok {
+		return v1.(FilterFlow), nil
 	}
 
-	cfg,err := GetFlowConfig(flowID)
-	if err!=nil{
-		return v,err
+	cfg, err := GetFlowConfig(flowID)
+	if err != nil {
+		return v, err
 	}
 
 	if global.Env().IsDebug {
@@ -103,20 +104,20 @@ func GetFlow(flowID string) (FilterFlow,error) {
 
 	if len(cfg.Filters) > 0 {
 		flow1, err := pipeline.NewFilter(cfg.GetConfig())
-		if flow1==nil||err != nil {
-			return v,err
+		if flow1 == nil || err != nil {
+			return v, err
 		}
 		v.JoinFilter(flow1)
 	}
 
 	flows.Store(flowID, v)
-	return v,nil
+	return v, nil
 }
 
 func MustGetFlow(flowID string) FilterFlow {
 
-	flow,err:=GetFlow(flowID)
-	if err!=nil{
+	flow, err := GetFlow(flowID)
+	if err != nil {
 		panic(err)
 	}
 	return flow
@@ -137,10 +138,10 @@ func ClearFlowCache(flow string) {
 	flows.Delete(flow)
 }
 
-func GetAllFlows()map[string]FilterFlow{
-	data:=map[string]FilterFlow{}
+func GetAllFlows() map[string]FilterFlow {
+	data := map[string]FilterFlow{}
 	flows.Range(func(key, value any) bool {
-		data[key.(string)]=value.(FilterFlow)
+		data[key.(string)] = value.(FilterFlow)
 		return true
 	})
 	return data
@@ -173,10 +174,10 @@ func GetRouter(name string) RouterConfig {
 	return v
 }
 
-func GetFlowConfig(id string) (FlowConfig,error) {
+func GetFlowConfig(id string) (FlowConfig, error) {
 	v, ok := flowConfigs[id]
 	if !ok {
-		return v,errors.Errorf("flow [%s] not found", id)
+		return v, errors.Errorf("flow [%s] not found", id)
 	}
-	return v,nil
+	return v, nil
 }

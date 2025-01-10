@@ -92,7 +92,7 @@ func (filter *BasicAuth) Name() string {
 func (filter *BasicAuth) Filter(ctx *fasthttp.RequestCtx) {
 
 	exists, user, pass := ctx.Request.ParseBasicAuth()
-	if exists&& len(filter.ValidUsers) > 0 {
+	if exists && len(filter.ValidUsers) > 0 {
 		p, ok := filter.ValidUsers[util.UnsafeBytesToString(user)]
 		if ok {
 			if util.UnsafeBytesToString(pass) == p {
@@ -109,7 +109,7 @@ func (filter *BasicAuth) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("basic_auth",NewBasicAuthFilter,&BasicAuth{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("basic_auth", NewBasicAuthFilter, &BasicAuth{})
 }
 
 func NewBasicAuthFilter(c *config.Config) (pipeline.Filter, error) {

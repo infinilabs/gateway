@@ -48,10 +48,10 @@ func (this *GatewayModule) getConfig(w http.ResponseWriter, req *http.Request, p
 	v, ok := this.entryPoints[id]
 	if ok {
 		cfg := v.GetConfig()
-		data:=util.MapStr{
-			"entry":cfg,
-			"router":v.GetRouterConfig(),
-			"flows":common.GetAllFlows(),
+		data := util.MapStr{
+			"entry":  cfg,
+			"router": v.GetRouterConfig(),
+			"flows":  common.GetAllFlows(),
 		}
 
 		this.WriteJSON(w, data, 200)

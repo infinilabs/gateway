@@ -35,7 +35,8 @@ import (
 
 var port = flag.Int("port", 8080, "listening port")
 var debug = flag.Bool("debug", false, "dump request")
-var name =util.PickRandomName()
+var name = util.PickRandomName()
+
 func main() {
 	runtime.GOMAXPROCS(1)
 	flag.Parse()
@@ -50,7 +51,7 @@ func main() {
 }
 
 func requestHandler(ctx *fasthttp.RequestCtx) {
-	if *debug{
+	if *debug {
 		fmt.Println(string(ctx.Request.PhantomURI().Scheme()))
 		fmt.Println(string(ctx.Request.PhantomURI().Host()))
 		fmt.Println(string(ctx.Request.PhantomURI().FullURI()))
@@ -59,10 +60,10 @@ func requestHandler(ctx *fasthttp.RequestCtx) {
 		fmt.Println(string(ctx.Request.PhantomURI().Hash()))
 		fmt.Println(string(ctx.Request.PhantomURI().Username()))
 		fmt.Println(string(ctx.Request.PhantomURI().Password()))
-		fmt.Println(ctx.Request.Header.String(),true)
-		fmt.Println(ctx.Request.GetRawBody(),true)
+		fmt.Println(ctx.Request.Header.String(), true)
+		fmt.Println(ctx.Request.GetRawBody(), true)
 	}
-	ctx.Response.Header.Set("SERVER",name)
+	ctx.Response.Header.Set("SERVER", name)
 	ctx.Response.SetStatusCode(200)
 	fmt.Fprintf(ctx, ".")
 }
