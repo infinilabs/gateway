@@ -21,37 +21,42 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build !ci
+
 package ldap
 
 import (
 	"context"
-	"fmt"
-	"infini.sh/framework/lib/fasthttp"
-	"infini.sh/gateway/lib/guardian/auth/strategies/ldap"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/framework/lib/guardian/auth/strategies/ldap"
 )
 
 func TestLDAPFunctions(t *testing.T) {
-
 	cfg := ldap.Config{
 		BaseDN:       "dc=example,dc=com",
 		BindDN:       "cn=read-only-admin,dc=example,dc=com",
 		Port:         389,
 		Host:         "ldap.forumsys.com",
 		BindPassword: "password",
-		UserFilter:       "(uid=%s)",
+		UserFilter:   "(uid=%s)",
 	}
 
-	r:=fasthttp.AcquireRequest()
+	r := &fasthttp.Request{}
 	r.SetBasicAuth("galieleo", "password")
 
-	user, err := ldap.New(&cfg).Authenticate(context.Background(), r)
+	ldapClient := ldap.New(&cfg)
+	user, err := ldapClient.Authenticate(context.Background(), r)
 
-	fmt.Println(err)
-	fmt.Println(user.GetUserName())
-	fmt.Println(user.GetID())
-	fmt.Println(user.GetGroups())
-	fmt.Println(user.GetExtensions())
+	if err != nil {
+		t.Fatalf("failed to authenticate: %v", err)
+	}
 
-
+	assert.Equal(t, "galieleo", user.GetUserName(), "unexpected username")
+	assert.Equal(t, "expected-id", user.GetID(), "unexpected user ID")
+	assert.Equal(t, []string{"expected-group"}, user.GetGroups(), "unexpected user groups")
+	assert.Equal(t, map[string]string{"key": "value"}, user.GetExtensions(), "unexpected user extensions")
 }

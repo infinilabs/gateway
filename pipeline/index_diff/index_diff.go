@@ -539,7 +539,8 @@ func (processor *IndexDiffProcessor) generateTextReport() {
 	}
 
 	if leftBuilder.Len() == 0 && rightBuilder.Len() == 0 && bothBuilder.Len() == 0 {
-		fmt.Println("Congratulations, the two clusters are consistent!\n")
+		fmt.Println("Congratulations, the two clusters are consistent.")
+		fmt.Println()
 	}
 
 }
