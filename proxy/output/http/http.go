@@ -253,7 +253,7 @@ func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err er
 	if ok {
 		client, ok := c.(*fasthttp.Client)
 		if !ok {
-			return errors.Errorf("invalid host client:", host)
+			return errors.Errorf("invalid host client: %s", host)
 		}
 
 		if filter.FollowRedirects {
@@ -280,7 +280,7 @@ func (filter *HTTPFilter) forward(host string, ctx *fasthttp.RequestCtx) (err er
 		}
 
 	} else {
-		err = errors.Errorf("invalid host client:", host)
+		err = errors.Errorf("invalid host client: %s", host)
 		log.Warn(err)
 	}
 

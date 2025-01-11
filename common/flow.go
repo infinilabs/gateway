@@ -24,14 +24,15 @@
 package common
 
 import (
+	"strings"
+	"sync"
+
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/orm"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/lib/fasthttp"
-	"strings"
-	"sync"
 )
 
 type FilterFlow struct {
@@ -40,8 +41,8 @@ type FilterFlow struct {
 }
 
 func (flow *FilterFlow) JoinFilter(filter pipeline.Filter) *FilterFlow {
-	if filter == nil || filter.Filter == nil {
-		panic("invalid filer")
+	if filter == nil {
+		panic("invalid filter")
 	}
 	flow.Filters = append(flow.Filters, filter)
 	return flow
