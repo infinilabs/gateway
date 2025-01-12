@@ -198,7 +198,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 					elastic.SafetyAddNewlineBetweenData(bulkBuff, payloadBytes)
 				}
 			}
-		},nil)
+		}, nil)
 
 		if err != nil {
 			log.Errorf("processing: %v docs, err: %v", docCount, err)

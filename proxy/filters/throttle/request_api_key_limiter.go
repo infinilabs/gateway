@@ -38,7 +38,7 @@ type RequestAPIKeyLimitFilter struct {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("request_api_key_limiter",NewRequestAPIKeyLimitFilter,&RequestAPIKeyLimitFilter{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_api_key_limiter", NewRequestAPIKeyLimitFilter, &RequestAPIKeyLimitFilter{})
 }
 
 func NewRequestAPIKeyLimitFilter(c *config.Config) (pipeline.Filter, error) {

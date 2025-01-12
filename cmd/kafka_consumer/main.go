@@ -26,15 +26,16 @@
  * Email: hello#infini.ltd */
 
 package main
-import (
-"context"
-"flag"
-"fmt"
-"os"
-"os/signal"
-"strings"
 
-"github.com/twmb/franz-go/pkg/kgo"
+import (
+	"context"
+	"flag"
+	"fmt"
+	"os"
+	"os/signal"
+	"strings"
+
+	"github.com/twmb/franz-go/pkg/kgo"
 )
 
 var (
@@ -143,4 +144,3 @@ func consume(cl *kgo.Client, style int) {
 		}
 	}
 }
-

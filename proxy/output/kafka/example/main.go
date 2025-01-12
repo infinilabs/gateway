@@ -21,15 +21,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-//https://www.sohamkamani.com/golang/working-with-kafka/
+// https://www.sohamkamani.com/golang/working-with-kafka/
 package main
 
 import (
 	"context"
 	"fmt"
+	"github.com/segmentio/kafka-go"
 	"log"
 	"os"
-	"github.com/segmentio/kafka-go"
 	"strconv"
 	"time"
 )
@@ -46,13 +46,12 @@ func main() {
 	// both the produce and consume functions are
 	// blocking
 
-	for i:=0;i<10;i++{
+	for i := 0; i < 10; i++ {
 		go produce(ctx)
 	}
 	//consume(ctx)
 
-
-	time.Sleep(1*time.Hour)
+	time.Sleep(1 * time.Hour)
 }
 
 func produce(ctx context.Context) {
@@ -61,26 +60,26 @@ func produce(ctx context.Context) {
 
 	// intialize the writer with the broker addresses, and the topic
 	w := kafka.NewWriter(kafka.WriterConfig{
-		Brokers: []string{brokerAddress},
-		Topic:   topic,
-		BatchSize: 1000,
+		Brokers:      []string{brokerAddress},
+		Topic:        topic,
+		BatchSize:    1000,
 		BatchTimeout: 10 * time.Millisecond,
 		RequiredAcks: 0,
 		// assign the logger to the writer
 	})
 
-	w.AllowAutoTopicCreation=true
+	w.AllowAutoTopicCreation = true
 
-	messages:=[]kafka.Message{}
-	j:=0
+	messages := []kafka.Message{}
+	j := 0
 	for {
 
-		for j=0;j<1000;j++{
-			msg:=kafka.Message{
-				Key: []byte(strconv.Itoa(i)),
+		for j = 0; j < 1000; j++ {
+			msg := kafka.Message{
+				Key:   []byte(strconv.Itoa(i)),
 				Value: []byte("this is message" + strconv.Itoa(i)),
 			}
-			messages=append(messages,msg)
+			messages = append(messages, msg)
 		}
 
 		err := w.WriteMessages(ctx, messages...)
@@ -88,7 +87,7 @@ func produce(ctx context.Context) {
 			panic("could not write message " + err.Error())
 		}
 		//fmt.Print(".")
-		messages=[]kafka.Message{}
+		messages = []kafka.Message{}
 		//fmt.Println("writes:", i)
 		i++
 	}

@@ -119,7 +119,7 @@ func NewBulkRequestResort(c *config.Config) (pipeline.Filter, error) {
 		runner.OutputQueue.Labels["elasticsearch"] = runner.Elasticsearch
 	}
 
-	runner.bulkBufferPool=elastic.NewBulkBufferPool("bulk_request_resort",1024*1024*1024,100000)
+	runner.bulkBufferPool = elastic.NewBulkBufferPool("bulk_request_resort", 1024*1024*1024, 100000)
 
 	runner.idleTimeout = util.GetDurationOrDefault(runner.IdleTimeoutInSeconds, 10*time.Second)
 	runner.commitTimeout = util.GetDurationOrDefault(runner.CommitConfig.CommitInterval, 10*time.Second)
@@ -341,7 +341,7 @@ func (filter *BulkRequestResort) Filter(ctx *fasthttp.RequestCtx) {
 
 			for partitionID, versions := range docs {
 
-				if len(versions) >1 {
+				if len(versions) > 1 {
 					//resort again
 					SortDocumentsByVersion(versions)
 				}
@@ -427,35 +427,35 @@ func (s *Sorter) run() {
 
 					//for _, doc := range docs {
 
-						offset := doc.ThisMessageOffset.Position
-						if latestEarlyCommitOffset == -1 || offset < latestEarlyCommitOffset {
-							latestEarlyCommitOffset = offset
-						}
+					offset := doc.ThisMessageOffset.Position
+					if latestEarlyCommitOffset == -1 || offset < latestEarlyCommitOffset {
+						latestEarlyCommitOffset = offset
+					}
 
-						if lastCommitableOffset == -1 || offset > lastCommitableOffset {
-							lastCommitableOffset = offset
-						}
+					if lastCommitableOffset == -1 || offset > lastCommitableOffset {
+						lastCommitableOffset = offset
+					}
 
-						v, ok := latestVersions[doc.Path]
-						if ok {
-							if v >= doc.Version {
-							} else {
-								latestVersions[doc.Path] = doc.Version
-							}
+					v, ok := latestVersions[doc.Path]
+					if ok {
+						if v >= doc.Version {
 						} else {
 							latestVersions[doc.Path] = doc.Version
 						}
+					} else {
+						latestVersions[doc.Path] = doc.Version
+					}
 
-						//add to bulk buffer
-						bulkBuffer.WriteMessageID(doc.Path)
+					//add to bulk buffer
+					bulkBuffer.WriteMessageID(doc.Path)
 
-						for _, b := range doc.Payload {
-							bulkBuffer.WriteNewByteBufferLine("success", b)
-						}
+					for _, b := range doc.Payload {
+						bulkBuffer.WriteNewByteBufferLine("success", b)
+					}
 					//}
 				}
 				hit = true
-			}else {
+			} else {
 				time.Sleep(1 * time.Second)
 				//log.Error("time.sleep 1s")
 			}
@@ -475,10 +475,9 @@ func (s *Sorter) run() {
 
 			//if it is ok to submit and commit
 			if mustCommitAndExit || bulkBuffer.GetMessageCount() > 0 &&
-				(
-					bulkBuffer.GetMessageCount() > s.filter.BatchSizeInDocs ||
-						bulkBuffer.GetMessageSize() > s.filter.batchSizeInBytes ||
-						util.Since(lastCommitTime) > s.filter.commitTimeout) {
+				(bulkBuffer.GetMessageCount() > s.filter.BatchSizeInDocs ||
+					bulkBuffer.GetMessageSize() > s.filter.batchSizeInBytes ||
+					util.Since(lastCommitTime) > s.filter.commitTimeout) {
 
 				if bulkBuffer.GetMessageCount() > 0 {
 					requests := []queue.ProduceRequest{}
@@ -568,13 +567,13 @@ func (filter *BulkRequestResort) NewDocumentBuffer(partitionID int, queueName st
 // Add 将文档添加到缓冲区
 func (b *DocumentBuffer) Add(docs []elastic.VersionInfo) {
 
-	RETRY:
+RETRY:
 	if b.docsCount.Load() > int64(b.maxBufferSize) {
 		time.Sleep(1 * time.Second)
 		//log.Error("time.sleep 1s")
 
 		//log.Error("buffer full, drop docs")
-		if !global.ShuttingDown(){
+		if !global.ShuttingDown() {
 			goto RETRY
 		}
 	}
@@ -608,12 +607,12 @@ func (b *DocumentBuffer) Add(docs []elastic.VersionInfo) {
 
 // GetDocuments 返回最旧的文档通道，最多读取指定数量的文档
 func (b *DocumentBuffer) GetDocuments(count int) (int, []elastic.VersionInfo) {
-	predictDocs:=int(b.docsCount.Load()) - count
-	if  predictDocs< b.minBufferSize {
+	predictDocs := int(b.docsCount.Load()) - count
+	if predictDocs < b.minBufferSize {
 		if util.Since(b.lastWriteTime) < b.idleTimeout {
 			return 0, []elastic.VersionInfo{}
 		}
-		if b.docsCount.Load()==0{
+		if b.docsCount.Load() == 0 {
 			return 0, []elastic.VersionInfo{}
 		}
 	}
@@ -632,9 +631,9 @@ func (b *DocumentBuffer) GetDocuments(count int) (int, []elastic.VersionInfo) {
 		case docs := <-b.documents:
 			//doc := docs.Docs
 			//if len(docs) > 0 {
-				//b.docs.Delete(doc[0].Path) //DELETE map after popup, may unlock the map
-				docsToCleanup = append(docsToCleanup, docs)
-				docsCountToCleanup += 1//len(docs)
+			//b.docs.Delete(doc[0].Path) //DELETE map after popup, may unlock the map
+			docsToCleanup = append(docsToCleanup, docs)
+			docsCountToCleanup += 1 //len(docs)
 			//}
 			if docsCountToCleanup >= count {
 				goto READ
@@ -726,10 +725,10 @@ READ:
 	//log.Error("total adding back docs:", len(docsToKeep))
 
 	//if len(docsToCleanup)>b.minBufferSize{
-		SortDocumentsByTime(docsToCleanup)
+	SortDocumentsByTime(docsToCleanup)
 	//}
 
-	removedDocs=len(docsToCleanup)
+	removedDocs = len(docsToCleanup)
 	b.lastToKeep = docsToKeep
 	//if len(docsToKeep) > 0 {
 	//	for _, v := range docsToKeep {

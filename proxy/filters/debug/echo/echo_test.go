@@ -38,5 +38,4 @@ func TestExtractFieldWithTags(t *testing.T) {
 	results1 := pipeline.ExtractFilterMetadata(echo)
 	fmt.Println(string(util.MustToJSONBytes(results1)))
 
-
 }

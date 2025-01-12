@@ -35,14 +35,14 @@ import (
 )
 
 var (
-//Req_REGISTER byte = 1 // 1 --- c register cid
-//Res_REGISTER byte = 2 // 2 --- s response
+// Req_REGISTER byte = 1 // 1 --- c register cid
+// Res_REGISTER byte = 2 // 2 --- s response
 //
-//Req_HEARTBEAT byte = 3 // 3 --- s send heartbeat req
-//Res_HEARTBEAT byte = 4 // 4 --- c send heartbeat res
+// Req_HEARTBEAT byte = 3 // 3 --- s send heartbeat req
+// Res_HEARTBEAT byte = 4 // 4 --- c send heartbeat res
 //
-//Req byte = 5 // 5 --- cs send data
-//Res byte = 6 // 6 --- cs send ack
+// Req byte = 5 // 5 --- cs send data
+// Res byte = 6 // 6 --- cs send ack
 )
 
 type CS struct {

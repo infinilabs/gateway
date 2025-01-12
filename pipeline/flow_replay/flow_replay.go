@@ -175,10 +175,10 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 
 			if processor.config.KeepTags {
 				tags, ok := filterCtx.GetTags()
-				if ok{
-					ts:=[]string{}
-					for _,v:=range tags{
-						ts=append(ts,v)
+				if ok {
+					ts := []string{}
+					for _, v := range tags {
+						ts = append(ts, v)
 					}
 					ctx.AddTags(ts)
 				}
@@ -206,7 +206,6 @@ func (processor *FlowRunnerProcessor) Process(ctx *pipeline.Context) error {
 			}
 			releaseCtx(filterCtx)
 		}
-
 
 		log.Debugf("replay %v messages flow:[%v], elapsed:%v", len(messages), processor.config.FlowName, time.Since(start1))
 

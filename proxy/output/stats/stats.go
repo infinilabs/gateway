@@ -52,7 +52,7 @@ func (filter StatsFilter) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("stats",NewStatsFilter,&StatsFilter{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("stats", NewStatsFilter, &StatsFilter{})
 }
 
 func NewStatsFilter(c *config.Config) (pipeline.Filter, error) {

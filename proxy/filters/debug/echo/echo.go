@@ -94,7 +94,7 @@ func (filter *Echo) Filter(ctx *fasthttp.RequestCtx) {
 	if filter.template != nil {
 		str = filter.template.ExecuteFuncString(func(w io.Writer, tag string) (int, error) {
 			variable, err := ctx.GetValue(tag)
-			if err==nil{
+			if err == nil {
 				return w.Write([]byte(util.ToString(variable)))
 			}
 			return -1, err

@@ -60,25 +60,24 @@ func (this ForceMergeModule) Name() string {
 }
 
 type Discovery struct {
-	Enabled bool `config:"enabled"`
-	MinIdleTime  string `config:"min_idle_time"`
-	Interval string   `config:"interval"`
-	Rules           []DiscoveryRule `config:"rules"`
+	Enabled     bool            `config:"enabled"`
+	MinIdleTime string          `config:"min_idle_time"`
+	Interval    string          `config:"interval"`
+	Rules       []DiscoveryRule `config:"rules"`
 }
 
 type DiscoveryRule struct {
-	IndexPattern string `config:"index_pattern"`
+	IndexPattern string   `config:"index_pattern"`
 	TimeFields   []string `config:"timestamp_fields"`
 }
 
 type MergeConfig struct {
-	Enabled         bool            `config:"enabled"`
-	Elasticsearch   string          `config:"elasticsearch"`
-	Indices         []string        `config:"indices"`
-	MinSegmentCount int             `config:"min_num_segments"`
-	MaxSegmentCount int             `config:"max_num_segments"`
-	Discovery Discovery  			`config:"discovery"`
-
+	Enabled         bool      `config:"enabled"`
+	Elasticsearch   string    `config:"elasticsearch"`
+	Indices         []string  `config:"indices"`
+	MinSegmentCount int       `config:"min_num_segments"`
+	MaxSegmentCount int       `config:"max_num_segments"`
+	Discovery       Discovery `config:"discovery"`
 }
 
 var mergeConfig = MergeConfig{}
@@ -86,7 +85,7 @@ var mergeConfig = MergeConfig{}
 func (module ForceMergeModule) Setup() {
 
 	ok, err := env.ParseConfig("force_merge", &mergeConfig)
-	if ok && err != nil  &&global.Env().SystemConfig.Configs.PanicOnConfigError{
+	if ok && err != nil && global.Env().SystemConfig.Configs.PanicOnConfigError {
 		panic(err)
 	}
 
@@ -264,44 +263,44 @@ func (module ForceMergeModule) Start() error {
 		client := elastic.GetClient(mergeConfig.Elasticsearch)
 		for i, v := range mergeConfig.Indices {
 			log.Infof("#%v - start forcemerging index [%v]", i, v)
-			forceMerge(client,v)
+			forceMerge(client, v)
 		}
 
 		for {
 
-			bytes,err:=queue.Pop(queue.GetOrInitConfig(taskQueue))
-			if err!=nil{
+			bytes, err := queue.Pop(queue.GetOrInitConfig(taskQueue))
+			if err != nil {
 				panic(err)
 			}
 
-			taskItem:=ForceMergeTaskItem{}
-			util.FromJSONBytes(bytes,&taskItem)
+			taskItem := ForceMergeTaskItem{}
+			util.FromJSONBytes(bytes, &taskItem)
 			client := elastic.GetClient(mergeConfig.Elasticsearch)
-			forceMerge(client,taskItem.Index)
+			forceMerge(client, taskItem.Index)
 		}
 
 	}()
 
-	if mergeConfig.Discovery.Enabled{
+	if mergeConfig.Discovery.Enabled {
 		task1 := task.ScheduleTask{
 			Description: "discovery indices for force_merge",
 			Type:        "interval",
 			Interval:    "60m",
 			Task: func(ctx context.Context) {
 				client := elastic.GetClient(mergeConfig.Elasticsearch)
-				for _,v:=range mergeConfig.Discovery.Rules{
-					log.Trace("processing index_pattern: ",v.IndexPattern)
-					indices,err:=client.GetIndices(v.IndexPattern)
-					if err!=nil{
+				for _, v := range mergeConfig.Discovery.Rules {
+					log.Trace("processing index_pattern: ", v.IndexPattern)
+					indices, err := client.GetIndices(v.IndexPattern)
+					if err != nil {
 						panic(err)
 					}
-					if indices!=nil{
-						for _,v:=range (*indices){
-							if v.SegmentsCount> int64(mergeConfig.MinSegmentCount){
-								task:=ForceMergeTaskItem{Elasticsearch: mergeConfig.Elasticsearch,Index: v.Index}
-								log.Trace("add force_merge task to queue,",task)
-								err:=queue.Push(queue.GetOrInitConfig(taskQueue),util.MustToJSONBytes(task))
-								if err!=nil{
+					if indices != nil {
+						for _, v := range *indices {
+							if v.SegmentsCount > int64(mergeConfig.MinSegmentCount) {
+								task := ForceMergeTaskItem{Elasticsearch: mergeConfig.Elasticsearch, Index: v.Index}
+								log.Trace("add force_merge task to queue,", task)
+								err := queue.Push(queue.GetOrInitConfig(taskQueue), util.MustToJSONBytes(task))
+								if err != nil {
 									panic(err)
 								}
 							}
@@ -316,7 +315,7 @@ func (module ForceMergeModule) Start() error {
 	return nil
 }
 
-const taskQueue ="force_merge_tasks"
+const taskQueue = "force_merge_tasks"
 
 func (module ForceMergeModule) Stop() error {
 

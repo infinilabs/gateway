@@ -36,13 +36,13 @@ import (
 )
 
 type RequestPathLimitFilter struct {
-	WarnMessage    bool `config:"log_warn_message"`
-	Message string        `config:"message"`
-	Rules   []*MatchRules `config:"rules"`
+	WarnMessage bool          `config:"log_warn_message"`
+	Message     string        `config:"message"`
+	Rules       []*MatchRules `config:"rules"`
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("request_path_limiter",NewRequestPathLimitFilter,&RequestPathLimitFilter{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_path_limiter", NewRequestPathLimitFilter, &RequestPathLimitFilter{})
 }
 
 func NewRequestPathLimitFilter(c *config.Config) (pipeline.Filter, error) {
@@ -131,8 +131,8 @@ func (filter *RequestPathLimitFilter) Filter(ctx *fasthttp.RequestCtx) {
 						log.Debug(key, " reach limited ", v.Pattern, ",extract:", item)
 					}
 
-					if filter.WarnMessage{
-						log.Warnf("request throttled: %v",string(ctx.Path()))
+					if filter.WarnMessage {
+						log.Warnf("request throttled: %v", string(ctx.Path()))
 					}
 
 					ctx.SetStatusCode(429)

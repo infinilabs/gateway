@@ -320,7 +320,7 @@ func NewBulkResponseValidate(c *config.Config) (pipeline.Filter, error) {
 
 	runner.id = util.GetUUID()
 
-	runner.bulkBufferPool=elastic.NewBulkBufferPool("bulk_response_process",1024*1024*1024,100000)
+	runner.bulkBufferPool = elastic.NewBulkBufferPool("bulk_response_process", 1024*1024*1024, 100000)
 
 	if runner.config.RetryFlow != "" && runner.config.PartialFailureRetry {
 		flow := common.MustGetFlow(runner.config.RetryFlow)

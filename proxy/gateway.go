@@ -262,19 +262,19 @@ func (module *GatewayModule) loadEntryPoints() map[string]*entry.Entrypoint {
 	entryConfigs := []common.EntryConfig{}
 
 	ok, err := env.ParseConfig("gateway", &module)
-	if ok && err != nil  &&global.Env().SystemConfig.Configs.PanicOnConfigError{
+	if ok && err != nil && global.Env().SystemConfig.Configs.PanicOnConfigError {
 		panic(err)
 	}
 
 	ok, err = env.ParseConfig("entry", &entryConfigs)
-	if ok && err != nil  &&global.Env().SystemConfig.Configs.PanicOnConfigError{
+	if ok && err != nil && global.Env().SystemConfig.Configs.PanicOnConfigError {
 		panic(err)
 	}
 
 	log.Trace(util.ToJson(entryConfigs, true))
 
 	ok, err = env.ParseConfig("flow", &flowConfigs)
-	if ok && err != nil  &&global.Env().SystemConfig.Configs.PanicOnConfigError{
+	if ok && err != nil && global.Env().SystemConfig.Configs.PanicOnConfigError {
 		panic(err)
 	}
 

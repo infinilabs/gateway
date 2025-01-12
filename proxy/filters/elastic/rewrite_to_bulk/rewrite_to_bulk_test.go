@@ -34,11 +34,11 @@ import (
 )
 
 func TestParseURLMeta(t *testing.T) {
-	url:="/index/_update/id"
-	valid, indexPath, typePath, idPath :=ParseURLMeta(url)
+	url := "/index/_update/id"
+	valid, indexPath, typePath, idPath := ParseURLMeta(url)
 	fmt.Println(valid, indexPath, typePath, idPath)
 	assert.Equal(t, valid, true)
 	assert.Equal(t, indexPath, "index")
 	assert.Equal(t, typePath, "_update")
-	assert.Equal(t,idPath, "id")
+	assert.Equal(t, idPath, "id")
 }

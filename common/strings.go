@@ -43,4 +43,3 @@ const CACHEABLE = "request_cacheable"
 const CACHEHASH = "request_cache_hash"
 
 var FaviconPath = []byte("/favicon.ico")
-

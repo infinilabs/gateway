@@ -21,12 +21,11 @@ var (
 //
 // For example, this is one process with two listens and one connection:
 //
-//   p13100
-//   cmpd
-//   n[::1]:6600
-//   n127.0.0.1:6600
-//   n[::1]:6600->[::1]:50992
-//
+//	p13100
+//	cmpd
+//	n[::1]:6600
+//	n127.0.0.1:6600
+//	n[::1]:6600->[::1]:50992
 func parseLSOF(out string) (map[string]Proc, error) {
 	var (
 		res = map[string]Proc{} // Local addr -> Proc

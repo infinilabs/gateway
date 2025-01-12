@@ -44,7 +44,7 @@ func TestMulti(t *testing.T) {
 		panic(err)
 	}
 
-	err= entry.Stop()
+	err = entry.Stop()
 	if err != nil {
 		panic(err)
 	}

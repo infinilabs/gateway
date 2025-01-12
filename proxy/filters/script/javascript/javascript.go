@@ -19,6 +19,7 @@ package javascript
 
 import (
 	"bytes"
+	log "github.com/cihub/seelog"
 	"github.com/dop251/goja"
 	"github.com/pkg/errors"
 	"infini.sh/framework/core/config"
@@ -30,14 +31,13 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	log "github.com/cihub/seelog"
 	"strings"
 )
 
 var magicChars = `*?[`
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("javascript",NewJavascriptFilter,&jsProcessor{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("javascript", NewJavascriptFilter, &jsProcessor{})
 	if runtime.GOOS != "windows" {
 		magicChars = `*?[\`
 	}
@@ -156,8 +156,8 @@ func loadSources(files ...string) (string, []byte, error) {
 	}
 
 	for _, filePath := range files {
-		filePath = path.Join(global.Env().GetDataDir(),"scripts", filePath)
-		log.Debugf("loading script: %v",filePath)
+		filePath = path.Join(global.Env().GetDataDir(), "scripts", filePath)
+		log.Debugf("loading script: %v", filePath)
 		if hasMeta(filePath) {
 			matches, err := filepath.Glob(filePath)
 			if err != nil {
@@ -203,10 +203,10 @@ func (p *jsProcessor) Filter(event *fasthttp.RequestCtx) {
 	var err error
 
 	//if p.stats == nil {
-		err =s.runProcessFunc(event)
-		if err!=nil{
-			panic(err)
-		}
+	err = s.runProcessFunc(event)
+	if err != nil {
+		panic(err)
+	}
 	//}
 	//else {
 	//	rtn, err = p.runWithStats(s, event)
@@ -229,7 +229,6 @@ func (p *jsProcessor) Filter(event *fasthttp.RequestCtx) {
 func (p *jsProcessor) String() string {
 	return "script=[type=javascript, id=" + p.Tag + ", sources=" + p.sourceFile + "]"
 }
-
 
 // hasMeta reports whether path contains any of the magic characters
 // recognized by Match/Glob.

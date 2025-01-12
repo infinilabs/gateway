@@ -48,7 +48,7 @@ var defaultConfig = Config{
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("date_range_precision_tuning", New,&defaultConfig)
+	pipeline.RegisterFilterPluginWithConfigMetadata("date_range_precision_tuning", New, &defaultConfig)
 }
 
 func New(c *config.Config) (pipeline.Filter, error) {
@@ -93,28 +93,27 @@ func (this *DatePrecisionTuning) Filter(ctx *fasthttp.RequestCtx) {
 			startProcess := false
 			precisionOffset := 0
 			matchCount := 0
-			block:=body[start:end]
-			if global.Env().IsDebug{
-				log.Debug("body[start:end]: ",string(body[start:end]))
+			block := body[start:end]
+			if global.Env().IsDebug {
+				log.Debug("body[start:end]: ", string(body[start:end]))
 			}
 
-			len:=len(block)-1
+			len := len(block) - 1
 			for i, v := range block {
-				if i>1 &&i <len{
-					left:=block[i-1]
-					right:=block[i+1]
+				if i > 1 && i < len {
+					left := block[i-1]
+					right := block[i+1]
 
 					if global.Env().IsDebug {
-						log.Debug(i,",",string(v),",",block[i-1],",",block[i+1])
+						log.Debug(i, ",", string(v), ",", block[i-1], ",", block[i+1])
 					}
-					if v == 84 &&left > 47 && left < 58 &&right > 47 && right < 58{ //T
+					if v == 84 && left > 47 && left < 58 && right > 47 && right < 58 { //T
 						startProcess = true
 						precisionOffset = 0
 						matchCount++
 						continue
 					}
 				}
-
 
 				if startProcess && v > 47 && v < 58 {
 					precisionOffset++
@@ -153,8 +152,8 @@ func (this *DatePrecisionTuning) Filter(ctx *fasthttp.RequestCtx) {
 							continue
 						}
 						if precisionOffset == 4 {
-							if global.Env().IsDebug{
-								log.Debug("prev: ",prev,",",prev != 54)
+							if global.Env().IsDebug {
+								log.Debug("prev: ", prev, ",", prev != 54)
 							}
 							if prev != 54 { //int:6
 								body[start+i] = 57
@@ -177,8 +176,8 @@ func (this *DatePrecisionTuning) Filter(ctx *fasthttp.RequestCtx) {
 			}
 		})
 
-		if global.Env().IsDebug{
-			log.Debug("rewrite success: ",ok,",",string(body),",",this.config.TimePrecision)
+		if global.Env().IsDebug {
+			log.Debug("rewrite success: ", ok, ",", string(body), ",", this.config.TimePrecision)
 		}
 
 		if ok {

@@ -43,9 +43,9 @@ import (
 	"infini.sh/framework/core/env"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
-	"infini.sh/framework/core/wrapper/net"
 	"infini.sh/framework/core/task"
 	"infini.sh/framework/core/util"
+	"infini.sh/framework/core/wrapper/net"
 	"infini.sh/gateway/service/heartbeat"
 )
 
@@ -98,7 +98,7 @@ var (
 
 func (module FloatingIPPlugin) Setup() {
 	ok, err := env.ParseConfig("floating_ip", &floatingIPConfig)
-	if ok && err != nil  &&global.Env().SystemConfig.Configs.PanicOnConfigError{
+	if ok && err != nil && global.Env().SystemConfig.Configs.PanicOnConfigError {
 		panic(err)
 	}
 
@@ -297,7 +297,7 @@ func (module FloatingIPPlugin) SwitchToStandbyMode(latency time.Duration) {
 
 	task.RunWithinGroup("standby", func(ctx context.Context) error {
 		aliveChan := make(chan bool)
-		client:=heartbeat.New()
+		client := heartbeat.New()
 		go func() {
 			defer func() {
 				if !global.Env().IsDebug {
@@ -478,7 +478,7 @@ func (module FloatingIPPlugin) StateMachine() {
 		}
 	}()
 
-	client:=heartbeat.New()
+	client := heartbeat.New()
 	aliveChan := make(chan bool)
 	go func() {
 		defer func() {

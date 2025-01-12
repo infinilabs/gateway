@@ -72,7 +72,7 @@ func (filter *TranslogOutput) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("translog",NewTranslogOutput,&TranslogOutput{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("translog", NewTranslogOutput, &TranslogOutput{})
 }
 
 func NewTranslogOutput(c *config.Config) (pipeline.Filter, error) {

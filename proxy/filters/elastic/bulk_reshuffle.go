@@ -402,13 +402,13 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				panic(errors.Error("queue key can't be nil"))
 			}
 
-			var skipInit=false
+			var skipInit = false
 			cfg1, ok := queue.SmartGetConfig(queueKey)
 			if ok && len(cfg1.Labels) > 0 {
-				_,ok:=cfg1.Labels["type"] //check label bulk_reshuffle exists
-				if ok{
+				_, ok := cfg1.Labels["type"] //check label bulk_reshuffle exists
+				if ok {
 					queueConfig = cfg1
-					skipInit=true
+					skipInit = true
 				}
 			}
 
@@ -455,8 +455,8 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			if !ok {
 				if this.config.BufferPoolEnabled {
 					buff = this.docBufferPool.Get()
-				}else{
-					buff=&bytebufferpool.ByteBuffer{}
+				} else {
+					buff = &bytebufferpool.ByteBuffer{}
 				}
 				docBuf[queueConfig.Name] = buff
 			}
@@ -474,8 +474,8 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				if !ok {
 					if this.config.BufferPoolEnabled {
 						buff = this.docBufferPool.Get()
-					}else{
-						buff=&bytebufferpool.ByteBuffer{}
+					} else {
+						buff = &bytebufferpool.ByteBuffer{}
 					}
 					docBuf[queueConfig.Name] = buff
 				}

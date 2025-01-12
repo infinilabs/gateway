@@ -60,12 +60,12 @@ func setup() {
 	module.RegisterSystemModule(&queue.Module{})
 	module.RegisterSystemModule(&task.TaskModule{})
 	module.RegisterSystemModule(&api.APIModule{})
-	module.RegisterModuleWithPriority(&pipeline.PipeModule{},100)
+	module.RegisterModuleWithPriority(&pipeline.PipeModule{}, 100)
 
 	module.RegisterUserPlugin(forcemerge.ForceMergeModule{})
 	module.RegisterUserPlugin(floating_ip.FloatingIPPlugin{})
 	module.RegisterUserPlugin(&metrics.MetricsModule{})
-	module.RegisterPluginWithPriority(&proxy.GatewayModule{},200)
+	module.RegisterPluginWithPriority(&proxy.GatewayModule{}, 200)
 }
 
 func start() {

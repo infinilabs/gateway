@@ -31,8 +31,8 @@ import (
 )
 
 type RedirectFilter struct {
-	Uri string `config:"uri"`
-	Code int `config:"code"`
+	Uri  string `config:"uri"`
+	Code int    `config:"code"`
 }
 
 func (filter *RedirectFilter) Name() string {
@@ -40,12 +40,12 @@ func (filter *RedirectFilter) Name() string {
 }
 
 func (filter *RedirectFilter) Filter(ctx *fasthttp.RequestCtx) {
-	ctx.Redirect(filter.Uri,filter.Code)
+	ctx.Redirect(filter.Uri, filter.Code)
 	ctx.Finished()
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("redirect",NewRedirectFilter,&RedirectFilter{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("redirect", NewRedirectFilter, &RedirectFilter{})
 }
 
 func NewRedirectFilter(c *config.Config) (pipeline.Filter, error) {

@@ -77,7 +77,7 @@ func (filter *RequestBodyJsonSet) Filter(ctx *fasthttp.RequestCtx) {
 }
 
 func init() {
-	pipeline.RegisterFilterPluginWithConfigMetadata("request_body_json_set",NewRequestBodyJsonSet,&RequestBodyJsonSet{})
+	pipeline.RegisterFilterPluginWithConfigMetadata("request_body_json_set", NewRequestBodyJsonSet, &RequestBodyJsonSet{})
 }
 
 func NewRequestBodyJsonSet(c *config.Config) (pipeline.Filter, error) {

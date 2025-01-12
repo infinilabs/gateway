@@ -51,7 +51,7 @@ const (
 )
 
 type Request struct {
-	IsActive bool 	  `json:"active"`
+	IsActive   bool   `json:"active"`
 	FloatingIP string `json:"floating_ip"`
 	FixedIP    string `json:"fixed_ip"`
 	EchoPort   int    `json:"echo_port"`
@@ -59,9 +59,10 @@ type Request struct {
 }
 
 var lastBroadcast time.Time
-//send a Broadcast message to network to discovery the cluster
+
+// send a Broadcast message to network to discovery the cluster
 func Broadcast(config *FloatingIPConfig, req *Request) {
-	if config==nil{
+	if config == nil {
 		panic("invalid config")
 	}
 
@@ -82,17 +83,17 @@ func Broadcast(config *FloatingIPConfig, req *Request) {
 
 	payload := util.MustToJSONBytes(req)
 
-	_,err=c.Write(payload)
+	_, err = c.Write(payload)
 	if err != nil {
 		log.Error(err)
 		return
 	}
-	lastBroadcast=time.Now()
+	lastBroadcast = time.Now()
 }
 
 func ServeMulticastDiscovery(config *FloatingIPConfig, h func(*net.UDPAddr, int, []byte)) {
 
-	if config==nil{
+	if config == nil {
 		panic("invalid config")
 	}
 
@@ -108,7 +109,7 @@ func ServeMulticastDiscovery(config *FloatingIPConfig, h func(*net.UDPAddr, int,
 		return
 	}
 
-	err=l.SetReadBuffer(maxDataSize)
+	err = l.SetReadBuffer(maxDataSize)
 	if err != nil {
 		log.Error(err)
 		return
@@ -124,4 +125,3 @@ func ServeMulticastDiscovery(config *FloatingIPConfig, h func(*net.UDPAddr, int,
 	}
 
 }
-

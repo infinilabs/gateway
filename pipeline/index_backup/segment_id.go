@@ -32,15 +32,15 @@ import (
 	"strings"
 )
 
-func ParseSegmentID(fileName string)string  {
-	if util.PrefixStr(fileName,"_"){
-		arr:=strings.Split(fileName,"_")
-		if len(arr)>1{
-			firstPart:=arr[1]
-			if util.ContainStr(firstPart,"."){
-				arr:=strings.Split(firstPart,".")
-				if len(arr)>0{
-					segmentID:=arr[0]
+func ParseSegmentID(fileName string) string {
+	if util.PrefixStr(fileName, "_") {
+		arr := strings.Split(fileName, "_")
+		if len(arr) > 1 {
+			firstPart := arr[1]
+			if util.ContainStr(firstPart, ".") {
+				arr := strings.Split(firstPart, ".")
+				if len(arr) > 0 {
+					segmentID := arr[0]
 					return segmentID
 				}
 			}
@@ -50,18 +50,17 @@ func ParseSegmentID(fileName string)string  {
 	return ""
 }
 
-//The result will be:
+// The result will be:
 // 0  if a==b,
-//-1 if a < b,
-//+1 if a > b.
-func CompareSegmentIDs(id1,id2 string)int  {
-	if len(id1)!=len(id2){
-		if len(id1)>len(id2){
+// -1 if a < b,
+// +1 if a > b.
+func CompareSegmentIDs(id1, id2 string) int {
+	if len(id1) != len(id2) {
+		if len(id1) > len(id2) {
 			return 1
-		}else{
+		} else {
 			return -1
 		}
 	}
-	return  strings.Compare(id1,id2)
+	return strings.Compare(id1, id2)
 }
-

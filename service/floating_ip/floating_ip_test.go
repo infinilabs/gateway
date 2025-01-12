@@ -29,6 +29,6 @@ import (
 )
 
 func TestPingActiveNode(t *testing.T) {
-	ok:=pingActiveNode("192.168.3.98")
+	ok := pingActiveNode("192.168.3.98")
 	fmt.Println(ok)
 }

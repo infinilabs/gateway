@@ -52,19 +52,18 @@ type Config struct {
 }
 
 type MessageRecord struct {
-
 	MessageOffset queue.Offset
 
 	RecordOffset    string
 	RecordTimestamp string
-	recordTime int64
+	recordTime      int64
 }
 
 type ReplicationCorrectionGroup struct {
 	partitionID int
 
-	config              *Config
-	PreStageQueueName   string `config:"pre_stage_queue"`
+	config            *Config
+	PreStageQueueName string `config:"pre_stage_queue"`
 	//FirstStageQueueName string `config:"first_stage_queue"`
 	FinalStageQueueName string `config:"final_stage_queue"`
 
@@ -106,8 +105,8 @@ func (runner *ReplicationCorrectionProcessor) newGroup(id int) *ReplicationCorre
 	}
 
 	group := ReplicationCorrectionGroup{
-		partitionID:         id,
-		PreStageQueueName:   "primary_write_ahead_log" + suffix,
+		partitionID:       id,
+		PreStageQueueName: "primary_write_ahead_log" + suffix,
 		//FirstStageQueueName: "primary_first_commit_log" + suffix,
 		FinalStageQueueName: "primary_final_commit_log" + suffix,
 	}
@@ -152,7 +151,7 @@ func (processor *ReplicationCorrectionProcessor) Name() string {
 	return "replication_correlation"
 }
 
-func (processor *ReplicationCorrectionGroup) fetchMessages(ctx *pipeline.Context,tag string, consumer queue.ConsumerAPI, handler func(consumer queue.ConsumerAPI, msg []queue.Message) bool, wg *sync.WaitGroup) {
+func (processor *ReplicationCorrectionGroup) fetchMessages(ctx *pipeline.Context, tag string, consumer queue.ConsumerAPI, handler func(consumer queue.ConsumerAPI, msg []queue.Message) bool, wg *sync.WaitGroup) {
 	defer func() {
 		if !global.Env().IsDebug {
 			if r := recover(); r != nil {
@@ -185,7 +184,7 @@ Fetch:
 		panic(err)
 	}
 
-	log.Debugf("get %v messages from queue: %v, %v", len(messages),tag,ctx1.String())
+	log.Debugf("get %v messages from queue: %v, %v", len(messages), tag, ctx1.String())
 
 	if len(messages) > 0 {
 
@@ -197,7 +196,7 @@ Fetch:
 	}
 
 	if len(messages) == 0 {
-		time.Sleep(10*time.Second)
+		time.Sleep(10 * time.Second)
 	}
 
 	if global.ShuttingDown() {
@@ -221,14 +220,14 @@ func (processor *ReplicationCorrectionGroup) cleanup(uID interface{}) {
 	//processor.finalStageRecords.Delete(uID)
 }
 
-var defaultHTTPPool=fasthttp.NewRequestResponsePool("replication_crc")
+var defaultHTTPPool = fasthttp.NewRequestResponsePool("replication_crc")
 
-func parseIDAndOffset(v string) (id, offset,timestamp string) {
+func parseIDAndOffset(v string) (id, offset, timestamp string) {
 	arr := strings.Split(v, "#")
 	if len(arr) != 3 {
 		panic("invalid message format:" + v)
 	}
-	return arr[0], arr[1],arr[2]
+	return arr[0], arr[1], arr[2]
 }
 
 func (processor *ReplicationCorrectionProcessor) Process(ctx *pipeline.Context) error {
@@ -339,7 +338,7 @@ func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *s
 	finalCommitqConfig, finalCommitConsumerConfig, finalCommitLogConsumer := processor.getConsumer(processor.FinalStageQueueName)
 	defer queue.ReleaseConsumer(finalCommitqConfig, finalCommitConsumerConfig, finalCommitLogConsumer)
 	//check second stage commit
-	go processor.fetchMessages(ctx,"final", finalCommitLogConsumer, func(consumer queue.ConsumerAPI, messages []queue.Message) bool {
+	go processor.fetchMessages(ctx, "final", finalCommitLogConsumer, func(consumer queue.ConsumerAPI, messages []queue.Message) bool {
 
 		processor.lastTimestampFetchedAnyMessageInFinalStage = time.Now()
 
@@ -356,8 +355,8 @@ func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *s
 			processor.lastOffsetInFinalStage = message.NextOffset.Position
 
 			v := string(message.Data)
-			id, offset,timestamp := parseIDAndOffset(v)
-			processor.finalStageRecords.Store(id, MessageRecord{MessageOffset:message.NextOffset,RecordOffset: offset,RecordTimestamp: timestamp})
+			id, offset, timestamp := parseIDAndOffset(v)
+			processor.finalStageRecords.Store(id, MessageRecord{MessageOffset: message.NextOffset, RecordOffset: offset, RecordTimestamp: timestamp})
 		}
 		log.Debugf("final stage message count: %v, map:%v", processor.totalMessageProcessedInFinalStage, util.GetSyncMapSize(&processor.finalStageRecords))
 		return true
@@ -369,7 +368,7 @@ func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *s
 	walCommitqConfig, walCommitConsumerConfig, WALConsumer := processor.getConsumer(processor.PreStageQueueName)
 	defer queue.ReleaseConsumer(walCommitqConfig, walCommitConsumerConfig, WALConsumer)
 	//fetch the message from the wal queue
-	go processor.fetchMessages(ctx, "wal",WALConsumer, func(consumer queue.ConsumerAPI, messages []queue.Message) bool {
+	go processor.fetchMessages(ctx, "wal", WALConsumer, func(consumer queue.ConsumerAPI, messages []queue.Message) bool {
 		processor.lastMessageFetchedTimeInPrepareStage = time.Now()
 		var lastCommitableMessageOffset queue.Offset
 		defer func() {
@@ -457,7 +456,7 @@ func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *s
 				}
 
 				if retry_times > processor.config.SafetyCommitRetryTimes {
-					stats.Increment("replication_crc", fmt.Sprintf("retry_times_exceed_%v",processor.config.SafetyCommitRetryTimes))
+					stats.Increment("replication_crc", fmt.Sprintf("retry_times_exceed_%v", processor.config.SafetyCommitRetryTimes))
 					hit = true
 				}
 
@@ -536,7 +535,7 @@ func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *s
 			}
 			wg.Done()
 		}()
-		var commitAnywayWaitInSeconds=time.Duration(processor.config.SafetyCommitIntervalInSeconds)
+		var commitAnywayWaitInSeconds = time.Duration(processor.config.SafetyCommitIntervalInSeconds)
 
 		//first
 		var lastFirstCommitAbleMessageRecord MessageRecord
@@ -548,7 +547,7 @@ func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *s
 		var lastFinalCommit time.Time
 		var needCommitFinalStage bool
 
-		for{
+		for {
 
 			if global.ShuttingDown() {
 				return
@@ -562,45 +561,44 @@ func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *s
 				return
 			}
 
-			time.Sleep(10*time.Second)
+			time.Sleep(10 * time.Second)
 
 			//cleanup first log
 			processor.firstStageRecords.Range(func(key, value interface{}) bool {
 				x := value.(MessageRecord)
-				msgTime,err:=util.ToInt64(x.RecordTimestamp)
-				if err!=nil{
+				msgTime, err := util.ToInt64(x.RecordTimestamp)
+				if err != nil {
 					panic(err)
 				}
 
 				var commitAnyway bool
-				if !(msgTime > 0 && processor.latestRecordTimestampInPrepareStage>0){
-					walHasLag:=queue.ConsumerHasLag(walCommitqConfig,walCommitConsumerConfig)
-					if walHasLag{
+				if !(msgTime > 0 && processor.latestRecordTimestampInPrepareStage > 0) {
+					walHasLag := queue.ConsumerHasLag(walCommitqConfig, walCommitConsumerConfig)
+					if walHasLag {
 						return true
-					}else{
-						commitAnyway=true
+					} else {
+						commitAnyway = true
 					}
 				}
 
-				timegap:=processor.latestRecordTimestampInPrepareStage-msgTime
-				if processor.totalMessageProcessedInPrepareStage > 0 && time.Since(processor.lastMessageFetchedTimeInPrepareStage) > time.Second*commitAnywayWaitInSeconds{
-					if time.Since(processor.lastMessageFetchedTimeInAnyStage) > time.Second*commitAnywayWaitInSeconds{
-						commitAnyway=true
+				timegap := processor.latestRecordTimestampInPrepareStage - msgTime
+				if processor.totalMessageProcessedInPrepareStage > 0 && time.Since(processor.lastMessageFetchedTimeInPrepareStage) > time.Second*commitAnywayWaitInSeconds {
+					if time.Since(processor.lastMessageFetchedTimeInAnyStage) > time.Second*commitAnywayWaitInSeconds {
+						commitAnyway = true
 					}
 				}
 
-				if commitAnyway||timegap>processor.config.SafetyCommitIntervalInSeconds{
+				if commitAnyway || timegap > processor.config.SafetyCommitIntervalInSeconds {
 					//update to latest committable message
-					if (commitAnyway&&x.MessageOffset.LatestThan(lastFirstCommitAbleMessageRecord.MessageOffset))||
-						(msgTime> lastFirstCommitAbleMessageRecord.recordTime&&x.MessageOffset.LatestThan(lastFirstCommitAbleMessageRecord.MessageOffset)){
-						x.recordTime=msgTime
-						lastFirstCommitAbleMessageRecord=x
-						processor.commitableMessageOffsetInFirstStage=x.MessageOffset
+					if (commitAnyway && x.MessageOffset.LatestThan(lastFirstCommitAbleMessageRecord.MessageOffset)) ||
+						(msgTime > lastFirstCommitAbleMessageRecord.recordTime && x.MessageOffset.LatestThan(lastFirstCommitAbleMessageRecord.MessageOffset)) {
+						x.recordTime = msgTime
+						lastFirstCommitAbleMessageRecord = x
+						processor.commitableMessageOffsetInFirstStage = x.MessageOffset
 						//needCommitFirstStage=true
-						log.Debug("update first commit:",x.MessageOffset)
+						log.Debug("update first commit:", x.MessageOffset)
 					}
 				}
-
 
 				//if needCommitFirstStage{
 				//	if time.Since(lastFirstCommit)>time.Second*10{
@@ -615,53 +613,51 @@ func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *s
 				return true
 			})
 
-
 			//cleanup final log
 			processor.finalStageRecords.Range(func(key, value interface{}) bool {
 				x := value.(MessageRecord)
-				msgTime,err:=util.ToInt64(x.RecordTimestamp)
-				if err!=nil{
+				msgTime, err := util.ToInt64(x.RecordTimestamp)
+				if err != nil {
 					panic(err)
 				}
 
 				var commitAnyway bool
-				if !(msgTime > 0 && processor.latestRecordTimestampInPrepareStage>0){
-					walHasLag:=queue.ConsumerHasLag(walCommitqConfig,walCommitConsumerConfig)
-					if walHasLag{
+				if !(msgTime > 0 && processor.latestRecordTimestampInPrepareStage > 0) {
+					walHasLag := queue.ConsumerHasLag(walCommitqConfig, walCommitConsumerConfig)
+					if walHasLag {
 						return true
-					}else{
-						commitAnyway=true
+					} else {
+						commitAnyway = true
 					}
 				}
 
-				timegap:=processor.latestRecordTimestampInPrepareStage-msgTime
-				if processor.totalMessageProcessedInPrepareStage > 0 && time.Since(processor.lastMessageFetchedTimeInPrepareStage) > time.Second*commitAnywayWaitInSeconds{
-					if time.Since(processor.lastMessageFetchedTimeInAnyStage) > time.Second*commitAnywayWaitInSeconds{
-						commitAnyway=true
+				timegap := processor.latestRecordTimestampInPrepareStage - msgTime
+				if processor.totalMessageProcessedInPrepareStage > 0 && time.Since(processor.lastMessageFetchedTimeInPrepareStage) > time.Second*commitAnywayWaitInSeconds {
+					if time.Since(processor.lastMessageFetchedTimeInAnyStage) > time.Second*commitAnywayWaitInSeconds {
+						commitAnyway = true
 					}
 				}
 
-				if commitAnyway||timegap>processor.config.SafetyCommitIntervalInSeconds{
+				if commitAnyway || timegap > processor.config.SafetyCommitIntervalInSeconds {
 					//update to latest committable message
-					if (commitAnyway&&x.MessageOffset.LatestThan(lastFinalCommitAbleMessageRecord.MessageOffset))||
-						(msgTime> lastFinalCommitAbleMessageRecord.recordTime&&x.MessageOffset.LatestThan(lastFinalCommitAbleMessageRecord.MessageOffset)){
-						x.recordTime=msgTime
-						lastFinalCommitAbleMessageRecord=x
-						processor.commitableMessageOffsetInFinalStage=x.MessageOffset
-						needCommitFinalStage=true
-						log.Debug("update final commit:",x.MessageOffset)
+					if (commitAnyway && x.MessageOffset.LatestThan(lastFinalCommitAbleMessageRecord.MessageOffset)) ||
+						(msgTime > lastFinalCommitAbleMessageRecord.recordTime && x.MessageOffset.LatestThan(lastFinalCommitAbleMessageRecord.MessageOffset)) {
+						x.recordTime = msgTime
+						lastFinalCommitAbleMessageRecord = x
+						processor.commitableMessageOffsetInFinalStage = x.MessageOffset
+						needCommitFinalStage = true
+						log.Debug("update final commit:", x.MessageOffset)
 					}
 				}
 
-
-				if needCommitFinalStage{
-					if time.Since(lastFinalCommit)>time.Second*10{
-						log.Debug("committing final offset:",processor.commitableMessageOffsetInFinalStage)
+				if needCommitFinalStage {
+					if time.Since(lastFinalCommit) > time.Second*10 {
+						log.Debug("committing final offset:", processor.commitableMessageOffsetInFinalStage)
 						finalCommitLogConsumer.CommitOffset(processor.commitableMessageOffsetInFinalStage)
-						lastFinalCommit=time.Now()
-						needCommitFinalStage=false
-						timegap1:=msgTime- lastFinalCommitAbleMessageRecord.recordTime
-						log.Trace(x.RecordTimestamp,",",x.RecordOffset,",time_gap: ",timegap,"s, ",timegap1,"s, record:",msgTime," vs latest:",processor.latestRecordTimestampInPrepareStage,", updating to commit:",x.MessageOffset,lastFinalCommitAbleMessageRecord,",",processor.config.SafetyCommitIntervalInSeconds)
+						lastFinalCommit = time.Now()
+						needCommitFinalStage = false
+						timegap1 := msgTime - lastFinalCommitAbleMessageRecord.recordTime
+						log.Trace(x.RecordTimestamp, ",", x.RecordOffset, ",time_gap: ", timegap, "s, ", timegap1, "s, record:", msgTime, " vs latest:", processor.latestRecordTimestampInPrepareStage, ", updating to commit:", x.MessageOffset, lastFinalCommitAbleMessageRecord, ",", processor.config.SafetyCommitIntervalInSeconds)
 					}
 				}
 				return true
@@ -702,7 +698,7 @@ func (processor *ReplicationCorrectionGroup) getConsumer(queueName string) (*que
 	qConfig := queue.GetOrInitConfig(queueName)
 	cConfig := queue.GetOrInitConsumerConfig(qConfig.ID, "crc", "name1")
 	consumer, err := queue.AcquireConsumer(qConfig,
-		cConfig,"worker_id")
+		cConfig, "worker_id")
 	if err != nil {
 		panic(err)
 	}
