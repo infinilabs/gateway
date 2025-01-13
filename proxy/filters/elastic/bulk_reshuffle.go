@@ -196,7 +196,7 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 		var hitMetadataNotFound bool
 
-		docCount, err := elastic.WalkBulkRequests(body, func(eachLine []byte) (skipNextLine bool) {
+		docCount, err := elastic.WalkBulkRequests(pathStr, body, func(eachLine []byte) (skipNextLine bool) {
 			if validEachLine {
 				obj := map[string]interface{}{}
 				err := util.FromJSONBytes(eachLine, &obj)
@@ -214,26 +214,26 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 
 			shardID := 0
 
-			var indexNew, typeNew, idNew string
-
-			//only handle empty index
-			if index == "" {
-				//url level
-				var urlLevelIndex string
-				var urlLevelType string
-
-				urlLevelIndex, urlLevelType = elastic.ParseUrlLevelBulkMeta(pathStr)
-
-				if index == "" && urlLevelIndex != "" {
-					index = urlLevelIndex
-					indexNew = urlLevelIndex
-				}
-
-				if typeName == "" && urlLevelType != "" {
-					typeName = urlLevelType
-					typeNew = urlLevelType
-				}
-			}
+			var idNew string
+			//var indexNew, typeNew, idNew string
+			////only handle empty index
+			//if index == "" {
+			//	//url levelbulk_processor.go:135
+			//	var urlLevelIndex string
+			//	var urlLevelType string
+			//
+			//	urlLevelIndex, urlLevelType = elastic.ParseUrlLevelBulkMeta(pathStr)
+			//
+			//	if index == "" && urlLevelIndex != "" {
+			//		index = urlLevelIndex
+			//		indexNew = urlLevelIndex
+			//	}
+			//
+			//	if typeName == "" && urlLevelType != "" {
+			//		typeName = urlLevelType
+			//		typeNew = urlLevelType
+			//	}
+			//}
 
 			if (actionStr == elastic.ActionIndex || actionStr == elastic.ActionCreate) && (len(id) == 0 || id == "null") && fixNullID {
 				id = util.GetUUID()
@@ -243,9 +243,10 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
-			if indexNew != "" || typeNew != "" || idNew != "" {
+			//if indexNew != "" || typeNew != "" || idNew != "" {
+			if idNew != "" {
 				var err error
-				metaBytes, err = updateJsonWithNewIndex(actionStr, metaBytes, indexNew, typeNew, idNew)
+				metaBytes, err = elastic.UpdateBulkMetadata(actionStr, metaBytes, "", "", idNew)
 				if err != nil {
 					panic(err)
 				}
@@ -629,35 +630,4 @@ func batchUpdateJson(scannedByte []byte, action string, set, del map[string]stri
 	}
 
 	return scannedByte, err
-}
-
-func updateJsonWithNewIndex(action string, scannedByte []byte, index, typeName, id string) (newBytes []byte, err error) {
-
-	if global.Env().IsDebug {
-		log.Trace("update:", action, ",", index, ",", typeName, ",", id)
-	}
-
-	newBytes = make([]byte, len(scannedByte))
-	copy(newBytes, scannedByte)
-
-	if index != "" {
-		newBytes, err = jsonparser.Set(newBytes, []byte("\""+index+"\""), action, "_index")
-		if err != nil {
-			return newBytes, err
-		}
-	}
-	if typeName != "" {
-		newBytes, err = jsonparser.Set(newBytes, []byte("\""+typeName+"\""), action, "_type")
-		if err != nil {
-			return newBytes, err
-		}
-	}
-	if id != "" {
-		newBytes, err = jsonparser.Set(newBytes, []byte("\""+id+"\""), action, "_id")
-		if err != nil {
-			return newBytes, err
-		}
-	}
-
-	return newBytes, err
 }

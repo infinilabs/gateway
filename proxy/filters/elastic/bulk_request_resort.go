@@ -312,7 +312,7 @@ func (filter *BulkRequestResort) Filter(ctx *fasthttp.RequestCtx) {
 
 		docs := map[int][]elastic.VersionInfo{}
 
-		elastic.WalkBulkRequests(requestBody, nil,
+		elastic.WalkBulkRequests(pathStr, requestBody, nil,
 			func(metaBytes []byte, actionStr, index, typeName, id, routing string, docCount int) (err error) {
 				if lastRecord, collect = docsToReplicate[offset]; collect {
 					lastRecord.Payload = append(lastRecord.Payload, bytes.Copy(metaBytes))
