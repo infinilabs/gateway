@@ -66,15 +66,6 @@ func (this *ElasticsearchBulkRequestThrottle) Filter(ctx *fasthttp.RequestCtx) {
 		docCount, err := elastic.WalkBulkRequests(pathStr, body, func(eachLine []byte) (skipNextLine bool) {
 			return false
 		}, func(metaBytes []byte, actionStr, index, typeName, id, routing string, offset int) (err error) {
-			//if index == "" {
-			//	//url level
-			//	var urlLevelIndex string
-			//	urlLevelIndex, _ = elastic.ParseUrlLevelBulkMeta(pathStr)
-			//	if urlLevelIndex != "" {
-			//		index = urlLevelIndex
-			//	}
-			//}
-
 			//stats
 			v, ok := indexOpStats[index]
 			if !ok {

@@ -72,21 +72,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 			metaCollected = false
 
 			metaStr := util.UnsafeBytesToString(metaBytes)
-
-			//url level
-			//var urlLevelIndex string
-			//var urlLevelType string
-			//urlLevelIndex, urlLevelType = elastic.ParseUrlLevelBulkMeta(pathStr)
-
 			var indexNew, typeNew, idNew string
-			//if index == "" && urlLevelIndex != "" {
-			//	index = urlLevelIndex
-			//	indexNew = urlLevelIndex
-			//}
-			//if typeName != typeNew && typeName == "" && !this.RemoveTypeMeta && urlLevelType != "" {
-			//	typeName = urlLevelType
-			//	typeNew = urlLevelType
-			//}
 
 			if (actionStr == elastic.ActionIndex || actionStr == elastic.ActionCreate) && (len(id) == 0 || id == "null") && this.FixNilID {
 				randID := util.GetUUID()

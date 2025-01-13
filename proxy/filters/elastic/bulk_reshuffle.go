@@ -215,25 +215,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 			shardID := 0
 
 			var idNew string
-			//var indexNew, typeNew, idNew string
-			////only handle empty index
-			//if index == "" {
-			//	//url levelbulk_processor.go:135
-			//	var urlLevelIndex string
-			//	var urlLevelType string
-			//
-			//	urlLevelIndex, urlLevelType = elastic.ParseUrlLevelBulkMeta(pathStr)
-			//
-			//	if index == "" && urlLevelIndex != "" {
-			//		index = urlLevelIndex
-			//		indexNew = urlLevelIndex
-			//	}
-			//
-			//	if typeName == "" && urlLevelType != "" {
-			//		typeName = urlLevelType
-			//		typeNew = urlLevelType
-			//	}
-			//}
 
 			if (actionStr == elastic.ActionIndex || actionStr == elastic.ActionCreate) && (len(id) == 0 || id == "null") && fixNullID {
 				id = util.GetUUID()
@@ -243,7 +224,6 @@ func (this *BulkReshuffle) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
-			//if indexNew != "" || typeNew != "" || idNew != "" {
 			if idNew != "" {
 				var err error
 				metaBytes, err = elastic.UpdateBulkMetadata(actionStr, metaBytes, "", "", idNew)

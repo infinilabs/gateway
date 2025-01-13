@@ -414,8 +414,6 @@ func (s *Sorter) run() {
 
 			if docCount > 0 {
 
-				//log.Error("docCount:", docCount, " fetch documents:", len(documents))
-
 				//if global.Env().IsDebug {
 				stats.IncrementBy("bulk_request_resort", fmt.Sprintf("%v_%v_get", s.filter.inputQueueConfig.ID, s.partitionID), int64(docCount))
 				//}
