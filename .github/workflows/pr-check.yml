@@ -88,8 +88,11 @@ jobs:
                 export WORK=$WORKBASE/$PNAME
 
                 # for foramt check
-                cd $WORK
+                cd $WORK && echo
                 git status --porcelain | grep " M .*\.go$"
+                echo "==="
+                echo "IMPORTANT: Above files are not formatted, please run 'make format' to format them."
+                echo "==="
                 exit 1
 
     unit_test:
