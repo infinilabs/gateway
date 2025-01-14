@@ -89,7 +89,7 @@ jobs:
 
                 # for foramt check
                 cd $WORK
-                git status --porcelain | grep -c " M .*\.go$"
+                git status --porcelain | grep " M .*\.go$"
                 exit 1
 
     unit_test:
