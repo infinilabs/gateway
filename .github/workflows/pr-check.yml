@@ -90,9 +90,9 @@ jobs:
                 # for foramt check
                 cd $WORK && echo
                 git status --porcelain | grep " M .*\.go$"
-                echo "===   ===   ===   ===   ===   ==="
+                echo "----------------------------------------------------------------------------------"
                 echo "IMPORTANT: Above files are not formatted, please run 'make format' to format them."
-                echo "===   ===   ===   ===   ===   ==="
+                echo "----------------------------------------------------------------------------------"
                 exit 1
 
     unit_test:
