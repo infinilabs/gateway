@@ -83,7 +83,14 @@ jobs:
             
             - name: Fail workflow if changes after format
               if: steps.check-changes.outputs.changes == 'true'
-              run: git status --porcelain | grep -c " M .*\.go$" && exit 1
+              run: |
+                export WORKBASE=$HOME/go/src/infini.sh
+                export WORK=$WORKBASE/$PNAME
+
+                # for foramt check
+                cd $WORK
+                git status --porcelain | grep -c " M .*\.go$"
+                exit 1
 
     unit_test:
         runs-on: ubuntu-latest
