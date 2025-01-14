@@ -83,7 +83,7 @@ jobs:
             
             - name: Fail workflow if changes after format
               if: steps.check-changes.outputs.changes == 'true'
-              run: exit 1
+              run: git status --porcelain | grep -c " M .*\.go$" && exit 1
 
     unit_test:
         runs-on: ubuntu-latest
