@@ -16,6 +16,8 @@ Information about release notes of INFINI Gateway is provided here.
 ### Bug fix
 
 ### Improvements
+- Remove unnecessary node re-selection on schema mismatch for elasticsearch filter (#62)
+
 
 ## 1.28.0 (2025-01-11)
 
