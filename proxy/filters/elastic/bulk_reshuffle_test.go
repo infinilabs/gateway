@@ -25,10 +25,8 @@ package elastic
 
 import (
 	"fmt"
-	"github.com/buger/jsonparser"
 	"github.com/magiconair/properties/assert"
 	"infini.sh/framework/core/elastic"
-	"infini.sh/framework/core/util"
 	"strings"
 	"testing"
 )
