@@ -27,6 +27,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"infini.sh/framework/core/errors"
 	"math/rand"
 	"net"
 	"sort"
@@ -366,7 +367,7 @@ func (p *ReverseProxy) getHostClient() (clientAvailable bool, client *fasthttp.H
 		e := p.endpoints[idx]
 		c, ok := p.hostClients[e] //TODO, check client by endpoint
 		if !ok {
-			log.Error("client not found for: ", e)
+			panic(errors.Errorf("client not found for: %v", e))
 		}
 
 		return true, c, e
@@ -413,7 +414,11 @@ func (p *ReverseProxy) getClient() (clientAvailable bool, client *fasthttp.Clien
 		e := p.endpoints[idx]
 		c, ok := p.clients[e] //TODO, check client by endpoint
 		if !ok {
-			log.Error("client not found for: ", e)
+			panic(errors.Errorf("client not found for: %v", e))
+		}
+
+		if global.Env().IsDebug {
+			log.Trace("select endpoint:", idx, ",", e, ",", len(p.endpoints), ",", p.endpoints)
 		}
 
 		return true, c, e
@@ -429,6 +434,10 @@ RANDOM:
 	}
 	e := p.endpoints[seed]
 	c := p.clients[e]
+
+	if global.Env().IsDebug {
+		log.Trace("random select client:", seed, ",", e, ",max:", max)
+	}
 	return true, c, e
 }
 
@@ -493,18 +502,8 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 		if !p.proxyConfig.SkipEnrichMetadata {
 			myctx.Request.Header.Set("X-Forwarded-Proto", originalSchema)
 		}
-
 		clonedURI.SetScheme(metadata.GetSchema())
 		myctx.Request.SetURI(clonedURI)
-		_, pc, host = p.getClient()
-
-		if !p.proxyConfig.SkipAvailableCheck && !elastic.IsHostAvailable(host) {
-			old := host
-			host = metadata.GetActiveHost()
-			log.Infof("host [%v] is not available, re-choose one: [%v]", old, host)
-			pc = metadata.GetHttpClient(host)
-		}
-
 		schemaChanged = true
 	}
 
@@ -533,10 +532,6 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 START:
 
 	metadata.CheckNodeTrafficThrottle(host, 1, myctx.Request.GetRequestLength(), 0)
-
-	//if p.proxyConfig.Timeout <= 0 {
-	//	p.proxyConfig.Timeout = 60 * time.Second
-	//}
 
 	var err error
 	if p.proxyConfig.Timeout > 0 {
