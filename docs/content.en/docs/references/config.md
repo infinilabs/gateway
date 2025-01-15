@@ -65,26 +65,80 @@ Note that external environment variables take precedence over internal environme
 PROD_ES_ENDPOINT=http://1.1.1.1:9200 LOGGING_ES_ENDPOINT=http://2.2.2.2:9201 ./bin/gateway
 ```
 
+## Path
 
-## System Configuration
+The instance configuration, data, and log directories.
 
-System configuration is mainly used to set the fundamental properties of the Gateway:
+Example:
 
-| Name                    | Type   | Description                                                                                                                                   |
-| ----------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| path.data               | string | Data directory, default is `data`                                                                                                             |
-| path.logs               | string | Log directory, default is `log`                                                                                                               |
-| path.configs            | string | Configuration directory, default is `config`                                                                                                  |
-| log.level               | string | Log level, default is `info`                                                                                                                  |
+```yaml
+path.data: data
+path.logs: log
+path.configs: "config"
+```
+
+| Name                    | Type   | Description                                                                                                                                            |
+| ----------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| path.data               | string | Data directory, default is `data`.                                                                                                                         |
+| path.logs               | string | Log directory, default is `log`.                                                                                                                          |
+| path.configs            | string | Configuration directory, default is `config`.                                                                                                                       |
+
+## Log
+
+The configuration for instance logs.
+
+Example:
+
+```yaml
+log:
+  level: info
+  debug: false
+```
+
+| Name                    | Type   | Description                                                                                                                                            |
+| ----------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| log.level               | string | Log level, default is `info`.                                                                                                                         |
 | log.debug               | bool   | Whether to enable debug mode. When enabled, the program exits immediately in case of an exception, printing the complete stack trace. Used for debugging and fault localization. Default is `false`, do not enable in production as it may result in data loss.      |
-| log.format              | bool   | Log format, default is `[%Date(01-02) %Time] [%LEV] [%File:%Line] %Msg%n`. [Format References](https://github.com/cihub/seelog/wiki/Format-reference) |
+| log.format              | bool   | Log format, default is `[%Date(01-02) %Time] [%LEV] [%File:%Line] %Msg%n`. [Format References](https://github.com/cihub/seelog/wiki/Format-reference). |
 | log.disable_file_output | bool   | Whether to disable local file log output, default is `false`. Use this in container environments if you don't want local log output.                                                          |
-| allow_multi_instance    | bool   | Whether to allow running multiple Gateway instances on a single machine, default is `false`                                                |
-| skip_instance_detect    | bool   | Whether to skip Gateway instance detection, default is `false`                                                                                |
-| max_num_of_instances    | int    | Maximum number of Gateway instances, default is `5`                                                                                            |
-| configs.auto_reload     | bool   | Whether to support dynamic loading of configurations from `path.configs`                                                                      |
 
+## Configs
 
+Manage the configuration of instance.
+
+Example:
+
+```yaml
+configs:
+  auto_reload: true
+  managed: true
+  panic_on_config_error: false 
+  interval: "1s"
+  servers:
+    - "http://localhost:9000"
+  max_backup_files: 5
+  soft_delete: false
+  tls:
+    enabled: false
+    cert_file: /etc/ssl.crt
+    key_file: /etc/ssl.key
+    skip_insecure_verify: false
+```
+
+| Name | Type | Description |
+| --- | --- | --- |
+| configs.auto_reload | bool | Whether it supports dynamically loading configuration files under the path.configs path. |
+| configs.managed | bool | Whether configuration management by the configuration center is supported. |
+| configs.servers | []string | Configuration center address |
+| configs.interval | string | Configuration synchronization interval |
+| configs.soft_delete | bool | The deletion of configuration files is soft deletion, default is `true`. |
+| configs.panic_on_config_error | bool | If there is an error in configuration loading, it will crash directly, default `true` |
+| configs.max_backup_files | int | The maximum number of configuration file backups, default `10`. |
+| configs.valid_config_extensions | []string | Valid configuration file suffixes, default `.tpl`, `.json`, `.yml`, `.yaml` |
+| configs.tls | object | TLS Configuration (Please refer to [TLS](#tls-配置)) |
+| configs.always_register_after_restart | bool | Whether to register after the instance is restarted. When the instance runs in the K8S environment, this parameter needs to be enabled. |
+| configs.allow_generated_metrics_tasks | bool | Allow automatic generation of collection metrics tasks. |
+| configs.ignored_path | []string | Paths of configuration files that need to be ignored. |   
 
 ## Local Disk Queue
 
@@ -282,10 +336,84 @@ To set up and store the Tencent Cloud credentials securely, use the keystore com
 | api.websocket.permitted_hosts | []string    | The list of hosts that permitted to access the websocket service |
 | api.websocket.skip_host_verify | bool    | Whether websocket skip verify the host or not |
 
+## Metrics
 
+Configure collection of system metrics.
+
+Example:
+
+```yaml
+metrics:
+  enabled: true
+  queue: metrics
+  network:
+    enabled: true
+    summary: true
+    details: true
+  memory:
+    metrics:
+      - swap
+      - memory
+  disk:
+    metrics:
+      - iops
+      - usage
+  cpu:
+    metrics:
+      - idle
+      - system
+      - user
+      - iowait
+      - load
+```
+
+| Name | Type | Description |
+| --- | --- | --- |
+| enabled | bool | Whether to enable system metrics collection, default `true`. |
+| queue | string | The queue name of metrics collection. |
+| network | object | The Configuration of network metrics collection. |
+| network.enabled | bool | Whether to enable network metrics collection, default `true`. |
+| network.summary | bool | Whether to collect network summary metircs. |
+| network.sockets | bool | Whether to collect network socket metircs. |
+| network.throughput | bool | Whether to collect network throughput metircs. |
+| network.details | bool | Whether to accumulate network IO metrics. |
+| network.interfaces | []string | Specify the network interfaces to be collected, and all interfaces are default. |
+| memory | object | The Configuration of memory metrics collection. |
+| memory.enabled | bool | Whether to enable memory metrics collection, default `true` |
+| memory.metrics | []string | Specified collection metrics, optional `swap`，`memory` |
+| disk | object | The Configuration of disk metrics collection. |
+| disk.metrics | []string | Specified collection metrics, optional `usage`，`iops` |
+| cpu | object | The Configuration of cpu metrics collection. |
+| cpu.metrics | []string | Specified collection metrics, optional `idle`，`system`，`user`，`iowait`，`load` |
+
+## Node
+
+The configuration of instance node.
+
+Example:
+
+```plain
+node:
+  major_ip_pattern: ".*"
+  labels:
+    env: dev
+  tags:
+    - linux
+    - x86
+    - es7
+```
+
+| Name | Type | Description |
+| --- | --- | --- |
+| major_ip_pattern | string | If there are multiple IPs on the host, use a pattern to control which IP is the primary one, which is used for reporting during registration. |
+| labels | map | Custom lables |
+| tags | []string | Custom tags |
 
 ## Misc
 
 | Name                                    | Type   | Description                                           |
 | --------------------------------------- | ------ | ----------------------------------------------------- |
 | preference.pipeline_enabled_by_default   | map    | Whether pipelines are enabled by default. If set to `false`, each pipeline must be explicitly configured with `enabled` set to `true` |
+| allow_multi_instance    | bool   | Whether is allowed to start multiple instances with the same program, default `false`                                                                                            |
+| skip_instance_detect    | bool   | Whether is allowed to skip instance detection, default `false`                                                                                                          |
+| max_num_of_instances    | int    | The maximum number of instances that the same program can run simultaneously, default `5`       |
