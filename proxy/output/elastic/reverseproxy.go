@@ -618,7 +618,7 @@ START:
 		if retryAble {
 			retry++
 			if p.proxyConfig.MaxRetryTimes > 0 && retry < p.proxyConfig.MaxRetryTimes {
-				if p.proxyConfig.RetryDelayInMs > 0 && !retryChooseHost { //no need add delay for change hosts
+				if p.proxyConfig.RetryDelayInMs > 0 && !retryChooseHost { // No delay is required when switching hosts.
 					time.Sleep(time.Duration(p.proxyConfig.RetryDelayInMs) * time.Millisecond)
 				}
 				myctx.Request.Header.Add("RETRY_AT", time.Now().String())
