@@ -36,18 +36,9 @@ type GatewayAPI struct {
 }
 
 func (this *GatewayAPI) RegisterSchema() {
-	err := orm.RegisterSchemaWithIndexName(common.EntryConfig{}, "entry")
-	if err != nil {
-		panic(err)
-	}
-	err = orm.RegisterSchemaWithIndexName(common.RouterConfig{}, "router")
-	if err != nil {
-		panic(err)
-	}
-	err = orm.RegisterSchemaWithIndexName(common.FlowConfig{}, "flow")
-	if err != nil {
-		panic(err)
-	}
+	orm.MustRegisterSchemaWithIndexName(common.EntryConfig{}, "entry")
+	orm.MustRegisterSchemaWithIndexName(common.RouterConfig{}, "router")
+	orm.MustRegisterSchemaWithIndexName(common.FlowConfig{}, "flow")
 
 }
 
