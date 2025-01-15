@@ -13,6 +13,8 @@ Information about release notes of INFINI Gateway is provided here.
 
 ### Features
 - Support simple bulk metadata in bulk related filters (#59)
+- Seamlessly retry requests on backend failure for the Elasticsearch filter (#63)
+
 
 ### Bug fix
 
