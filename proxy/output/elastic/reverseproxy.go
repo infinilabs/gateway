@@ -27,6 +27,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/emirpasic/gods/sets/hashset"
 	"infini.sh/framework/core/errors"
 	"math/rand"
 	"net"
@@ -462,36 +463,6 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 		cleanHopHeaders(&myctx.Request)
 	}
 
-	var pc fasthttp.ClientAPI
-	var host string
-
-	if p.proxyConfig.FixedClient {
-		pc = p.client
-		host = p.host
-	} else {
-		//var ok bool
-		//使用算法来获取合适的 client
-		switch metadata.Config.ClientMode {
-		case "client":
-			_, pc, host = p.getClient()
-			break
-		case "host":
-			_, pc, host = p.getHostClient()
-			break
-		default:
-			_, pc, host = p.getClient()
-		}
-
-		if !p.proxyConfig.SkipAvailableCheck && !elastic.IsHostAvailable(host) {
-			old := host
-			host = metadata.GetActiveHost()
-			if rate.GetRateLimiterPerSecond("proxy-host-not-available", old, 1).Allow() {
-				log.Infof("host [%v] is not available, fallback: [%v]", old, host)
-			}
-			pc = metadata.GetHttpClient(host)
-		}
-	}
-
 	// modify schema，align with elasticsearch's schema
 	originalHost := string(myctx.Request.Header.Host())
 	originalSchema := myctx.Request.GetSchema()
@@ -519,17 +490,71 @@ func (p *ReverseProxy) DelegateRequest(elasticsearch string, metadata *elastic.E
 		myctx.Request.Header.Add(fasthttp.HeaderXForwardedHost, originalHost)
 	}
 
+	curHost := string(myctx.Request.Host())
+
+	//choose a server to perform the request
+	var pc fasthttp.ClientAPI
+	var host string
+
+	var retryChooseHost = true
+	var skippedHost *hashset.Set
+	retry := 0
+START:
+
+	if retryChooseHost {
+		retryChooseHost = false
+
+		log.Error("init hosts")
+		oldHost := host
+		if p.proxyConfig.FixedClient {
+			pc = p.client
+			host = p.host
+		} else {
+			//var ok bool
+			switch metadata.Config.ClientMode {
+			case "client":
+				_, pc, host = p.getClient()
+				break
+			case "host":
+				_, pc, host = p.getHostClient()
+				break
+			default:
+				_, pc, host = p.getClient()
+			}
+
+			if !p.proxyConfig.SkipAvailableCheck && !elastic.IsHostAvailable(host) {
+				old := host
+				host = metadata.GetActiveHost()
+				if rate.GetRateLimiterPerSecond("proxy-host-not-available", old, 1).Allow() {
+					log.Infof("host [%v] is not available, fallback: [%v]", old, host)
+				}
+				pc = metadata.GetHttpClient(host)
+			}
+		}
+
+		//it may select the same host, we need ensure skip the failure node
+		if oldHost != "" && oldHost == host {
+			if skippedHost != nil {
+				if len(p.endpoints) > 1 {
+					for _, v := range p.endpoints {
+						if !skippedHost.Contains(v) { //the node is not in failure set, try use it
+							host = v
+							pc = metadata.GetHttpClient(host)
+							log.Error("re-choose new host:", host)
+						}
+					}
+				}
+			}
+		}
+	}
+
 	if global.Env().IsDebug {
 		log.Tracef("send request [%v] to upstream [%v]", myctx.Request.PhantomURI().String(), host)
 	}
 
-	curHost := string(myctx.Request.Host())
 	if host != curHost || host != originalHost {
 		myctx.Request.SetHostBytes([]byte(host))
 	}
-
-	retry := 0
-START:
 
 	metadata.CheckNodeTrafficThrottle(host, 1, myctx.Request.GetRequestLength(), 0)
 
@@ -557,6 +582,33 @@ START:
 				elastic.GetOrInitHost(host, metadata.Config.ID).ReportFailure()
 			}
 			//server failure flow
+
+			if p.proxyConfig.RetryOnBackendFailure {
+				log.Error("retry on background failure")
+				if skippedHost == nil {
+					skippedHost = hashset.New()
+				}
+				skippedHost.Add(host)
+				method := string(myctx.Method())
+				//writes
+				if method == fasthttp.MethodPost || method == fasthttp.MethodPut || method == fasthttp.MethodPatch || method == fasthttp.MethodDelete {
+					log.Error("retry writes on background failure")
+
+					if p.proxyConfig.RetryWriteOpsOnBackendFailure {
+						retryAble = true
+						retryChooseHost = true
+					}
+
+				} else if p.proxyConfig.RetryReadonlyOnlyOnBackendFailure {
+
+					log.Error("retry reads on background failure")
+
+					//reads
+					retryAble = true
+					retryChooseHost = true
+				}
+			}
+
 		} else if res.StatusCode() == 429 {
 			if p.proxyConfig.RetryOnBackendBusy {
 				retryAble = true
@@ -566,7 +618,7 @@ START:
 		if retryAble {
 			retry++
 			if p.proxyConfig.MaxRetryTimes > 0 && retry < p.proxyConfig.MaxRetryTimes {
-				if p.proxyConfig.RetryDelayInMs > 0 {
+				if p.proxyConfig.RetryDelayInMs > 0 && !retryChooseHost { //no need add delay for change hosts
 					time.Sleep(time.Duration(p.proxyConfig.RetryDelayInMs) * time.Millisecond)
 				}
 				myctx.Request.Header.Add("RETRY_AT", time.Now().String())

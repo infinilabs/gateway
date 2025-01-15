@@ -29,12 +29,14 @@ type ProxyConfig struct {
 	Elasticsearch string `config:"elasticsearch"`
 	Balancer      string `config:"balancer"`
 
-	MaxConnection         int  `config:"max_connection_per_node"`
-	MaxResponseBodySize   int  `config:"max_response_size"`
-	MaxRetryTimes         int  `config:"max_retry_times"`
-	RetryOnBackendFailure bool `config:"retry_on_backend_failure"`
-	RetryOnBackendBusy    bool `config:"retry_on_backend_busy"`
-	RetryDelayInMs        int  `config:"retry_delay_in_ms"`
+	MaxConnection                     int  `config:"max_connection_per_node"`
+	MaxResponseBodySize               int  `config:"max_response_size"`
+	MaxRetryTimes                     int  `config:"max_retry_times"`
+	RetryOnBackendFailure             bool `config:"retry_on_backend_failure"`
+	RetryReadonlyOnlyOnBackendFailure bool `config:"retry_readonly_on_backend_failure"` //usually it is safety to retry readonly requests, GET/HEAD verbs only, as write may have partial failure, retry may cause duplicated writes
+	RetryWriteOpsOnBackendFailure     bool `config:"retry_writes_on_backend_failure"`   //POST/PUT/PATCH requests, which means may not good for retry, but you can sill opt it on, and it is preferred to work with other flow/filters
+	RetryOnBackendBusy                bool `config:"retry_on_backend_busy"`
+	RetryDelayInMs                    int  `config:"retry_delay_in_ms"`
 
 	MaxConnWaitTimeout    time.Duration `config:"max_conn_wait_timeout"`
 	MaxIdleConnDuration   time.Duration `config:"max_idle_conn_duration"`
