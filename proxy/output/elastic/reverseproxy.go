@@ -347,7 +347,7 @@ func (p *ReverseProxy) getHostClient() (clientAvailable bool, client *fasthttp.H
 	}
 
 	if len(p.hostClients) == 0 || len(p.endpoints) == 0 {
-		log.Error("no upstream found")
+		log.Error("no upstream was found")
 		return false, nil, ""
 	}
 
@@ -504,7 +504,6 @@ START:
 	if retryChooseHost {
 		retryChooseHost = false
 
-		log.Error("init hosts")
 		oldHost := host
 		if p.proxyConfig.FixedClient {
 			pc = p.client
@@ -540,7 +539,7 @@ START:
 						if !skippedHost.Contains(v) { //the node is not in failure set, try use it
 							host = v
 							pc = metadata.GetHttpClient(host)
-							log.Error("re-choose new host:", host)
+							log.Trace("re-choose new host:", host)
 						}
 					}
 				}
@@ -584,7 +583,9 @@ START:
 			//server failure flow
 
 			if p.proxyConfig.RetryOnBackendFailure {
-				log.Error("retry on background failure")
+				if global.Env().IsDebug {
+					log.Trace("retry on background failure")
+				}
 				if skippedHost == nil {
 					skippedHost = hashset.New()
 				}
@@ -592,7 +593,10 @@ START:
 				method := string(myctx.Method())
 				//writes
 				if method == fasthttp.MethodPost || method == fasthttp.MethodPut || method == fasthttp.MethodPatch || method == fasthttp.MethodDelete {
-					log.Error("retry writes on background failure")
+
+					if global.Env().IsDebug {
+						log.Trace("retry writes on background failure")
+					}
 
 					if p.proxyConfig.RetryWriteOpsOnBackendFailure {
 						retryAble = true
@@ -600,9 +604,9 @@ START:
 					}
 
 				} else if p.proxyConfig.RetryReadonlyOnlyOnBackendFailure {
-
-					log.Error("retry reads on background failure")
-
+					if global.Env().IsDebug {
+						log.Trace("retry reads on background failure")
+					}
 					//reads
 					retryAble = true
 					retryChooseHost = true
