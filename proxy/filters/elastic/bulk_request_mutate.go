@@ -66,29 +66,14 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 		var bulkBuff *bytebufferpool.ByteBuffer = bytebufferpool.Get("bulk_mutate_request_docs")
 		defer bytebufferpool.Put("bulk_mutate_request_docs", bulkBuff)
 		var metaCollected bool
-		docCount, err := elastic.WalkBulkRequests(body, func(eachLine []byte) (skipNextLine bool) {
+		docCount, err := elastic.WalkBulkRequests(pathStr, body, func(eachLine []byte) (skipNextLine bool) {
 			return false
 		}, func(metaBytes []byte, actionStr, index, typeName, id, routing string, offset int) (err error) {
 			metaCollected = false
 
 			metaStr := util.UnsafeBytesToString(metaBytes)
-
-			//url level
-			var urlLevelIndex string
-			var urlLevelType string
-
-			urlLevelIndex, urlLevelType = elastic.ParseUrlLevelBulkMeta(pathStr)
-
 			var indexNew, typeNew, idNew string
-			if index == "" && urlLevelIndex != "" {
-				index = urlLevelIndex
-				indexNew = urlLevelIndex
-			}
 
-			if typeName != typeNew && typeName == "" && !this.RemoveTypeMeta && urlLevelType != "" {
-				typeName = urlLevelType
-				typeNew = urlLevelType
-			}
 			if (actionStr == elastic.ActionIndex || actionStr == elastic.ActionCreate) && (len(id) == 0 || id == "null") && this.FixNilID {
 				randID := util.GetUUID()
 				if this.AddTimestampToID {
@@ -110,6 +95,13 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
+			//index should not be empty, or will be use the default index
+			if index == "" {
+				index = this.DefaultIndex
+				idNew = this.DefaultIndex
+			}
+
+			//handle the index rename
 			if index != "" && len(this.IndexNameRename) > 0 {
 				v, ok := this.IndexNameRename[index]
 				if ok {
@@ -124,6 +116,7 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 				}
 			}
 
+			//handle the type rename
 			if typeName != "" && !this.RemoveTypeMeta && len(this.TypeNameRename) > 0 {
 				v, ok := this.TypeNameRename[typeName]
 				if ok && v != typeName {

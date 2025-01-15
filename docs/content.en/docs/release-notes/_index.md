@@ -12,6 +12,7 @@ Information about release notes of INFINI Gateway is provided here.
 ### Breaking changes
 
 ### Features
+- Support simple bulk metadata in bulk related filters (#59)
 
 ### Bug fix
 

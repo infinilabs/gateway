@@ -312,7 +312,7 @@ func (filter *BulkRequestResort) Filter(ctx *fasthttp.RequestCtx) {
 
 		docs := map[int][]elastic.VersionInfo{}
 
-		elastic.WalkBulkRequests(requestBody, nil,
+		elastic.WalkBulkRequests(pathStr, requestBody, nil,
 			func(metaBytes []byte, actionStr, index, typeName, id, routing string, docCount int) (err error) {
 				if lastRecord, collect = docsToReplicate[offset]; collect {
 					lastRecord.Payload = append(lastRecord.Payload, bytes.Copy(metaBytes))
@@ -413,8 +413,6 @@ func (s *Sorter) run() {
 			docCount, documents := documentBuffer.GetDocuments(s.filter.BatchSizeInDocs)
 
 			if docCount > 0 {
-
-				//log.Error("docCount:", docCount, " fetch documents:", len(documents))
 
 				//if global.Env().IsDebug {
 				stats.IncrementBy("bulk_request_resort", fmt.Sprintf("%v_%v_get", s.filter.inputQueueConfig.ID, s.partitionID), int64(docCount))

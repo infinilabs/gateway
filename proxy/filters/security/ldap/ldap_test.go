@@ -45,7 +45,6 @@ func TestLDAPFunctions(t *testing.T) {
 		UserFilter:   "(uid=%s)",
 	}
 
-
 	r := &fasthttp.Request{}
 	r.SetBasicAuth("galieleo", "password")
 
