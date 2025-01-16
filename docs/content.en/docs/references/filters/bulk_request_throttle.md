@@ -6,7 +6,7 @@ title: "bulk_request_throttle"
 
 ## Description
 
-bulk_request_throttle 过滤器用来对 Elasticsearch 的 Bulk 请求进行限速。
+The bulk_request_throttle filter is used to limit the speed of Bulk requests to Elasticsearch.
 
 ## Configuration Example
 
@@ -35,7 +35,7 @@ flow:
 | Name                                | Type   | Description                                                                                                                       |
 | ----------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------- |
 | indices                             | map    | The indices which wanted to throttle                                                                                              |
-| indices.[NAME].interval             | string | 评估限速的单位时间间隔，默认为 `1s`                                                                                               |
+| indices.[NAME].interval             | string | The unit time interval for evaluating the speed limit, default `1s`                                                                                               |
 | indices.[NAME].max_requests         | int    | Maximum request count limit in the interval                                                                                       |
 | indices.[NAME].burst_requests       | int    | Burst request count limit in the interval                                                                                         |
 | indices.[NAME].max_bytes            | int    | Maximum request traffic limit in the interval                                                                                     |
