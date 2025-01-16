@@ -135,7 +135,7 @@ configs:
 | configs.panic_on_config_error | bool | If there is an error in configuration loading, it will crash directly, default `true` |
 | configs.max_backup_files | int | The maximum number of configuration file backups, default `10`. |
 | configs.valid_config_extensions | []string | Valid configuration file suffixes, default `.tpl`, `.json`, `.yml`, `.yaml` |
-| configs.tls | object | TLS Configuration (Please refer to [TLS](#tls-配置)) |
+| configs.tls | object | TLS Configuration (Please refer to [TLS](#tls-configuration)) |
 | configs.always_register_after_restart | bool | Whether to register after the instance is restarted. When the instance runs in the K8S environment, this parameter needs to be enabled. |
 | configs.allow_generated_metrics_tasks | bool | Allow automatic generation of collection metrics tasks. |
 | configs.ignored_path | []string | Paths of configuration files that need to be ignored. |   
