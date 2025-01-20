@@ -67,7 +67,7 @@ PROD_ES_ENDPOINT=http://1.1.1.1:9200 LOGGING_ES_ENDPOINT=http://2.2.2.2:9201 ./b
 
 ## Path
 
-The instance configuration, data, and log directories.
+Common configuration for paths, including data, log and config directories.
 
 Example:
 
@@ -85,7 +85,7 @@ path.configs: "config"
 
 ## Log
 
-The configuration for instance logs.
+The configuration for logs.
 
 Example:
 
@@ -104,7 +104,7 @@ log:
 
 ## Configs
 
-Manage the configuration of instance.
+Manage the configuration.
 
 Example:
 
@@ -388,7 +388,7 @@ metrics:
 
 ## Node
 
-The configuration of instance node.
+The configuration of node.
 
 Example:
 
