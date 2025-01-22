@@ -1,1 +1,4 @@
 /public/
+resources/_gen/
+/themes/
+/config.bak
