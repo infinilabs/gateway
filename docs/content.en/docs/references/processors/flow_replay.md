@@ -7,8 +7,7 @@ asciinema: false
 
 ## Description
 
-flow_replay 处理器用来异步消费队列里面的请求并使用异步用于在线请求的处理流程来进行消费处理。
-
+The flow_replay processor is used to asynchronously consume requests in the queue and use the asynchronous processing process for online requests to perform consumption processing.
 
 ## Configuration Example
 
