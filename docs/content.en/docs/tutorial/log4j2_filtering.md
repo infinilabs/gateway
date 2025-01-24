@@ -35,7 +35,7 @@ In this way, INFINI Gateway can prevent the execution of malicious attack comman
 
 ## Reference Configuration
 
-Download the latest `1.5.0-SNAPSHOT` version: [http://release.elasticsearch.cn/gateway/snapshot/](http://release.elasticsearch.cn/gateway/snapshot/)
+Download the latest `{{< globaldata "gateway" "version" >}}` version: [https://release.infinilabs.com/gateway/stable/](https://release.infinilabs.com/gateway/stable/)
 
 The `context_filter` filter of INFINI Gateway can be used to detect the keywords of the request context `_ctx.request.to_string` and filter out malicious traffic, thereby blocking attacks.
 
