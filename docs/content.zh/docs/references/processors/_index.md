@@ -58,7 +58,6 @@ pipeline:
 - [smtp](./smtp)
 - [merge_to_bulk](./merge_to_bulk)
 - [flow_replay](./flow_replay)
-- [replication_correlation](./replication_correlation)
 
 ### 索引写入
 
