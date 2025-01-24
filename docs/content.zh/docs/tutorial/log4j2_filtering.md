@@ -35,7 +35,7 @@ Apache Log4j 是一款非常流行的开源的用于 Java 运行环境的日志�
 
 ## 参考配置
 
-下载最新的 `1.5.0-SNAPSHOT` 版本[http://release.elasticsearch.cn/gateway/snapshot/](http://release.elasticsearch.cn/gateway/snapshot/)
+下载最新的 `{{< globaldata "gateway" "version" >}}` 版本[https://release.infinilabs.com/gateway/stable/](https://release.infinilabs.com/gateway/stable/)
 
 使用极限网关的 `context_filter` 过滤器，对请求上下文 `_ctx.request.to_string` 进行关键字检测，过滤掉恶意流量，从而阻断攻击。
 
