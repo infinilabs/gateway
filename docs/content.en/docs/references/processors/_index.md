@@ -58,7 +58,6 @@ Parameters related to pipeline definition are described as follows:
 - [smtp](./smtp)
 - [merge_to_bulk](./merge_to_bulk)
 - [flow_replay](./flow_replay)
-- [replication_correlation](./replication_correlation)
 
 ### Index Writing
 
