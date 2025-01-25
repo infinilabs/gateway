@@ -7,31 +7,6 @@ title: "版本历史"
 
 这里是极限网关历史版本发布的相关说明。
 
-## Latest (In development)
-
-### Breaking changes
-
-### Features
-
-### Bug fix
-
-### Improvements
-
-## 1.28.1 (2025-01-24)
-
-### Features
-
-- 支持在批量相关过滤器中使用简单的批量元数据（#59）
-- 在 Elasticsearch 过滤器中后端故障时无缝重试请求（#63）
-
-### Improvements
-
-- 移除 Elasticsearch 过滤器中因模式不匹配导致的不必要节点重新选择（#62）
-
-## 1.28.0 (2025-01-11)
-
-- 同步更新 Framework 修复的一些已知问题
-
 ## 1.27.0 (2024-12-13)
 
 ### Improvements

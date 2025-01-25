@@ -7,31 +7,6 @@ title: "Release Notes"
 
 Information about release notes of INFINI Gateway is provided here.
 
-## Latest (In development)
-
-### Breaking changes
-
-### Features
-
-### Bug fix
-
-### Improvements
-
-## 1.28.1 (2025-01-24)
-
-### Features
-
-- Support simple bulk metadata in bulk related filters (#59)
-- Seamlessly retry requests on backend failure for the Elasticsearch filter (#63)
-
-### Improvements
-
-- Remove unnecessary node re-selection on schema mismatch for elasticsearch filter (#62)
-
-## 1.28.0 (2025-01-11)
-
-This release includes updates from the underlying [Framework v1.1.0](https://docs.infinilabs.com/framework/v1.1.0/docs/references/http_client/), which resolves several common issues and enhances overall stability and performance. While there are no direct changes to Gateway itself, the improvements inherited from Framework benefit Gateway indirectly.
-
 ## 1.27.0 (2024-12-13)
 
 ### Breaking Changes
