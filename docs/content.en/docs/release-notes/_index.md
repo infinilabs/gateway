@@ -7,68 +7,6 @@ title: "Release Notes"
 
 Information about release notes of INFINI Gateway is provided here.
 
-## Latest (In development)
-
-### Breaking changes
-
-### Features
-
-### Bug fix
-
-### Improvements
-
-## 1.28.1 (2025-01-24)
-
-### Features
-
-- Support simple bulk metadata in bulk related filters (#59)
-- Seamlessly retry requests on backend failure for the Elasticsearch filter (#63)
-
-### Improvements
-
-- Remove unnecessary node re-selection on schema mismatch for elasticsearch filter (#62)
-
-## 1.28.0 (2025-01-11)
-
-This release includes updates from the underlying [Framework v1.1.0](https://docs.infinilabs.com/framework/v1.1.0/docs/references/http_client/), which resolves several common issues and enhances overall stability and performance. While there are no direct changes to Gateway itself, the improvements inherited from Framework benefit Gateway indirectly.
-
-## 1.27.0 (2024-12-13)
-
-### Breaking Changes
-
-- Update default branch for vendor
-
-### Features
-
-- Auto-issue certificates for domains
-- Support filter config file (#620)
-- Add configs parameter allow_generated_metrics_tasks
-- Add parameter context for ES API ClusterHealth and ClusterStats
-- Support passing query parameter level to cluster health API
-- Crontab task support for timezones
-- Support timezone draft
-- Customize event queue
-
-### Bug Fixes
-
-- Rollback for client registration
-- Reload when file is in dirty read
-- Prevent consumer from advancing beyond writer’s segment
-- Fix wait group usage in bulk indexing processor
-- Query string query was ignored (#588)
-
-### Improvements
-
-- Refactor system configuration
-- Add UUID to WebSocket session
-- Add utility to parse parameters, panic on missing
-- Adjust logging format
-- Refactor inflight check
-- Update license header
-- Add utility to register schema
-- Log with IP and agent register during agent restart
-- Update CLI naming style (#589)
-
 ## 1.26.1 (2024-08-13)
 
 ### Improvements
