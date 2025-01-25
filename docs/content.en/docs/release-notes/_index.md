@@ -12,15 +12,21 @@ Information about release notes of INFINI Gateway is provided here.
 ### Breaking changes
 
 ### Features
-- Support simple bulk metadata in bulk related filters (#59)
-- Seamlessly retry requests on backend failure for the Elasticsearch filter (#63)
-
 
 ### Bug fix
 
 ### Improvements
-- Remove unnecessary node re-selection on schema mismatch for elasticsearch filter (#62)
 
+## 1.28.1 (2025-01-24)
+
+### Features
+
+- Support simple bulk metadata in bulk related filters (#59)
+- Seamlessly retry requests on backend failure for the Elasticsearch filter (#63)
+
+### Improvements
+
+- Remove unnecessary node re-selection on schema mismatch for elasticsearch filter (#62)
 
 ## 1.28.0 (2025-01-11)
 
@@ -29,9 +35,11 @@ This release includes updates from the underlying [Framework v1.1.0](https://doc
 ## 1.27.0 (2024-12-13)
 
 ### Breaking Changes
+
 - Update default branch for vendor
 
 ### Features
+
 - Auto-issue certificates for domains
 - Support filter config file (#620)
 - Add configs parameter allow_generated_metrics_tasks
@@ -42,6 +50,7 @@ This release includes updates from the underlying [Framework v1.1.0](https://doc
 - Customize event queue
 
 ### Bug Fixes
+
 - Rollback for client registration
 - Reload when file is in dirty read
 - Prevent consumer from advancing beyond writer’s segment
@@ -49,6 +58,7 @@ This release includes updates from the underlying [Framework v1.1.0](https://doc
 - Query string query was ignored (#588)
 
 ### Improvements
+
 - Refactor system configuration
 - Add UUID to WebSocket session
 - Add utility to parse parameters, panic on missing
