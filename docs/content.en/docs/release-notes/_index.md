@@ -17,6 +17,10 @@ Information about release notes of INFINI Gateway is provided here.
 
 ### Improvements
 
+## 1.28.2 (2025-02-15)
+
+This release includes updates from the underlying [Framework v1.1.2](https://docs.infinilabs.com/framework/v1.1.2/docs/references/http_client/), which resolves several common issues and enhances overall stability and performance. While there are no direct changes to Gateway itself, the improvements inherited from Framework benefit Gateway indirectly.
+
 ## 1.28.1 (2025-01-24)
 
 ### Features

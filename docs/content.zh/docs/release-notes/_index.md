@@ -17,6 +17,10 @@ title: "版本历史"
 
 ### Improvements
 
+## 1.28.2 (2025-02-15)
+
+- 同步更新 [Framework v1.1.2](https://docs.infinilabs.com/framework/v1.1.2/docs/references/http_client/) 修复的一些已知问题
+
 ## 1.28.1 (2025-01-24)
 
 ### Features
