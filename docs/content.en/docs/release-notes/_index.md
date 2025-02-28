@@ -7,6 +7,12 @@ title: "Release Notes"
 
 Information about release notes of INFINI Gateway is provided here.
 
+## Latest (In development)  
+### Breaking changes  
+### Features  
+### Bug fix  
+### Improvements  
+
 ## 1.29.0 (2025-02-27)
 
 ### Breaking changes

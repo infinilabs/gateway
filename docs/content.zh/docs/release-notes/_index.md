@@ -7,6 +7,12 @@ title: "版本历史"
 
 这里是极限网关历史版本发布的相关说明。
 
+## Latest (In development)  
+### Breaking changes  
+### Features  
+### Bug fix  
+### Improvements  
+
 ## 1.29.0 (2025-02-27)
 
 ### Breaking changes
