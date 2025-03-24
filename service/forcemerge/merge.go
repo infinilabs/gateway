@@ -48,8 +48,8 @@ import (
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/task"
 	"infini.sh/framework/core/util"
-	"runtime"
 	"reflect"
+	"runtime"
 	"time"
 )
 
@@ -110,9 +110,9 @@ func convertToInt(y interface{}) int {
 	case reflect.Float64:
 		yint = int(y.(float64))
 	default:
-        yint = util.InterfaceToInt(y)
-    }
-    return yint
+        	yint = util.InterfaceToInt(y)
+    	}
+    	return yint
 }
 
 func forceMerge(client elastic.API, index string) {
