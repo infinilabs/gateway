@@ -100,6 +100,20 @@ func mustGetV() {
 
 }
 
+func convertToInt(y interface{}) int {
+	ytyp := reflect.TypeOf(y)
+	var yint int = 0
+	switch ytyp.Kind() {
+	case reflect.Float32:
+		yint = int(y.(float32))
+	case reflect.Float64:
+		yint = int(y.(float64))
+	default:
+        yint = util.InterfaceToInt(y)
+    }
+    return yint
+}
+
 func forceMerge(client elastic.API, index string) {
 
 	retry := 0
@@ -111,21 +125,21 @@ GET_STATS:
 		log.Error(err)
 		return
 	}
-	currentMerge := util.InterfaceToInt(currentMergeV)
+	currentMerge := convertToInt(currentMergeV)
 
 	segmentsCountV, err := stats.GetValue("_all.primaries.segments.count")
 	if err != nil {
 		log.Error(err)
 		return
 	}
-	segmentsCount := util.InterfaceToInt(segmentsCountV)
+	segmentsCount := convertToInt(segmentsCountV)
 
 	storeSizeV, err := stats.GetValue("_all.primaries.store.size_in_bytes")
 	if err != nil {
 		log.Error(err)
 		return
 	}
-	storeSize := util.InterfaceToInt(storeSizeV)
+	storeSize := convertToInt(storeSizeV)
 
 	log.Debug(stats)
 	if err != nil {
