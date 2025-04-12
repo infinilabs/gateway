@@ -10,6 +10,7 @@ title: "版本历史"
 ## Latest (In development)  
 ### Breaking changes  
 ### Features  
+- 支持`http`处理器压缩请求 (#90)
 ### Bug fix  
 ### Improvements  
 
