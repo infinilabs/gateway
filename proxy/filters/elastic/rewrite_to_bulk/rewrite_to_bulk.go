@@ -148,22 +148,22 @@ func (filter *RewriteToBulk) Filter(ctx *fasthttp.RequestCtx) {
 		//write final part
 		docBuf.WriteString("} }\n")
 
+		var body []byte
+		var err error
+
 		if action != "delete" {
 			if contentEncoding == "gzip" {
-				body, err := ctx.Request.BodyGunzip()
+				body, err = ctx.Request.BodyGunzip()
 				if err != nil {
 					panic(err)
 				}
-				util.WalkBytesAndReplace(body, util.NEWLINE, util.SPACE)
-				docBuf.Write(bytes.Copy(body))
-				docBuf.WriteString("\n")
 			} else {
-				body := ctx.Request.Body()
-				util.WalkBytesAndReplace(body, util.NEWLINE, util.SPACE)
-				docBuf.Write(bytes.Copy(body))
-				docBuf.WriteString("\n")
+				body = ctx.Request.Body()
 			}
 		}
+		util.WalkBytesAndReplace(body, util.NEWLINE, util.SPACE)
+		docBuf.Write(bytes.Copy(body))
+		docBuf.WriteString("\n")
 
 		if contentEncoding == "gzip" {
 			ctx.Request.ResetBody()
