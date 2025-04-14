@@ -10,7 +10,7 @@ Information about release notes of INFINI Gateway is provided here.
 ## Latest (In development)  
 ### Breaking changes  
 ### Features  
-- feat: support compress for http process (#90)
+- Add support for HTTP process compression (#90)
 ### Bug fix  
 ### Improvements  
 
