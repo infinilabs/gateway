@@ -25,7 +25,7 @@ package elastic
 
 import (
 	"fmt"
-	"src/github.com/savsgio/gotils/bytes"
+	"github.com/savsgio/gotils/bytes"
 	"time"
 
 	log "github.com/cihub/seelog"

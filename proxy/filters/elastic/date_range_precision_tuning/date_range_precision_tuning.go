@@ -25,12 +25,12 @@ package date_range_precision_tuning
 
 import (
 	"fmt"
+	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
-	log "src/github.com/cihub/seelog"
 )
 
 type DatePrecisionTuning struct {
