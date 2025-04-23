@@ -25,6 +25,7 @@ package elastic
 
 import (
 	"fmt"
+	"github.com/savsgio/gotils/bytes"
 	"time"
 
 	log "github.com/cihub/seelog"
@@ -56,7 +57,7 @@ func (filter *ElasticsearchBulkRequestMutate) Name() string {
 }
 
 func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
-
+	contentEncoding := string(ctx.Request.Header.PeekAny([]string{fasthttp.HeaderContentEncoding, fasthttp.HeaderContentEncoding2}))
 	pathStr := util.UnsafeBytesToString(ctx.PhantomURI().Path())
 
 	if util.SuffixStr(pathStr, "/_bulk") {
@@ -202,7 +203,15 @@ func (this *ElasticsearchBulkRequestMutate) Filter(ctx *fasthttp.RequestCtx) {
 			if !util.BytesHasSuffix(bulkBuff.B, elastic.NEWLINEBYTES) {
 				bulkBuff.Write(elastic.NEWLINEBYTES)
 			}
-			ctx.Request.SetRawBody(bulkBuff.Bytes())
+			if contentEncoding == "gzip" {
+				ctx.Request.ResetBody()
+				_, err := fasthttp.WriteGzipLevel(ctx.Request.BodyWriter(), bytes.Copy(bulkBuff.Bytes()), fasthttp.CompressBestCompression)
+				if err != nil {
+					panic(errors.Errorf("failed to compress message: %v", err))
+				}
+			} else {
+				ctx.Request.SetRawBody(bulkBuff.Bytes())
+			}
 		}
 	}
 

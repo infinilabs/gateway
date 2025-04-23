@@ -32,6 +32,7 @@ import (
 	log "github.com/cihub/seelog"
 	"github.com/savsgio/gotils/bytes"
 	"infini.sh/framework/core/config"
+	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
@@ -80,6 +81,7 @@ func (filter *RewriteToBulk) Filter(ctx *fasthttp.RequestCtx) {
 		pipeline := ctx.PhantomURI().QueryArgs().Peek("pipeline")
 		versionType := ctx.PhantomURI().QueryArgs().Peek("version_type")
 		version := ctx.PhantomURI().QueryArgs().Peek("version")
+		contentEncoding := string(ctx.Request.Header.PeekAny([]string{fasthttp.HeaderContentEncoding, fasthttp.HeaderContentEncoding2}))
 
 		action := "index"
 		if typePath == "_update" {
@@ -146,14 +148,32 @@ func (filter *RewriteToBulk) Filter(ctx *fasthttp.RequestCtx) {
 		//write final part
 		docBuf.WriteString("} }\n")
 
-		if action != "delete" {
-			body := ctx.Request.Body()
-			util.WalkBytesAndReplace(body, util.NEWLINE, util.SPACE)
-			docBuf.Write(bytes.Copy(body))
-			docBuf.WriteString("\n")
-		}
+		var body []byte
+		var err error
 
-		ctx.Request.SetBody(bytes.Copy(docBuf.Bytes()))
+		if action != "delete" {
+			if contentEncoding == "gzip" {
+				body, err = ctx.Request.BodyGunzip()
+				if err != nil {
+					panic(err)
+				}
+			} else {
+				body = ctx.Request.Body()
+			}
+		}
+		util.WalkBytesAndReplace(body, util.NEWLINE, util.SPACE)
+		docBuf.Write(bytes.Copy(body))
+		docBuf.WriteString("\n")
+
+		if contentEncoding == "gzip" {
+			ctx.Request.ResetBody()
+			_, err := fasthttp.WriteGzipLevel(ctx.Request.BodyWriter(), bytes.Copy(docBuf.Bytes()), fasthttp.CompressBestCompression)
+			if err != nil {
+				panic(errors.Errorf("failed to compress message: %v", err))
+			}
+		} else {
+			ctx.Request.SetBody(bytes.Copy(docBuf.Bytes()))
+		}
 	}
 }
 
