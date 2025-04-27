@@ -8,6 +8,12 @@ title: "版本历史"
 这里是极限网关历史版本发布的相关说明。
 
 ## Latest (In development)  
+### ❌ Breaking changes  
+### 🚀 Features  
+### 🐛 Bug fix  
+### ✈️ Improvements  
+
+## 1.29.3 (2025-04-27)
 ### Breaking changes  
 ### Features  
 - 实现 `HTTP` 处理器请求压缩支持 (#90)
