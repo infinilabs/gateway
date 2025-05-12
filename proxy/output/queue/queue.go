@@ -27,7 +27,7 @@ import (
 	"bytes"
 	"fmt"
 	log "github.com/cihub/seelog"
-	"github.com/valyala/fasttemplate"
+	"infini.sh/framework/lib/fasttemplate"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/errors"
 	"infini.sh/framework/core/global"
