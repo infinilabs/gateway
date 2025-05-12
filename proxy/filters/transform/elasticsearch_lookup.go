@@ -29,7 +29,7 @@ import (
 
 	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
-	"github.com/valyala/fasttemplate"
+	"infini.sh/framework/lib/fasttemplate"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/errors"
