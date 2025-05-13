@@ -12,7 +12,7 @@ Information about release notes of INFINI Gateway is provided here.
 ### 🚀 Features  
 ### 🐛 Bug fix  
 ### ✈️ Improvements  
-chore: request body json del filter by `ignore` key path not found
+fix: code `format` and `lint` error 
 
 ## 1.29.3 (2025-04-27)
 ### Breaking changes  

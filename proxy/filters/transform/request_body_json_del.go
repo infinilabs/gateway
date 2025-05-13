@@ -62,10 +62,6 @@ func (filter *RequestBodyJsonDel) Filter(ctx *fasthttp.RequestCtx) {
 
 			bodyBytes = jsonparser.Delete(bodyBytes, pathArray...)
 			if err != nil {
-				// If a "Key path not found" error occurs, skip the current iteration and continue with the next path
-				if err.Error() == "Key path not found" {
-					continue
-				}
 				log.Errorf("path:%v, %v", path, err)
 				return
 			}
