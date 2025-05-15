@@ -324,7 +324,6 @@ func (processor *IndexBackupProcessor) Process(ctx *pipeline.Context) error {
 			break
 		}
 	}
-	return nil
 }
 
 func (processor *IndexBackupProcessor) updateLastFileUploadedTimestamp(uuid, file string, timestamp int64) {

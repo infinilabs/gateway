@@ -108,7 +108,7 @@ func New(c *config.Config) (pipeline.Processor, error) {
 	return &runner, nil
 }
 
-func (processor FlowRunnerProcessor) Stop() error {
+func (processor *FlowRunnerProcessor) Stop() error {
 	signalChannel <- true
 	return nil
 }

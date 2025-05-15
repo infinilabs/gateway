@@ -62,7 +62,7 @@ var lock sync.RWMutex
 
 func StartServer(host string, port int) error {
 	CMap = make(map[string]*CS)
-	listen, err := net.ListenTCP("tcp", &net.TCPAddr{net.ParseIP(host), port, ""})
+	listen, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP(host), Port: port})
 	if err != nil {
 		//fmt.Println("Listen Port failed:", err.Error())
 		//TODO

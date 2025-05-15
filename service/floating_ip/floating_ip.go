@@ -224,7 +224,6 @@ func (module FloatingIPPlugin) SwitchToActiveMode() {
 				time.Sleep(10 * time.Second)
 			}
 		}
-		return nil
 	})
 
 	//announce via broadcast
@@ -253,7 +252,6 @@ func (module FloatingIPPlugin) SwitchToActiveMode() {
 				time.Sleep(10 * time.Second)
 			}
 		}
-		return nil
 	})
 
 	actived = true
