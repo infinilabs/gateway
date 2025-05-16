@@ -12,6 +12,12 @@ title: "版本历史"
 ### 🚀 Features  
 ### 🐛 Bug fix  
 ### ✈️ Improvements  
+
+## 1.29.4 (2025-05-16)
+### ❌ Breaking changes  
+### 🚀 Features  
+### 🐛 Bug fix  
+### ✈️ Improvements  
 - fix: 修复 `format` 和 `lint` 报错
 
 ## 1.29.3 (2025-04-27)

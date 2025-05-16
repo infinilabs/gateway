@@ -12,6 +12,12 @@ Information about release notes of INFINI Gateway is provided here.
 ### 🚀 Features  
 ### 🐛 Bug fix  
 ### ✈️ Improvements  
+
+## 1.29.4 (2025-05-16)
+### ❌ Breaking changes  
+### 🚀 Features  
+### 🐛 Bug fix  
+### ✈️ Improvements  
 fix: code `format` and `lint` error 
 
 ## 1.29.3 (2025-04-27)
