@@ -29,7 +29,6 @@ import (
 
 	"github.com/buger/jsonparser"
 	log "github.com/cihub/seelog"
-	"infini.sh/framework/lib/fasttemplate"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/elastic"
 	"infini.sh/framework/core/errors"
@@ -37,6 +36,7 @@ import (
 	"infini.sh/framework/core/pipeline"
 	"infini.sh/framework/core/util"
 	"infini.sh/framework/lib/fasthttp"
+	"infini.sh/framework/lib/fasttemplate"
 )
 
 type RequestTemplate struct {
