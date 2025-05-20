@@ -20,6 +20,8 @@ Information about release notes of INFINI Gateway is provided here.
 ### ✈️ Improvements  
 - fix: code `format` and `lint` error 
 
+[Framework v1.1.7](https://docs.infinilabs.com/framework/v1.1.7/docs/references/http_client/)
+
 ## 1.29.3 (2025-04-27)
 ### Breaking changes  
 ### Features  
@@ -27,27 +29,19 @@ Information about release notes of INFINI Gateway is provided here.
 ### Bug fix  
 ### Improvements  
 
+[Framework v1.1.6](https://docs.infinilabs.com/framework/v1.1.6/docs/references/http_client/)
+
 ## 1.29.2 (2025-03-31)
-### Breaking changes  
-### Features  
-### Bug fix  
-### Improvements  
+
+This release includes updates from the underlying [Framework v1.1.5](https://docs.infinilabs.com/framework/v1.1.5/docs/references/http_client/), which resolves several common issues and enhances overall stability and performance. While there are no direct changes to Gateway itself, the improvements inherited from Framework benefit Gateway indirectly.
 
 ## 1.29.1 (2025-03-14)
-### Breaking changes  
-### Features  
-### Bug fix  
-### Improvements  
+
+This release includes updates from the underlying [Framework v1.1.4](https://docs.infinilabs.com/framework/v1.1.4/docs/references/http_client/), which resolves several common issues and enhances overall stability and performance. While there are no direct changes to Gateway itself, the improvements inherited from Framework benefit Gateway indirectly.
 
 ## 1.29.0 (2025-02-27)
 
-### Breaking changes
-
-### Features
-
-### Bug fix
-
-### Improvements
+This release includes updates from the underlying[Framework v1.1.3](https://docs.infinilabs.com/framework/v1.1.3/docs/references/http_client/), which resolves several common issues and enhances overall stability and performance. While there are no direct changes to Gateway itself, the improvements inherited from Framework benefit Gateway indirectly.
 
 ## 1.28.2 (2025-02-15)
 
