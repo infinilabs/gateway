@@ -556,7 +556,10 @@ START:
 	}
 
 	metadata.CheckNodeTrafficThrottle(host, 1, myctx.Request.GetRequestLength(), 0)
-
+	method := string(myctx.Method())
+	if method == fasthttp.MethodHead {
+	        res.SkipBody = true
+	}
 	var err error
 	if p.proxyConfig.Timeout > 0 {
 		err = pc.DoTimeout(&myctx.Request, res, p.proxyConfig.Timeout)
