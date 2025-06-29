@@ -13,6 +13,13 @@ Information about release notes of INFINI Gateway is provided here.
 ### 🐛 Bug fix  
 ### ✈️ Improvements  
 
+## 1.29.7 (2025-06-29)
+### ❌ Breaking changes  
+### 🚀 Features  
+### 🐛 Bug fix  
+### ✈️ Improvements  
+- This release includes updates from the underlying [Framework v1.1.9](https://docs.infinilabs.com/framework/v1.1.9), which resolves several common issues and enhances overall stability and performance. While there are no direct changes to GATEWAY itself, the improvements inherited from Framework benefit GATEWAY indirectly.
+
 ## 1.29.6 (2025-06-13)
 ### ❌ Breaking changes  
 ### 🚀 Features  
