@@ -26,7 +26,10 @@ The gateway is deployed between the client and Elasticsearch/OpenSearch/Easysear
 - Request observability: The gateway is equipped with the logging and indicator monitoring features to fully analyze Elasticsearch/OpenSearch/Easysearch requests.
 
 
-To learn more about Gateway, please visit: https://docs.infinilabs.com/gateway/
+To learn more about Gateway, please visit: 
+
+- https://docs.infinilabs.com/gateway/
+- https://deepwiki.com/infinilabs/gateway
 
 ## Community
 
