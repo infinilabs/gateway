@@ -117,6 +117,21 @@ func server(listen *net.TCPListener) {
 
 func ServerHandler(conn net.Conn) {
 	defer func() {
+		if !global.Env().IsDebug {
+			if r := recover(); r != nil {
+				var v string
+				switch r.(type) {
+				case error:
+					v = r.(error).Error()
+				case runtime.Error:
+					v = r.(runtime.Error).Error()
+				case string:
+					v = r.(string)
+				}
+				log.Error(v)
+			}
+		}
+
 		if conn != nil {
 			conn.Close()
 		}
