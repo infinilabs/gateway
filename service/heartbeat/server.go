@@ -116,7 +116,12 @@ func server(listen *net.TCPListener) {
 }
 
 func ServerHandler(conn net.Conn) {
-	defer conn.Close()
+	defer func() {
+		if conn != nil {
+			conn.Close()
+		}
+	}()
+
 	data := make([]byte, 128)
 	var uid string
 	var C *CS
