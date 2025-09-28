@@ -148,7 +148,7 @@ func ServerHandler(conn net.Conn) {
 	select {
 	case <-C.Dch:
 		//fmt.Println("close handler goroutine")
-	case <-time.After(30 * time.Minute): // 添加30分钟超时，防止连接永远挂起
+	case <-time.After(30 * time.Minute): // add 30 minutes timeout to prevent connection from hanging forever
 		log.Warn("connection timeout, closing connection for user:", C.u)
 		lock.Lock()
 		delete(CMap, C.u)
@@ -186,7 +186,7 @@ func ServerWHandler(conn net.Conn, C *CS) {
 		case <-ticker.C:
 			if _, ok := CMap[C.u]; !ok {
 				//fmt.Println("conn die, close ClientWHandler")
-				// 发送断开信号
+				// send close sing，ServerHandler can close the connection
 				select {
 				case C.Dch <- true:
 				default:
@@ -253,7 +253,7 @@ func ServerRHandler(conn net.Conn, C *CS) {
 			delete(CMap, C.u)
 			lock.Unlock()
 			//fmt.Println("delete user!")
-			// 发送断开信号，让ServerHandler能够正确关闭连接
+			// send close sing，ServerHandler can close the connection
 			select {
 			case C.Dch <- true:
 			default:
