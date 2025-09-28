@@ -54,7 +54,7 @@ type CS struct {
 }
 
 func NewCs(uid string) *CS {
-	return &CS{Rch: make(chan []byte), Wch: make(chan []byte), u: uid}
+	return &CS{Rch: make(chan []byte), Wch: make(chan []byte), Dch: make(chan bool), u: uid}
 }
 
 var CMap map[string]*CS
@@ -136,6 +136,7 @@ func ServerHandler(conn net.Conn) {
 			conn.Close()
 		}
 	}()
+
 	data := make([]byte, 128)
 	var uid string
 	var C *CS
@@ -167,6 +168,11 @@ func ServerHandler(conn net.Conn) {
 	select {
 	case <-C.Dch:
 		//fmt.Println("close handler goroutine")
+	case <-time.After(30 * time.Minute): // add 30 minutes timeout to prevent connection from hanging forever
+		log.Warn("connection timeout, closing connection for user:", C.u)
+		lock.Lock()
+		delete(CMap, C.u)
+		lock.Unlock()
 	}
 }
 
@@ -200,6 +206,11 @@ func ServerWHandler(conn net.Conn, C *CS) {
 		case <-ticker.C:
 			if _, ok := CMap[C.u]; !ok {
 				//fmt.Println("conn die, close ClientWHandler")
+				// send close sing，ServerHandler can close the connection
+				select {
+				case C.Dch <- true:
+				default:
+				}
 				return
 			}
 		}
@@ -262,6 +273,11 @@ func ServerRHandler(conn net.Conn, C *CS) {
 			delete(CMap, C.u)
 			lock.Unlock()
 			//fmt.Println("delete user!")
+			// send close sing，ServerHandler can close the connection
+			select {
+			case C.Dch <- true:
+			default:
+			}
 			return
 		}
 	}
