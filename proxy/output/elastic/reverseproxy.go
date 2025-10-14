@@ -27,13 +27,14 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/emirpasic/gods/sets/hashset"
-	"infini.sh/framework/core/errors"
 	"math/rand"
 	"net"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/emirpasic/gods/sets/hashset"
+	"infini.sh/framework/core/errors"
 
 	log "github.com/cihub/seelog"
 	"infini.sh/framework/core/elastic"
@@ -171,43 +172,51 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		return
 	}
 
-	if !esConfig.Discovery.Enabled && !force {
-		log.Trace("discovery is not enabled, skip nodes refresh")
-		return
-	}
-
 	hosts := []string{}
-	checkMetadata := false
-	if metadata != nil && metadata.Nodes != nil && len(*metadata.Nodes) > 0 {
 
-		oldV := p.lastNodesTopologyVersion
-		p.lastNodesTopologyVersion = metadata.NodesTopologyVersion
-
-		if oldV == p.lastNodesTopologyVersion {
-			if global.Env().IsDebug {
-				log.Trace("metadata.NodesTopologyVersion is equal")
-			}
+	// if discovery disabled，use endpoints
+	if !esConfig.Discovery.Enabled {
+		if !force {
+			log.Trace("discovery is not enabled, skip nodes refresh")
 			return
 		}
-
-		checkMetadata = true
-		for _, y := range *metadata.Nodes {
-			if !isEndpointValid(y, cfg) {
-				continue
-			}
-
-			host := y.GetHttpPublishHost()
-			if host != "" && elastic.IsHostAvailable(host) {
-				hosts = append(hosts, host)
-			}
-		}
-		log.Tracef("discovery %v nodes: [%v]", len(hosts), util.JoinArray(hosts, ", "))
-	}
-
-	if len(hosts) == 0 {
+		// force mode, use configured endpoints
 		hosts = metadata.GetSeedHosts()
-		if checkMetadata {
-			log.Debugf("no matched endpoint, fallback to seed: %v", hosts)
+		log.Debugf("discovery is disabled, using configured endpoints: %v", hosts)
+	} else {
+		// discovery enabled, get nodes from metadata
+		checkMetadata := false
+		if metadata != nil && metadata.Nodes != nil && len(*metadata.Nodes) > 0 {
+
+			oldV := p.lastNodesTopologyVersion
+			p.lastNodesTopologyVersion = metadata.NodesTopologyVersion
+
+			if oldV == p.lastNodesTopologyVersion {
+				if global.Env().IsDebug {
+					log.Trace("metadata.NodesTopologyVersion is equal")
+				}
+				return
+			}
+
+			checkMetadata = true
+			for _, y := range *metadata.Nodes {
+				if !isEndpointValid(y, cfg) {
+					continue
+				}
+
+				host := y.GetHttpPublishHost()
+				if host != "" && elastic.IsHostAvailable(host) {
+					hosts = append(hosts, host)
+				}
+			}
+			log.Tracef("discovery %v nodes: [%v]", len(hosts), util.JoinArray(hosts, ", "))
+		}
+
+		if len(hosts) == 0 {
+			hosts = metadata.GetSeedHosts()
+			if checkMetadata {
+				log.Debugf("no matched endpoint, fallback to seed: %v", hosts)
+			}
 		}
 	}
 
