@@ -164,59 +164,49 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 
 	ws := []int{}
 	esConfig := elastic.GetConfig(cfg.Elasticsearch)
+	if !esConfig.Discovery.Enabled {
+		log.Trace("discovery is not enabled, skip nodes refresh")
+		return
+	}
 
 	metadata := elastic.GetOrInitMetadata(esConfig)
-
 	if metadata == nil && !force {
 		log.Trace("metadata is nil and not forced, skip nodes refresh")
 		return
 	}
 
 	hosts := []string{}
+	checkMetadata := false
+	if metadata != nil && metadata.Nodes != nil && len(*metadata.Nodes) > 0 {
 
-	// if discovery disabled，use endpoints
-	if !esConfig.Discovery.Enabled {
-		if !force {
-			log.Trace("discovery is not enabled, skip nodes refresh")
+		oldV := p.lastNodesTopologyVersion
+		p.lastNodesTopologyVersion = metadata.NodesTopologyVersion
+
+		if oldV == p.lastNodesTopologyVersion {
+			if global.Env().IsDebug {
+				log.Trace("metadata.NodesTopologyVersion is equal")
+			}
 			return
 		}
-		// force mode, use configured endpoints
-		hosts = metadata.GetSeedHosts()
-		log.Debugf("discovery is disabled, using configured endpoints: %v", hosts)
-	} else {
-		// discovery enabled, get nodes from metadata
-		checkMetadata := false
-		if metadata != nil && metadata.Nodes != nil && len(*metadata.Nodes) > 0 {
 
-			oldV := p.lastNodesTopologyVersion
-			p.lastNodesTopologyVersion = metadata.NodesTopologyVersion
-
-			if oldV == p.lastNodesTopologyVersion {
-				if global.Env().IsDebug {
-					log.Trace("metadata.NodesTopologyVersion is equal")
-				}
-				return
+		checkMetadata = true
+		for _, y := range *metadata.Nodes {
+			if !isEndpointValid(y, cfg) {
+				continue
 			}
 
-			checkMetadata = true
-			for _, y := range *metadata.Nodes {
-				if !isEndpointValid(y, cfg) {
-					continue
-				}
-
-				host := y.GetHttpPublishHost()
-				if host != "" && elastic.IsHostAvailable(host) {
-					hosts = append(hosts, host)
-				}
+			host := y.GetHttpPublishHost()
+			if host != "" && elastic.IsHostAvailable(host) {
+				hosts = append(hosts, host)
 			}
-			log.Tracef("discovery %v nodes: [%v]", len(hosts), util.JoinArray(hosts, ", "))
 		}
+		log.Tracef("discovery %v nodes: [%v]", len(hosts), util.JoinArray(hosts, ", "))
+	}
 
-		if len(hosts) == 0 {
-			hosts = metadata.GetSeedHosts()
-			if checkMetadata {
-				log.Debugf("no matched endpoint, fallback to seed: %v", hosts)
-			}
+	if len(hosts) == 0 {
+		hosts = metadata.GetSeedHosts()
+		if checkMetadata {
+			log.Debugf("no matched endpoint, fallback to seed: %v", hosts)
 		}
 	}
 
