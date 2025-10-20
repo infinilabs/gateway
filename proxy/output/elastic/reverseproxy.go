@@ -160,7 +160,7 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 
 	ws := []int{}
 	esConfig := elastic.GetConfig(cfg.Elasticsearch)
-	if !esConfig.Discovery.Enabled {
+	if !esConfig.Discovery.Enabled && !force {
 		log.Trace("discovery is not enabled, skip nodes refresh")
 		return
 	}
