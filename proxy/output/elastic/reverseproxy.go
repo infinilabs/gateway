@@ -153,10 +153,6 @@ func isEndpointValid(node elastic.NodesInfo, cfg *ProxyConfig) bool {
 }
 
 func (p *ReverseProxy) refreshNodes(force bool) {
-
-	p.locker.Lock()
-	defer p.locker.Unlock()
-
 	if global.Env().IsDebug {
 		log.Trace("elasticsearch client nodes refreshing")
 	}
@@ -174,6 +170,9 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		log.Trace("metadata is nil and not forced, skip nodes refresh")
 		return
 	}
+
+	p.locker.Lock()
+	defer p.locker.Unlock()
 
 	hosts := []string{}
 	checkMetadata := false
