@@ -175,9 +175,9 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 	defer p.locker.Unlock()
 
 	hosts := []string{}
-	checkMetadata := false
-	if metadata != nil && metadata.Nodes != nil && len(*metadata.Nodes) > 0 {
 
+	// if discovery is enabled, try to get nodes from metadata first
+	if esConfig.Discovery.Enabled && metadata != nil && metadata.Nodes != nil && len(*metadata.Nodes) > 0 {
 		oldV := p.lastNodesTopologyVersion
 		p.lastNodesTopologyVersion = metadata.NodesTopologyVersion
 
@@ -188,7 +188,6 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 			return
 		}
 
-		checkMetadata = true
 		for _, y := range *metadata.Nodes {
 			if !isEndpointValid(y, cfg) {
 				continue
@@ -202,9 +201,12 @@ func (p *ReverseProxy) refreshNodes(force bool) {
 		log.Tracef("discovery %v nodes: [%v]", len(hosts), util.JoinArray(hosts, ", "))
 	}
 
+	// fallback to seed hosts if discovery is disabled or no valid nodes found
 	if len(hosts) == 0 {
 		hosts = metadata.GetSeedHosts()
-		if checkMetadata {
+		if !esConfig.Discovery.Enabled {
+			log.Tracef("discovery disabled, using seed hosts: [%v]", util.JoinArray(hosts, ", "))
+		} else {
 			log.Debugf("no matched endpoint, fallback to seed: %v", hosts)
 		}
 	}
