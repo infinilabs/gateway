@@ -29,6 +29,7 @@ package rewrite_to_bulk
 
 import (
 	"fmt"
+	log "github.com/cihub/seelog"
 	"github.com/savsgio/gotils/bytes"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/errors"
@@ -72,6 +73,7 @@ func (filter *RewriteToBulk) Filter(ctx *fasthttp.RequestCtx) {
 	path := string(ctx.PhantomURI().Path())
 	valid, indexPath, typePath, idPath := ParseURLMeta(path)
 	if global.Env().IsDebug {
+		log.Debugf("rewrite_to_bulk: %v => %v, %v, %v, %v", path, valid, indexPath, typePath, idPath)
 	}
 	if valid {
 
