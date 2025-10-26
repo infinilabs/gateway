@@ -29,7 +29,6 @@ package rewrite_to_bulk
 
 import (
 	"fmt"
-	log "github.com/cihub/seelog"
 	"github.com/savsgio/gotils/bytes"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/errors"
@@ -73,7 +72,6 @@ func (filter *RewriteToBulk) Filter(ctx *fasthttp.RequestCtx) {
 	path := string(ctx.PhantomURI().Path())
 	valid, indexPath, typePath, idPath := ParseURLMeta(path)
 	if global.Env().IsDebug {
-		log.Debugf("rewrite_to_bulk: %v => %v, %v, %v, %v", path, valid, indexPath, typePath, idPath)
 	}
 	if valid {
 
@@ -87,6 +85,9 @@ func (filter *RewriteToBulk) Filter(ctx *fasthttp.RequestCtx) {
 		if typePath == "_update" {
 			action = "update"
 			typePath = ""
+		} else if typePath == "_doc,_update" {
+			action = "update"
+			typePath = "_doc"
 		} else if typePath == "_create" {
 			action = "create"
 			typePath = ""
@@ -196,7 +197,7 @@ func ParseURLMeta(pathStr string) (valid bool, urlLevelIndex, urlLevelType, id s
 	last := pathArray[len(pathArray)-1]
 
 	//only _doc and _create are valid for create new doc
-	if util.PrefixStr(last, "_") && !util.ContainsAnyInArray(last, []string{"_create", "_doc"}) {
+	if util.PrefixStr(last, "_") && !util.ContainsAnyInArray(last, []string{"_create", "_doc", "_update"}) {
 		return false, urlLevelIndex, urlLevelType, id
 	}
 
@@ -205,6 +206,9 @@ func ParseURLMeta(pathStr string) (valid bool, urlLevelIndex, urlLevelType, id s
 		urlLevelIndex = pathArray[1]
 		urlLevelType = pathArray[2]
 		id = pathArray[3]
+		if pathArray[4] == "_update" && pathArray[2] == "_doc" {
+			urlLevelType = fmt.Sprintf("%s,%s", pathArray[2], pathArray[4])
+		}
 		break
 	case 4:
 		urlLevelIndex = pathArray[1]
