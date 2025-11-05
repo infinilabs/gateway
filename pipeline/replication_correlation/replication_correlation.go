@@ -216,9 +216,10 @@ Fetch:
 }
 
 func (processor *ReplicationCorrectionGroup) cleanup(uID interface{}) {
-	//processor.prepareStageBitmap.Delete(uID)
-	//processor.firstStageRecords.Delete(uID)
-	//processor.finalStageRecords.Delete(uID)
+	// 🔧 修复：启用 cleanup 逻辑，防止内存泄漏和重复处理
+	// 删除已完成的消息记录，避免 sync.Map 无限增长
+	processor.firstStageRecords.Delete(uID)
+	processor.finalStageRecords.Delete(uID)
 }
 
 var defaultHTTPPool = fasthttp.NewRequestResponsePool("replication_crc")
@@ -664,13 +665,19 @@ func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *s
 				}
 
 				if needCommitFinalStage {
-					if time.Since(lastFinalCommit) > time.Second*10 {
+					// 🔧 修复：减少 offset 提交延迟从 10 秒到 3 秒，降低崩溃时数据重复的窗口期
+					// 同时确保 commit 不会过于频繁影响性能
+					if time.Since(lastFinalCommit) > time.Second*3 {
 						log.Debug("committing final offset:", processor.commitableMessageOffsetInFinalStage)
-						finalCommitLogConsumer.CommitOffset(processor.commitableMessageOffsetInFinalStage)
-						lastFinalCommit = time.Now()
-						needCommitFinalStage = false
-						timegap1 := msgTime - lastFinalCommitAbleMessageRecord.recordTime
-						log.Trace(x.RecordTimestamp, ",", x.RecordOffset, ",time_gap: ", timegap, "s, ", timegap1, "s, record:", msgTime, " vs latest:", processor.latestRecordTimestampInPrepareStage, ", updating to commit:", x.MessageOffset, lastFinalCommitAbleMessageRecord, ",", processor.config.SafetyCommitIntervalInSeconds)
+						err := finalCommitLogConsumer.CommitOffset(processor.commitableMessageOffsetInFinalStage)
+						if err != nil {
+							log.Errorf("failed to commit final offset: %v, offset: %v", err, processor.commitableMessageOffsetInFinalStage)
+						} else {
+							lastFinalCommit = time.Now()
+							needCommitFinalStage = false
+							timegap1 := msgTime - lastFinalCommitAbleMessageRecord.recordTime
+							log.Trace(x.RecordTimestamp, ",", x.RecordOffset, ",time_gap: ", timegap, "s, ", timegap1, "s, record:", msgTime, " vs latest:", processor.latestRecordTimestampInPrepareStage, ", updating to commit:", x.MessageOffset, lastFinalCommitAbleMessageRecord, ",", processor.config.SafetyCommitIntervalInSeconds)
+						}
 					}
 				}
 				return true
