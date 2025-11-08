@@ -216,8 +216,8 @@ Fetch:
 }
 
 func (processor *ReplicationCorrectionGroup) cleanup(uID interface{}) {
-	// 🔧 修复：启用 cleanup 逻辑，防止内存泄漏和重复处理
-	// 删除已完成的消息记录，避免 sync.Map 无限增长
+	// fix: enable cleanup logic, to prevent memory leaks and duplicate processing
+	// fix: delete completed message records, to avoid sync.Map growing infinitely
 	processor.firstStageRecords.Delete(uID)
 	processor.finalStageRecords.Delete(uID)
 }
@@ -338,7 +338,7 @@ func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *s
 
 	wg.Add(1)
 	finalCommitqConfig, finalCommitConsumerConfig, finalCommitLogConsumer := processor.getConsumer(processor.FinalStageQueueName)
-	// 🔧 修复：检查consumer是否为nil（空队列情况）
+	// fix: check if consumer is nil (empty queue case)
 	if finalCommitLogConsumer == nil {
 		log.Debugf("final commit log queue is empty, skip final stage processing")
 		wg.Done()
@@ -665,9 +665,9 @@ func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *s
 				}
 
 				if needCommitFinalStage {
-					// 🔧 修复：减少 offset 提交延迟从 10 秒到 3 秒，降低崩溃时数据重复的窗口期
-					// 同时确保 commit 不会过于频繁影响性能
-					if time.Since(lastFinalCommit) > time.Second*3 {
+					// fix: reduce offset commit delay from 10 seconds to 5 seconds, to reduce the window period of data duplication when crashing
+					// also ensure commit will not affect performance too much
+					if time.Since(lastFinalCommit) > time.Second*5 {
 						log.Debug("committing final offset:", processor.commitableMessageOffsetInFinalStage)
 						err := finalCommitLogConsumer.CommitOffset(processor.commitableMessageOffsetInFinalStage)
 						if err != nil {
@@ -697,7 +697,7 @@ func (processor *ReplicationCorrectionGroup) process(ctx *pipeline.Context, w *s
 		//	firstCommitLogConsumer.CommitOffset(processor.commitableMessageOffsetInFirstStage)
 		//}
 
-		// 🔧 修复：只在consumer不为nil时才commit
+		// fix: only commit when consumer is not nil
 		if finalCommitLogConsumer != nil && processor.commitableMessageOffsetInFinalStage.Position > 0 {
 			finalCommitLogConsumer.CommitOffset(processor.commitableMessageOffsetInFinalStage)
 		}
@@ -721,7 +721,7 @@ func (processor *ReplicationCorrectionGroup) getConsumer(queueName string) (*que
 	consumer, err := queue.AcquireConsumer(qConfig,
 		cConfig, "worker_id")
 	if err != nil {
-		// 🔧 修复：优雅处理空队列情况，而不是panic
+		// fix: error can be "empty queue" or "queue not exists" or other errors
 		if strings.Contains(err.Error(), "empty queue") {
 			log.Debugf("queue [%v] is empty, return nil consumer", queueName)
 			return qConfig, cConfig, nil
