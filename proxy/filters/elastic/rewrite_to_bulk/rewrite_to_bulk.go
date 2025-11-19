@@ -167,7 +167,7 @@ func (filter *RewriteToBulk) Filter(ctx *fasthttp.RequestCtx) {
 			}
 
 			if len(body) <= 0 {
-				panic("invalid body request such bulk requests")
+				panic("invalid body for such bulk request, should be a valid json")
 			}
 
 			if filter.ValidateBody {
