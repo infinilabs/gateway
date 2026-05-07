@@ -43,6 +43,7 @@ import (
 	"fmt"
 	"math"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -64,9 +65,11 @@ import (
 )
 
 type ScrollProcessor struct {
-	config   Config
-	client   elastic.API
-	HTTPPool *fasthttp.RequestResponsePool
+	config         Config
+	client         elastic.API
+	clientID       string
+	requestTimeout time.Duration
+	HTTPPool       *fasthttp.RequestResponsePool
 }
 
 type OutputQueueConfig struct {
@@ -98,6 +101,105 @@ type Config struct {
 	//RemovePipeline         bool         `config:"remove_pipeline"`
 	IndexNameRename map[string]string `config:"index_rename"`
 	TypeNameRename  map[string]string `config:"type_rename"`
+}
+
+func truncateLogValue(value string, limit int) string {
+	if value == "" || limit <= 0 || len(value) <= limit {
+		return value
+	}
+	return util.SubString(value, 0, limit) + "..."
+}
+
+func (processor *ScrollProcessor) getRequestTimeout() time.Duration {
+	if processor.requestTimeout > 0 {
+		return processor.requestTimeout
+	}
+
+	meta := elastic.GetMetadata(processor.clientID)
+	if meta == nil || meta.Config == nil || meta.Config.RequestTimeout <= 0 {
+		return 0
+	}
+	return time.Duration(meta.Config.RequestTimeout) * time.Second
+}
+
+func (processor *ScrollProcessor) buildScrollErrorContext(slice int, scrollID string, apiCtx *elastic.APIContext) string {
+	parts := []string{
+		fmt.Sprintf("cluster=%s", processor.config.Elasticsearch),
+		fmt.Sprintf("indices=%s", processor.config.Indices),
+		fmt.Sprintf("slice=%d/%d", slice, processor.config.SliceSize),
+		fmt.Sprintf("scroll=%s", processor.config.ScrollTime),
+		fmt.Sprintf("batch_size=%d", processor.config.BatchSize),
+	}
+
+	if timeout := processor.getRequestTimeout(); timeout > 0 {
+		parts = append(parts, fmt.Sprintf("request_timeout=%s", timeout))
+	}
+
+	if scrollID != "" {
+		parts = append(parts, fmt.Sprintf("scroll_id_prefix=%s", truncateLogValue(scrollID, 64)))
+	}
+
+	if apiCtx != nil && apiCtx.Request != nil {
+		if method := util.UnsafeBytesToString(apiCtx.Request.Header.Method()); method != "" {
+			parts = append(parts, fmt.Sprintf("method=%s", method))
+		}
+		if host := util.UnsafeBytesToString(apiCtx.Request.Host()); host != "" {
+			parts = append(parts, fmt.Sprintf("host=%s", host))
+		}
+		if requestURI := util.UnsafeBytesToString(apiCtx.Request.RequestURI()); requestURI != "" {
+			parts = append(parts, fmt.Sprintf("request_uri=%s", truncateLogValue(requestURI, 256)))
+		}
+		if apiCtx.Response != nil {
+			if statusCode := apiCtx.Response.StatusCode(); statusCode > 0 {
+				parts = append(parts, fmt.Sprintf("status=%d", statusCode))
+			}
+		}
+	}
+
+	return strings.Join(parts, ", ")
+}
+
+func (processor *ScrollProcessor) wrapScrollRequestError(action string, slice int, err error, query *elastic.SearchRequest, response []byte, scrollID string, apiCtx *elastic.APIContext) error {
+	if err == nil {
+		err = fmt.Errorf("empty scroll response")
+	}
+
+	contextParts := []string{processor.buildScrollErrorContext(slice, scrollID, apiCtx)}
+
+	if processor.config.QueryString != "" {
+		contextParts = append(contextParts, fmt.Sprintf("query_string=%s", truncateLogValue(processor.config.QueryString, 512)))
+	}
+	if processor.config.QueryDSL != "" {
+		contextParts = append(contextParts, fmt.Sprintf("query_dsl=%s", truncateLogValue(processor.config.QueryDSL, 1024)))
+	}
+	if query != nil {
+		contextParts = append(contextParts, fmt.Sprintf("search_request=%s", truncateLogValue(util.MustToJSON(query), 1024)))
+	}
+	if len(response) > 0 {
+		contextParts = append(contextParts, fmt.Sprintf("response=%s", truncateLogValue(util.UnsafeBytesToString(response), 1024)))
+	} else {
+		contextParts = append(contextParts, "response=<empty>")
+	}
+
+	return fmt.Errorf("%s failed (%s): %w", action, strings.Join(contextParts, ", "), err)
+}
+
+func (processor *ScrollProcessor) recordScrollRequestStart(ctx *pipeline.Context, stage string) int64 {
+	startTime := time.Now().UnixMilli()
+	ctx.PutValue("es_scroll.last_request_stage", stage)
+	ctx.PutValue("es_scroll.last_request_start_time", startTime)
+	return startTime
+}
+
+func (processor *ScrollProcessor) recordScrollRequestDone(ctx *pipeline.Context, startedAt int64) {
+	if startedAt <= 0 {
+		return
+	}
+	ctx.PutValue("es_scroll.last_request_duration_ms", time.Now().UnixMilli()-startedAt)
+}
+
+func (processor *ScrollProcessor) recordSuccessfulExport(ctx *pipeline.Context) {
+	ctx.PutValue("es_scroll.last_successful_export_time", time.Now().UnixMilli())
 }
 
 func init() {
@@ -142,10 +244,17 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		cfg.SliceSize = 1
 	}
 
+	requestTimeout := time.Duration(0)
+	if cfg.ElasticsearchConfig != nil && cfg.ElasticsearchConfig.RequestTimeout > 0 {
+		requestTimeout = time.Duration(cfg.ElasticsearchConfig.RequestTimeout) * time.Second
+	}
+
 	return &ScrollProcessor{
-		config:   cfg,
-		client:   client,
-		HTTPPool: fasthttp.NewRequestResponsePool("es_scroll"),
+		config:         cfg,
+		client:         client,
+		clientID:       cfg.Elasticsearch,
+		requestTimeout: requestTimeout,
+		HTTPPool:       fasthttp.NewRequestResponsePool("es_scroll"),
 	}, nil
 
 }
@@ -191,10 +300,13 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 
 			var query *elastic.SearchRequest = elastic.GetSearchRequest(processor.config.QueryString, processor.config.QueryDSL, processor.config.Fields, processor.config.SortField, processor.config.SortType)
 			query = common.EnsureExactScrollTotalHits(processor.client.GetVersion(), query)
+			requestStartTime := processor.recordScrollRequestStart(ctx, "new_scroll")
 			scrollResponse1, err := processor.client.NewScroll(processor.config.Indices, processor.config.ScrollTime, processor.config.BatchSize, query, tempSlice, processor.config.SliceSize)
+			processor.recordScrollRequestDone(ctx, requestStartTime)
 			if err != nil {
-				log.Errorf("%v-%v, query string: %v, query dsl: %v, search request: %s", processor.config.Output, err, processor.config.QueryString, processor.config.QueryDSL, util.MustToJSON(query))
-				panic(err)
+				wrappedErr := processor.wrapScrollRequestError("new scroll", tempSlice, err, query, nil, "", nil)
+				log.Error(wrappedErr)
+				panic(wrappedErr)
 			}
 
 			initScrollID, err := jsonparser.GetString(scrollResponse1, "_scroll_id")
@@ -223,6 +335,9 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 			docSize := processor.processingDocs(scrollResponse1, processor.config.Output)
 			atomic.AddInt64(&totalDocsScrolled, int64(docSize))
 			ctx.PutValue("es_scroll.scrolled_docs", atomic.LoadInt64(&totalDocsScrolled))
+			if docSize > 0 {
+				processor.recordSuccessfulExport(ctx)
+			}
 
 			progress.IncreaseWithTotal(processor.config.Output, "scroll-"+util.ToString(tempSlice), docSize, int(totalHits))
 
@@ -259,11 +374,14 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 				apiCtx.Request.Reset()
 				apiCtx.Response.Reset()
 
+				requestStartTime := processor.recordScrollRequestStart(ctx, "next_scroll")
 				data, err := processor.client.NextScroll(apiCtx, processor.config.ScrollTime, initScrollID)
+				processor.recordScrollRequestDone(ctx, requestStartTime)
 
 				if err != nil || len(data) == 0 {
-					log.Error("failed to scroll,slice:", slice, ",", processor.config.Elasticsearch, ",", processor.config.Indices, ",", string(data), ",", err)
-					panic(err)
+					wrappedErr := processor.wrapScrollRequestError("next scroll", slice, err, nil, data, initScrollID, apiCtx)
+					log.Error(wrappedErr)
+					panic(wrappedErr)
 				}
 
 				if data != nil && len(data) > 0 {
@@ -283,6 +401,9 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 					docSize := processor.processingDocs(data, processor.config.Output)
 					atomic.AddInt64(&totalDocsScrolled, int64(docSize))
 					ctx.PutValue("es_scroll.scrolled_docs", atomic.LoadInt64(&totalDocsScrolled))
+					if docSize > 0 {
+						processor.recordSuccessfulExport(ctx)
+					}
 
 					processedSize += docSize
 					log.Debugf("[%v] slice[%v]:%v,%v-%v", processor.config.Elasticsearch, slice, docSize, processedSize, totalHits)
