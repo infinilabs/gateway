@@ -40,6 +40,7 @@ limitations under the License.
 package es_scroll
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"runtime"
@@ -102,6 +103,13 @@ type Config struct {
 	IndexNameRename map[string]string `config:"index_rename"`
 	TypeNameRename  map[string]string `config:"type_rename"`
 }
+
+const (
+	maxQueuePayloadBytes         = 1024 * 1024
+	queuePushRetryDelay          = 500 * time.Millisecond
+	minQueuePayloadBytesForSplit = 256 * 1024
+	minScrollRequestTimeout      = 30 * time.Second
+)
 
 func truncateLogValue(value string, limit int) string {
 	if value == "" || limit <= 0 || len(value) <= limit {
@@ -184,6 +192,254 @@ func (processor *ScrollProcessor) wrapScrollRequestError(action string, slice in
 	return fmt.Errorf("%s failed (%s): %w", action, strings.Join(contextParts, ", "), err)
 }
 
+func (processor *ScrollProcessor) wrapQueuePushError(queueName string, partitionID int, payloadSize int, err error) error {
+	return fmt.Errorf(
+		"push scroll batch to queue failed (cluster=%s, indices=%s, queue=%s, partition=%d, payload_bytes=%d): %w",
+		processor.config.Elasticsearch,
+		processor.config.Indices,
+		queueName,
+		partitionID,
+		payloadSize,
+		err,
+	)
+}
+
+func isRetryableQueuePushError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "operation timed out") || strings.Contains(msg, "context deadline exceeded")
+}
+
+func effectiveScrollRequestTimeout(cfg *elastic.ElasticsearchConfig) time.Duration {
+	if cfg == nil || cfg.RequestTimeout <= 0 {
+		return minScrollRequestTimeout
+	}
+
+	timeout := time.Duration(cfg.RequestTimeout) * time.Second
+	if timeout < minScrollRequestTimeout {
+		return minScrollRequestTimeout
+	}
+	return timeout
+}
+
+func buildScrollClientConfig(cfg Config) (*elastic.ElasticsearchConfig, string) {
+	if cfg.ElasticsearchConfig != nil {
+		clientCfg := *cfg.ElasticsearchConfig
+		baseID := clientCfg.ID
+		if baseID == "" {
+			if clientCfg.Name != "" {
+				baseID = clientCfg.Name
+			} else {
+				baseID = cfg.Elasticsearch
+			}
+		}
+		if clientCfg.Name == "" {
+			clientCfg.Name = baseID
+		}
+		clientCfg.ID = baseID + "_es_scroll"
+		clientCfg.Source = "es_scroll"
+		return &clientCfg, cfg.Elasticsearch
+	}
+
+	meta := elastic.GetMetadata(cfg.Elasticsearch)
+	if meta == nil || meta.Config == nil {
+		return nil, cfg.Elasticsearch
+	}
+
+	clientCfg := *meta.Config
+	baseID := clientCfg.ID
+	if baseID == "" {
+		baseID = cfg.Elasticsearch
+	}
+	if clientCfg.Name == "" {
+		clientCfg.Name = baseID
+	}
+	clientCfg.ID = baseID + "_es_scroll"
+	clientCfg.Source = "es_scroll"
+	return &clientCfg, cfg.Elasticsearch
+}
+
+func createScrollClient(cfg Config) (elastic.API, string, time.Duration, error) {
+	clientCfg, sharedClientID := buildScrollClientConfig(cfg)
+	if clientCfg == nil {
+		client := elastic.GetClientNoPanic(cfg.Elasticsearch)
+		if client == nil {
+			return nil, "", 0, fmt.Errorf("failed to get elasticsearch client")
+		}
+		return client, sharedClientID, 0, nil
+	}
+
+	timeout := effectiveScrollRequestTimeout(clientCfg)
+	clientCfg.RequestTimeout = int(timeout / time.Second)
+
+	if cfg.ElasticsearchConfig == nil {
+		meta := elastic.GetMetadata(cfg.Elasticsearch)
+		if meta != nil && meta.Config != nil {
+			currentTimeout := time.Duration(meta.Config.RequestTimeout) * time.Second
+			if currentTimeout >= timeout {
+				client := elastic.GetClientNoPanic(cfg.Elasticsearch)
+				if client != nil {
+					return client, cfg.Elasticsearch, currentTimeout, nil
+				}
+			}
+		}
+	}
+
+	client, err := es_common.InitClientWithConfig(*clientCfg)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	return client, clientCfg.ID, timeout, nil
+}
+
+func buildBulkOperationBytes(metaBytes, payloadBytes []byte) []byte {
+	size := len(metaBytes) + 1
+	if len(payloadBytes) > 0 {
+		size += len(payloadBytes) + 1
+	}
+
+	buf := make([]byte, 0, size)
+	buf = append(buf, metaBytes...)
+	buf = append(buf, '\n')
+	if len(payloadBytes) > 0 {
+		buf = append(buf, payloadBytes...)
+		buf = append(buf, '\n')
+	}
+	return buf
+}
+
+func splitBulkPayloadByBytes(payload []byte, maxBytes int) ([][]byte, error) {
+	if len(payload) == 0 {
+		return nil, nil
+	}
+	if maxBytes <= 0 || len(payload) <= maxBytes {
+		return [][]byte{payload}, nil
+	}
+
+	var chunks [][]byte
+	current := &bytebufferpool.ByteBuffer{}
+	flush := func() {
+		if current.Len() == 0 {
+			return
+		}
+		chunks = append(chunks, append([]byte(nil), current.Bytes()...))
+		current.Reset()
+	}
+
+	appendOperation := func(metaBytes, payloadBytes []byte) {
+		opBytes := buildBulkOperationBytes(metaBytes, payloadBytes)
+		if current.Len() > 0 && current.Len()+len(opBytes) > maxBytes {
+			flush()
+		}
+		if len(opBytes) > maxBytes {
+			chunks = append(chunks, opBytes)
+			return
+		}
+		current.Write(opBytes)
+	}
+
+	var pendingMeta []byte
+	_, err := elastic.WalkBulkRequests("", payload, nil,
+		func(metaBytes []byte, actionStr, index, typeName, id, routing string, offset int) error {
+			pendingMeta = metaBytes
+			if actionStr == elastic.ActionDelete {
+				appendOperation(metaBytes, nil)
+			}
+			return nil
+		},
+		func(payloadBytes []byte, actionStr, index, typeName, id, routing string) {
+			appendOperation(pendingMeta, payloadBytes)
+		},
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	flush()
+	return chunks, nil
+}
+
+func hasOversizedBulkOperation(payload []byte, maxBytes int) (bool, int, error) {
+	if len(payload) == 0 || maxBytes <= 0 {
+		return false, 0, nil
+	}
+
+	maxOperationBytes := 0
+	var pendingMeta []byte
+	_, err := elastic.WalkBulkRequests("", payload, nil,
+		func(metaBytes []byte, actionStr, index, typeName, id, routing string, offset int) error {
+			pendingMeta = metaBytes
+			if actionStr == elastic.ActionDelete {
+				size := len(buildBulkOperationBytes(metaBytes, nil))
+				if size > maxOperationBytes {
+					maxOperationBytes = size
+				}
+			}
+			return nil
+		},
+		func(payloadBytes []byte, actionStr, index, typeName, id, routing string) {
+			size := len(buildBulkOperationBytes(pendingMeta, payloadBytes))
+			if size > maxOperationBytes {
+				maxOperationBytes = size
+			}
+		},
+		nil,
+	)
+	if err != nil {
+		return false, 0, err
+	}
+
+	return maxOperationBytes > maxBytes, maxOperationBytes, nil
+}
+
+func (processor *ScrollProcessor) pushQueuePayload(pushQueue *queue.QueueConfig, queueName string, partitionID int, payload []byte) error {
+	if len(payload) == 0 {
+		return nil
+	}
+
+	chunks, err := splitBulkPayloadByBytes(payload, maxQueuePayloadBytes)
+	if err != nil {
+		return processor.wrapQueuePushError(queueName, partitionID, len(payload), fmt.Errorf("split bulk payload: %w", err))
+	}
+	if len(chunks) == 0 {
+		chunks = [][]byte{payload}
+	}
+
+	for _, chunk := range chunks {
+		if err := queue.Push(pushQueue, chunk); err == nil {
+			continue
+		} else if isRetryableQueuePushError(err) {
+			time.Sleep(queuePushRetryDelay)
+			if retryErr := queue.Push(pushQueue, chunk); retryErr == nil {
+				continue
+			} else if len(chunk) > minQueuePayloadBytesForSplit {
+				smallerChunks, splitErr := splitBulkPayloadByBytes(chunk, len(chunk)/2)
+				if splitErr == nil && len(smallerChunks) > 1 {
+					for _, smallerChunk := range smallerChunks {
+						if pushErr := processor.pushQueuePayload(pushQueue, queueName, partitionID, smallerChunk); pushErr != nil {
+							return pushErr
+						}
+					}
+					continue
+				}
+				if oversized, maxOperationBytes, oversizedErr := hasOversizedBulkOperation(chunk, maxQueuePayloadBytes); oversizedErr == nil && oversized {
+					return processor.wrapQueuePushError(queueName, partitionID, len(chunk), fmt.Errorf("single bulk operation too large to split (operation_bytes=%d): %w", maxOperationBytes, retryErr))
+				}
+				return processor.wrapQueuePushError(queueName, partitionID, len(chunk), retryErr)
+			} else {
+				return processor.wrapQueuePushError(queueName, partitionID, len(chunk), retryErr)
+			}
+		} else {
+			return processor.wrapQueuePushError(queueName, partitionID, len(chunk), err)
+		}
+	}
+
+	return nil
+}
+
 func (processor *ScrollProcessor) recordScrollRequestStart(ctx *pipeline.Context, stage string) int64 {
 	startTime := time.Now().UnixMilli()
 	ctx.PutValue("es_scroll.last_request_stage", stage)
@@ -224,15 +480,10 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		cfg.Output = cfg.Queue.Name
 	}
 
-	client := elastic.GetClientNoPanic(cfg.Elasticsearch)
-	if client == nil {
-		if cfg.ElasticsearchConfig != nil {
-			cfg.ElasticsearchConfig.Source = "es_scroll"
-			client, _ = es_common.InitElasticInstanceWithoutMetadata(*cfg.ElasticsearchConfig)
-		}
-	}
-	if client == nil {
-		panic("failed to get elasticsearch client")
+	client, clientID, requestTimeout, err := createScrollClient(cfg)
+	if err != nil {
+		log.Error(err)
+		return nil, err
 	}
 
 	esVersion := client.GetVersion()
@@ -244,15 +495,10 @@ func New(c *config.Config) (pipeline.Processor, error) {
 		cfg.SliceSize = 1
 	}
 
-	requestTimeout := time.Duration(0)
-	if cfg.ElasticsearchConfig != nil && cfg.ElasticsearchConfig.RequestTimeout > 0 {
-		requestTimeout = time.Duration(cfg.ElasticsearchConfig.RequestTimeout) * time.Second
-	}
-
 	return &ScrollProcessor{
 		config:         cfg,
 		client:         client,
-		clientID:       cfg.Elasticsearch,
+		clientID:       clientID,
 		requestTimeout: requestTimeout,
 		HTTPPool:       fasthttp.NewRequestResponsePool("es_scroll"),
 	}, nil
@@ -353,7 +599,7 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 			defer processor.HTTPPool.ReleaseRequest(req)
 			defer processor.HTTPPool.ReleaseResponse(res)
 
-			meta := elastic.GetMetadata(processor.config.Elasticsearch)
+			meta := elastic.GetMetadata(processor.clientID)
 			apiCtx := &elastic.APIContext{
 				Client:   meta.GetHttpClient(meta.GetActivePreferredHost("")),
 				Request:  req,
@@ -434,6 +680,27 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 	return nil
 }
 
+func buildBulkMetaLine(action, index, typeStr, id, routing string) []byte {
+	meta := map[string]string{
+		"_index": index,
+		"_id":    id,
+	}
+	if typeStr != "" {
+		meta["_type"] = typeStr
+	}
+	if routing != "" {
+		meta["routing"] = routing
+	}
+
+	line, err := json.Marshal(map[string]interface{}{
+		action: meta,
+	})
+	if err != nil {
+		panic(err)
+	}
+	return append(line, '\n')
+}
+
 func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName string) int {
 
 	docSize := 0
@@ -451,11 +718,11 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 		}
 
 		typeStr, err := jsonparser.GetString(value, "_type")
-		if err != nil {
+		if err != nil && err != jsonparser.KeyPathNotFoundError {
 			log.Debugf("get _type field error: %v", err)
 		}
 		routing, err := jsonparser.GetString(value, "_routing")
-		if err != nil {
+		if err != nil && err != jsonparser.KeyPathNotFoundError {
 			log.Debugf("get _routing field error: %v", err)
 		}
 
@@ -510,14 +777,7 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 		if len(processor.config.BulkOperation) > 0 {
 			bulkOperation = processor.config.BulkOperation
 		}
-		buffer.WriteString(fmt.Sprintf("{ \"%s\" : { \"_index\" : \"%s\", ", bulkOperation, index))
-		if typeStr != "" {
-			buffer.WriteString(fmt.Sprintf("\"_type\" : \"%s\",", typeStr))
-		}
-		if routing != "" {
-			buffer.WriteString(fmt.Sprintf("\"routing\" : \"%s\",", routing))
-		}
-		buffer.WriteString(fmt.Sprintf("\"_id\" : \"%s\" } }\n", id))
+		buffer.Write(buildBulkMetaLine(bulkOperation, index, typeStr, id, routing))
 		buffer.Write(source)
 		buffer.WriteString("\n")
 
@@ -549,8 +809,9 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 			log.Trace("queue config: ", pushQueue)
 		}
 
-		if err := queue.Push(pushQueue, v.Bytes()); err != nil {
-			log.Errorf("failed to push data to queue: %v, %v", outputQueueName+util.ToString(k), err)
+		queueName := outputQueueName + util.ToString(k)
+		if err := processor.pushQueuePayload(pushQueue, queueName, k, v.Bytes()); err != nil {
+			log.Error(err)
 			panic(err)
 		}
 
