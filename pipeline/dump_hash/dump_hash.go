@@ -191,6 +191,7 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 			}()
 
 			var query *elastic.SearchRequest = elastic.GetSearchRequest(processor.config.QueryString, processor.config.QueryDSL, processor.config.Fields, processor.config.SortField, processor.config.SortType)
+			query = common.EnsureExactScrollTotalHits(processor.client.GetVersion(), query)
 			scrollResponse1, err := processor.client.NewScroll(processor.config.Indices, processor.config.ScrollTime, processor.config.BatchSize, query, tempSlice, processor.config.SliceSize)
 			if err != nil {
 				log.Errorf("%v-%v", processor.config.Output, err)

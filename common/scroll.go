@@ -35,3 +35,19 @@ func GetScrollHitsTotal(version elastic.Version, data []byte) (int64, error) {
 	}
 	return jsonparser.GetInt(data, "hits", "total", "value")
 }
+
+func EnsureExactScrollTotalHits(version elastic.Version, query *elastic.SearchRequest) *elastic.SearchRequest {
+	if version.Distribution == elastic.Elasticsearch && version.Major < 7 {
+		return query
+	}
+
+	if query == nil {
+		query = &elastic.SearchRequest{}
+	}
+
+	if err := query.Set("track_total_hits", true); err != nil {
+		panic(err)
+	}
+
+	return query
+}
