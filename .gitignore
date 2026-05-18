@@ -54,3 +54,5 @@ config/generated.go
 config/generat*.go
 generated_*.go
 *.swp
+.github/copilot*.md
+.github/hooks
