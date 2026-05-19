@@ -43,6 +43,7 @@ import (
 	"infini.sh/framework/core/queue"
 	"infini.sh/framework/core/stats"
 	"infini.sh/framework/core/util"
+	"infini.sh/gateway/pipeline/internal/logutil"
 )
 
 //#操作合并任务
@@ -630,13 +631,14 @@ func (processor *BulkIndexingProcessor) submitBulkRequest(tag, esClusterID strin
 		defer cancel()
 
 		continueRequest, statsMap, _, err := bulkProcessor.Bulk(ctx, tag, meta, host, mainBuf)
+		duration := time.Since(start)
 		if global.Env().IsDebug {
-			stats.Timing("elasticsearch."+esClusterID+".bulk", "elapsed_ms", time.Since(start).Milliseconds())
+			stats.Timing("elasticsearch."+esClusterID+".bulk", "elapsed_ms", duration.Milliseconds())
 		}
 		if err != nil {
 			log.Errorf("submit bulk requests to elasticsearch [%v] failed, err:%v", meta.Config.Name, err)
 		}
-		log.Info(meta.Config.Name, ", ", host, ", stats: ", statsMap, ", count: ", count, ", size: ", util.ByteSize(uint64(size)), ", elapsed: ", time.Since(start), ", continue: ", continueRequest)
+		log.Info(meta.Config.Name, ", ", host, ", stats: ", statsMap, ", count: ", count, ", size: ", util.ByteSize(uint64(size)), ", elapsed: ", logutil.FormatDuration(duration), ", qps: ", logutil.QPS(int64(count), duration), ", continue: ", continueRequest)
 		return continueRequest, err
 	}
 
