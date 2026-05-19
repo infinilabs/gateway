@@ -29,7 +29,6 @@ package dump_hash
 
 import (
 	"fmt"
-	"math"
 	"path"
 	"runtime"
 	"strconv"
@@ -56,6 +55,7 @@ import (
 	"infini.sh/framework/lib/fasthttp"
 	es_common "infini.sh/framework/modules/elastic/common"
 	"infini.sh/gateway/common"
+	"infini.sh/gateway/pipeline/internal/logutil"
 )
 
 type DumpHashProcessor struct {
@@ -303,7 +303,7 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 	wg.Wait()
 	progress.Stop()
 	duration := time.Since(start)
-	log.Infof("dump finished, es: %v, index: %v, docs: %v, duration: %vs, qps: %v ", processor.config.Elasticsearch, processor.config.Indices, totalDocsNeedToScroll, duration, math.Ceil(float64(totalDocsNeedToScroll)/math.Ceil((duration.Seconds()))))
+	log.Infof("dump finished, es: %v, index: %v, docs: %v, duration: %s, qps: %d", processor.config.Elasticsearch, processor.config.Indices, totalDocsNeedToScroll, logutil.FormatDuration(duration), logutil.QPS(totalDocsNeedToScroll, duration))
 
 	return nil
 }
