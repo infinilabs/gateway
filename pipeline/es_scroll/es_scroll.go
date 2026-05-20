@@ -65,9 +65,10 @@ import (
 )
 
 type ScrollProcessor struct {
-	config   Config
-	client   elastic.API
-	HTTPPool *fasthttp.RequestResponsePool
+	config       Config
+	client       elastic.API
+	HTTPPool     *fasthttp.RequestResponsePool
+	outputQueues []*queue.QueueConfig
 }
 
 type OutputQueueConfig struct {
@@ -139,6 +140,9 @@ func New(c *config.Config) (pipeline.Processor, error) {
 	if cfg.SliceSize < 1 {
 		cfg.SliceSize = 1
 	}
+	if cfg.PartitionSize < 1 {
+		cfg.PartitionSize = 1
+	}
 	if esVersion.Distribution == elastic.Elasticsearch && esVersion.Major < 5 {
 		cfg.SliceSize = 1
 	}
@@ -159,6 +163,7 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 
 	start := time.Now()
 	wg := sync.WaitGroup{}
+	processor.initOutputQueues()
 
 	var totalDocsNeedToScroll int64 = 0
 	var totalDocsScrolled int64 = 0
@@ -220,7 +225,7 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 			atomic.AddInt64(&totalDocsNeedToScroll, totalHits)
 			ctx.PutValue("es_scroll.total_hits", atomic.LoadInt64(&totalDocsNeedToScroll))
 
-			docSize := processor.processingDocs(scrollResponse1, processor.config.Output)
+			docSize := processor.processingDocs(scrollResponse1)
 			atomic.AddInt64(&totalDocsScrolled, int64(docSize))
 			ctx.PutValue("es_scroll.scrolled_docs", atomic.LoadInt64(&totalDocsScrolled))
 
@@ -280,7 +285,7 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 						panic(err)
 					}
 
-					docSize := processor.processingDocs(data, processor.config.Output)
+					docSize := processor.processingDocs(data)
 					atomic.AddInt64(&totalDocsScrolled, int64(docSize))
 					ctx.PutValue("es_scroll.scrolled_docs", atomic.LoadInt64(&totalDocsScrolled))
 
@@ -313,7 +318,27 @@ func (processor *ScrollProcessor) Process(c *pipeline.Context) error {
 	return nil
 }
 
-func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName string) int {
+func (processor *ScrollProcessor) initOutputQueues() {
+	if len(processor.outputQueues) == processor.config.PartitionSize {
+		return
+	}
+
+	outputQueues := make([]*queue.QueueConfig, processor.config.PartitionSize)
+	for partitionID := 0; partitionID < processor.config.PartitionSize; partitionID++ {
+		labels := map[string]interface{}{
+			"type": "scroll_docs",
+		}
+		if processor.config.Queue != nil {
+			for key, value := range processor.config.Queue.Labels {
+				labels[key] = value
+			}
+		}
+		outputQueues[partitionID] = queue.AdvancedGetOrInitConfig("", processor.config.Output+util.ToString(partitionID), labels)
+	}
+	processor.outputQueues = outputQueues
+}
+
+func (processor *ScrollProcessor) processingDocs(data []byte) int {
 
 	docSize := 0
 	var docs = map[int]*bytebufferpool.ByteBuffer{}
@@ -412,24 +437,13 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 	}, "hits", "hits")
 
 	for k, v := range docs {
-		queueConfig := &queue.QueueConfig{}
-		queueConfig.Source = "dynamic"
-		queueConfig.Labels = util.MapStr{}
-		queueConfig.Labels["type"] = "scroll_docs"
-		if processor.config.Queue != nil {
-			for k, v := range processor.config.Queue.Labels {
-				queueConfig.Labels[k] = v
-			}
-		}
-		queueConfig.Name = outputQueueName + util.ToString(k)
-		queue.RegisterConfig(queueConfig)
-		pushQueue := queue.GetOrInitConfig(outputQueueName + util.ToString(k))
+		pushQueue := processor.outputQueues[k]
 		if global.Env().IsDebug {
 			log.Trace("queue config: ", pushQueue)
 		}
 
 		if err := queue.Push(pushQueue, v.Bytes()); err != nil {
-			log.Errorf("failed to push data to queue: %v, %v", outputQueueName+util.ToString(k), err)
+			log.Errorf("failed to push data to queue: %v, %v", processor.config.Output+util.ToString(k), err)
 			panic(err)
 		}
 
@@ -438,7 +452,7 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 		bytebufferpool.Put("es_scroll", v)
 	}
 
-	stats.IncrementBy("scrolling_processing."+outputQueueName, "docs", int64(docSize))
+	stats.IncrementBy("scrolling_processing."+processor.config.Output, "docs", int64(docSize))
 
 	return docSize
 }
