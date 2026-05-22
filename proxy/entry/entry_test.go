@@ -24,8 +24,10 @@
 package entry
 
 import (
+	"fmt"
 	config3 "infini.sh/framework/core/config"
 	"infini.sh/gateway/common"
+	"net"
 	"testing"
 )
 
@@ -48,4 +50,50 @@ func TestMulti(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func TestStartDoesNotHoldPortWhenFlowResolutionFails(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserve port: %v", err)
+	}
+	addr := ln.Addr().(*net.TCPAddr)
+	_ = ln.Close()
+
+	routerName := "missing-flow-router"
+	common.RegisterRouterConfig(common.RouterConfig{
+		Name: routerName,
+		Rules: []common.RuleConfig{
+			{
+				Method:      []string{"GET"},
+				PathPattern: []string{"/"},
+				Flow:        []string{"missing-flow"},
+			},
+		},
+	})
+
+	entry := Entrypoint{
+		config: common.EntryConfig{
+			Enabled:          true,
+			Name:             "test-missing-flow",
+			RouterConfigName: routerName,
+			NetworkConfig: config3.NetworkConfig{
+				Binding: fmt.Sprintf("127.0.0.1:%d", addr.Port),
+			},
+		},
+	}
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("expected start to panic when referenced flow is missing")
+		}
+
+		reuse, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", addr.Port))
+		if err != nil {
+			t.Fatalf("expected port to remain free after failed start: %v", err)
+		}
+		_ = reuse.Close()
+	}()
+
+	_ = entry.Start()
 }
