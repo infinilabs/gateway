@@ -93,20 +93,6 @@ func (this *Entrypoint) Start() error {
 		log.Trace("auto skip address ", this.listenAddress)
 	}
 
-	var ln net.Listener
-	var err error
-
-	if this.config.NetworkConfig.ReusePort && !strings.Contains(this.listenAddress, "::") {
-		log.Debug("reuse port ", this.listenAddress)
-		ln, err = reuseport.Listen("tcp4", this.config.NetworkConfig.GetBindingAddr())
-	} else {
-		ln, err = net.Listen("tcp", this.listenAddress)
-	}
-
-	if err != nil {
-		panic(errors.Errorf("error in listener(%v): %s", this.listenAddress, err))
-	}
-
 	this.router = r.New()
 
 	if this.config.RouterConfigName != "" {
@@ -256,6 +242,26 @@ func (this *Entrypoint) Start() error {
 		for _, ip := range this.routerConfig.IPAccessRules.ClientIP.PermittedList {
 			this.server.AddWhiteIPList(ip)
 		}
+	}
+
+	var ln net.Listener
+	var err error
+	started := false
+	defer func() {
+		if !started && ln != nil {
+			_ = ln.Close()
+		}
+	}()
+
+	if this.config.NetworkConfig.ReusePort && !strings.Contains(this.listenAddress, "::") {
+		log.Debug("reuse port ", this.listenAddress)
+		ln, err = reuseport.Listen("tcp4", this.config.NetworkConfig.GetBindingAddr())
+	} else {
+		ln, err = net.Listen("tcp", this.listenAddress)
+	}
+
+	if err != nil {
+		panic(errors.Errorf("error in listener(%v): %s", this.listenAddress, err))
 	}
 
 	if this.config.TLSConfig.TLSEnabled {
@@ -418,6 +424,7 @@ func (this *Entrypoint) Start() error {
 	})
 
 	log.Infof("entry [%s] listen at: %s%s", this.String(), this.GetSchema(), this.listenAddress)
+	started = true
 
 	return nil
 }
