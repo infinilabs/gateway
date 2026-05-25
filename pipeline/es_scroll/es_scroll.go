@@ -355,7 +355,7 @@ func (processor *ScrollProcessor) processingDocs(data []byte) int {
 		}
 
 		typeStr, err := jsonparser.GetString(value, "_type")
-		if err != nil {
+		if err != nil && !errors.Is(err, jsonparser.KeyPathNotFoundError) {
 			log.Debugf("get _type field error: %v", err)
 		}
 		routing, err := jsonparser.GetString(value, "_routing")
