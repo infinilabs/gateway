@@ -65,9 +65,9 @@ import (
 )
 
 type ScrollProcessor struct {
-	config       Config
-	client       elastic.API
-	HTTPPool     *fasthttp.RequestResponsePool
+	config   Config
+	client   elastic.API
+	HTTPPool *fasthttp.RequestResponsePool
 	// Cache partition queues so processingDocs stays on the hot path.
 	outputQueues []*queue.QueueConfig
 }
