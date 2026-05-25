@@ -4,12 +4,12 @@ allow_multi_instance: true
 #the env section used for setup default settings, it can be overwritten by system environments.
 #eg: PROD_ES_ENDPOINT=http://192.168.3.185:9200 LOGGING_ES_ENDPOINT=http://192.168.3.185:9201  ./bin/gateway
 env: #use $[[env.LOGGING_ES_ENDPOINT]] in config instead
-  LOGGING_ES_ENDPOINT: https://localhost:9200/
+  LOGGING_ES_ENDPOINT: http://localhost:9200/
   LOGGING_ES_USER: admin
-  LOGGING_ES_PASS: INFINILabs-Cloud-Test-2026
-  PROD_ES_ENDPOINT: https://localhost:9200/
+  LOGGING_ES_PASS: admin
+  PROD_ES_ENDPOINT: http://localhost:9200/
   PROD_ES_USER: admin
-  PROD_ES_PASS: INFINILabs-Cloud-Test-2026
+  PROD_ES_PASS: admin
   GW_BINDING: "0.0.0.0:8000"
   API_BINDING: "0.0.0.0:2900"
 
