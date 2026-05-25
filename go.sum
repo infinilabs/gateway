@@ -125,6 +125,10 @@ github.com/hashicorp/go-uuid v1.0.3 h1:2gKiV6YVmrJ1i2CKKa9obLvRieoRGviZFL26PcT/C
 github.com/hashicorp/go-uuid v1.0.3/go.mod h1:6SBZvOh/SIDV7/2o3Jml5SYk/TvGqwFJ/bN7x4byOro=
 github.com/hashicorp/go-version v1.7.0 h1:5tqGy27NaOTB8yJKUZELlFAS/LTKJkrmONwQKeRZfjY=
 github.com/hashicorp/go-version v1.7.0/go.mod h1:fltr4n8CU8Ke44wwGCBoEymUuxUHl09ZGVZPK5anwXA=
+github.com/infinilabs/framework-vendor/src/github.com/dop251/goja v0.0.0-20230228080227-6d95946e4353 h1:PXfbw2aOFGBgN1LsUc9kw+nyFvaMu43J2RTrP0sjGm8=
+github.com/infinilabs/framework-vendor/src/github.com/dop251/goja v0.0.0-20230228080227-6d95946e4353/go.mod h1:0YBNfreorTn9Kv+Yo8sGThLMA/X2CWNn6emlYSvAuoI=
+github.com/infinilabs/framework-vendor/src/github.com/dop251/goja_nodejs v0.0.0-20230228080227-6d95946e4353 h1:ng8mnmSwv1zHw3ct4NVeGootBmmgyvBckvGfCfPieZs=
+github.com/infinilabs/framework-vendor/src/github.com/dop251/goja_nodejs v0.0.0-20230228080227-6d95946e4353/go.mod h1:vfnUdZM9Ehi1m0+t+iyzIacGM2y55iTtHW5q0tJZorw=
 github.com/j-keck/arping v1.0.3 h1:aeVk5WnsK6xPaRsFt5wV6W2x5l/n5XBNp0MMr/FEv2k=
 github.com/j-keck/arping v1.0.3/go.mod h1:aJbELhR92bSk7tp79AWM/ftfc90EfEi2bQJrbBFOsPw=
 github.com/jcmturner/aescts/v2 v2.0.0 h1:9YKLH6ey7H4eDBXW8khjYslgyqG2xZikXP0EQFKrle8=

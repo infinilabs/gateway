@@ -6,6 +6,10 @@ replace infini.sh/framework => ../framework
 
 replace github.com/cihub/seelog => ../framework/lib/seelog
 
+replace github.com/dop251/goja => github.com/infinilabs/framework-vendor/src/github.com/dop251/goja v0.0.0-20230228080227-6d95946e4353
+
+replace github.com/dop251/goja_nodejs => github.com/infinilabs/framework-vendor/src/github.com/dop251/goja_nodejs v0.0.0-20230228080227-6d95946e4353
+
 require (
 	github.com/OneOfOne/xxhash v1.2.8
 	github.com/bsm/extsort v0.6.1
