@@ -428,7 +428,7 @@ func (processor *ScrollProcessor) processingDocs(data []byte, outputQueueName st
 		}
 
 		if err := queue.Push(pushQueue, v.Bytes()); err != nil {
-			log.Errorf("failed to push data to queue: %v, %v", outputQueueName+util.ToString(k), err)
+			_ = log.Errorf("failed to push data to queue: %v, %v", outputQueueName+util.ToString(k), err)
 			panic(err)
 		}
 
