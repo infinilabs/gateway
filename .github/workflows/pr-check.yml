@@ -29,13 +29,10 @@ jobs:
 
             - name: Prepare framework build info
               run: |
-                FRAMEWORK_COMMIT=$(git -C "$GITHUB_WORKSPACE/framework" rev-parse HEAD)
-                cat > "$GITHUB_WORKSPACE/framework/config/generated_framework-info.go" <<EOF
-                package config
-
-                const LastFrameworkCommitLog = "$FRAMEWORK_COMMIT"
-                const LastFrameworkVendorCommitLog = "N/A"
-                EOF
+                make -C "$GITHUB_WORKSPACE/framework" \
+                  FRAMEWORK_FOLDER="$GITHUB_WORKSPACE/framework" \
+                  OFFLINE_BUILD=true \
+                  init update-generated-framework-info
 
             - name: Set up go toolchain
               uses: actions/setup-go@v5
@@ -100,13 +97,10 @@ jobs:
 
             - name: Prepare framework build info
               run: |
-                FRAMEWORK_COMMIT=$(git -C "$GITHUB_WORKSPACE/framework" rev-parse HEAD)
-                cat > "$GITHUB_WORKSPACE/framework/config/generated_framework-info.go" <<EOF
-                package config
-
-                const LastFrameworkCommitLog = "$FRAMEWORK_COMMIT"
-                const LastFrameworkVendorCommitLog = "N/A"
-                EOF
+                make -C "$GITHUB_WORKSPACE/framework" \
+                  FRAMEWORK_FOLDER="$GITHUB_WORKSPACE/framework" \
+                  OFFLINE_BUILD=true \
+                  init update-generated-framework-info
 
             - name: Set up go toolchain
               uses: actions/setup-go@v5
@@ -146,13 +140,10 @@ jobs:
 
             - name: Prepare framework build info
               run: |
-                FRAMEWORK_COMMIT=$(git -C "$GITHUB_WORKSPACE/framework" rev-parse HEAD)
-                cat > "$GITHUB_WORKSPACE/framework/config/generated_framework-info.go" <<EOF
-                package config
-
-                const LastFrameworkCommitLog = "$FRAMEWORK_COMMIT"
-                const LastFrameworkVendorCommitLog = "N/A"
-                EOF
+                make -C "$GITHUB_WORKSPACE/framework" \
+                  FRAMEWORK_FOLDER="$GITHUB_WORKSPACE/framework" \
+                  OFFLINE_BUILD=true \
+                  init update-generated-framework-info
 
             - name: Set up go toolchain
               uses: actions/setup-go@v5
