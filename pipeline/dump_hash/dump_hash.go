@@ -327,6 +327,7 @@ func (processor *DumpHashProcessor) processingDocs(data []byte, outputQueueName 
 
 		hash := processor.Hash(processor.config.HashFunc, source)
 
+		// Match the source cluster's routing rules when partitioning migration data.
 		partitionID := elastic.GetShardID(processor.client.GetVersion().Major, util.UnsafeStringToBytes(id), processor.config.PartitionSize)
 
 		buffer, ok := docs[partitionID]

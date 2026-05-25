@@ -68,6 +68,7 @@ type ScrollProcessor struct {
 	config       Config
 	client       elastic.API
 	HTTPPool     *fasthttp.RequestResponsePool
+	// Cache partition queues so processingDocs stays on the hot path.
 	outputQueues []*queue.QueueConfig
 }
 
@@ -400,6 +401,7 @@ func (processor *ScrollProcessor) processingDocs(data []byte) int {
 
 		//hash := processor.Hash(processor.config.HashFunc, hashBuffer, source)
 
+		// Match the source cluster's routing rules when partitioning migration data.
 		partitionID := elastic.GetShardID(processor.client.GetVersion().Major, util.UnsafeStringToBytes(id), processor.config.PartitionSize)
 
 		buffer, ok := docs[partitionID]

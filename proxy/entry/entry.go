@@ -248,6 +248,7 @@ func (this *Entrypoint) Start() error {
 	var err error
 	started := false
 	defer func() {
+		// Release the port if startup fails after binding during reload.
 		if !started && ln != nil {
 			_ = ln.Close()
 		}
