@@ -19,20 +19,12 @@ jobs:
               uses: actions/checkout@v4
               with:
                 path: ${{ env.PNAME }}
-                fetch-depth: 0
 
             - name: Checkout framework repository
               uses: actions/checkout@v4
               with:
                 repository: infinilabs/framework
                 path: framework
-
-            - name: Prepare framework build info
-              run: |
-                make -C "$GITHUB_WORKSPACE/framework" \
-                  FRAMEWORK_FOLDER="$GITHUB_WORKSPACE/framework" \
-                  OFFLINE_BUILD=true \
-                  init update-generated-framework-info
 
             - name: Set up go toolchain
               uses: actions/setup-go@v5
@@ -50,18 +42,28 @@ jobs:
             - name: Code format
               shell: bash
               run: |
-                cd $GITHUB_WORKSPACE/$PNAME
+                echo Home path is $HOME
+                export WORKBASE=$HOME/go/src/infini.sh
+                export WORK=$WORKBASE/$PNAME
+
+                mkdir -p $HOME/go/src/
+                ln -s $GITHUB_WORKSPACE $WORKBASE
+
+                ls -lrt $WORKBASE/
+                ls -alrt $WORK
+
+                cd $WORK
                 echo Formating code at $PWD ...
-                find . -type f -name '*.go' \
-                  -not -path './vendor/*' \
-                  -not -path './.git/*' \
-                  -exec gofmt -w {} +
+                make format
 
             - name: Check for changes after format
               id: check-changes
               shell: bash
               run: |
-                cd $GITHUB_WORKSPACE/$PNAME
+                export WORKBASE=$HOME/go/src/infini.sh
+                export WORK=$WORKBASE/$PNAME
+
+                cd $WORK
                 if [[ $(git status --porcelain | grep -c " M .*\.go$") -gt 0 ]]; then
                   echo "go format detected formatting changes"
                   echo "changes=true" >> $GITHUB_OUTPUT
@@ -73,7 +75,10 @@ jobs:
             - name: Fail workflow if changes after format
               if: steps.check-changes.outputs.changes == 'true'
               run: |
-                cd $GITHUB_WORKSPACE/$PNAME && echo
+                export WORKBASE=$HOME/go/src/infini.sh
+                export WORK=$WORKBASE/$PNAME
+
+                cd $WORK && echo
                 git status --porcelain | grep " M .*\.go$"
                 echo "----------------------------------------------------------------------------------"
                 echo "IMPORTANT: Above files are not formatted, please run 'make format' to format them."
@@ -87,24 +92,12 @@ jobs:
               uses: actions/checkout@v4
               with:
                 path: ${{ env.PNAME }}
-                fetch-depth: 0
 
             - name: Checkout framework repository
               uses: actions/checkout@v4
               with:
                 repository: infinilabs/framework
                 path: framework
-
-            - name: Checkout vendor repository
-              uses: actions/checkout@v4
-              with:
-                repository: infinilabs/framework-vendor
-                path: vendor
-
-            - name: Prepare framework tooling path
-              run: |
-                mkdir -p "$RUNNER_TEMP/gopath/src/infini.sh"
-                ln -s "$GITHUB_WORKSPACE/framework" "$RUNNER_TEMP/gopath/src/infini.sh/framework"
 
             - name: Set up go toolchain
               uses: actions/setup-go@v5
@@ -122,11 +115,20 @@ jobs:
             - name: Unit test
               env:
                 GOFLAGS: -tags=ci
-                OLDGOPATH: ${{ runner.temp }}/gopath
               run: |
-                cd $GITHUB_WORKSPACE/$PNAME
+                echo Home path is $HOME
+                export WORKBASE=$HOME/go/src/infini.sh
+                export WORK=$WORKBASE/$PNAME
+
+                mkdir -p $HOME/go/src/
+                ln -s $GITHUB_WORKSPACE $WORKBASE
+
+                ls -lrt $WORKBASE/
+                ls -alrt $WORK
+
+                cd $WORK
                 echo Testing code at $PWD ...
-                make test FRAMEWORK_FOLDER="$GITHUB_WORKSPACE/framework" OFFLINE_BUILD=true
+                make test
     
     code_lint:
         runs-on: ubuntu-latest
@@ -135,24 +137,12 @@ jobs:
               uses: actions/checkout@v4
               with:
                 path: ${{ env.PNAME }}
-                fetch-depth: 0
 
             - name: Checkout framework repository
               uses: actions/checkout@v4
               with:
                 repository: infinilabs/framework
                 path: framework
-
-            - name: Checkout vendor repository
-              uses: actions/checkout@v4
-              with:
-                repository: infinilabs/framework-vendor
-                path: vendor
-
-            - name: Prepare framework tooling path
-              run: |
-                mkdir -p "$RUNNER_TEMP/gopath/src/infini.sh"
-                ln -s "$GITHUB_WORKSPACE/framework" "$RUNNER_TEMP/gopath/src/infini.sh/framework"
 
             - name: Set up go toolchain
               uses: actions/setup-go@v5
@@ -170,8 +160,17 @@ jobs:
             - name: Code lint
               env:
                 GOFLAGS: -tags=ci
-                OLDGOPATH: ${{ runner.temp }}/gopath
               run: |
-                cd $GITHUB_WORKSPACE/$PNAME
+                echo Home path is $HOME
+                export WORKBASE=$HOME/go/src/infini.sh
+                export WORK=$WORKBASE/$PNAME
+
+                mkdir -p $HOME/go/src/
+                ln -s $GITHUB_WORKSPACE $WORKBASE
+
+                ls -lrt $WORKBASE/
+                ls -alrt $WORK
+
+                cd $WORK
                 echo Linting code at $PWD ...
-                make lint FRAMEWORK_FOLDER="$GITHUB_WORKSPACE/framework" OFFLINE_BUILD=true
+                make lint
