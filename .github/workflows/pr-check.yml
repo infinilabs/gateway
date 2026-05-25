@@ -9,7 +9,6 @@ defaults:
     shell: bash
 
 env:
-    GO_VERSION: 1.23.4
     PNAME: gateway
 
 jobs:
@@ -27,19 +26,15 @@ jobs:
                 repository: infinilabs/framework
                 path: framework
 
-            - name: Checkout framework-vendor
-              uses: actions/checkout@v4
-              with:
-                ref: main
-                repository: infinilabs/framework-vendor
-                path: vendor
-
             - name: Set up go toolchain
               uses: actions/setup-go@v5
               with:
-                go-version: ${{ env.GO_VERSION }}
+                go-version-file: gateway/go.mod
                 check-latest: false
                 cache: true
+                cache-dependency-path: |
+                  gateway/go.sum
+                  framework/go.sum
 
             - name: Check go toolchain
               run: go version
@@ -54,7 +49,7 @@ jobs:
                 # for format workspace
                 mkdir -p $HOME/go/src/
                 ln -s $GITHUB_WORKSPACE $WORKBASE
-                
+
                 # check work folder
                 ls -lrt $WORKBASE/
                 ls -alrt $WORK
@@ -109,19 +104,15 @@ jobs:
                 repository: infinilabs/framework
                 path: framework
 
-            - name: Checkout framework-vendor
-              uses: actions/checkout@v4
-              with:
-                ref: main
-                repository: infinilabs/framework-vendor
-                path: vendor
-
             - name: Set up go toolchain
               uses: actions/setup-go@v5
               with:
-                go-version: ${{ env.GO_VERSION }}
+                go-version-file: gateway/go.mod
                 check-latest: false
                 cache: true
+                cache-dependency-path: |
+                  gateway/go.sum
+                  framework/go.sum
 
             - name: Check go toolchain
               run: go version
@@ -137,7 +128,7 @@ jobs:
                 # for test workspace
                 mkdir -p $HOME/go/src/
                 ln -s $GITHUB_WORKSPACE $WORKBASE
-                
+
                 # check work folder
                 ls -lrt $WORKBASE/
                 ls -alrt $WORK
@@ -161,19 +152,15 @@ jobs:
                 repository: infinilabs/framework
                 path: framework
 
-            - name: Checkout framework-vendor
-              uses: actions/checkout@v4
-              with:
-                ref: main
-                repository: infinilabs/framework-vendor
-                path: vendor
-
             - name: Set up go toolchain
               uses: actions/setup-go@v5
               with:
-                go-version: ${{ env.GO_VERSION }}
+                go-version-file: gateway/go.mod
                 check-latest: false
                 cache: true
+                cache-dependency-path: |
+                  gateway/go.sum
+                  framework/go.sum
 
             - name: Check go toolchain
               run: go version
@@ -189,7 +176,7 @@ jobs:
                 # for lint workspace
                 mkdir -p $HOME/go/src/
                 ln -s $GITHUB_WORKSPACE $WORKBASE
-                
+
                 # check work folder
                 ls -lrt $WORKBASE/
                 ls -alrt $WORK
