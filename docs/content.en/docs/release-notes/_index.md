@@ -11,7 +11,9 @@ Information about release notes of INFINI Gateway is provided here.
 ### ❌ Breaking changes  
 ### 🚀 Features  
 ### 🐛 Bug fix  
+- Fix entry startup cleanup so failed reloads do not leave the listener port occupied.
 ### ✈️ Improvements  
+- Pre-initialize `es_scroll` output queues, reduce noisy routing logs, and unify duration/QPS logging for scroll and bulk processing paths.
 
 ## 1.30.2 (2026-03-16)
 ### ❌ Breaking changes  
