@@ -400,7 +400,7 @@ func (processor *ScrollProcessor) processingDocs(data []byte) int {
 
 		//hash := processor.Hash(processor.config.HashFunc, hashBuffer, source)
 
-		partitionID := elastic.GetShardID(7, util.UnsafeStringToBytes(id), processor.config.PartitionSize)
+		partitionID := elastic.GetShardID(processor.client.GetVersion().Major, util.UnsafeStringToBytes(id), processor.config.PartitionSize)
 
 		buffer, ok := docs[partitionID]
 		if !ok {

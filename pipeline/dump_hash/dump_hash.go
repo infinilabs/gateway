@@ -327,7 +327,7 @@ func (processor *DumpHashProcessor) processingDocs(data []byte, outputQueueName 
 
 		hash := processor.Hash(processor.config.HashFunc, source)
 
-		partitionID := elastic.GetShardID(7, util.UnsafeStringToBytes(id), processor.config.PartitionSize)
+		partitionID := elastic.GetShardID(processor.client.GetVersion().Major, util.UnsafeStringToBytes(id), processor.config.PartitionSize)
 
 		buffer, ok := docs[partitionID]
 		if !ok {
