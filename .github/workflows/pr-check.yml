@@ -126,7 +126,7 @@ jobs:
               run: |
                 cd $GITHUB_WORKSPACE/$PNAME
                 echo Testing code at $PWD ...
-                make ci-test FRAMEWORK_FOLDER="$GITHUB_WORKSPACE/framework" OFFLINE_BUILD=true
+                make test FRAMEWORK_FOLDER="$GITHUB_WORKSPACE/framework" OFFLINE_BUILD=true
     
     code_lint:
         runs-on: ubuntu-latest
@@ -174,4 +174,4 @@ jobs:
               run: |
                 cd $GITHUB_WORKSPACE/$PNAME
                 echo Linting code at $PWD ...
-                make ci-lint FRAMEWORK_FOLDER="$GITHUB_WORKSPACE/framework" OFFLINE_BUILD=true GOLANGCI_LINT_FLAGS="--new-from-rev=${{ github.event.pull_request.base.sha }}"
+                make lint FRAMEWORK_FOLDER="$GITHUB_WORKSPACE/framework" OFFLINE_BUILD=true
