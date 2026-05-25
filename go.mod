@@ -6,10 +6,6 @@ replace infini.sh/framework => ../framework
 
 replace github.com/cihub/seelog => ../framework/lib/seelog
 
-replace github.com/dop251/goja => ../vendor/src/github.com/dop251/goja
-
-replace github.com/dop251/goja_nodejs => ../vendor/src/github.com/dop251/goja_nodejs
-
 require (
 	github.com/OneOfOne/xxhash v1.2.8
 	github.com/bsm/extsort v0.6.1
@@ -17,8 +13,8 @@ require (
 	github.com/cespare/xxhash v1.1.0
 	github.com/cihub/seelog v0.0.0-00010101000000-000000000000
 	github.com/dgraph-io/ristretto v0.2.0
-	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
-	github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14
+	github.com/dop251/goja v0.0.0-20220408131256-ffe77e20c6f1
+	github.com/dop251/goja_nodejs v0.0.0-20211022123610-8dd9abb0616d
 	github.com/drewlanenga/govector v0.0.0-20220726163947-b958ac08bc93
 	github.com/emirpasic/gods v1.18.1
 	github.com/fsnotify/fsnotify v1.10.1
