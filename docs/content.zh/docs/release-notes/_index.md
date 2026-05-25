@@ -11,7 +11,9 @@ title: "版本历史"
 ### ❌ Breaking changes  
 ### 🚀 Features  
 ### 🐛 Bug fix  
+- 修复入口启动失败时监听端口未释放的问题，避免 reload 失败后端口仍被占用。
 ### ✈️ Improvements  
+- 预初始化 `es_scroll` 输出队列，减少 `_routing` 相关噪音日志，并统一 scroll 与 bulk 处理路径的耗时/QPS 日志格式。
 
 ## 1.30.2 (2026-03-16)
 ### ❌ Breaking changes  
