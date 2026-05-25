@@ -9,6 +9,5 @@ APP_STATIC_FOLDER := .public
 APP_STATIC_PACKAGE := public
 APP_UI_FOLDER := ui
 APP_PLUGIN_FOLDER := pipeline proxy
-GOMODULE := true
 
 include ../framework/Makefile
