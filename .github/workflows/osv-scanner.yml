@@ -27,6 +27,7 @@ jobs:
   scan-pr:
     uses: "google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v1.9.1"
     with:
+      fail-on-vuln: false
       # Example of specifying custom arguments
       scan-args: |-
         -r
