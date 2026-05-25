@@ -46,12 +46,15 @@ jobs:
                 export WORKBASE=$HOME/go/src/infini.sh
                 export WORK=$WORKBASE/$PNAME
 
+                # for format workspace
                 mkdir -p $HOME/go/src/
                 ln -s $GITHUB_WORKSPACE $WORKBASE
 
+                # check work folder
                 ls -lrt $WORKBASE/
                 ls -alrt $WORK
 
+                # for code format
                 cd $WORK
                 echo Formating code at $PWD ...
                 make format
@@ -63,6 +66,7 @@ jobs:
                 export WORKBASE=$HOME/go/src/infini.sh
                 export WORK=$WORKBASE/$PNAME
 
+                # for foramt check
                 cd $WORK
                 if [[ $(git status --porcelain | grep -c " M .*\.go$") -gt 0 ]]; then
                   echo "go format detected formatting changes"
@@ -78,6 +82,7 @@ jobs:
                 export WORKBASE=$HOME/go/src/infini.sh
                 export WORK=$WORKBASE/$PNAME
 
+                # for foramt check
                 cd $WORK && echo
                 git status --porcelain | grep " M .*\.go$"
                 echo "----------------------------------------------------------------------------------"
@@ -120,12 +125,15 @@ jobs:
                 export WORKBASE=$HOME/go/src/infini.sh
                 export WORK=$WORKBASE/$PNAME
 
+                # for test workspace
                 mkdir -p $HOME/go/src/
                 ln -s $GITHUB_WORKSPACE $WORKBASE
 
+                # check work folder
                 ls -lrt $WORKBASE/
                 ls -alrt $WORK
 
+                # for unit test
                 cd $WORK
                 echo Testing code at $PWD ...
                 make test
@@ -165,12 +173,15 @@ jobs:
                 export WORKBASE=$HOME/go/src/infini.sh
                 export WORK=$WORKBASE/$PNAME
 
+                # for lint workspace
                 mkdir -p $HOME/go/src/
                 ln -s $GITHUB_WORKSPACE $WORKBASE
 
+                # check work folder
                 ls -lrt $WORKBASE/
                 ls -alrt $WORK
 
+                # for code lint
                 cd $WORK
                 echo Linting code at $PWD ...
                 make lint
