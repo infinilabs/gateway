@@ -257,6 +257,18 @@ func (s *session) Event() Event {
 	return s.evt
 }
 
+func init() {
+	// Register common.MapStr as being a simple map[string]interface{} for
+	// treatment within the JS VM.
+	AddSessionHook("_type_mapstr", func(s Session) {
+		s.Runtime().RegisterSimpleMapType(reflect.TypeOf(util.MapStr(nil)),
+			func(i interface{}) map[string]interface{} {
+				return map[string]interface{}(i.(util.MapStr))
+			},
+		)
+	})
+}
+
 type sessionPool struct {
 	New func() *session
 	C   chan *session

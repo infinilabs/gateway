@@ -1,10 +1,14 @@
 module infini.sh/gateway
 
-go 1.26.2
+go 1.25.0
 
 replace infini.sh/framework => ../framework
 
 replace github.com/cihub/seelog => ../framework/lib/seelog
+
+replace github.com/dop251/goja => ../vendor/src/github.com/dop251/goja
+
+replace github.com/dop251/goja_nodejs => ../vendor/src/github.com/dop251/goja_nodejs
 
 require (
 	github.com/OneOfOne/xxhash v1.2.8
