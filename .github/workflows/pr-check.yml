@@ -43,7 +43,10 @@ jobs:
               shell: bash
               run: |
                 echo Home path is $HOME
+                export WORKBASE=$HOME/go/src/infini.sh
                 export WORK=$GITHUB_WORKSPACE/$PNAME
+                mkdir -p $WORKBASE
+                ln -sfn $GITHUB_WORKSPACE/framework $WORKBASE/framework
 
                 # check work folder
                 ls -alrt $WORK
@@ -57,7 +60,10 @@ jobs:
               id: check-changes
               shell: bash
               run: |
+                export WORKBASE=$HOME/go/src/infini.sh
                 export WORK=$GITHUB_WORKSPACE/$PNAME
+                mkdir -p $WORKBASE
+                ln -sfn $GITHUB_WORKSPACE/framework $WORKBASE/framework
 
                 # for foramt check
                 cd $WORK
@@ -72,7 +78,10 @@ jobs:
             - name: Fail workflow if changes after format
               if: steps.check-changes.outputs.changes == 'true'
               run: |
+                export WORKBASE=$HOME/go/src/infini.sh
                 export WORK=$GITHUB_WORKSPACE/$PNAME
+                mkdir -p $WORKBASE
+                ln -sfn $GITHUB_WORKSPACE/framework $WORKBASE/framework
 
                 # for foramt check
                 cd $WORK && echo
@@ -114,7 +123,10 @@ jobs:
                 GOFLAGS: -tags=ci
               run: |
                 echo Home path is $HOME
+                export WORKBASE=$HOME/go/src/infini.sh
                 export WORK=$GITHUB_WORKSPACE/$PNAME
+                mkdir -p $WORKBASE
+                ln -sfn $GITHUB_WORKSPACE/framework $WORKBASE/framework
 
                 # check work folder
                 ls -alrt $WORK
@@ -156,7 +168,10 @@ jobs:
                 GOFLAGS: -tags=ci
               run: |
                 echo Home path is $HOME
+                export WORKBASE=$HOME/go/src/infini.sh
                 export WORK=$GITHUB_WORKSPACE/$PNAME
+                mkdir -p $WORKBASE
+                ln -sfn $GITHUB_WORKSPACE/framework $WORKBASE/framework
 
                 # check work folder
                 ls -alrt $WORK
