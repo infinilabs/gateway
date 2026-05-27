@@ -1,6 +1,7 @@
 name: 'commit-message-check'
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited]
 
 jobs:
   check-commit-message:

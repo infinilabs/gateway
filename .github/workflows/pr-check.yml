@@ -44,14 +44,11 @@ jobs:
               run: |
                 echo Home path is $HOME
                 export WORKBASE=$HOME/go/src/infini.sh
-                export WORK=$WORKBASE/$PNAME
-
-                # for format workspace
-                mkdir -p $HOME/go/src/
-                ln -s $GITHUB_WORKSPACE $WORKBASE
+                export WORK=$GITHUB_WORKSPACE/$PNAME
+                mkdir -p $WORKBASE
+                ln -sfn $GITHUB_WORKSPACE/framework $WORKBASE/framework
 
                 # check work folder
-                ls -lrt $WORKBASE/
                 ls -alrt $WORK
 
                 # for code format
@@ -64,7 +61,9 @@ jobs:
               shell: bash
               run: |
                 export WORKBASE=$HOME/go/src/infini.sh
-                export WORK=$WORKBASE/$PNAME
+                export WORK=$GITHUB_WORKSPACE/$PNAME
+                mkdir -p $WORKBASE
+                ln -sfn $GITHUB_WORKSPACE/framework $WORKBASE/framework
 
                 # for foramt check
                 cd $WORK
@@ -80,7 +79,9 @@ jobs:
               if: steps.check-changes.outputs.changes == 'true'
               run: |
                 export WORKBASE=$HOME/go/src/infini.sh
-                export WORK=$WORKBASE/$PNAME
+                export WORK=$GITHUB_WORKSPACE/$PNAME
+                mkdir -p $WORKBASE
+                ln -sfn $GITHUB_WORKSPACE/framework $WORKBASE/framework
 
                 # for foramt check
                 cd $WORK && echo
@@ -123,14 +124,11 @@ jobs:
               run: |
                 echo Home path is $HOME
                 export WORKBASE=$HOME/go/src/infini.sh
-                export WORK=$WORKBASE/$PNAME
-
-                # for test workspace
-                mkdir -p $HOME/go/src/
-                ln -s $GITHUB_WORKSPACE $WORKBASE
+                export WORK=$GITHUB_WORKSPACE/$PNAME
+                mkdir -p $WORKBASE
+                ln -sfn $GITHUB_WORKSPACE/framework $WORKBASE/framework
 
                 # check work folder
-                ls -lrt $WORKBASE/
                 ls -alrt $WORK
 
                 # for unit test
@@ -171,14 +169,11 @@ jobs:
               run: |
                 echo Home path is $HOME
                 export WORKBASE=$HOME/go/src/infini.sh
-                export WORK=$WORKBASE/$PNAME
-
-                # for lint workspace
-                mkdir -p $HOME/go/src/
-                ln -s $GITHUB_WORKSPACE $WORKBASE
+                export WORK=$GITHUB_WORKSPACE/$PNAME
+                mkdir -p $WORKBASE
+                ln -sfn $GITHUB_WORKSPACE/framework $WORKBASE/framework
 
                 # check work folder
-                ls -lrt $WORKBASE/
                 ls -alrt $WORK
 
                 # for code lint

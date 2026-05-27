@@ -38,7 +38,6 @@ import (
 	"time"
 
 	log "github.com/cihub/seelog"
-	"github.com/j-keck/arping"
 	"infini.sh/framework/core/config"
 	"infini.sh/framework/core/env"
 	"infini.sh/framework/core/errors"
@@ -214,7 +213,7 @@ func (module FloatingIPPlugin) SwitchToActiveMode() {
 
 				log.Trace("announce floating_ip, do arping every 10s")
 				ip := net1.ParseIP(floatingIPConfig.IP)
-				err := arping.GratuitousArpOverIfaceByName(ip, floatingIPConfig.Interface)
+				err := announceFloatingIP(ip, floatingIPConfig.Interface)
 				if err != nil {
 					if util.ContainStr(err.Error(), "unable to open") {
 						panic("please make sure running as root user, or sudo")

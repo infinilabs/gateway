@@ -12,6 +12,7 @@ Information about release notes of INFINI Gateway is provided here.
 ### 🚀 Features  
 ### 🐛 Bug fix  
 - Fix entry startup cleanup so failed reloads do not leave the listener port occupied.
+- Fix PR checks to build Gateway in Go module mode without the legacy GOPATH vendor workspace dependency, and keep cross-platform builds working when `floating_ip` is enabled.
 ### ✈️ Improvements  
 - Pre-initialize `es_scroll` output queues, reduce noisy routing logs, and unify duration/QPS logging for scroll and bulk processing paths.
 
