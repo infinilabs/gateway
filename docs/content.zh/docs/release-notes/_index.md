@@ -12,6 +12,7 @@ title: "版本历史"
 ### 🚀 Features  
 ### 🐛 Bug fix  
 - 修复入口启动失败时监听端口未释放的问题，避免 reload 失败后端口仍被占用。
+- 修复 PR 检查在 Go Modules 模式下对旧 GOPATH vendor 工作区的依赖，并保持启用 `floating_ip` 时跨平台构建可用。
 ### ✈️ Improvements  
 - 预初始化 `es_scroll` 输出队列，减少 `_routing` 相关噪音日志，并统一 scroll 与 bulk 处理路径的耗时/QPS 日志格式。
 
