@@ -257,7 +257,7 @@ Example:
 ```
 web:
   enabled: true
-  embedding_api: true
+  embedding_api: false
   network:
     binding: $[[env.SERV_BINDING]]
   tls:

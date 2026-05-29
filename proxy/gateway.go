@@ -62,6 +62,7 @@ func (module *GatewayModule) Setup() {
 	module.entryPoints = module.loadEntryPoints()
 
 	api := api2.GatewayAPI{}
+	api2.InitSelfAPI()
 	if module.API.Enabled {
 		api.RegisterAPI("")
 	}

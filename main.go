@@ -44,6 +44,7 @@ import (
 	_ "infini.sh/framework/plugins"
 	stats "infini.sh/framework/plugins/stats_statsd"
 	"infini.sh/gateway/config"
+	_ "infini.sh/gateway/internal/managed"
 	_ "infini.sh/gateway/pipeline"
 	"infini.sh/gateway/proxy"
 	"infini.sh/gateway/service/floating_ip"
