@@ -29,7 +29,9 @@ package main
 
 import (
 	_ "expvar"
+	log "github.com/cihub/seelog"
 	"infini.sh/framework"
+	"infini.sh/framework/core/global"
 	"infini.sh/framework/core/module"
 	"infini.sh/framework/modules/api"
 	"infini.sh/framework/modules/elastic"
@@ -49,6 +51,8 @@ import (
 	"infini.sh/gateway/proxy"
 	"infini.sh/gateway/service/floating_ip"
 	"infini.sh/gateway/service/forcemerge"
+	"os"
+	"runtime"
 )
 
 func setup() {
@@ -70,6 +74,24 @@ func setup() {
 }
 
 func start() {
+	defer func() {
+		if !global.Env().IsDebug {
+			if r := recover(); r != nil {
+				var v string
+				switch r.(type) {
+				case error:
+					v = r.(error).Error()
+				case runtime.Error:
+					v = r.(runtime.Error).Error()
+				case string:
+					v = r.(string)
+				}
+				log.Errorf("error on start module [%v]", v)
+				log.Flush()
+				os.Exit(1)
+			}
+		}
+	}()
 	module.Start()
 }
 
