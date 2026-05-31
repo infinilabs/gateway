@@ -324,7 +324,7 @@ metrics:
   logging_queue: logging
   instance:
     enabled: true
-  network:
+    network:
     enabled: true
     summary: true
     sockets: true
