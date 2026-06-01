@@ -29,6 +29,7 @@ package dump_hash
 
 import (
 	"fmt"
+	"os"
 	"path"
 	"runtime"
 	"strconv"
@@ -157,7 +158,9 @@ func (processor *DumpHashProcessor) Process(c *pipeline.Context) error {
 		for i := 0; i < processor.config.PartitionSize; i += 1 {
 			file := path.Join(global.Env().GetDataDir(), "diff", processor.config.Output+"-"+strconv.Itoa(i))
 			err := util.FileDelete(file)
-			log.Infof("deleting old dump file [%s], err: %v", file, err)
+			if err != nil && !os.IsNotExist(err) {
+				log.Warnf("failed to delete old dump file [%s]: %v", file, err)
+			}
 		}
 	}
 
