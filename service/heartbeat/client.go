@@ -8,6 +8,7 @@ import (
 	"infini.sh/framework/core/global"
 	"net"
 	"runtime"
+	"sync"
 	"time"
 )
 
@@ -23,9 +24,10 @@ var (
 )
 
 type Client struct {
-	Dch chan bool
-	Rch chan []byte
-	Wch chan []byte
+	Dch  chan bool
+	Rch  chan []byte
+	Wch  chan []byte
+	once sync.Once
 }
 
 func New() *Client {
@@ -38,9 +40,14 @@ func New() *Client {
 }
 
 func (client *Client) Stop() {
-	close(client.Dch)
-	close(client.Rch)
-	close(client.Wch)
+	client.once.Do(func() {
+		close(client.Dch)
+	})
+}
+
+// signalDone safely signals disconnection without panicking on closed channel
+func (client *Client) signalDone() {
+	client.Stop()
 }
 
 func (client *Client) Start(host string, port int, dialTimeoutInMs, rwTimeoutInMs int, onConnect, onDisconnect func()) error {
@@ -90,14 +97,14 @@ func (client *Client) ClientHandler(rwTimeoutInMs int, conn *net.TCPConn) {
 		conn.SetWriteDeadline(time.Now().Add(time.Duration(rwTimeoutInMs) * time.Millisecond))
 		_, err := conn.Write([]byte{Req_REGISTER, '#', '2'})
 		if err != nil {
-			client.Dch <- true
+			client.signalDone()
 			break
 		}
 
 		conn.SetReadDeadline(time.Now().Add(time.Duration(rwTimeoutInMs) * time.Millisecond))
 		_, err = conn.Read(data)
 		if err != nil {
-			client.Dch <- true
+			client.signalDone()
 			break
 		}
 		if data[0] == Res_REGISTER {
@@ -132,34 +139,37 @@ func (client *Client) ClientRHandler(rwTimeoutInMs int, conn *net.TCPConn) {
 		data := make([]byte, 128)
 		err := conn.SetReadDeadline(time.Now().Add(time.Duration(rwTimeoutInMs) * time.Millisecond))
 		if err != nil {
-			client.Dch <- true
+			client.signalDone()
 			return
 		}
 		i, err := conn.Read(data)
 		if err != nil {
-			client.Dch <- true
+			client.signalDone()
 			return
 		}
 		if i == 0 {
-			client.Dch <- true
+			client.signalDone()
 			return
 		}
 		err = conn.SetWriteDeadline(time.Now().Add(time.Duration(rwTimeoutInMs) * time.Millisecond))
 		if err != nil {
-			client.Dch <- true
+			client.signalDone()
 			return
 		}
 		if data[0] == Req_HEARTBEAT {
 			_, err = conn.Write([]byte{Res_REGISTER, '#', 'h'})
 			if err != nil {
-				client.Dch <- true
+				client.signalDone()
 				return
 			}
 		} else if data[0] == Req {
-			client.Rch <- data[2:]
+			select {
+			case client.Rch <- data[2:i]:
+			default:
+			}
 			_, err = conn.Write([]byte{Res, '#'})
 			if err != nil {
-				client.Dch <- true
+				client.signalDone()
 				return
 			}
 		}
@@ -189,14 +199,16 @@ func (client *Client) ClientWHandler(rwTimeoutInMs int, conn net.Conn) {
 		case msg := <-client.Wch:
 			err := conn.SetWriteDeadline(time.Now().Add(time.Duration(rwTimeoutInMs) * time.Millisecond))
 			if err != nil {
-				client.Dch <- true
+				client.signalDone()
 				return
 			}
 			_, err = conn.Write(msg)
 			if err != nil {
-				client.Dch <- true
+				client.signalDone()
 				return
 			}
+		case <-client.Dch:
+			return
 		}
 	}
 
@@ -223,7 +235,13 @@ func (client *Client) ClientWork() {
 	for {
 		select {
 		case _ = <-client.Rch:
-			client.Wch <- []byte{Req, '#', 'x', 'x', 'x', 'x', 'x'}
+			select {
+			case client.Wch <- []byte{Req, '#', 'x', 'x', 'x', 'x', 'x'}:
+			case <-client.Dch:
+				return
+			}
+		case <-client.Dch:
+			return
 		}
 	}
 }

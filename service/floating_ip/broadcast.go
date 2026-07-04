@@ -96,6 +96,10 @@ func ServeMulticastDiscovery(config *FloatingIPConfig, h func(*net.UDPAddr, int,
 		n, src, err := l.ReadFromUDP(b)
 		if err != nil {
 			log.Error("read from UDP failed:", err)
+			continue
+		}
+		if n == 0 || src == nil {
+			continue
 		}
 		h(src, n, b)
 	}

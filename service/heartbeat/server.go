@@ -73,7 +73,10 @@ func PushGRT() {
 		time.Sleep(3 * time.Second)
 		lock.RLock()
 		for _, v := range CMap {
-			v.Wch <- []byte{Req, '#', 'p', 'u', 's', 'h', '!'}
+			select {
+			case v.Wch <- []byte{Req, '#', 'p', 'u', 's', 'h', '!'}:
+			case <-time.After(2 * time.Second):
+			}
 		}
 		lock.RUnlock()
 	}
