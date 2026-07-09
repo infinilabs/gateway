@@ -143,3 +143,7 @@ params:
   # /!\ This is an experimental feature, might be removed or changed at any time
   # (Optional, experimental, default false) Enables service worker that caches visited pages and resources for offline use.
   BookServiceWorker: false
+
+  # (Optional, default false) Enables search box in the header.
+  BookSearchBox: true
+  BookSearchWidget: "https://coco.infini.cloud/integration/d95h826k7e3tu0abbbeg/widget"
