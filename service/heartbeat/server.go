@@ -95,10 +95,14 @@ func PushGRT() {
 
 	for {
 		time.Sleep(3 * time.Second)
+		lock.RLock()
 		for _, v := range CMap {
-			//fmt.Println("push msg to user:" + k)
-			v.Wch <- []byte{Req, '#', 'p', 'u', 's', 'h', '!'}
+			select {
+			case v.Wch <- []byte{Req, '#', 'p', 'u', 's', 'h', '!'}:
+			case <-time.After(2 * time.Second):
+			}
 		}
+		lock.RUnlock()
 	}
 }
 
