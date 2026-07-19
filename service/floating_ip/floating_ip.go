@@ -293,8 +293,13 @@ func (module FloatingIPPlugin) SwitchToStandbyMode(latency time.Duration) {
 	}
 
 	task.RunWithinGroup("standby", func(ctx context.Context) error {
+<<<<<<< HEAD
 		aliveChan := make(chan bool)
 		client := heartbeat.New()
+=======
+		aliveChan := make(chan bool, 1)
+		client:=heartbeat.New()
+>>>>>>> origin/release/v1.25.2
 		go func() {
 			defer func() {
 				if !global.Env().IsDebug {
@@ -311,13 +316,22 @@ func (module FloatingIPPlugin) SwitchToStandbyMode(latency time.Duration) {
 						log.Error(v)
 					}
 				}
-				aliveChan <- false
+				select {
+				case aliveChan <- false:
+				default:
+				}
 			}()
 			log.Tracef("check floating_ip echo_port:%v", floatingIPConfig.Echo.EchoPort)
 			client.Start(floatingIPConfig.IP, floatingIPConfig.Echo.EchoPort, floatingIPConfig.Echo.EchoDialTimeout, floatingIPConfig.Echo.EchoTimeout, func() {
-				aliveChan <- true
+				select {
+				case aliveChan <- true:
+				default:
+				}
 			}, func() {
-				aliveChan <- false
+				select {
+				case aliveChan <- false:
+				default:
+				}
 			})
 		}()
 
@@ -475,8 +489,13 @@ func (module FloatingIPPlugin) StateMachine() {
 		}
 	}()
 
+<<<<<<< HEAD
 	client := heartbeat.New()
 	aliveChan := make(chan bool)
+=======
+	client:=heartbeat.New()
+	aliveChan := make(chan bool, 1)
+>>>>>>> origin/release/v1.25.2
 	go func() {
 		defer func() {
 			if !global.Env().IsDebug {
@@ -496,12 +515,21 @@ func (module FloatingIPPlugin) StateMachine() {
 		}()
 
 		err := client.Start(floatingIPConfig.IP, floatingIPConfig.Echo.EchoPort, floatingIPConfig.Echo.EchoDialTimeout, floatingIPConfig.Echo.EchoTimeout, func() {
-			aliveChan <- true
+			select {
+			case aliveChan <- true:
+			default:
+			}
 		}, func() {
-			aliveChan <- false
+			select {
+			case aliveChan <- false:
+			default:
+			}
 		})
 		if err != nil {
-			aliveChan <- false
+			select {
+			case aliveChan <- false:
+			default:
+			}
 		}
 	}()
 
