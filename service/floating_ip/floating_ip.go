@@ -293,13 +293,8 @@ func (module FloatingIPPlugin) SwitchToStandbyMode(latency time.Duration) {
 	}
 
 	task.RunWithinGroup("standby", func(ctx context.Context) error {
-<<<<<<< HEAD
-		aliveChan := make(chan bool)
-		client := heartbeat.New()
-=======
 		aliveChan := make(chan bool, 1)
-		client:=heartbeat.New()
->>>>>>> origin/release/v1.25.2
+		client := heartbeat.New()
 		go func() {
 			defer func() {
 				if !global.Env().IsDebug {
@@ -489,13 +484,8 @@ func (module FloatingIPPlugin) StateMachine() {
 		}
 	}()
 
-<<<<<<< HEAD
 	client := heartbeat.New()
-	aliveChan := make(chan bool)
-=======
-	client:=heartbeat.New()
 	aliveChan := make(chan bool, 1)
->>>>>>> origin/release/v1.25.2
 	go func() {
 		defer func() {
 			if !global.Env().IsDebug {

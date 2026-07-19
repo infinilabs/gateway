@@ -213,20 +213,10 @@ func ServerWHandler(conn net.Conn, C *CS) {
 		case d := <-C.Wch:
 			conn.Write(d)
 		case <-ticker.C:
-<<<<<<< HEAD
-			if _, ok := CMap[C.u]; !ok {
-				//fmt.Println("conn die, close ClientWHandler")
-				// send close sing，ServerHandler can close the connection
-				select {
-				case C.Dch <- true:
-				default:
-				}
-=======
 			lock.RLock()
 			_, ok := CMap[C.u]
 			lock.RUnlock()
 			if !ok {
->>>>>>> origin/release/v1.25.2
 				return
 			}
 		}
