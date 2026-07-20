@@ -13,6 +13,8 @@ title: "版本历史"
 ### 🐛 Bug fix  
 - 修复入口启动失败时监听端口未释放的问题，避免 reload 失败后端口仍被占用。
 - 修复 PR 检查在 Go Modules 模式下对旧 GOPATH vendor 工作区的依赖，并保持启用 `floating_ip` 时跨平台构建可用。
+- 修复心跳 `ServerHandler` 中因客户端连接后立即断开（如端口扫描、健康检查探针）导致的忙循环高 CPU 问题。
+- 修复心跳和 `floating_ip` 模块中的多个并发 bug：使用 `sync.Once` 替换先关闭再发送的模式、为 `PushGRT` 通道写入添加超时、使用带缓冲的 `aliveChan` 防止 goroutine 泄漏、为 `CMap` 并发访问添加读锁保护。
 ### ✈️ Improvements  
 - 预初始化 `es_scroll` 输出队列，减少 `_routing` 相关噪音日志，并统一 scroll 与 bulk 处理路径的耗时/QPS 日志格式。
 

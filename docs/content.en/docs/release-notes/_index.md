@@ -13,6 +13,8 @@ Information about release notes of INFINI Gateway is provided here.
 ### 🐛 Bug fix  
 - Fix entry startup cleanup so failed reloads do not leave the listener port occupied.
 - Fix PR checks to build Gateway in Go module mode without the legacy GOPATH vendor workspace dependency, and keep cross-platform builds working when `floating_ip` is enabled.
+- Fix busy-loop in heartbeat `ServerHandler` causing high CPU when clients connect then immediately disconnect (e.g. port scans, health check probes).
+- Fix multiple concurrency bugs in heartbeat and `floating_ip` modules: replace close-then-send pattern with `sync.Once` based `Stop()`, add timeout on `PushGRT` channel writes, use buffered `aliveChan` to prevent goroutine leaks, and add read lock protection for concurrent `CMap` access.
 ### ✈️ Improvements  
 - Pre-initialize `es_scroll` output queues, reduce noisy routing logs, and unify duration/QPS logging for scroll and bulk processing paths.
 
