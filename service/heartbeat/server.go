@@ -110,11 +110,9 @@ func server(listen *net.TCPListener) {
 	for {
 		conn, err := listen.AcceptTCP()
 		if err != nil {
-			//fmt.Println("Accept client connection exception:", err.Error())
+			time.Sleep(100 * time.Millisecond)
 			continue
 		}
-		//fmt.Println("client connections from:", conn.RemoteAddr())
-		// handler goroutine
 		go ServerHandler(conn)
 	}
 }
@@ -144,23 +142,30 @@ func ServerHandler(conn net.Conn) {
 	data := make([]byte, 128)
 	var uid string
 	var C *CS
+
+	// Set a deadline for the registration phase to prevent indefinite blocking
+	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+
 	for {
-		conn.Read(data)
-		//fmt.Println("data sent from the client:", string(data))
+		n, err := conn.Read(data)
+		if err != nil || n == 0 {
+			return
+		}
 		if data[0] == Req_REGISTER { // register
 			conn.Write([]byte{Res_REGISTER, '#', 'o', 'k'})
-			uid = string(data[2:])
+			uid = string(data[2:n])
 			C = NewCs(uid)
 			lock.Lock()
 			CMap[uid] = C
 			lock.Unlock()
-			//fmt.Println("register client")
-			//fmt.Println(uid)
 			break
 		} else {
 			conn.Write([]byte{Res_REGISTER, '#', 'e', 'r'})
 		}
 	}
+
+	// Clear the deadline after successful registration
+	conn.SetReadDeadline(time.Time{})
 	//	ClientWHandler
 	go ServerWHandler(conn, C)
 
@@ -208,13 +213,10 @@ func ServerWHandler(conn net.Conn, C *CS) {
 		case d := <-C.Wch:
 			conn.Write(d)
 		case <-ticker.C:
-			if _, ok := CMap[C.u]; !ok {
-				//fmt.Println("conn die, close ClientWHandler")
-				// send close sing，ServerHandler can close the connection
-				select {
-				case C.Dch <- true:
-				default:
-				}
+			lock.RLock()
+			_, ok := CMap[C.u]
+			lock.RUnlock()
+			if !ok {
 				return
 			}
 		}
