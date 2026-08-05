@@ -2,8 +2,7 @@ env:
   LR_GATEWAY_HOST: 127.0.0.1:8001
   LR_GATEWAY_API_HOST: 127.0.0.1:9000
   ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
-  # ES_DATA_PATH: /home/runner/es_install_dir/data
-  ES_DATA_PATH: /Users/steve/go/src/infini.sh/agent/data/agent/nodes/d9gvlf28sigcli1dicpg/services/easysearch/d9k6eqa8sig0jagunfq0/assets/easysearch/data
+  ES_DATA_PATH: /home/runner/es_install_dir/data
   MINIO_API_HOST: 127.0.0.1:16426
   MINIO_TEST_BUCKET: test-bucket
 
