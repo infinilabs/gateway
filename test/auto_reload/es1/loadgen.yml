@@ -28,12 +28,12 @@ requests:
       equals:
         _ctx.response.status: 404
   - request:
-      method: POST
-      url: http://$[[env.LR_GATEWAY_API_HOST]]/config
+      method: PUT
+      url: http://$[[env.LR_GATEWAY_API_HOST]]/config/
       body: |
         {
           "configs": {
-            "flow": "flow:\n  - filter:\n    - set_context:\n        context:\n          _ctx.request.path: /company_basic/_search\n    - request_path_limiter:\n        rules:\n          - pattern: /(?P\u003cindex_name\u003ecompany_basic)/_search\n            max_qps: 200\n            group: index_name\n            message: 'out of the limit : 200'\n    - basic_auth:\n        valid_users:\n          zk: '1234'\n    - elasticsearch:\n        elasticsearch: es-710-test\n        refresh:\n          interval: 30s\n          enabled: true\n    name: es-710-test_company_basic\n"
+            "flow.yml": "flow:\n  - filter:\n    - set_context:\n        context:\n          _ctx.request.path: /company_basic/_search\n    - request_path_limiter:\n        rules:\n          - pattern: /(?P\u003cindex_name\u003ecompany_basic)/_search\n            max_qps: 200\n            group: index_name\n            message: 'out of the limit : 200'\n    - basic_auth:\n        valid_users:\n          zk: '1234'\n    - elasticsearch:\n        elasticsearch: es-710-test\n        refresh:\n          interval: 30s\n          enabled: true\n    name: es-710-test_company_basic\n"
           }
         }
     assert:

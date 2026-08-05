@@ -2,6 +2,8 @@ env:
   LR_GATEWAY_HOST: 127.0.0.1:8001
   LR_GATEWAY_API_HOST: 127.0.0.1:9000
   ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+  ELASTICSEARCH_ENDPOINT_BROKEN: http://127.0.0.1:65523
+
 runner:
   total_rounds: 1
   no_warm: true
@@ -16,12 +18,12 @@ requests:
       equals:
         _ctx.response.status: 503
   - request:
-      method: POST
-      url: http://$[[env.LR_GATEWAY_API_HOST]]/config
+      method: PUT
+      url: http://$[[env.LR_GATEWAY_API_HOST]]/config/
       body: |
         {
           "configs": {
-            "es": "elasticsearch:\n  - name: es-server\n    enabled: true\n    endpoints:\n     - $[[env.ELASTICSEARCH_ENDPOINT]]\n"
+            "es.yml": "elasticsearch:\n  - name: es-server\n    enabled: true\n    endpoints:\n     - $[[env.ELASTICSEARCH_ENDPOINT]]\n"
           }
         }
     assert:
@@ -36,12 +38,12 @@ requests:
       equals:
         _ctx.response.status: 200
   - request:
-      method: POST
-      url: http://$[[env.LR_GATEWAY_API_HOST]]/config
+      method: PUT
+      url: http://$[[env.LR_GATEWAY_API_HOST]]/config/
       body: |
         {
           "configs": {
-            "es": "elasticsearch:\n  - name: es-server\n    enabled: true\n    endpoints:\n     - $[[env.ELASTICSEARCH_ENDPOINT_BROKEN]]\n"
+            "es.yml": "elasticsearch:\n  - name: es-server\n    enabled: true\n    endpoints:\n     - $[[env.ELASTICSEARCH_ENDPOINT_BROKEN]]\n"
           }
         }
     assert:

@@ -17,12 +17,12 @@ requests:
         _ctx.response.status: 200
         _ctx.response.body: hello world
   - request:
-      method: POST
-      url: http://$[[env.LR_GATEWAY_API_HOST]]/config
+      method: PUT
+      url: http://$[[env.LR_GATEWAY_API_HOST]]/config/
       body: |
         {
           "configs": {
-            "flow": "flow:\n  - name: hello\n    filter:\n      - echo:\n          message: 'hello infini'\n"
+            "flow.yml": "flow:\n  - name: hello\n    filter:\n      - echo:\n          message: 'hello infini'\n"
           }
         }
     assert:

@@ -43,7 +43,6 @@ type Elasticsearch struct {
 	param.Parameters
 	config   *ProxyConfig
 	instance *ReverseProxy
-	metadata *elastic.ElasticsearchMetadata
 }
 
 func (filter *Elasticsearch) Name() string {
@@ -121,7 +120,6 @@ func New(c *config.Config) (pipeline.Filter, error) {
 	}
 
 	runner := Elasticsearch{config: &cfg}
-	runner.metadata = elastic.GetMetadata(cfg.Elasticsearch)
 
 	runner.instance = NewReverseProxy(&cfg)
 
@@ -130,9 +128,8 @@ func New(c *config.Config) (pipeline.Filter, error) {
 	return &runner, nil
 }
 
+// Metadata is replaced with a new object on config reload, so it must be
+// looked up every time instead of cached on the filter.
 func (filter *Elasticsearch) getMetadata() *elastic.ElasticsearchMetadata {
-	if filter.metadata == nil {
-		filter.metadata = elastic.GetMetadata(filter.config.Elasticsearch)
-	}
-	return filter.metadata
+	return elastic.GetMetadata(filter.config.Elasticsearch)
 }
