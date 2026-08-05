@@ -44,7 +44,7 @@ elasticsearch:
 
 pipeline:
   - name: index_diff_service
-    auto_start: true
+    auto_start: false
     keep_running: false
     processor:
     - dag:
@@ -75,7 +75,7 @@ pipeline:
           - index_diff:
               diff_queue: "diff_result"
               buffer_size: 10
-              text_report: true #如果要存 es，这个开关关闭，开启 pipeline 的 diff_result_ingest 任务
+              text_report: false #如果要存 es，这个开关关闭，开启 pipeline 的 diff_result_ingest 任务
               source_queue: 'source_docs'
               target_queue: 'target_docs'
   - name: diff_result_ingest
