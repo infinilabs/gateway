@@ -9,8 +9,6 @@ runner:
   assert_invalid: true
   assert_error: true
 requests:
-  - sleep:
-      sleep_in_milli_seconds: 2500  
   - request:
       method: DELETE
       url: http://$[[env.LR_GATEWAY_HOST]]/es_migration-test
