@@ -1,7 +1,6 @@
 env:
   LR_GATEWAY_HOST: 127.0.0.1:8001
-  LR_GATEWAY_API_HOST: 127.0.0.1:9000
-  ELASTICSEARCH_ENDPOINTS: ["http://127.0.0.1:9200","http://127.0.0.1:9200"]
+
 runner:
   total_rounds: 1
   no_warm: true

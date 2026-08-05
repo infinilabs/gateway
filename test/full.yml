@@ -3,7 +3,7 @@ env:
   SUITES_NAME: full
 
 tests:
-  - path: test/auto_reload/elasticsearch
+  # - path: test/auto_reload/elasticsearch
   # - path: test/auto_reload/entry
   # - path: test/auto_reload/entry_ipv6
   # - path: test/auto_reload/es1
@@ -80,7 +80,7 @@ tests:
   # - path: test/pipelines/api
   # - path: test/pipelines/es_scroll/es_in_processor
   # - path: test/pipelines/logging
-  # - path: test/proxy/elasticsearch-proxy
+  - path: test/proxy/elasticsearch-proxy
   # - path: test/routing/404-fallback-to-slave
   # - path: test/routing/context_switch
   # - path: test/routing/cross-cluster-search

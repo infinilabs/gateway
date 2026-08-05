@@ -1,7 +1,8 @@
 env:
   LR_GATEWAY_HOST: 127.0.0.1:8001
   LR_GATEWAY_API_HOST: 127.0.0.1:9000
-  ELASTICSEARCH_ENDPOINT: ['127.0.0.1:88','127.0.0.1']
+  ELASTICSEARCH_ENDPOINTS: ["http://127.0.0.1:9200","http://127.0.0.1:9200"]
+
 path.data: data
 path.logs: log
 
@@ -38,7 +39,7 @@ router:
 elasticsearch:
   - name: es-server
     enabled: true
-    endpoints: $[[env.ELASTICSEARCH_ENDPOINT]]
+    endpoints: $[[env.ELASTICSEARCH_ENDPOINTS]]
     discovery:
       enabled: true
       refresh:
