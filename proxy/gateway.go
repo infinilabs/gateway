@@ -200,50 +200,98 @@ func (module *GatewayModule) handleConfigureChange() {
 				return
 			}
 
-			//each entry should reuse port
-			//collect old entry with same id and same port
+			// Build the desired entrypoint set from the new config: entries
+			// identical to a running one are kept untouched (skipKeys), only
+			// changed or new entries get a fresh Entrypoint.
 			old := module.entryPoints
-			existKeys := map[string]string{}
-			skipKeys := map[string]string{}
+			// ids whose config is unchanged, old entrypoint is kept as-is
+			skipKeys := map[string]struct{}{}
+			// ids with changed or new config, require a fresh entrypoint
 			entryPoints := map[string]*entry.Entrypoint{}
 
 			for _, v := range newConfig {
-
 				if v.ID == "" && v.Name != "" {
 					v.ID = v.Name
 				}
 
 				oldC, ok := old[v.ID]
 				if ok {
-					existKeys[v.ID] = v.ID
 					config := oldC.GetConfig()
 					if config.Equals(&v) {
-						skipKeys[v.ID] = v.ID
+						skipKeys[v.ID] = struct{}{}
 						continue
 					}
 				}
 
-				//if !module.DisableReusePortByDefault {
-				//	v.NetworkConfig.ReusePort = true
-				//}
+				applyDefaultReusePort(&v, module.DisableReusePortByDefault)
 				e := entry.NewEntrypoint(v)
 				entryPoints[v.ID] = e
 			}
 
+			// This file change did not add new entries or modify existing entries, nothing to do.
 			if len(entryPoints) == 0 {
 				return
 			}
 
-			log.Debug("starting new entry points")
-			for _, v := range entryPoints {
-				v.Start()
+			// Switching to the new entrypoints runs in three phases. The new
+			// entries fall into two groups by their reuse_port setting:
+			// reuse_port=false entries cannot bind while the old listener is
+			// still running ("address already in use"), so their predecessors
+			// must be stopped first; reuse_port=true entries rely on
+			// SO_REUSEPORT to bind alongside the old listener, which enables a
+			// zero-downtime start-then-stop switch.
+			//
+			// 1. Stop the old entrypoints whose replacement cannot reuse the port.
+			stoppedOld := map[string]*entry.Entrypoint{}
+			for id, e := range entryPoints {
+				if e.GetConfig().NetworkConfig.ReusePortEnabled() {
+					continue
+				}
+				if oldC, ok := old[id]; ok {
+					log.Trace("stopping ", oldC.GetNameOrID())
+					oldC.Stop()
+					stoppedOld[id] = oldC
+				}
 			}
 
+			// 2. Start all new entrypoints. Each start is isolated so one
+			// failure does not abort the others; when the old entrypoint was
+			// stopped in phase 1, roll back to it so the port keeps serving
+			// the old config.
+			log.Debug("starting new entry points")
+			for id, e := range entryPoints {
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Error("error on start entry ", e.GetNameOrID(), ", ", r)
+							delete(entryPoints, id)
+							if oldC, ok := stoppedOld[id]; ok {
+								log.Debug("rollback to old entry: ", oldC.GetNameOrID())
+								if err := oldC.Start(); err != nil {
+									log.Error("error on rollback entry ", oldC.GetNameOrID(), ", ", err)
+								} else {
+									entryPoints[id] = oldC
+									delete(stoppedOld, id)
+								}
+							}
+						}
+					}()
+					e.Start()
+				}()
+			}
+
+			// 3. Stop the remaining old entrypoints: those replaced by
+			// reuse_port=true entries and those no longer present in the new
+			// config. Unchanged entries (skipKeys) and entries already stopped
+			// in phase 1 are skipped.
 			log.Debug("stopping old entry points")
-			for _, v := range old {
-				_, ok := skipKeys[v.GetConfig().ID]
+			for id, v := range old {
+				_, ok := skipKeys[id]
 				if ok {
-					entryPoints[v.GetConfig().ID] = v
+					entryPoints[id] = v
+					continue
+				}
+				if _, ok := stoppedOld[id]; ok {
 					continue
 				}
 				v.Stop()
@@ -298,9 +346,7 @@ func (module *GatewayModule) loadEntryPoints() map[string]*entry.Entrypoint {
 	log.Trace("num of entry configs:", len(entryConfigs))
 	entryPoints := map[string]*entry.Entrypoint{}
 	for _, v := range entryConfigs {
-		//if !module.DisableReusePortByDefault {
-		//	v.NetworkConfig.ReusePort = true
-		//}
+		applyDefaultReusePort(&v, module.DisableReusePortByDefault)
 		e := entry.NewEntrypoint(v)
 		if v.ID == "" && v.Name != "" {
 			v.ID = v.Name
@@ -308,6 +354,15 @@ func (module *GatewayModule) loadEntryPoints() map[string]*entry.Entrypoint {
 		entryPoints[v.ID] = e
 	}
 	return entryPoints
+}
+
+// Helper function to fill in the default reuse_port for entries that do not
+// configure it explicitly, leaving per-entry values untouched.
+func applyDefaultReusePort(cfg *common.EntryConfig, disableReuseByDefault bool) {
+	if cfg.NetworkConfig.ReusePort == nil {
+		reuse := !disableReuseByDefault
+		cfg.NetworkConfig.ReusePort = &reuse
+	}
 }
 
 func (module *GatewayModule) Start() error {

@@ -5,6 +5,7 @@ env:
 tests:
   - path: test/auto_reload/elasticsearch
   - path: test/auto_reload/entry
+  - path: test/auto_reload/entry_ipv6
   - path: test/auto_reload/es1
   - path: test/auto_reload/flow
   - path: test/auto_reload/router

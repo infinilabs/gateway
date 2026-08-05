@@ -45,6 +45,7 @@ import (
 	r "infini.sh/framework/lib/router"
 	"infini.sh/gateway/common"
 	"net"
+	"net/netip"
 	"os"
 	"path"
 	"runtime"
@@ -82,13 +83,13 @@ func (this *Entrypoint) Start() error {
 		return nil
 	}
 
-	if this.config.NetworkConfig.ReusePort == this.config.NetworkConfig.SkipOccupiedPort && this.config.NetworkConfig.ReusePort == true {
+	if this.config.NetworkConfig.ReusePortEnabled() && this.config.NetworkConfig.SkipOccupiedPort {
 		return errors.New("port reuse and skip occupied can't be enabled at the same time for entry:" + this.config.Name)
 	}
 
 	this.listenAddress = this.config.NetworkConfig.GetBindingAddr()
 
-	if !this.config.NetworkConfig.ReusePort && this.config.NetworkConfig.SkipOccupiedPort {
+	if !this.config.NetworkConfig.ReusePortEnabled() && this.config.NetworkConfig.SkipOccupiedPort {
 		this.listenAddress = util.AutoGetAddress(this.config.NetworkConfig.GetBindingAddr())
 		log.Trace("auto skip address ", this.listenAddress)
 	}
@@ -254,9 +255,16 @@ func (this *Entrypoint) Start() error {
 		}
 	}()
 
-	if this.config.NetworkConfig.ReusePort && !strings.Contains(this.listenAddress, "::") {
+	if this.config.NetworkConfig.ReusePortEnabled() {
+		// reuseport.Listen requires the network to match the address family.
+		network := "tcp4"
+		if host, _, err := net.SplitHostPort(this.listenAddress); err == nil {
+			if ip, err := netip.ParseAddr(host); err == nil && ip.Is6() {
+				network = "tcp6"
+			}
+		}
 		log.Debug("reuse port ", this.listenAddress)
-		ln, err = reuseport.Listen("tcp4", this.config.NetworkConfig.GetBindingAddr())
+		ln, err = reuseport.Listen(network, this.config.NetworkConfig.GetBindingAddr())
 	} else {
 		ln, err = net.Listen("tcp", this.listenAddress)
 	}
