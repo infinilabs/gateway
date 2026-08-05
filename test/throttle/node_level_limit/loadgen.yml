@@ -9,7 +9,9 @@ runner:
   assert_invalid: true
   assert_error: true
 requests:
-  # NOTE: time.RateLimiter will block request at the first second
+  # With max_qps_per_node=1 the limiter starts with a full bucket, so the
+  # first request passes immediately; every later request is throttled and
+  # sleeps ~1s before its token is refilled.
   - request:
       method: POST
       url: http://$[[env.LR_GATEWAY_HOST]]/_bulk
@@ -17,11 +19,8 @@ requests:
         { "create" : { "_index" : "test1", "_id" : "1" } }
         { "field1" : "value3" }
     assert:
-      and:
-        - equals:
-            _ctx.response.status: 200
-        - range:
-            _ctx.elapsed.gte: 1000
+      equals:
+        _ctx.response.status: 200
   - request:
       method: POST
       url: http://$[[env.LR_GATEWAY_HOST]]/_bulk
@@ -32,6 +31,8 @@ requests:
       and:
         - equals:
             _ctx.response.status: 200
+        - range:
+            _ctx.elapsed.gte: 1000
   - request:
       method: DELETE
       url: http://$[[env.LR_GATEWAY_HOST]]/test1

@@ -27,8 +27,9 @@ elasticsearch:
     endpoints:
       - $[[env.ELASTICSEARCH_ENDPOINT]]
     traffic_control: #global traffic control
+      enabled: true
       max_bps_per_node: 209715200 #max total bytes send to es per node, 200MB/s
-      max_wait_time_in_ms: 1000
+      max_wait_time_in_ms: 10000
       max_qps_per_node: 1 #max total requests send to es per node, 1/s
     discovery:
       enabled: false

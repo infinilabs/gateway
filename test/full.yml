@@ -80,7 +80,7 @@ tests:
   # - path: test/pipelines/api
   # - path: test/pipelines/es_scroll/es_in_processor
   # - path: test/pipelines/logging
-  - path: test/proxy/elasticsearch-proxy
+  # - path: test/proxy/elasticsearch-proxy
   # - path: test/routing/404-fallback-to-slave
   # - path: test/routing/context_switch
   # - path: test/routing/cross-cluster-search
@@ -94,7 +94,7 @@ tests:
   # - path: test/template/config_template
   # - path: test/throttle/bulk_requests_limit
   # - path: test/throttle/limit_response_payload_size
-  # - path: test/throttle/node_level_limit
+  - path: test/throttle/node_level_limit
   # - path: test/throttle/throttle_per_read_write
   # - path: test/transform/context_parse
   # - path: test/transform/convert-search-to-msearch
