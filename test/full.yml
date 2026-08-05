@@ -3,100 +3,100 @@ env:
   SUITES_NAME: full
 
 tests:
-  # - path: test/auto_reload/elasticsearch
-  # - path: test/auto_reload/entry
-  # - path: test/auto_reload/entry_ipv6
-  # - path: test/auto_reload/es1
-  # - path: test/auto_reload/flow
-  # - path: test/auto_reload/router
-  # - path: test/common/api
-  # - path: test/easysearch/esrally
-  # - path: test/echo/dump_context
-  # - path: test/echo/echo_with_context
-  # - path: test/echo/hello_world
-  # - path: test/elasticsearch/elasticsearch-lookup
-  # - path: test/elasticsearch/elasticsearch-route-by-index
-  # - path: test/elasticsearch/elasticsearch-with-cache
-  # - path: test/elasticsearch/elasticsearch-with-cache-plus
-  # - path: test/elasticsearch/es_migration/bulk_indexing_es_config
-  # - path: test/elasticsearch/es_migration/common
-  # - path: test/elasticsearch/es_migration/match_by_label
+  - path: test/auto_reload/elasticsearch
+  - path: test/auto_reload/entry
+  - path: test/auto_reload/entry_ipv6
+  - path: test/auto_reload/es1
+  - path: test/auto_reload/flow
+  - path: test/auto_reload/router
+  - path: test/common/api
+  - path: test/easysearch/esrally
+  - path: test/echo/dump_context
+  - path: test/echo/echo_with_context
+  - path: test/echo/hello_world
+  - path: test/elasticsearch/elasticsearch-lookup
+  - path: test/elasticsearch/elasticsearch-route-by-index
+  - path: test/elasticsearch/elasticsearch-with-cache
+  - path: test/elasticsearch/elasticsearch-with-cache-plus
+  - path: test/elasticsearch/es_migration/bulk_indexing_es_config
+  - path: test/elasticsearch/es_migration/common
+  - path: test/elasticsearch/es_migration/match_by_label
   - path: test/elasticsearch/index-backup
-  # - path: test/elasticsearch/index-docs-diff
-  # - path: test/filters/basic_auth
-  # - path: test/filters/bulk_request_mutate
-  # - path: test/filters/bulk_reshuffle
-  # - path: test/filters/bulk_response_process
-  # - path: test/filters/cache
-  # - path: test/filters/clone
-  # - path: test/filters/context_filter
-  # - path: test/filters/context_limiter
-  # - path: test/filters/context_regex_replace
-  # - path: test/filters/date_range_precision_tuning
-  # - path: test/filters/drop
-  # - path: test/filters/dump
-  # - path: test/filters/echo
-  # - path: test/filters/elasticsearch
-  # - path: test/filters/elasticsearch_health_check
-  # - path: test/filters/flow
-  # - path: test/filters/http
-  # - path: test/filters/javascript
-  # - path: test/filters/logging
-  # - path: test/filters/queue
-  # - path: test/filters/ratio
-  # - path: test/filters/record
-  # - path: test/filters/redirect
-  # - path: test/filters/request_api_key_filter
-  # - path: test/filters/request_api_key_limiter
-  # - path: test/filters/request_body_json_del
-  # - path: test/filters/request_body_json_set
-  # - path: test/filters/request_body_regex_replace
-  # - path: test/filters/request_header_filter
-  # - path: test/filters/request_method_filter
-  # - path: test/filters/request_path_filter
-  # - path: test/filters/request_path_limiter
-  # - path: test/filters/request_user_filter
-  # - path: test/filters/request_user_limiter
-  # - path: test/filters/response_body_regex_replace
-  # - path: test/filters/response_header_filter
-  # - path: test/filters/response_header_format
-  # - path: test/filters/response_status_filter
-  # - path: test/filters/retry_limiter
-  # - path: test/filters/sample
-  # - path: test/filters/set_basic_auth
-  # - path: test/filters/set_context
-  # - path: test/filters/set_hostname
-  # - path: test/filters/set_request_header
-  # - path: test/filters/set_request_query_args
-  # - path: test/filters/set_response
-  # - path: test/filters/set_response_header
-  # - path: test/filters/sleep
-  # - path: test/filters/switch
-  # - path: test/filters/translog
-  # - path: test/misc/fast_flow_runner
-  # - path: test/misc/minio
-  # - path: test/misc/toggle_router_rules
-  # - path: test/observability/elasticsearch-request-logging
-  # - path: test/pipelines/api
-  # - path: test/pipelines/es_scroll/es_in_processor
-  # - path: test/pipelines/logging
-  # - path: test/proxy/elasticsearch-proxy
-  # - path: test/routing/404-fallback-to-slave
-  # - path: test/routing/context_switch
-  # - path: test/routing/cross-cluster-search
-  # - path: test/routing/indices-replace
-  # - path: test/routing/router_by_auth
-  # - path: test/routing/router_by_user
-  # - path: test/routing/router_rules
-  # - path: test/security/entry-with-tls
-  # - path: test/security/ip_denied_permitted
-  # - path: test/security/log4j-request-filter
-  # - path: test/template/config_template
-  # - path: test/throttle/bulk_requests_limit
-  # - path: test/throttle/limit_response_payload_size
-  # - path: test/throttle/node_level_limit
-  # - path: test/throttle/throttle_per_read_write
-  # - path: test/transform/context_parse
-  # - path: test/transform/convert-search-to-msearch
-  # - path: test/transform/create_auto_gen_uuid
-  # - path: test/transform/merge_cross_search_results
+  - path: test/elasticsearch/index-docs-diff
+  - path: test/filters/basic_auth
+  - path: test/filters/bulk_request_mutate
+  - path: test/filters/bulk_reshuffle
+  - path: test/filters/bulk_response_process
+  - path: test/filters/cache
+  - path: test/filters/clone
+  - path: test/filters/context_filter
+  - path: test/filters/context_limiter
+  - path: test/filters/context_regex_replace
+  - path: test/filters/date_range_precision_tuning
+  - path: test/filters/drop
+  - path: test/filters/dump
+  - path: test/filters/echo
+  - path: test/filters/elasticsearch
+  - path: test/filters/elasticsearch_health_check
+  - path: test/filters/flow
+  - path: test/filters/http
+  - path: test/filters/javascript
+  - path: test/filters/logging
+  - path: test/filters/queue
+  - path: test/filters/ratio
+  - path: test/filters/record
+  - path: test/filters/redirect
+  - path: test/filters/request_api_key_filter
+  - path: test/filters/request_api_key_limiter
+  - path: test/filters/request_body_json_del
+  - path: test/filters/request_body_json_set
+  - path: test/filters/request_body_regex_replace
+  - path: test/filters/request_header_filter
+  - path: test/filters/request_method_filter
+  - path: test/filters/request_path_filter
+  - path: test/filters/request_path_limiter
+  - path: test/filters/request_user_filter
+  - path: test/filters/request_user_limiter
+  - path: test/filters/response_body_regex_replace
+  - path: test/filters/response_header_filter
+  - path: test/filters/response_header_format
+  - path: test/filters/response_status_filter
+  - path: test/filters/retry_limiter
+  - path: test/filters/sample
+  - path: test/filters/set_basic_auth
+  - path: test/filters/set_context
+  - path: test/filters/set_hostname
+  - path: test/filters/set_request_header
+  - path: test/filters/set_request_query_args
+  - path: test/filters/set_response
+  - path: test/filters/set_response_header
+  - path: test/filters/sleep
+  - path: test/filters/switch
+  - path: test/filters/translog
+  - path: test/misc/fast_flow_runner
+  - path: test/misc/minio
+  - path: test/misc/toggle_router_rules
+  - path: test/observability/elasticsearch-request-logging
+  - path: test/pipelines/api
+  - path: test/pipelines/es_scroll/es_in_processor
+  - path: test/pipelines/logging
+  - path: test/proxy/elasticsearch-proxy
+  - path: test/routing/404-fallback-to-slave
+  - path: test/routing/context_switch
+  - path: test/routing/cross-cluster-search
+  - path: test/routing/indices-replace
+  - path: test/routing/router_by_auth
+  - path: test/routing/router_by_user
+  - path: test/routing/router_rules
+  - path: test/security/entry-with-tls
+  - path: test/security/ip_denied_permitted
+  - path: test/security/log4j-request-filter
+  - path: test/template/config_template
+  - path: test/throttle/bulk_requests_limit
+  - path: test/throttle/limit_response_payload_size
+  - path: test/throttle/node_level_limit
+  - path: test/throttle/throttle_per_read_write
+  - path: test/transform/context_parse
+  - path: test/transform/convert-search-to-msearch
+  - path: test/transform/create_auto_gen_uuid
+  - path: test/transform/merge_cross_search_results
