@@ -59,6 +59,7 @@ elastic:
     enabled: true
   metadata_refresh:
     enabled: true
+    interval: 5s
 
 s3:
   my_blob_store:

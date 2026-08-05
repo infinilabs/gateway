@@ -21,7 +21,7 @@ tests:
   # - path: test/elasticsearch/es_migration/bulk_indexing_es_config
   # - path: test/elasticsearch/es_migration/common
   # - path: test/elasticsearch/es_migration/match_by_label
-  # - path: test/elasticsearch/index-backup
+  - path: test/elasticsearch/index-backup
   # - path: test/elasticsearch/index-docs-diff
   # - path: test/filters/basic_auth
   # - path: test/filters/bulk_request_mutate
@@ -94,7 +94,7 @@ tests:
   # - path: test/template/config_template
   # - path: test/throttle/bulk_requests_limit
   # - path: test/throttle/limit_response_payload_size
-  - path: test/throttle/node_level_limit
+  # - path: test/throttle/node_level_limit
   # - path: test/throttle/throttle_per_read_write
   # - path: test/transform/context_parse
   # - path: test/transform/convert-search-to-msearch
