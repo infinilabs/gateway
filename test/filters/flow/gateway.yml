@@ -1,0 +1,35 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 2000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: dns-flow
+    filter:
+      - flow:
+          ignore_undefined_flow: true
+          context_flow:
+            context: _ctx.request.path
+            context_parse_pattern: '^/(?P<path>[0-9a-z_\-]+)'
+            flow_id_template: flow_$[[path]]
+      - set_response:
+          status: 503
+          content_type: application/json
+          body: '{"message":"invalid path"}'
+  - name: flow_test1
+    filter:
+      - echo:
+          message: "response from test1"
+router:
+  - name: my_router
+    default_flow: dns-flow

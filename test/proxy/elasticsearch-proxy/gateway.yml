@@ -1,0 +1,46 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: ['127.0.0.1:88','127.0.0.1']
+path.data: data
+path.logs: log
+
+stats:
+  enabled: false
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 10000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: es-flow
+    filter:
+      - elasticsearch:
+          elasticsearch: es-server
+          refresh:
+            enabled: true
+            interval: 10s
+          fixed_client: true
+          client_mode: host
+          timeout: -1
+          skip_cleanup_hop_headers: true
+          skip_keep_original_uri: true
+          skip_metadata_enrich: true
+
+router:
+  - name: my_router
+    default_flow: es-flow
+
+elasticsearch:
+  - name: es-server
+    enabled: true
+    endpoints: $[[env.ELASTICSEARCH_ENDPOINT]]
+    discovery:
+      enabled: true
+      refresh:
+        enabled: true
+        interval: 60s

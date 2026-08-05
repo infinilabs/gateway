@@ -1,0 +1,127 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+runner:
+  total_rounds: 1
+  no_warm: true
+  log_requests: true
+  assert_invalid: true
+  assert_error: true
+requests:
+  - request:
+      method: DELETE
+      url: http://$[[env.LR_GATEWAY_HOST]]/es_migration-test
+  - request:
+      method: DELETE
+      url: http://$[[env.LR_GATEWAY_HOST]]/infini_gateway_pipeline_logs
+  - request:
+      method: DELETE
+      url: http://$[[env.LR_GATEWAY_HOST]]/es_migration-test-new
+  - request:
+      method: POST
+      url: http://$[[env.LR_GATEWAY_HOST]]/es_migration-test/_doc?refresh
+      body: |
+        {
+        "model": "Porshe",
+        "year": 1972,
+        "engine": "2.0-liter four-cylinder Macan 1",
+        "horsepower": "252hp",
+        "genres": ["Sporty", "Classic"]
+        }
+    assert:
+      equals:
+        _ctx.response.status: 201
+  - request:
+      method: POST
+      url: http://$[[env.LR_GATEWAY_HOST]]/es_migration-test/_doc?refresh
+      body: |
+        {
+        "model": "Porshe",
+        "year": 1972,
+        "engine": "2.0-liter four-cylinder Macan 2",
+        "horsepower": "252hp",
+        "genres": ["Sporty", "Classic"]
+        }
+    assert:
+      equals:
+        _ctx.response.status: 201
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/es_migration-test/_search?pretty
+    assert:
+      and:
+        - equals:
+            _ctx.response.status: 200
+        - contains:
+            _ctx.response.body: '"engine" : "2.0-liter four-cylinder Macan 1"'
+        - contains:
+            _ctx.response.body: '"engine" : "2.0-liter four-cylinder Macan 2"'
+  - request:
+      method: POST
+      url: http://$[[env.LR_GATEWAY_API_HOST]]/pipeline/task/source_scroll/_start
+    assert:
+      equals:
+        _ctx.response.status: 200
+  - request:
+      method: POST
+      url: http://$[[env.LR_GATEWAY_API_HOST]]/pipeline/task/target_indexing/_start
+    assert:
+      equals:
+        _ctx.response.status: 200
+  - sleep:
+      sleep_in_milli_seconds: 4000
+  - request:
+      method: POST
+      url: http://$[[env.LR_GATEWAY_HOST]]/es_migration-test-new/_refresh
+    assert:
+      equals:
+        _ctx.response.status: 200
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/es_migration-test-new/_search?pretty
+    assert:
+      and:
+        - equals:
+            _ctx.response.status: 200
+        - contains:
+            _ctx.response.body: '"engine" : "2.0-liter four-cylinder Macan 1"'
+        - contains:
+            _ctx.response.body: '"engine" : "2.0-liter four-cylinder Macan 2"'
+  - sleep:
+      sleep_in_milli_seconds: 6000
+  - request:
+      method: POST
+      url: http://$[[env.LR_GATEWAY_HOST]]/infini_gateway_pipeline_logs/_refresh
+    assert:
+      equals:
+        _ctx.response.status: 200
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/infini_gateway_pipeline_logs/_search?pretty
+    assert:
+      and:
+        - equals:
+            _ctx.response.status: 200
+        - contains:
+            _ctx.response.body: '"task_id" : "target_indexing"'
+        - contains:
+            _ctx.response.body: '"task_id" : "source_scroll"'
+  - request:
+      method: DELETE
+      url: http://$[[env.LR_GATEWAY_HOST]]/es_migration-test
+    assert:
+      equals:
+        _ctx.response.status: 200
+  - request:
+      method: DELETE
+      url: http://$[[env.LR_GATEWAY_HOST]]/es_migration-test-new
+    assert:
+      equals:
+        _ctx.response.status: 200
+  - request:
+      method: DELETE
+      url: http://$[[env.LR_GATEWAY_HOST]]/infini_gateway_pipeline_logs
+    assert:
+      equals:
+        _ctx.response.status: 200

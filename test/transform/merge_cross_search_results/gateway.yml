@@ -1,0 +1,410 @@
+env:
+  GATEWAY_HOST: '0.0.0.0:8001'
+  LR_ELASTICSEARCH_ENDPOINT1: 'http://localhost:9200'
+  LR_ELASTICSEARCH_ENDPOINT2: 'http://localhost:9202'
+  LR_ELASTICSEARCH_ENDPOINT3: 'http://localhost:9201'
+
+path.data: data
+path.logs: log
+
+entry:
+  - name: es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 10000
+    network:
+      binding: $[[env.GATEWAY_HOST]]
+
+flow:
+  - name: logging-flow
+    filter:
+      - dump:
+          request: true
+  - name: default-flow
+    filter:
+      # - switch: #use easysearch's ccs instead
+      #     remove_prefix: false
+      #     path_rules:
+      #       - prefix: "cluster1:"
+      #         flow: es1-flow
+      #       - prefix: "/cluster1:"
+      #         flow: es1-flow
+      #       - prefix: "cluster2:"
+      #         flow: es2-flow
+      #       - prefix: "/cluster2:"
+      #         flow: es2-flow
+      - flow: #default flow
+          flows:
+            - mixed-flow
+  - name: field-caps-flow
+    filter:
+      - context_parse: #https://regexkit.com/php-regex
+          context: _ctx.request.path
+          pattern: ^\/(?P<index>.*?)\/\_field_caps
+          group: "parsed"
+      - if:
+          exists: ['parsed.index']
+        then:
+          - if:
+              contains:
+                parsed.index: ":" #include cross cluster search operations
+            then:
+              - context_regex_replace:
+                  context: "_ctx.request.path"
+                  pattern: '^\/(?P<cluster>.*?)\:'
+                  to: ""
+              - flow: #forward to es1
+                  flow: es1-flow
+              - set_context:
+                  context:
+                    res1: $[[_ctx.response.body]] #save es1's response
+              - flow: #forward to es2
+                  flow: es2-flow
+              - javascript: #merge search response
+                  source: >
+                    var console = require('console');
+
+                    function mergeJSON(target, add) {
+                      function isObject(obj) {
+                        return obj && typeof obj === "object" && !Array.isArray(obj);
+                      }
+                      for (var key in add) {
+                        if (add.hasOwnProperty(key)) {
+                          if (target[key] && isObject(target[key]) && isObject(add[key])) {
+                            console.log(key);
+                            mergeJSON(target[key], add[key]);
+                          } else if (Array.isArray(target[key]) && Array.isArray(add[key])) {
+                            console.log(key);
+                            target[key] = target[key].concat(add[key]);
+                          } else {
+                            target[key] = add[key];
+                          }
+                        }
+                      }
+                      return target;
+                    };
+
+
+                    function process(ctx) {
+
+                      //handle es2
+                      var response = ctx.Get("_ctx.response.body");
+                      var responseJsonObj=JSON.parse(response);
+                      console.log(response);
+
+                      //get es2 hits count
+                      var finalTotal = responseJsonObj.hits.total.value;
+                      var finalHits= responseJsonObj.hits.hits;
+
+                      //update index prefix with cluster
+                      if (finalHits.length>0){
+                          for(var i=0; i<finalHits.length; i++){
+                                //finalHits[i]._index="cluster2:"+finalHits[i]._index;
+                          }
+                      }
+
+                      var response1 = ctx.Get("res1");
+                      console.log(response1);
+
+                      if(response1.length > 0) {
+                        var jsonObj=JSON.parse(response1);
+
+                       var a=responseJsonObj;
+                        var b=jsonObj;
+                        console.log("a:"+a);
+                        console.log("b:"+b);                      
+                      
+                      ctx.Put("_ctx.response.body",JSON.stringify(responseJsonObj));
+
+                      }
+                    }
+            else:   
+              - flow:
+                  flow: system-flow
+        else:
+          - flow:
+              flow: system-flow
+
+  - name: search-flow
+    filter:
+      - context_parse: #https://regexkit.com/php-regex
+          context: _ctx.request.path
+          pattern: ^\/(?P<index>.*?)\/\_search
+          group: "parsed"
+      - if:
+          exists: ['parsed.index']
+        then:
+          # - dump:
+          #     context:
+          #       - parsed.index
+          - if:
+              contains:
+                parsed.index: ":" #include cross cluster search operations
+            then:
+              - echo:
+                  message: "include cross cluster search operations"
+              - context_regex_replace:
+                  context: "_ctx.request.path"
+                  pattern: '^\/(?P<cluster>.*?)\:'
+                  to: ""
+              # - set_context:
+              #     context:
+              #     #  _ctx.request.uri: http://baidu.com
+              #      _ctx.request.path: /new_request_path
+              # - dump:
+              #     request: true
+              #     context:
+              #       - '_ctx.request.path'
+              # - switch: #forward to es1
+              #     remove_prefix: true
+              #     continue: true
+              #     path_rules:
+              #       - prefix: "cluster1:"
+              #         flow: es1-flow
+              - flow: #forward to es1
+                  flow: es1-flow
+              - set_context:
+                  context:
+                    res1: $[[_ctx.response.body]] #save es1's response
+              # - switch: #forward to es2
+              #     remove_prefix: true
+              #     continue: true
+              #     path_rules:
+              #       - prefix: "cluster2:"
+              #         flow: es2-flow
+              - flow: #forward to es2
+                  flow: es2-flow
+              - javascript: #merge search response
+                  source: >
+                    var console = require('console');
+
+                    function mergeJSON(target, add) {
+                      function isObject(obj) {
+                        return obj && typeof obj === "object" && !Array.isArray(obj);
+                      }
+                      for (var key in add) {
+                        if (add.hasOwnProperty(key)) {
+                          if (target[key] && isObject(target[key]) && isObject(add[key])) {
+                            mergeJSON(target[key], add[key]);
+                          } else if (Array.isArray(target[key]) && Array.isArray(add[key])) {
+                            target[key] = target[key].concat(add[key]);
+                          } else {
+                            target[key] = add[key];
+                          }
+                        }
+                      }
+                      return target;
+                    };
+
+
+                    function process(ctx) {
+
+                      //handle es2
+                      var response = ctx.Get("_ctx.response.body");
+                      var responseJsonObj=JSON.parse(response);
+                      //console.log(response);
+
+                      //get es2 hits count
+                      var finalTotal = responseJsonObj.hits.total.value;
+                      var finalHits= responseJsonObj.hits.hits;
+
+                      //update index prefix with cluster
+                      if (finalHits.length>0){
+                          for(var i=0; i<finalHits.length; i++){
+                                //finalHits[i]._index="cluster2:"+finalHits[i]._index;
+                          }
+                      }
+
+                      var response1 = ctx.Get("res1");
+                      //console.log(response1);
+
+                      if(response1.length > 0) {
+                        var jsonObj=JSON.parse(response1);
+
+                      //get es1 hits count
+                      var es1total = jsonObj.hits.total.value;
+                      finalTotal+=es1total
+                      
+                     // console.log("finalTotal:"+finalTotal);
+                      responseJsonObj.hits.total.value=finalTotal;
+                      var hits= jsonObj.hits.hits;
+
+                      if (hits.length>0){
+                        for(var i=0; i<hits.length; i++){
+                              //hits[i]._index="cluster1:"+hits[i]._index;
+                              finalHits.push(hits[i]);
+                        }
+                      }
+
+                      //if ((responseJsonObj.aggregations.length>0) || (jsonObj.aggregations.length>0)){
+                        //merge aggs
+                        var a=responseJsonObj.aggregations;
+                        var b=jsonObj.aggregations;
+                        responseJsonObj.aggregations=mergeJSON(a,b);
+                        // console.log("a:"+a);
+                        // console.log("b:"+b);
+                        console.log("aggregations:"+JSON.stringify(responseJsonObj.aggregations));  
+                      //}
+                      
+                      ctx.Put("_ctx.response.body",JSON.stringify(responseJsonObj));
+
+                      }
+                    }
+            else:   
+              - flow:
+                  flow: system-flow
+        else:
+          # - echo:
+          #     message: "index not exists"
+          - flow:
+              flow: system-flow
+        
+  - name: es1-flow
+    filter:
+      - set_basic_auth:
+          username: admin
+          password: admin
+      - elasticsearch:
+          elasticsearch: es1
+  - name: es2-flow
+    filter:
+      - set_basic_auth:
+          username: admin
+          password: admin
+      - elasticsearch:
+          elasticsearch: es2
+  - name: system-flow
+    filter:
+      # - set_basic_auth:
+      #     username: admin
+      #     password: admin
+      - elasticsearch:
+          elasticsearch: system
+  - name: mixed-flow
+    filter:
+      - if:
+          and:
+            - equals:
+                _ctx.request.path: '/_cat/indices'
+            - equals:
+                _ctx.request.query_args.format: "json"
+        then:
+          - flow:
+              flow: es1-flow
+          - set_context:
+              context:
+                res1: $[[_ctx.response.body]]
+          - flow:
+              flow: es2-flow
+          - javascript:
+              source: >
+                var console = require('console');
+
+                function mergeJSON(target, add) {
+                    function isObject(obj) {
+                        if (typeof obj == "object") {
+                            for (var key in obj) {
+                                if (obj.hasOwnProperty(key)) {
+                                    return true; // search for first object prop
+                                }
+                            }
+                        }
+                        return false;
+                    }
+                    for (var key in add) {
+                        if (add.hasOwnProperty(key)) {
+                            if (target[key] && isObject(target[key]) && isObject(add[key])) {
+                                this.mergeJSON(target[key], add[key]);
+                            } else {
+                                target[key] = add[key];
+                            }
+                        }
+                    }
+                    console.log("target:"+target);
+                    return target;
+                };
+
+                function process(ctx) {
+
+                  //handle es2
+                  var response = ctx.Get("_ctx.response.body");
+                  var responseJsonObj=JSON.parse(response);
+                  for(var i=0; i<responseJsonObj.length; i++){
+                      //responseJsonObj[i].index="cluster2:"+responseJsonObj[i].index;
+                  }
+
+                  var response1 = ctx.Get("res1");
+                  if(response1.length > 0) {
+                    var jsonObj=JSON.parse(response1);
+                      if (jsonObj.length>0){
+                        for(var i=0; i<jsonObj.length; i++){
+                              //jsonObj[i].index="cluster1:"+jsonObj[i].index;
+                              responseJsonObj.push(jsonObj[i]);
+                        }
+
+                        ctx.Put("_ctx.response.body",JSON.stringify(responseJsonObj));
+                      }
+                  }
+                }
+        else:
+          - flow:
+              flow: system-flow
+
+
+router:
+  - name: my_router
+    default_flow: default-flow
+    # tracing_flow: logging-flow
+    rules:
+      - method:
+          - '*'
+        pattern:
+          - "/_search"
+          - "/{index_name}/_search"
+        flow:
+          - search-flow
+      - method:
+          - '*'
+        pattern:
+          - "/_field_caps"
+          - "/{index_name}/_field_caps"
+        flow:
+          - field-caps-flow
+
+elasticsearch:
+  - name: es1
+    enabled: true
+    endpoints:
+      - $[[env.LR_ELASTICSEARCH_ENDPOINT1]]
+    basic_auth:
+      username: admin
+      password: admin
+  - name: es2
+    enabled: true
+    endpoints:
+      - $[[env.LR_ELASTICSEARCH_ENDPOINT2]]
+    basic_auth:
+      username: admin
+      password: admin
+  - name: system
+    enabled: true
+    endpoints:
+      - $[[env.LR_ELASTICSEARCH_ENDPOINT3]]
+    basic_auth:
+      username: admin
+      password: admin
+
+
+
+
+# /a:*,cluster*:index*/_search
+# /a,cluster:index*/_search
+# /a,b*/_search
+# /a,b/_search
+# /a/_search
+# /cluster1:indexname/_search
+# /cluster*:indexname/_search
+# /cluster*:*indexname*/_search
+# /cluster*:*/_search
+# /*:*/_search
+# /*cluster:*/_search

@@ -1,0 +1,67 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+  MINIO_API_HOST: 127.0.0.1:16426
+  MINIO_TEST_BUCKET: test-bucket
+  MINIO_API_USERNAME: minioadmin
+  MINIO_API_PASSWORD: minioadmin
+
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 2000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: test
+    filter:
+      - elasticsearch:
+          elasticsearch: dev
+
+router:
+  - name: my_router
+    default_flow: test
+
+elasticsearch:
+  - name: dev
+    enabled: true
+    endpoint: $[[env.ELASTICSEARCH_ENDPOINT]]
+
+pipeline:
+  - name: index_backup
+    auto_start: true
+    keep_running: true
+    processor:
+      - index_backup:
+          elasticsearch: "dev"
+          index: "test"
+          upload_to_fs_repo: false
+          upload_to_s3: true
+          upload_interval_in_second: 1
+          s3:
+            server: my_blob_store
+            location: cn-beijing-001
+            bucket: $[[env.MINIO_TEST_BUCKET]]
+
+elastic:
+  elasticsearch: dev
+  enabled: true
+  remote_configs: false
+  health_check:
+    enabled: true
+  availability_check:
+    enabled: true
+  metadata_refresh:
+    enabled: true
+
+s3:
+  my_blob_store:
+    endpoint: $[[env.MINIO_API_HOST]]
+    access_key: $[[env.MINIO_API_USERNAME]]
+    access_secret: $[[env.MINIO_API_PASSWORD]]

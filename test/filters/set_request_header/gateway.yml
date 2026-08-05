@@ -1,0 +1,28 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 2000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: test
+    filter:
+      - set_request_header:
+          headers:
+            - Trial -> true
+            - Department -> Engineering
+      - echo:
+          message: '{"trial": $[[_ctx.request.header.Trial]], "department": "$[[_ctx.request.header.Department]]"}'
+
+router:
+  - name: my_router
+    default_flow: test

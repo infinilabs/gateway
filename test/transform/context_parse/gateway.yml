@@ -1,0 +1,25 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+entry:
+  - name: test_entry
+    enabled: true
+    router: default
+    max_concurrency: 20000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+router:
+  - name: default
+    default_flow: default_flow
+
+flow:
+  - name: default_flow
+    filter:
+      - context_parse:
+          context: _ctx.request.path
+          pattern: ^\/.*?\d{4}\.(?P<month>\d{2})\.(?P<day>\d{2}).*?
+          group: "parsed_index"
+      - echo:
+          message: $[[parsed_index.month]] - $[[parsed_index.day]]

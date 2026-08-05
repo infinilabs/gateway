@@ -1,0 +1,207 @@
+name: Integration Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+env:
+  INFINI_BASE_FOLDER: /home/runner/go/src/infini.sh
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Setup INFINI_BASE_FOLDER
+        run: mkdir -p $INFINI_BASE_FOLDER
+
+      - name: Checkout Gateway
+        uses: actions/checkout@v4
+        with:
+          path: gateway
+
+      - name: Move Gateway to INFINI_BASE_FOLDER
+        run: mv ./gateway $INFINI_BASE_FOLDER/gateway
+
+      - name: Checkout Framework
+        uses: actions/checkout@v4
+        with:
+          repository: infinilabs/framework
+          ref: main
+          path: framework
+
+      - name: Move Framework to INFINI_BASE_FOLDER
+        run: mv ./framework $INFINI_BASE_FOLDER/framework
+
+      - name: Clone Framework Vendor
+        run: git clone https://github.com/infinilabs/framework-vendor.git $INFINI_BASE_FOLDER/vendor
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Build Gateway
+        working-directory: ${{ env.INFINI_BASE_FOLDER }}/gateway
+        run: make build
+
+      - name: Verify Gateway Binary
+        working-directory: ${{ env.INFINI_BASE_FOLDER }}/gateway
+        run: ls -la bin/gateway && file bin/gateway
+
+      - name: Install Easysearch
+        run: |
+          mkdir -p ~/es_install_dir
+          curl -sSL http://get.infini.cloud | bash -s -- -p easysearch -d ~/es_install_dir -v 2.3.0
+
+          # Disable security by writing a minimal config
+          cat > ~/es_install_dir/config/easysearch.yml <<EOF
+          cluster.name: docker-cluster
+          network.host: 0.0.0.0
+          http.port: 9200
+          discovery.type: single-node
+          security.enabled: false
+          EOF
+
+          cd ~/es_install_dir && ./bin/initialize.sh -s
+          cd ~/es_install_dir && nohup ./bin/easysearch > easysearch.log 2>&1 &
+
+          start_time=$(date +%s)
+          timeout_secs=300
+
+          # Wait for port 9200 to be open
+          while ! nc -z 127.0.0.1 9200; do
+              elapsed=$(($(date +%s) - start_time))
+              if [ "$elapsed" -ge "$timeout_secs" ]; then
+                echo "Easysearch did not open port 9200 within ${timeout_secs}s"
+                tail -n 200 ~/es_install_dir/easysearch.log
+                exit 1
+              fi
+              echo "Easysearch not up after ${elapsed}s, retrying in 5s..."
+              sleep 5
+          done
+          echo "Easysearch is listening on 127.0.0.1:9200"
+
+          # Wait for cluster to be green/yellow
+          while true; do
+              elapsed=$(($(date +%s) - start_time))
+              if [ "$elapsed" -ge "$timeout_secs" ]; then
+                echo "Easysearch cluster did not become ready within ${timeout_secs}s"
+                tail -n 200 ~/es_install_dir/easysearch.log
+                exit 1
+              fi
+              health=$(curl -s http://127.0.0.1:9200/_cluster/health)
+              status=$(echo "$health" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("status", ""))')
+              if [ "$status" = "green" ] || [ "$status" = "yellow" ]; then
+                echo "Easysearch cluster status: $status"
+                break
+              fi
+              echo "Cluster status is ${status:-unknown} after ${elapsed}s, retrying in 5s..."
+              sleep 5
+          done
+
+      - name: Download loadgen
+        run: |
+          cd ~
+          curl -sLO https://release.infinilabs.com/loadgen/snapshot/loadgen-1.31.0_NIGHTLY-20260803-linux-amd64.tar.gz
+          tar -xzf loadgen-1.31.0_NIGHTLY-20260803-linux-amd64.tar.gz
+          chmod +x loadgen-linux-amd64
+          ./loadgen-linux-amd64 -version 2>&1 | head -5
+
+      - name: Install and start MinIO
+        run: |
+          mkdir -p ~/minio_data
+          curl -sLO https://dl.min.io/server/minio/release/linux-amd64/minio
+          chmod +x minio
+          sudo mv minio /usr/local/bin/
+
+          MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin \
+            nohup minio server ~/minio_data --address ":16426" \
+            > /tmp/minio.log 2>&1 &
+          MINIO_PID=$!
+          echo "MinIO PID: $MINIO_PID"
+
+          # Wait for MinIO to be ready
+          start_time=$(date +%s)
+          timeout_secs=120
+          while ! curl -sf http://127.0.0.1:16426/minio/health/live -o /dev/null; do
+              elapsed=$(($(date +%s) - start_time))
+              if [ "$elapsed" -ge "$timeout_secs" ]; then
+                echo "MinIO did not start within ${timeout_secs}s"
+                tail -n 100 /tmp/minio.log
+                exit 1
+              fi
+              echo "MinIO not up after ${elapsed}s, retrying in 2s..."
+              sleep 2
+          done
+          echo "MinIO is listening on 127.0.0.1:16426"
+
+      - name: Create MinIO test bucket
+        run: |
+          curl -sLO https://dl.min.io/client/mc/release/linux-amd64/mc
+          chmod +x mc
+          sudo mv mc /usr/local/bin/
+
+          mc alias set local http://127.0.0.1:16426 minioadmin minioadmin
+          mc mb --ignore-existing local/test-bucket
+          mc anonymous set download local/test-bucket
+          mc ls local/
+
+      - name: Run Integration Tests
+        working-directory: ${{ env.INFINI_BASE_FOLDER }}/gateway
+        run: ~/loadgen-linux-amd64 -config test/full.yml
+
+      - name: Detect Floating IP
+        id: detect-fip
+        working-directory: ${{ env.INFINI_BASE_FOLDER }}/gateway
+        run: |
+          FLOAT_IP=$(./test/misc/floating_ip/setup-floating-ip-env.sh)
+          echo "Detected floating IP: $FLOAT_IP"
+          echo "floating_ip=$FLOAT_IP" >> $GITHUB_OUTPUT
+
+      - name: Run Floating IP Test
+        working-directory: ${{ env.INFINI_BASE_FOLDER }}/gateway
+        run: |
+          FLOAT_IP=${{ steps.detect-fip.outputs.floating_ip }}
+          echo "Using floating IP: $FLOAT_IP"
+
+          # Start gateway with sudo, preserving env vars
+          sudo -E env GATEWAY_FLOATING_IP_HOST=$FLOAT_IP \
+            ./bin/gateway -config test/misc/floating_ip/gateway.yml -log debug -debug \
+            > /tmp/gateway-fip.log 2>&1 &
+          GATEWAY_PID=$!
+          echo "Gateway PID: $GATEWAY_PID"
+          echo $GATEWAY_PID > /tmp/gateway-fip.pid
+
+          # Wait for gateway entry to be reachable on floating IP
+          for i in {1..60}; do
+            if curl -sf http://${FLOAT_IP}:8001/test -o /dev/null; then
+              echo "Gateway entry ready on ${FLOAT_IP}:8001"
+              break
+            fi
+            echo "Waiting for gateway entry... attempt $i"
+            sleep 2
+          done
+
+          # Run loadgen against the floating IP
+          GATEWAY_FLOATING_IP_HOST=$FLOAT_IP \
+            ~/loadgen-linux-amd64 \
+            -config test/misc/floating_ip/loadgen.yml
+          LOADGEN_EXIT=$?
+
+          # Cleanup gateway
+          if [ -f /tmp/gateway-fip.pid ]; then
+            PID=$(cat /tmp/gateway-fip.pid)
+            sudo kill $PID 2>/dev/null || true
+            sleep 2
+            sudo kill -9 $PID 2>/dev/null || true
+            rm -f /tmp/gateway-fip.pid
+          fi
+
+          echo "=== Floating IP test gateway log (last 100 lines) ==="
+          tail -n 100 /tmp/gateway-fip.log
+
+          exit $LOADGEN_EXIT

@@ -1,0 +1,30 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 200000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: hello_world
+    filter:
+      - echo:
+          message: 'hello world'
+
+router:
+  - name: my_router
+    default_flow: hello_world
+    ip_access_control:
+      enabled: true
+      client_ip:
+        permitted:
+          - 192.168.3.98
+          - 127.0.0.1

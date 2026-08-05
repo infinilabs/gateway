@@ -1,0 +1,36 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT_NOTEXISTS: http://127.0.0.1:65523
+path.data: data
+path.logs: log
+configs.auto_reload: true
+
+api:
+  enabled: true
+  network:
+    binding: $[[env.LR_GATEWAY_API_HOST]]
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 2000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: es-flow
+    filter:
+      - elasticsearch:
+          elasticsearch: es-server
+
+router:
+  - name: my_router
+    default_flow: es-flow
+
+elasticsearch:
+  - name: es-server
+    enabled: true
+    endpoints:
+     - $[[env.ELASTICSEARCH_ENDPOINT_NOTEXISTS]]

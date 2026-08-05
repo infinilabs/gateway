@@ -1,0 +1,122 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+progress_bar.enabled: true
+configs.auto_reload: true
+
+api:
+  enabled: true
+  network:
+    binding: $[[env.LR_GATEWAY_API_HOST]]
+
+elasticsearch:
+  - name: source
+    enabled: true
+    endpoint: $[[env.ELASTICSEARCH_ENDPOINT]]
+    orm:
+      enabled: true
+  - name: target
+    enabled: true
+    endpoint: $[[env.ELASTICSEARCH_ENDPOINT]]
+
+entry:
+  - name: es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 10000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: default-flow
+    filter:
+      - flow:
+          flows:
+            - es-flow
+  - name: es-flow
+    filter:
+      - elasticsearch:
+          elasticsearch: source
+
+router:
+  - name: my_router
+    default_flow: default-flow
+
+metrics:
+  enabled: true
+  logging_queue: logging
+
+pipeline:
+  - name: indexing_merge
+    auto_start: true
+    keep_running: true
+    processor:
+      - indexing_merge:
+          input_queue: "logging"
+          idle_timeout_in_seconds: 1
+          elasticsearch: "target"
+          index_name: "infini_gateway_pipeline_logs"
+          output_queue:
+            name: "gateway-pipeline-logs"
+            label:
+              tag: "pipeline_logging"
+          worker_size: 1
+          bulk_size_in_kb: 1
+  - name: logging_requests
+    auto_start: true
+    keep_running: true
+    processor:
+      - bulk_indexing:
+          bulk:
+            compress: true
+            batch_size_in_mb: 1
+            batch_size_in_docs: 1
+          consumer:
+            fetch_max_messages: 100
+          queues:
+            type: indexing_merge
+  - name: source_scroll
+    auto_start: true
+    keep_running: true
+    logging:
+      enabled: true
+    processor:
+      - es_scroll:
+          slice_size: 2
+          batch_size: 5000
+          indices: "es_migration-test"
+          elasticsearch: source
+          output_queue: source_index_dump
+          partition_size: 20
+          scroll_time: "5m"
+          index_rename:
+            "*": "es_migration-test-new"
+          remove_type: true
+
+  - name: target_indexing
+    auto_start: true
+    keep_running: true
+    logging:
+      enabled: true
+    processor:
+      - bulk_indexing:
+          detect_active_queue: false
+          elasticsearch: target
+          max_worker_size: 10
+          detect_interval: 100
+          bulk:
+            compress: true
+            batch_size_in_mb: 20
+            batch_size_in_docs: 1
+            invalid_queue: bulk_indexing_400
+          queues:
+            type: scroll_docs
+          consumer:
+            fetch_max_messages: 1000
+
+disk_queue:
+  sync_timeout_in_ms: 10000
+  sync_every_records: 10000

@@ -1,0 +1,31 @@
+floating_ip:
+  enabled: true
+  priority: 2234
+  ip: $[[env.GATEWAY_FLOATING_IP_HOST]]
+  echo:
+    port: 62315
+  forced_by_priority: true
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 2000
+    network:
+      binding: $[[env.GATEWAY_FLOATING_IP_HOST]]:8001
+
+flow:
+  - name: test
+    filter:
+      - echo:
+          message: 'ok'
+
+router:
+  - name: my_router
+    default_flow: test
+    rules:
+      - method:
+          - GET
+        pattern:
+          - /test
+        flow: test

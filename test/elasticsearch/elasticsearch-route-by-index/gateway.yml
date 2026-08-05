@@ -1,0 +1,60 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 10000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: default-flow
+    filter:
+      - switch:
+          remove_prefix: false
+          path_rules:
+            - prefix: "apm-"
+              flow: es1-flow
+            - prefix: "erp-"
+              flow: es2-flow
+            - prefix: "mall-"
+              flow: es3-flow
+      - flow: #default flow
+          flows:
+            - es1-flow
+  - name: es1-flow
+    filter:
+      - elasticsearch:
+          elasticsearch: es1-apm
+  - name: es2-flow
+    filter:
+      - elasticsearch:
+          elasticsearch: es2-erp
+  - name: es3-flow
+    filter:
+      - elasticsearch:
+          elasticsearch: es3-mall
+
+router:
+  - name: my_router
+    default_flow: default-flow
+
+elasticsearch:
+  - name: es1-apm
+    enabled: true
+    endpoints:
+     - $[[env.ELASTICSEARCH_ENDPOINT]]
+  - name: es2-erp
+    enabled: true
+    endpoints:
+     - $[[env.ELASTICSEARCH_ENDPOINT]]
+  - name: es3-mall
+    enabled: true
+    endpoints:
+     - $[[env.ELASTICSEARCH_ENDPOINT]]

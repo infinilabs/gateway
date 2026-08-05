@@ -1,0 +1,45 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+runner:
+  total_rounds: 1
+  no_warm: true
+  log_requests: true
+  assert_invalid: true
+  assert_error: true
+requests:
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/index1/_search?q=%24%7Bjava%3Aos%7D'
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body: Apache Log4j 2, Boom!
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/index/_search?q=%24%7Bjava%3Avm%7D
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body: Apache Log4j 2, Boom!
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/index/_search?q=%24%7Bjava%3Avm%7D
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body: Apache Log4j 2, Boom!
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/index/_search?q=%24%7Bjndi%3Armi%3A%2F%2Flocalhost%3A1099%2Fapi%7D
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body: Apache Log4j 2, Boom!
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/index/_search
+    assert:
+      equals:
+        _ctx.response.status: 404

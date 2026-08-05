@@ -1,0 +1,70 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+api:
+  enabled: true
+  network:
+    binding: $[[env.LR_GATEWAY_API_HOST]]
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 2000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: test
+    filter:
+      - bulk_reshuffle:
+          elasticsearch: prod
+          level: node #cluster,node,shard,partition
+      - elasticsearch:
+          elasticsearch: prod
+          refresh:
+            enabled: true
+            interval: 30s
+
+router:
+  - name: my_router
+    default_flow: test
+
+elastic:
+  enabled: true
+  remote_configs: false
+  health_check:
+    enabled: true
+    interval: 30s
+  availability_check:
+    enabled: true
+    interval: 60s
+  metadata_refresh:
+    enabled: true
+    interval: 30s
+  cluster_settings_check:
+    enabled: false
+    interval: 20s
+
+elasticsearch:
+  - name: prod
+    endpoint: $[[env.ELASTICSEARCH_ENDPOINT]]
+    enabled: true
+    discovery:
+      enabled: true
+      refresh:
+        enabled: true
+        interval: 30s
+pipeline:
+  - name: bulk_request_ingest
+    auto_start: true
+    processor:
+      - bulk_indexing:
+          batch_size_in_docs: 1
+          queues:
+            type: bulk_reshuffle
+            level: node

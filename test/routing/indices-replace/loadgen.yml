@@ -1,0 +1,40 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+runner:
+  total_rounds: 1
+  no_warm: true
+  log_requests: true
+  assert_invalid: true
+  assert_error: true
+  disable_header_names_normalizing: true
+requests:
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/_search
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body: /_search
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/abc/_search
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body: /cluster01:abc,cluster02:abc,cluster03:abc/_search
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/abc,efg/_search
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body: /cluster01:abc,cluster02:abc,cluster03:abc,cluster01:efg,cluster02:efg,cluster03:efg/_search
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/efg,hij,xyz/_search
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body: /cluster01:efg,cluster02:efg,cluster03:efg,cluster01:hij,cluster02:hij,cluster03:hij,cluster01:xyz,cluster02:xyz,cluster03:xyz/_search

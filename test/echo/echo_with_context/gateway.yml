@@ -1,0 +1,23 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 200000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: hello_world
+    filter:
+      - echo:
+          message: 'request throttled: $[[_ctx.request.method]],$[[_ctx.remote_ip]]'
+router:
+  - name: my_router
+    default_flow: hello_world

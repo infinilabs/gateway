@@ -1,0 +1,36 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 2000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: test
+    filter:
+      - get_cache:
+          pass_patterns: ["_cat","scroll", "scroll_id","_refresh","_cluster","_ccr","_count","_flush","_ilm","_ingest","_license","_migration","_ml","_rollup","_data_stream","_open", "_close"]
+      - elasticsearch:
+          elasticsearch: dev
+      - set_cache:
+          min_response_size: 100
+          max_response_size: 1024000
+          cache_ttl: 30s
+          max_cache_items: 100000
+
+router:
+  - name: my_router
+    default_flow: test
+
+elasticsearch:
+  - name: dev
+    enabled: true
+    endpoint: $[[env.ELASTICSEARCH_ENDPOINT]]

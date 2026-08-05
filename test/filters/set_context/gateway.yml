@@ -1,0 +1,48 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 2000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: test_body
+    filter:
+      - set_response:
+          body: '{"message":"hello world"}'
+      - set_context:
+          context:
+            _ctx.response.content_type: "application/json"
+            _ctx.response.body_json.success: true
+            _ctx.response.status: 419
+            _ctx.response.header.TIMES: 100
+  - name: test_path
+    filter:
+      - set_context:
+          context:
+            _ctx.request.path: test_path2
+      - echo:
+          message: $[[_ctx.request.to_string]]
+
+
+router:
+  - name: my_router
+    rules:
+      - method: GET
+        pattern:
+          - '/test_body'
+        flow:
+          - test_body
+      - method: GET
+        pattern:
+          - '/test_path'
+        flow:
+          - test_path

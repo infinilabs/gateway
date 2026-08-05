@@ -1,0 +1,34 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 2000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: test
+    filter:
+      - request_path_limiter:
+          message: "Hey, You just reached our request limit!"
+          rules:
+            - pattern: "/(?P<index_name>medcl)/_search"
+              max_qps: 2
+              group: index_name
+            - pattern: "/(?P<index_name>.*?)/_search"
+              max_qps: 1
+              group: index_name
+      - set_response:
+          status: 200
+          body: 'hello'
+
+router:
+  - name: my_router
+    default_flow: test

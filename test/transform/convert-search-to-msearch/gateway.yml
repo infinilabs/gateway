@@ -1,0 +1,93 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: test_entry
+    enabled: true
+    router: default
+    max_concurrency: 20000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+router:
+  - name: default
+    default_flow: test
+    tracing_flow: request_logging
+    rules:
+      - method:
+          - "*"
+        pattern:
+          - "/_search"
+          - "/{any_index}/_search"
+        flow:
+          - test
+
+flow:
+  - name: request_logging
+    filter:
+      - logging:
+          queue_name: request_logging
+          max_request_body_size: 10240
+          max_response_body_size: 10240
+  - name: test
+    filter:
+      - javascript:
+          params:
+            rewriteRoutingThrottleSize: 5
+          source: >
+            var console = require('console');
+            var params = {rewriteRoutingThrottleSize: []};
+            function register(scriptParams) {
+                params = scriptParams;
+            }
+
+            function process(event) {
+              var routing = event.Get("_ctx.request.query_args.routing");
+              if (routing!=undefined && routing.length>params.rewriteRoutingThrottleSize){
+                 console.log("found big routing: "+routing);
+                 event.Put("_ctx.response.header.ROUTING_SIZE",routing.length);
+
+                if (event.Get("_ctx.request.body_length") > 0){
+
+                   var previousBody = event.Get("_ctx.request.body");
+
+                   if (previousBody!=undefined){
+
+                     //remove newline
+                     previousBody = previousBody.replace(/[\r\n]/gm, '');
+
+                     var newBody="";
+                     var meta={};
+                     meta.routing=routing;
+                     newBody+=JSON.stringify(meta);
+                     newBody+="\n"
+
+
+                     newBody+=previousBody;
+
+                     var path=event.Get("_ctx.request.path");
+                     var newPath=path.replace("/_search", "/_msearch");
+
+                     console.log(path+" -> "+ newPath);
+
+                     event.Put("_ctx.request.path",newPath);
+                     event.Put("_ctx.request.body",newBody);
+
+                     console.log(event.Get("_ctx.request.body"));
+
+                   }
+                }
+
+                 //clear routing
+                  event.Put("_ctx.request.query_args.routing","");
+
+
+              }
+
+            }
+      - echo:
+          message: $[[_ctx.request.path]]

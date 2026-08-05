@@ -1,0 +1,39 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+configs.auto_reload: true
+
+api:
+  enabled: true
+  network:
+    binding: $[[env.LR_GATEWAY_API_HOST]]
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 2000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+router:
+  - name: my_router
+    rules:
+      - method:
+          - GET
+        pattern:
+          - /hello
+        flow: hello
+
+flow:
+  - name: hello
+    filter:
+      - echo:
+          message: 'hello world'
+  - name: hello2
+    filter:
+      - echo:
+          message: 'hello infini'

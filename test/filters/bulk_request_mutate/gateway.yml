@@ -1,0 +1,39 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 2000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: test
+    filter:
+      - bulk_request_mutate:
+          fix_null_id: true
+          generate_enhanced_id: true
+#          fix_null_type: true
+#          default_type: _doc
+#          default_index: m-index
+          index_rename:
+            "*": index-new
+            test-bulk: test-bulk-new
+            medcl-dr3: index3-new
+#          type_rename:
+#            "*": type-new
+#            type1: type-new
+#            type2: type-new
+#            doc: type-new
+#            doc1: type-new
+      - echo:
+          message: "$[[_ctx.request.body]]"
+router:
+  - name: my_router
+    default_flow: test

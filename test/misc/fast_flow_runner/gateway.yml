@@ -1,0 +1,59 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+api:
+  enabled: true
+  network:
+    binding: $[[env.LR_GATEWAY_API_HOST]]
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: primary-write-flow
+    filter:
+      - queue:
+          queue_name: 'backup'
+      - set_response:
+          body: '{"success":true}'
+          status: 200
+          content_type: application/json
+      - drop:
+  - name: direct-write-flow
+    filter:
+      - elasticsearch:
+          elasticsearch: 'backup'
+
+router:
+  - name: my_router
+    default_flow: direct-write-flow
+    rules:
+      - method:
+          - POST
+        pattern:
+          - /_bulk
+          - /{any_index}/_bulk
+        flow: primary-write-flow
+
+elasticsearch:
+  - name: backup
+    enabled: true
+    endpoints:
+      - $[[env.ELASTICSEARCH_ENDPOINT]]
+
+pipeline:
+  - name: queue_consumer
+    auto_start: true
+    keep_running: true
+    processor:
+      - fast_flow_runner:
+          input_queue: 'backup'
+          flow: direct-write-flow

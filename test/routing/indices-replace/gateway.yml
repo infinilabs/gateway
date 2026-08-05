@@ -1,0 +1,68 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: test_entry
+    enabled: true
+    router: default
+    max_concurrency: 20000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+router:
+  - name: default
+    default_flow: test
+    rules:
+      - method:
+          - "*"
+        pattern:
+          - "/{any_index}/_search"
+        flow:
+          - test
+
+flow:
+  - name: test
+    filter:
+      - javascript:
+          params:
+            clusterNames: ["cluster01", "cluster02", "cluster03"]
+          source: >
+            var console = require('console');
+            var params = {clusterNames: []};
+            function register(scriptParams) {
+                params = scriptParams;
+            }
+            function process(event) {
+              var originalPath = event.Get("_ctx.request.path");
+              // console.info("Original Request Path [%s]", originalPath);
+
+              var matches = originalPath.match(/\/?(.*?)\/_search/)
+              var indexNames = [];
+              if(matches && matches.length > 1) {
+                  indexNames = matches[1].split(",")
+              }
+              var resultNames = []
+              if(indexNames.length > 0) {
+                  for(var i=0; i<indexNames.length; i++){
+                      if(indexNames[i].length > 0) {
+                          for(var j=0; j<params.clusterNames.length; j++){
+                              resultNames.push(params.clusterNames[j]+":"+indexNames[i])
+                          }
+                      }
+                  }
+              }
+
+              if (resultNames.length>0){
+                  var newPath="/"+resultNames.join(",")+"/_search";
+                  // console.info("New Request Path [%s]", newPath);
+                  event.Put("_ctx.request.path",newPath);
+                  // event.Put("index.rewritten", originalPath+" -> "+newPath);
+                  // event.Tag("js");
+              }
+            }
+      - echo:
+          message: $[[_ctx.request.path]]

@@ -1,0 +1,38 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 2000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: es1-flow
+    filter:
+      - echo:
+          message: "response from es1"
+  - name: es2-flow
+    filter:
+      - echo:
+          message: "response from es2"
+  - name: cross_cluster_search
+    filter:
+      - switch:
+          path_rules:
+            - prefix: "es1:"
+              flow: es1-flow
+            - prefix: "es2:"
+              flow: es2-flow
+      - echo:
+          message: "response from default es"
+
+router:
+  - name: my_router
+    default_flow: cross_cluster_search

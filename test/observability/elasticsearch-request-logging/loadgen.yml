@@ -1,0 +1,63 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+runner:
+  total_rounds: 1
+  no_warm: true
+  log_requests: true
+  assert_invalid: true
+  assert_error: true
+requests:
+  - request:
+      method: POST
+      url: http://$[[env.LR_GATEWAY_HOST]]/test-doc/_doc?refresh
+      body: '{ "a": "test body" }'
+    assert:
+      and:
+        - equals:
+            _ctx.response.status: 201
+  - request:
+      method: POST
+      url: http://$[[env.LR_GATEWAY_HOST]]/test-doc/_doc?refresh
+      body: '{ "a": "test body" }'
+    assert:
+      and:
+        - equals:
+            _ctx.response.status: 201
+  - sleep:
+      sleep_in_milli_seconds: 20000
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/gateway_requests/_search
+    assert:
+      and:
+        - equals:
+            _ctx.response.status: 200
+        - contains:
+            _ctx.response.body: 'test body'
+            _ctx.response.body: 'test-doc/_doc?refresh'
+        - not:
+            contains:
+              _ctx.response.body: '/sleep'
+  - request:
+      method: DELETE
+      url: http://$[[env.LR_GATEWAY_HOST]]/gateway_requests
+    assert:
+      and:
+        - equals:
+            _ctx.response.status: 200
+  - request:
+      method: DELETE
+      url: http://$[[env.LR_GATEWAY_HOST]]/test-doc
+    assert:
+      and:
+        - equals:
+            _ctx.response.status: 200
+  - request:
+      method: DELETE
+      url: http://$[[env.LR_GATEWAY_API_HOST]]/queue/gateway_requests
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body_json.acknowledged: true

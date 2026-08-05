@@ -1,0 +1,36 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+api:
+  enabled: true
+  network:
+    binding: $[[env.LR_GATEWAY_API_HOST]]
+
+router:
+  - name: my_router
+    default_flow: default-flow
+
+pipeline:
+  - name: source_scroll
+    auto_start: true
+    keep_running: true
+    processor:
+      - es_scroll:
+          slice_size: 2
+          batch_size: 5000
+          indices: "es_migration-test"
+          elasticsearch: source
+          elasticsearch_config:
+            name: source
+            enabled: true
+            endpoint: $[[env.ELASTICSEARCH_ENDPOINT]]
+          output_queue: source_index_dump
+          partition_size: 20
+          scroll_time: "5m"
+          index_rename:
+            "*": "es_migration-test-new"
+          remove_type: true

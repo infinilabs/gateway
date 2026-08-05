@@ -1,0 +1,58 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 200000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: echo
+    filter:
+      - set_response:
+          status: 201
+          content_type: "text/plain; charset=utf-8"
+          body: "hello world"
+      - set_response_header:
+          headers:
+            - Env -> Dev
+      - dump:
+          context:
+            - _sys.month_of_now
+            - _sys.weekday_of_now
+            - _sys.day_of_now
+            - _sys.hour_of_now
+            - _sys.minute_of_now
+            - _sys.second_of_now
+            - _sys.hostname
+            - _ctx.id
+            - _ctx.tls
+            - _ctx.remote_ip
+            - _ctx.remote_addr
+            - _ctx.local_ip
+            - _ctx.local_addr
+            - _ctx.request.host
+            - _ctx.request.method
+            - _ctx.request.uri
+            - _ctx.request.path
+            - _ctx.request.body
+            - _ctx.request.body_length
+            - _ctx.request.query_args.from
+            - _ctx.request.query_args.size
+            - _ctx.request.header.Accept
+            - _ctx.request.user
+            - _ctx.response.status
+            - _ctx.response.body
+            - _ctx.response.content_type
+            - _ctx.response.body_length
+            - _ctx.response.header.Env
+router:
+  - name: my_router
+    default_flow: echo

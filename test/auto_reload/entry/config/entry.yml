@@ -1,0 +1,7 @@
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router2
+    max_concurrency: 2000
+    network:
+      binding: 127.0.0.1:8001

@@ -1,0 +1,70 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: primary-or-slave-entry
+    enabled: true
+    router: primary-router
+    max_concurrency: 10000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+    tls:
+      enabled: false
+
+flow:
+  - name: primary-read-flow
+    filter:
+      - elasticsearch:
+          elasticsearch: 'primary'
+          refresh:
+            enabled: true
+            interval: 30s
+      - set_response:
+          when:
+            equals:
+              _ctx.response.body_json.status: 404
+          body: 'fallback'
+          status: 200
+
+router:
+  - name: primary-router
+    default_flow: primary-read-flow
+    rules:
+      - method:
+          - 'GET'
+          - 'HEAD'
+        pattern:
+          - '/{any:*}'
+        flow:
+          - primary-read-flow
+      - method:
+          - '*'
+        pattern:
+          - '/_cat'
+          - '/_sql'
+          - '/_cluster'
+          - '/_refresh'
+          - '/_count'
+          - '/_search'
+          - '/_msearch'
+          - '/_mget'
+          - '/{any_index}/_eql/search'
+          - '/{any_index}/_count'
+          - '/{any_index}/_search'
+          - '/{any_index}/_msearch'
+          - '/{any_index}/_mget'
+        flow:
+          - primary-read-flow
+
+elasticsearch:
+  - name: primary
+    enabled: true
+    endpoints:
+      - $[[env.ELASTICSEARCH_ENDPOINT]]
+    discovery:
+      enabled: true
+      interval: 60s
