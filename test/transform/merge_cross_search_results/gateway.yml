@@ -1,8 +1,7 @@
 env:
   GATEWAY_HOST: '0.0.0.0:8001'
   LR_ELASTICSEARCH_ENDPOINT1: 'http://localhost:9200'
-  LR_ELASTICSEARCH_ENDPOINT2: 'http://localhost:9202'
-  LR_ELASTICSEARCH_ENDPOINT3: 'http://localhost:9201'
+  LR_ELASTICSEARCH_ENDPOINT2: 'http://localhost:9201'
 
 path.data: data
 path.logs: log
@@ -279,7 +278,7 @@ flow:
       #     username: admin
       #     password: admin
       - elasticsearch:
-          elasticsearch: system
+          elasticsearch: es1
   - name: mixed-flow
     filter:
       - if:
@@ -383,13 +382,6 @@ elasticsearch:
     enabled: true
     endpoints:
       - $[[env.LR_ELASTICSEARCH_ENDPOINT2]]
-    basic_auth:
-      username: admin
-      password: admin
-  - name: system
-    enabled: true
-    endpoints:
-      - $[[env.LR_ELASTICSEARCH_ENDPOINT3]]
     basic_auth:
       username: admin
       password: admin

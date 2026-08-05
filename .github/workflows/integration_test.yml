@@ -57,50 +57,74 @@ jobs:
           mkdir -p ~/es_install_dir
           curl -sSL http://get.infini.cloud | bash -s -- -p easysearch -d ~/es_install_dir -v 2.3.0
 
+          # Second instance for cross-cluster tests, copied from the same install
+          cp -r ~/es_install_dir ~/es_install_dir_9201
+
           # Disable security by writing a minimal config
           cat > ~/es_install_dir/config/easysearch.yml <<EOF
           cluster.name: docker-cluster
+          node.name: node-9200
           network.host: 0.0.0.0
           http.port: 9200
+          transport.port: 9300
+          discovery.type: single-node
+          security.enabled: false
+          EOF
+
+          cat > ~/es_install_dir_9201/config/easysearch.yml <<EOF
+          cluster.name: docker-cluster-9201
+          node.name: node-9201
+          network.host: 0.0.0.0
+          http.port: 9201
+          transport.port: 9301
           discovery.type: single-node
           security.enabled: false
           EOF
 
           cd ~/es_install_dir && ./bin/initialize.sh -s
+          cd ~/es_install_dir_9201 && ./bin/initialize.sh -s
+
           cd ~/es_install_dir && nohup ./bin/easysearch > easysearch.log 2>&1 &
+          cd ~/es_install_dir_9201 && nohup ./bin/easysearch > easysearch.log 2>&1 &
 
           start_time=$(date +%s)
           timeout_secs=300
 
-          # Wait for port 9200 to be open
-          while ! nc -z 127.0.0.1 9200; do
-              elapsed=$(($(date +%s) - start_time))
-              if [ "$elapsed" -ge "$timeout_secs" ]; then
-                echo "Easysearch did not open port 9200 within ${timeout_secs}s"
-                tail -n 200 ~/es_install_dir/easysearch.log
-                exit 1
-              fi
-              echo "Easysearch not up after ${elapsed}s, retrying in 5s..."
-              sleep 5
+          # Wait for ports 9200/9201 to be open
+          for port in 9200 9201; do
+            while ! nc -z 127.0.0.1 $port; do
+                elapsed=$(($(date +%s) - start_time))
+                if [ "$elapsed" -ge "$timeout_secs" ]; then
+                  echo "Easysearch did not open port $port within ${timeout_secs}s"
+                  tail -n 200 ~/es_install_dir/easysearch.log
+                  tail -n 200 ~/es_install_dir_9201/easysearch.log
+                  exit 1
+                fi
+                echo "Easysearch port $port not up after ${elapsed}s, retrying in 5s..."
+                sleep 5
+            done
+            echo "Easysearch is listening on 127.0.0.1:$port"
           done
-          echo "Easysearch is listening on 127.0.0.1:9200"
 
-          # Wait for cluster to be green/yellow
-          while true; do
-              elapsed=$(($(date +%s) - start_time))
-              if [ "$elapsed" -ge "$timeout_secs" ]; then
-                echo "Easysearch cluster did not become ready within ${timeout_secs}s"
-                tail -n 200 ~/es_install_dir/easysearch.log
-                exit 1
-              fi
-              health=$(curl -s http://127.0.0.1:9200/_cluster/health)
-              status=$(echo "$health" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("status", ""))')
-              if [ "$status" = "green" ] || [ "$status" = "yellow" ]; then
-                echo "Easysearch cluster status: $status"
-                break
-              fi
-              echo "Cluster status is ${status:-unknown} after ${elapsed}s, retrying in 5s..."
-              sleep 5
+          # Wait for clusters to be green/yellow
+          for port in 9200 9201; do
+            while true; do
+                elapsed=$(($(date +%s) - start_time))
+                if [ "$elapsed" -ge "$timeout_secs" ]; then
+                  echo "Easysearch cluster on $port did not become ready within ${timeout_secs}s"
+                  tail -n 200 ~/es_install_dir/easysearch.log
+                  tail -n 200 ~/es_install_dir_9201/easysearch.log
+                  exit 1
+                fi
+                health=$(curl -s http://127.0.0.1:$port/_cluster/health)
+                status=$(echo "$health" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("status", ""))')
+                if [ "$status" = "green" ] || [ "$status" = "yellow" ]; then
+                  echo "Easysearch cluster on $port status: $status"
+                  break
+                fi
+                echo "Cluster on $port status is ${status:-unknown} after ${elapsed}s, retrying in 5s..."
+                sleep 5
+            done
           done
 
       - name: Download loadgen
