@@ -16,7 +16,7 @@ Information about release notes of INFINI Gateway is provided here.
 - Fix busy-loop in heartbeat `ServerHandler` causing high CPU when clients connect then immediately disconnect (e.g. port scans, health check probes).
 - Fix multiple concurrency bugs in heartbeat and `floating_ip` modules: replace close-then-send pattern with `sync.Once` based `Stop()`, add timeout on `PushGRT` channel writes, use buffered `aliveChan` to prevent goroutine leaks, and add read lock protection for concurrent `CMap` access.
 - fix: entry hot reload fails with "address already in use" #137
-- fix: elasticsearch filter serves stale metadata after config reload #137
+- fix: refresh cached metadata on elasticsearch config reload #137
 - fix: index_backup never picks up indices created after startup #137
 
 ### ✈️ Improvements  

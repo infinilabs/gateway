@@ -139,6 +139,13 @@ func ClearFlowCache(flow string) {
 	flows.Delete(flow)
 }
 
+func ClearFlowCaches() {
+	flows.Range(func(key, value any) bool {
+		flows.Delete(key)
+		return true
+	})
+}
+
 func GetAllFlows() map[string]FilterFlow {
 	data := map[string]FilterFlow{}
 	flows.Range(func(key, value any) bool {

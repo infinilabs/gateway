@@ -43,6 +43,17 @@ type Elasticsearch struct {
 	param.Parameters
 	config   *ProxyConfig
 	instance *ReverseProxy
+	// Cached metadata. 
+	// 
+	// An elasticsearch config reload replaces the metadata
+	// object in the framework registry, which would leave this pointer
+	// stale. 
+	// Instead of mutating this field in place, the gateway handles
+	// the reload by dropping the cached flows: entries re-resolve their
+	// flow handlers, the flows rebuild, and this filter is reconstructed
+	// holding the fresh metadata. The stale filter is never written to and
+	// becomes unreachable once in-flight requests on the old flow drain.
+	metadata *elastic.ElasticsearchMetadata
 }
 
 func (filter *Elasticsearch) Name() string {
@@ -120,6 +131,7 @@ func New(c *config.Config) (pipeline.Filter, error) {
 	}
 
 	runner := Elasticsearch{config: &cfg}
+	runner.metadata = elastic.GetMetadata(cfg.Elasticsearch)
 
 	runner.instance = NewReverseProxy(&cfg)
 
@@ -128,8 +140,9 @@ func New(c *config.Config) (pipeline.Filter, error) {
 	return &runner, nil
 }
 
-// Metadata is replaced with a new object on config reload, so it must be
-// looked up every time instead of cached on the filter.
 func (filter *Elasticsearch) getMetadata() *elastic.ElasticsearchMetadata {
-	return elastic.GetMetadata(filter.config.Elasticsearch)
+	if filter.metadata == nil {
+		filter.metadata = elastic.GetMetadata(filter.config.Elasticsearch)
+	}
+	return filter.metadata
 }

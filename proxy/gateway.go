@@ -126,6 +126,42 @@ func (module *GatewayModule) handleConfigureChange() {
 		}
 	})
 
+	NotifyOnConfigSectionChange("elasticsearch", func(pCfg, cCfg *Config) {
+
+		defer func() {
+			if !global.Env().IsDebug {
+				if r := recover(); r != nil {
+					var v string
+					switch r.(type) {
+					case error:
+						v = r.(error).Error()
+					case runtime.Error:
+						v = r.(runtime.Error).Error()
+					case string:
+						v = r.(string)
+					}
+					log.Error("error on apply elasticsearch change,", v)
+				}
+			}
+		}()
+
+		if cCfg != nil {
+			// The framework replaces the cluster metadata with fresh objects
+			// on elasticsearch config reload, while cached flows hold filters
+			// that captured the old metadata pointers. Drop the cached flows
+			// and re-resolve the entry flow handlers so filters rebuild
+			// against the fresh metadata, the same way flow changes are
+			// applied. Registered after the framework's own elasticsearch
+			// reload callback (system module starts first), so the new
+			// metadata is already in place when flows rebuild.
+			common.ClearFlowCaches()
+			for _, v := range module.entryPoints {
+				v.RefreshDefaultFlow()
+				v.RefreshTracingFlow()
+			}
+		}
+	})
+
 	NotifyOnConfigSectionChange("router", func(pCfg, cCfg *Config) {
 		defer func() {
 			if !global.Env().IsDebug {
