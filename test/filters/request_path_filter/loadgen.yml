@@ -1,0 +1,25 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+runner:
+  total_rounds: 1
+  no_warm: true
+  log_requests: true
+  assert_invalid: true
+  assert_error: true
+requests:
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/medcl/_search
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body: 'hello world !'
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/x-medcl/_search
+    assert:
+      equals:
+        _ctx.response.status: 403
+        _ctx.response.body_json.message: 'request not allowed.'

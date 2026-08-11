@@ -1,0 +1,59 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+  ES_DATA_PATH: /home/runner/es_install_dir/data
+  MINIO_API_HOST: 127.0.0.1:16426
+  MINIO_TEST_BUCKET: test-bucket
+
+runner:
+  total_rounds: 1
+  no_warm: true
+  log_requests: true
+  assert_invalid: true
+  assert_error: true
+requests:
+  - request:
+      method: POST
+      url: http://$[[env.LR_GATEWAY_HOST]]/test/_doc
+      body: '{"test":"abc"}'
+    assert:
+      equals:
+        _ctx.response.status: 201
+  - request:
+      method: POST
+      url: http://$[[env.LR_GATEWAY_HOST]]/test/_doc
+      body: '{"test":"abc"}'
+    assert:
+      equals:
+        _ctx.response.status: 201
+  - request:
+      method: POST
+      url: http://$[[env.LR_GATEWAY_HOST]]/test/_doc
+      body: '{"test":"abc"}'
+    assert:
+      equals:
+        _ctx.response.status: 201
+  - sleep:
+      sleep_in_milli_seconds: 20000
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/test
+    assert:
+      equals:
+        _ctx.response.status: 200
+    register:
+      - index_id: _ctx.response.body_json.test.settings.index.uuid
+  - request:
+      method: HEAD
+      url: http://$[[env.MINIO_API_HOST]]/$[[env.MINIO_TEST_BUCKET]]$[[env.ES_DATA_PATH]]/nodes/0/indices/$[[index_id]]/0/index/_0.cfs
+    assert:
+      equals:
+        _ctx.response.status: 200
+  - request:
+      method: DELETE
+      url: http://$[[env.LR_GATEWAY_HOST]]/test
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body_json.acknowledged: true

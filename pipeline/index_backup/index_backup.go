@@ -258,6 +258,54 @@ func (processor *IndexBackupProcessor) Process(ctx *pipeline.Context) error {
 	if err != nil {
 		panic(err)
 	}
+	pathToWatch := processor.resolveWatchPaths(meta, indices)
+	if len(pathToWatch) == 0 {
+		// Nothing to watch yet. The routing table comes from periodically
+		// refreshed cluster metadata and may lag behind index creation, so
+		// bail out and let the pipeline loop retry shortly instead of
+		// parking in the timer loop with an empty watch set forever.
+		log.Debugf("index backup [%v]: no local primary shard found for [%v], retry later", processor.Name(), processor.config.Index)
+		return nil
+	}
+	for indexUUID, path := range pathToWatch {
+		processor.initialCloneIndex(indexUUID, path)
+	}
+
+	//#on agent
+	//each node should find shard's location
+	//upload file to s3 and enable new files watch
+
+	//upload checker
+	timer := util.AcquireTimer(60 * time.Second)
+	for {
+		select {
+		case <-ctx.Context.Done():
+			return nil
+		case <-timer.C:
+			timer.Reset(60 * time.Second)
+			// Re-resolve on every tick: metadata is replaced on refresh and
+			// shards may move or new indices may appear while watching.
+			freshMeta := elastic.GetMetadata(processor.config.Elasticsearch)
+			if freshMeta == nil {
+				continue
+			}
+			freshIndices, err := elastic.GetClient(processor.config.Elasticsearch).GetIndices(processor.config.Index)
+			if err != nil {
+				log.Errorf("index backup [%v]: failed to list indices, %v", processor.Name(), err)
+				continue
+			}
+			for indexUUID, path := range processor.resolveWatchPaths(freshMeta, freshIndices) {
+				pathToWatch[indexUUID] = path
+				processor.initialCloneIndex(indexUUID, path)
+			}
+			break
+		}
+	}
+}
+
+// Helper function to map each matching index's primary shards to their local
+// on-disk index folder, based on the cluster routing table in meta.
+func (processor *IndexBackupProcessor) resolveWatchPaths(meta *elastic.ElasticsearchMetadata, indices *map[string]elastic.IndexInfo) map[string]string {
 	pathToWatch := map[string]string{}
 
 	for indexName, indexInfo := range *indices {
@@ -295,7 +343,6 @@ func (processor *IndexBackupProcessor) Process(ctx *pipeline.Context) error {
 									util.ToString(v.Shard),
 									"index")
 
-								processor.initialCloneIndex(indexInfo.ID, path)
 								pathToWatch[indexInfo.ID] = path
 								break
 							}
@@ -306,24 +353,7 @@ func (processor *IndexBackupProcessor) Process(ctx *pipeline.Context) error {
 		}
 	}
 
-	//#on agent
-	//each node should find shard's location
-	//upload file to s3 and enable new files watch
-
-	//upload checker
-	timer := util.AcquireTimer(60 * time.Second)
-	for {
-		select {
-		case <-ctx.Context.Done():
-			return nil
-		case <-timer.C:
-			timer.Reset(60 * time.Second)
-			for indexUUID, path := range pathToWatch {
-				processor.initialCloneIndex(indexUUID, path)
-			}
-			break
-		}
-	}
+	return pathToWatch
 }
 
 func (processor *IndexBackupProcessor) updateLastFileUploadedTimestamp(uuid, file string, timestamp int64) {

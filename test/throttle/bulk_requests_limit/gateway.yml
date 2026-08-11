@@ -1,0 +1,54 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+entry:
+  - name: test_entry
+    enabled: true
+    router: default
+    max_concurrency: 20000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+router:
+  - name: default
+    default_flow: test
+
+flow:
+  - name: test
+    filter:
+      - bulk_request_throttle:
+          indices:
+            bulk_requests_limit-test:
+              max_requests: 2
+              action: drop
+              message: "test writing too fast。"
+              log_warn_message: true
+            bulk_requests_limit-test1:
+              max_bytes: 128
+              action: drop
+              message: "test1 writing too fast。"
+              log_warn_message: true
+            filebeat-*:
+              max_bytes: 512
+              action: drop
+              message: "filebeat indices writing too fast。"
+              log_warn_message: true
+      - elasticsearch:
+          elasticsearch: test_cluster
+      - dump:
+          context:
+            - _ctx.response.body_json.responses.[0].status
+            - _ctx.response.body_json.responses.[0].took
+            - _ctx.response.body_json.responses.[1].status
+          when:
+            contains:
+              _ctx.request.path: /_msearch
+
+elasticsearch:
+  - name: test_cluster
+    enabled: true
+    endpoints:
+      - $[[env.ELASTICSEARCH_ENDPOINT]]
+    discovery:
+      enabled: false

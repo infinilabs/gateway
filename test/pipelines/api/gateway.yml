@@ -1,0 +1,27 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+configs.auto_reload: true
+
+api:
+  enabled: true
+  network:
+    binding: $[[env.LR_GATEWAY_API_HOST]]
+
+metrics:
+  enabled: true
+  queue: metrics
+  instance:
+    enabled: true
+  network:
+    enabled: true
+    summary: true
+
+elasticsearch:
+  - name: logserver
+    enabled: true
+    endpoints:
+      - $[[env.ELASTICSEARCH_ENDPOINT]]

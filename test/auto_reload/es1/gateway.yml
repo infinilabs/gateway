@@ -1,0 +1,62 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+configs.auto_reload: true
+
+api:
+  enabled: true
+  network:
+    binding: $[[env.LR_GATEWAY_API_HOST]]
+
+entry:
+  - max_concurrency: 200000
+    router: my-router
+    name: my-entry
+    enabled: true
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+      reuse_port: false
+
+router:
+  - name: my-router
+    rules:
+      - method: '*'
+        pattern:
+          - /es-710-test/company_basic/_search
+        flow:
+          - es-710-test_company_basic
+
+elasticsearch:
+  - endpoints:
+      - $[[env.ELASTICSEARCH_ENDPOINT]]
+    traffic_control:
+      max_qps_per_node: 20000
+    discovery:
+      refresh:
+        interval: 30s
+        enabled: true
+      enabled: true
+    name: es-710-test
+    enabled: true
+
+flow:
+  - name: es-710-test_company_basic
+    filter:
+    - set_context:
+        context:
+          _ctx.request.path: /company_basic/_search
+    - request_path_limiter:
+        rules:
+          - pattern: /(?P<index_name>company_basic)/_search
+            max_qps: 200
+            group: index_name
+            message: 'out of the limit : 200'
+    - basic_auth:
+        valid_users:
+          zk: '12345'
+    - elasticsearch:
+        elasticsearch: es-710-test
+        refresh:
+          interval: 30s
+          enabled: true

@@ -1,0 +1,68 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 2000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: test
+    filter:
+      - context_filter:
+          context: _ctx.request.path
+          message: "request not allowed."
+          status: 403
+          must: #must match all rules to continue
+            prefix:
+              - /medcl
+            contain:
+              - _search
+            suffix:
+              - _search
+            wildcard:
+              - /*/_search
+            regex:
+              - ^/m[\w]+dcl
+          must_not: # any match will be filtered
+            prefix:
+              - /.kibana
+              - /_security
+              - /_security
+              - /gateway_requests*
+              - /.reporting
+              - /_monitoring/bulk
+            contain:
+              - _refresh
+            suffix:
+              - _count
+              - _refresh
+            wildcard:
+              - /*/_refresh
+            regex:
+              - ^/\.m[\w]+dcl
+          should:
+            prefix:
+              - /medcl
+            contain:
+              - _search
+              - _async_search
+            suffix:
+              - _refresh
+            wildcard:
+              - /*/_refresh
+            regex:
+              - ^/m[\w]+dcl
+      - echo:
+          message: "hello world !"
+
+router:
+  - name: my_router
+    default_flow: test

@@ -1,0 +1,30 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 2000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: test
+    filter:
+      - request_api_key_limiter:
+          id:
+            - VuaCfGcBCdbkQm-e5aOx
+          max_requests: 1
+          action: drop # retry or drop
+          message: "your api_key reached our limit"
+      - set_response:
+          status: 200
+          body: 'hello'
+router:
+  - name: my_router
+    default_flow: test

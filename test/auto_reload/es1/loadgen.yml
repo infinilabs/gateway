@@ -1,0 +1,52 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+runner:
+  total_rounds: 1
+  no_warm: true
+  log_requests: true
+  assert_invalid: true
+  assert_error: true
+requests:
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/es-710-test/company_basic/_search
+      basic_auth:
+        username: 'zk'
+        password: '1234'
+    assert:
+      equals:
+        _ctx.response.status: 401
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/es-710-test/company_basic/_search
+      basic_auth:
+        username: 'zk'
+        password: '12345'
+    assert:
+      equals:
+        _ctx.response.status: 404
+  - request:
+      method: PUT
+      url: http://$[[env.LR_GATEWAY_API_HOST]]/config/
+      body: |
+        {
+          "configs": {
+            "flow.yml": "flow:\n  - filter:\n    - set_context:\n        context:\n          _ctx.request.path: /company_basic/_search\n    - request_path_limiter:\n        rules:\n          - pattern: /(?P\u003cindex_name\u003ecompany_basic)/_search\n            max_qps: 200\n            group: index_name\n            message: 'out of the limit : 200'\n    - basic_auth:\n        valid_users:\n          zk: '1234'\n    - elasticsearch:\n        elasticsearch: es-710-test\n        refresh:\n          interval: 30s\n          enabled: true\n    name: es-710-test_company_basic\n"
+          }
+        }
+    assert:
+      equals:
+        _ctx.response.status: 200
+  - sleep:
+      sleep_in_milli_seconds: 5000
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/es-710-test/company_basic/_search
+      basic_auth:
+        username: 'zk'
+        password: '1234'
+    assert:
+      equals:
+        _ctx.response.status: 404

@@ -1,0 +1,54 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 2000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: test
+    filter:
+      - response_status_filter:
+          exclude:
+            - 200
+            - 201
+          include:
+            - 404
+            - 500
+          action: deny
+          status: 200
+          message: 'request filtered!'
+  - name: ok-path
+    filter:
+      - set_response:
+          status: 200
+          body: you should not see it
+  - name: bad-path
+    filter:
+      - set_response:
+          status: 404
+          body: not found
+
+router:
+  - name: my_router
+    rules:
+      - method: '*'
+        pattern:
+          - '/test1'
+        flow:
+          - ok-path
+          - test
+      - method: '*'
+        pattern:
+          - '/test2'
+        flow:
+          - bad-path
+          - test

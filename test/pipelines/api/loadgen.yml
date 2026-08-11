@@ -1,0 +1,76 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+runner:
+  total_rounds: 1
+  no_warm: true
+  log_requests: true
+  assert_invalid: true
+  assert_error: true
+requests:
+  - request:
+      method: POST
+      url: http://$[[env.LR_GATEWAY_API_HOST]]/pipeline/tasks/
+      body: |
+        {
+          "name": "test-pipeline",
+          "auto_start": false,
+          "keep_running": false,
+          "retry_delay_in_ms": 1000,
+          "processor": [
+            {
+              "indexing_merge": {
+                "input_queue": "metrics",
+                "elasticsearch": "logserver",
+                "index_name": "infini-metrics",
+                "output_queue": {
+                  "name": "bulk_requests",
+                  "label": {
+                    "tag": "metrics"
+                  }
+                },
+                "worker_size": 1,
+                "bulk_size_in_mb": 10
+              }
+            }
+          ]
+        }
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body_json.acknowledged: true
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_API_HOST]]/pipeline/task/test-pipeline
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body_json.state: STOPPED
+  - request:
+      method: POST
+      url: http://$[[env.LR_GATEWAY_API_HOST]]/pipeline/task/test-pipeline/_start
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body_json.acknowledged: true
+  - request:
+      method: POST
+      url: http://$[[env.LR_GATEWAY_API_HOST]]/pipeline/task/test-pipeline/_stop
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body_json.acknowledged: true
+  - request:
+      method: DELETE
+      url: http://$[[env.LR_GATEWAY_API_HOST]]/pipeline/task/test-pipeline
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body_json.acknowledged: true
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_API_HOST]]/pipeline/task/test-pipeline
+    assert:
+      equals:
+        _ctx.response.status: 404

@@ -1,0 +1,57 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+stats:
+  enabled: false
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 10000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: default_flow
+    filter:
+      - elasticsearch:
+          elasticsearch: prod
+          max_connection_per_node: 1000
+      - set_response_header:
+          headers:
+            - x-elastic-product -> Elasticsearch
+  - name: overwrite_flow
+    filter:
+      - elasticsearch:
+          elasticsearch: prod
+          max_connection_per_node: 1000
+      - set_context:
+          context:
+            _ctx.response.body_json.version.number: '"7.14.0"'
+            _ctx.response.body_json.version.build_flavor: '"default"'
+            _ctx.response.body_json.tagline: '"You Know, for Search"'
+      - set_response_header:
+          headers:
+            - x-elastic-product -> Elasticsearch
+
+router:
+  - name: my_router
+    default_flow: default_flow
+    rules:
+      - method:
+          - "GET"
+        pattern:
+          - "/"
+        flow:
+          - overwrite_flow
+
+elasticsearch:
+  - name: prod
+    enabled: true
+    endpoints:
+     - $[[env.ELASTICSEARCH_ENDPOINT]]

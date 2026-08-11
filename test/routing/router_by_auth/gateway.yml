@@ -1,0 +1,39 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 200000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: default_flow
+    filter:
+      - context_filter: #try admin
+          context: _ctx.request.header.Authorization
+          action: redirect_flow
+          exclude:
+            - "Basic ZWxhc3RpYzowRThRbG5OcHMzNjJxQWY3SjEzSDE1REI="
+          flow: admin_flow
+      #go rest flow
+      - echo:
+          message: "access denied"
+      - set_response:
+          status: 403
+          content_type: application/json
+          body: '{"message":"access denied"}'
+  - name: admin_flow
+    filter:
+      - echo:
+          message: "hello admin"
+  - name: readonly_flow
+    filter:
+      - echo:
+          message: "hello readonly"
+router:
+  - name: my_router
+    default_flow: default_flow

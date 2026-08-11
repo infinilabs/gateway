@@ -1,0 +1,27 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 2000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: test
+    filter:
+      - request_body_regex_replace:
+          pattern: '"size":10000'
+          to: '"size":100'
+      - echo:
+          message: $[[_ctx.request.to_string]]
+
+router:
+  - name: my_router
+    default_flow: test

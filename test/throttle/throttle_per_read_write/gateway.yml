@@ -1,0 +1,95 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: test_entry
+    enabled: true
+    router: default
+    max_concurrency: 20000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+router:
+  - name: default
+    default_flow: write_flow
+    rules:
+      - method:
+          - "GET"
+          - "HEAD"
+        pattern:
+          - "/{any:*}"
+        flow:
+          - read_flow
+      - method:
+          - "*"
+        pattern:
+          - "/_cat"
+          - "/_sql"
+          - "/_cluster"
+          - "/_refresh"
+          - "/_count"
+          - "/_search"
+          - "/_msearch"
+          - "/_mget"
+          - "/{any_index}/_eql/search"
+          - "/{any_index}/_count"
+          - "/{any_index}/_search"
+          - "/{any_index}/_msearch"
+          - "/{any_index}/_mget"
+        flow:
+          - read_flow
+
+flow:
+  - name: forward_to_es
+    filter:
+      - elasticsearch:
+          elasticsearch: es-server
+  - name: read_flow
+    filter:
+      - flow:
+          flows:
+            - limit_read_tps
+            - limit_body_size
+            - forward_to_es
+  - name: write_flow
+    filter:
+      - flow:
+          flows:
+            - limit_write_tps
+            - limit_body_size
+            - forward_to_es
+  - name: limit_body_size
+    filter:
+      - if:
+         range:
+           _ctx.request.body_length:
+             gte: 256
+        then:
+          - set_response:
+              body: '{"message":"request body is too large."}'
+              status: 400
+          - drop:
+  - name: limit_write_tps
+    filter:
+      - request_client_ip_limiter:
+          max_requests: 1 #1 req/s
+          status: 429
+          message: '{"message":"[write] request too frequently."}'
+          action: drop
+  - name: limit_read_tps
+    filter:
+      - request_client_ip_limiter:
+          max_requests: 1 #1 req/s
+          status: 429
+          message: '{"message":"[read] request too frequently."}'
+          action: drop
+
+elasticsearch:
+  - name: es-server
+    enabled: true
+    endpoints:
+      - $[[env.ELASTICSEARCH_ENDPOINT]]

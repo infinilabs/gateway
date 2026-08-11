@@ -1,0 +1,60 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+  MINIO_API_HOST: 127.0.0.1:16426
+  MINIO_TEST_BUCKET: test-bucket
+  MINIO_API_USERNAME: minioadmin
+  MINIO_API_PASSWORD: minioadmin
+
+api:
+  enabled: true
+  network:
+    binding: $[[env.LR_GATEWAY_API_HOST]]
+
+node:
+  id: cfkr9215k34l5enovsng # NOTE: need to align with the one in loadgen.yml
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 2000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: test
+    filter:
+      - queue:
+          queue_name: disk_test
+      - echo:
+          message: 'ok'
+
+router:
+  - name: my_router
+    default_flow: test
+    rules:
+      - method:
+          - POST
+        pattern:
+          - /test
+        flow: test
+
+disk_queue:
+  #enabled: true
+  compress:
+    idle_threshold: 1
+  max_bytes_per_file: 1
+  upload_to_s3: true
+  sync_every_records: 1
+  s3:
+    server: my_blob_store
+    location: cn-beijing-001
+    bucket: $[[env.MINIO_TEST_BUCKET]]
+
+s3:
+  my_blob_store:
+    endpoint: $[[env.MINIO_API_HOST]]
+    access_key: $[[env.MINIO_API_USERNAME]]
+    access_secret: $[[env.MINIO_API_PASSWORD]]

@@ -1,0 +1,46 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 10000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: v2-flow
+    filter:
+      - elasticsearch:
+          elasticsearch: v2
+  - name: v7-flow
+    filter:
+      - elasticsearch:
+          elasticsearch: v7
+  - name: cross-cluster-search
+    filter:
+      - switch:
+          path_rules:
+            - prefix: "v2:"
+              flow: v2-flow
+            - prefix: "v7:"
+              flow: v7-flow
+      - elasticsearch:
+          elasticsearch: v7
+
+router:
+  - name: my_router
+    default_flow: cross-cluster-search
+
+elasticsearch:
+  - name: v2
+    enabled: true
+    endpoint: $[[env.ELASTICSEARCH_ENDPOINT]]
+  - name: v7
+    enabled: true
+    endpoint: $[[env.ELASTICSEARCH_ENDPOINT]]

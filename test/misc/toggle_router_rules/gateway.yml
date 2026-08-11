@@ -1,0 +1,82 @@
+env:
+  LR_GATEWAY_HOST1: 0.0.0.0:8001
+  LR_GATEWAY_HOST2: 0.0.0.0:8002
+  LR_GATEWAY_HOST3: 0.0.0.0:8003
+  LR_GATEWAY_HOST4: 0.0.0.0:8004
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry1
+    enabled: true
+    router: my_router
+    max_concurrency: 200000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST1]]
+  - name: my_es_entry2
+    enabled: true
+    router: toggle_enabled_router
+    max_concurrency: 200000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST2]]
+  - name: my_es_entry3
+    enabled: true
+    router: toggle_enabled_router_1
+    max_concurrency: 200000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST3]]
+  - name: my_es_entry4
+    enabled: true
+    router: toggle_enabled_router_2
+    max_concurrency: 200000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST4]]
+
+flow:
+  - name: hello_world
+    filter:
+      - echo:
+          message: 'hello world'
+  - name: toggled
+    filter:
+      - echo:
+          message: 'hello toggled'
+router:
+  - name: my_router
+    default_flow: hello_world
+  - name: toggle_enabled_router
+    default_flow: hello_world
+    rule_toggle_enabled: true
+    rules:
+      - method:
+          - "*"
+        pattern:
+          - "/_hello"
+        enabled: true
+        flow:
+          - toggled
+  - name: toggle_enabled_router_1
+    default_flow: hello_world
+    rule_toggle_enabled: false
+    rules:
+      - method:
+          - "*"
+        pattern:
+          - "/_hello"
+        enabled: true
+        flow:
+          - toggled
+  - name: toggle_enabled_router_2
+    default_flow: hello_world
+    rule_toggle_enabled: true
+    rules:
+      - method:
+          - "*"
+        pattern:
+          - "/_hello"
+        enabled: false
+        flow:
+          - toggled

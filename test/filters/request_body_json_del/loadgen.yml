@@ -1,0 +1,23 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+runner:
+  total_rounds: 1
+  no_warm: true
+  log_requests: true
+  assert_invalid: true
+  assert_error: true
+requests:
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/user/search
+      body: '{"query":{"bool":{"must":[{"range":{"age":{"gte":10,"lte":20}}}],"should":[{"term":{"gender":{"value":"male"}}}]}}}'
+
+    assert:
+      and:
+        - not:
+            exists:
+              - _ctx.response.body_json.query.bool.should
+        - exists:
+            - _ctx.response.body_json.query.bool.must

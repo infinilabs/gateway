@@ -1,0 +1,97 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+path.data: data
+path.logs: log
+
+stats:
+  enabled: false
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 10000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: es-flow
+    filter:
+      - elasticsearch:
+          elasticsearch: es-server
+  - name: es-cache-flow
+    filter:
+      - date_range_precision_tuning:
+          time_precision: 4
+      - get_cache:
+      - elasticsearch:
+          elasticsearch: es-server
+      - set_cache:
+  - name: request_logging
+    filter:
+      - logging:
+          queue_name: request_logging
+          max_request_body_size: 102400
+          max_response_body_size: 102400
+router:
+  - name: my_router
+    default_flow: es-flow
+    tracing_flow: request_logging
+    rules:
+      - method:
+          - 'GET'
+          - 'HEAD'
+        pattern:
+          - '/'
+          - '/_search'
+          - '/{any_index}/_search'
+        flow:
+          - es-cache-flow
+
+elasticsearch:
+  - name: es-server
+    enabled: true
+    endpoints:
+      - $[[env.ELASTICSEARCH_ENDPOINT]]
+  - name: logging-server #the logging server
+    enabled: true
+    endpoints:
+      - $[[env.ELASTICSEARCH_ENDPOINT]]
+    basic_auth:
+      username: admin
+      password: admin
+    discovery:
+      enabled: false
+
+pipeline:
+  - name: indexing_merge
+    auto_start: true
+    keep_running: true
+    processor:
+      - indexing_merge:
+          input_queue: 'request_logging'
+          elasticsearch: 'logging-server'
+          index_name: 'gateway_requests'
+          output_queue:
+            name: 'gateway_requests'
+            label:
+              tag: 'request_logging'
+          worker_size: 1
+          bulk_size_in_mb: 10
+  - name: logging_requests
+    auto_start: true
+    keep_running: true
+    processor:
+      - bulk_indexing:
+          bulk:
+            compress: true
+            batch_size_in_mb: 10
+            batch_size_in_docs: 5000
+          consumer:
+            fetch_max_messages: 100
+          queues:
+            type: indexing_merge
+          when:
+            cluster_available: ['logging-server']

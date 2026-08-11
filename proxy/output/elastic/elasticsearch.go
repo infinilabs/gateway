@@ -43,6 +43,16 @@ type Elasticsearch struct {
 	param.Parameters
 	config   *ProxyConfig
 	instance *ReverseProxy
+	// Cached metadata.
+	//
+	// An elasticsearch config reload replaces the metadata
+	// object in the framework registry, which would leave this pointer
+	// stale.
+	// Instead of mutating this field in place, the gateway handles
+	// the reload by dropping the cached flows: entries re-resolve their
+	// flow handlers, the flows rebuild, and this filter is reconstructed
+	// holding the fresh metadata. The stale filter is never written to and
+	// becomes unreachable once in-flight requests on the old flow drain.
 	metadata *elastic.ElasticsearchMetadata
 }
 

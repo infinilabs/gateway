@@ -1,0 +1,17 @@
+env:
+  GATEWAY_HOST: '0.0.0.0:8001'
+
+runner:
+  total_rounds: 1
+  no_warm: true
+  log_requests: true
+  assert_invalid: true
+  assert_error: true
+requests:
+  - request:
+      method: GET
+      url: http://$[[env.GATEWAY_HOST]]/_cat/indices?format=json
+    assert:
+      equals:
+        _ctx.response.status: 200
+#        _ctx.response.body: '02 - 06'

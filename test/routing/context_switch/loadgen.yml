@@ -1,0 +1,47 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8001
+  LR_GATEWAY_API_HOST: 127.0.0.1:9000
+  ELASTICSEARCH_ENDPOINT: http://127.0.0.1:9200
+runner:
+  total_rounds: 1
+  no_warm: true
+  log_requests: true
+  assert_invalid: true
+  assert_error: true
+  disable_header_names_normalizing: true
+requests:
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/abd-2023.01.06-abc/_search
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body: hello world [01][02]
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/abd-2023.02.06-abc/_search
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body: hello world [01][02]
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/abd-2023.03.06-abc/_search
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body: hello world [03]
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/abd-2023.04.06-abc/_search
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body: not_found
+  - request:
+      method: GET
+      url: http://$[[env.LR_GATEWAY_HOST]]/abd-2023.05.06-abc/_search
+    assert:
+      equals:
+        _ctx.response.status: 200
+        _ctx.response.body: not_found
