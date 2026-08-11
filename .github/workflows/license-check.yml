@@ -1,0 +1,26 @@
+name: License Dependency Check
+
+on:
+  pull_request
+
+jobs:
+  check-no-license-dependency:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up go toolchain
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: false
+          cache: false
+
+      - name: Check infini.sh/license is not in the module graph
+        run: |
+          if go mod graph 2>/dev/null | grep -q 'infini.sh/license'; then
+            echo "::error::infini.sh/license found in the module graph. The license dependency belongs to the enterprise plugin and must not be part of the open-source gateway. Check go.mod for a 'require infini.sh/license' or 'replace infini.sh/license =>' line and remove it."
+            exit 1
+          fi
+          echo "OK: infini.sh/license is not in the module graph"
