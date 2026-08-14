@@ -11,6 +11,12 @@ title: "版本历史"
 ### ❌ Breaking changes  
 ### 🚀 Features  
 ### 🐛 Bug fix  
+### ✈️ Improvements  
+
+## 1.31.2 (2026-08-12)
+### ❌ Breaking changes  
+### 🚀 Features  
+### 🐛 Bug fix  
 - 修复入口启动失败时监听端口未释放的问题，避免 reload 失败后端口仍被占用。
 - 修复 PR 检查在 Go Modules 模式下对旧 GOPATH vendor 工作区的依赖，并保持启用 `floating_ip` 时跨平台构建可用。
 - 修复心跳 `ServerHandler` 中因客户端连接后立即断开（如端口扫描、健康检查探针）导致的忙循环高 CPU 问题。
@@ -20,6 +26,7 @@ title: "版本历史"
 - fix: 修复 index_backup 无法处理 gateway 启动后新建索引的问题 #137
 
 ### ✈️ Improvements  
+- 此版本包含了底层 [Framework](https://docs.infinilabs.com/framework/main) 的更新，解决了一些常见问题，并增强了整体稳定性和性能。虽然 Gateway 本身没有直接的变更，但从 Framework 中继承的改进间接地使 Gateway 受益。
 - 预初始化 `es_scroll` 输出队列，减少 `_routing` 相关噪音日志，并统一 scroll 与 bulk 处理路径的耗时/QPS 日志格式。
 - test: 新增集成测试 #137
 
