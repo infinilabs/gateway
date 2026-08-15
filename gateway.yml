@@ -407,3 +407,12 @@ elastic:
   cluster_settings_check:
     enabled: false
     interval: 60s
+
+# OTLP/gRPC intake: standard OpenTelemetry LogsService endpoint.
+# Agents (or any OTel SDK/Collector) export logs here; records are
+# decoded into the otel log data model (snake_case attributes) and
+# appended to the log_processing queue for the processing pipeline.
+otlp:
+  enabled: true
+  bind: ":4317"
+  queue: log_processing

@@ -42,9 +42,16 @@ import (
 	stats2 "infini.sh/framework/modules/stats"
 	"infini.sh/framework/modules/task"
 	_ "infini.sh/framework/plugins"
+	// enterprise data-processing processors (dissect, field_standardize,
+	// ...) — private repo checked out under framework/plugins/enterprise.
+	_ "infini.sh/framework/plugins/enterprise/processors"
+	// otlp_export ships processed batches out via OTLP/gRPC when this
+	// gateway fans out to another collector tier.
+	_ "infini.sh/framework/plugins/otlp/export"
 	stats "infini.sh/framework/plugins/stats_statsd"
 	"infini.sh/gateway/config"
 	_ "infini.sh/gateway/pipeline"
+	"infini.sh/gateway/otlp"
 	"infini.sh/gateway/proxy"
 	"infini.sh/gateway/service/floating_ip"
 	"infini.sh/gateway/service/forcemerge"
@@ -60,6 +67,7 @@ func setup() {
 	module.RegisterSystemModule(&queue.Module{})
 	module.RegisterSystemModule(&task.TaskModule{})
 	module.RegisterSystemModule(&api.APIModule{})
+	module.RegisterModuleWithPriority(&otlp.Module{}, 50)
 	module.RegisterModuleWithPriority(&pipeline.PipeModule{}, 100)
 
 	module.RegisterUserPlugin(forcemerge.ForceMergeModule{})
