@@ -416,3 +416,59 @@ otlp:
   enabled: true
   bind: ":4317"
   queue: log_processing
+
+# ---------------------------------------------------------------------------
+# Third-party log intake via Kafka (opt-in): consume an external Kafka
+# topic and run the same processing chain as OTLP-ingested records.
+#
+# pipeline:
+#   - name: kafka_log_processing
+#     enabled: false
+#     auto_start: true
+#     keep_running: true
+#     singleton: true
+#     processor:
+#       - consumer:
+#           queue_selector:
+#             keys:
+#               - log_processing
+#           consumer:
+#             group: gateway-log-processing
+#           message_field: messages
+#           processor:
+#             - for_each:
+#                 processor:
+#                   - dissect:
+#                       pattern: "%{log_level} %{service_name}: %{remainder}"
+#                       ignore_failure: true
+#                   - field_standardize:
+#                       mode: underscore
+#             - otlp_export:
+#                 endpoint: "127.0.0.1:4317"
+#                 insecure: true
+# kafka_queue:
+#   enabled: true
+#   brokers:
+#     - "127.0.0.1:9092"
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Managed-config server (opt-in): serve /instance/_register + /configs/_sync
+# so agents (and cascading gateways) register here and pull dynamic configs.
+# Point them at this gateway's web port:
+#
+#   configs:
+#     server:
+#       enabled: true
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Managed client (opt-in): register THIS gateway to a config manager
+# (LogPilot or an upstream gateway) and pull dynamic configs, so gateway
+# instances show up in the ingestion center like agents do:
+#
+#   configs:
+#     managed: true
+#     servers:
+#       - "http://logpilot:29000"
+# ---------------------------------------------------------------------------
