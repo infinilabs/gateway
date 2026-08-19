@@ -39,6 +39,7 @@ import (
 	queue2 "infini.sh/framework/modules/queue/disk_queue"
 	"infini.sh/framework/modules/redis"
 	"infini.sh/framework/modules/s3"
+	"infini.sh/framework/modules/sqlite"
 	stats2 "infini.sh/framework/modules/stats"
 	"infini.sh/framework/modules/task"
 	_ "infini.sh/framework/plugins"
@@ -47,8 +48,8 @@ import (
 	_ "infini.sh/framework/plugins/enterprise/processors"
 	// enterprise OTLP intake (gRPC :4317 module + HTTP filter) and
 	// otlp_export processor - private repo, self-register via init().
-	_ "infini.sh/framework/plugins/enterprise/otlp/intake"
 	_ "infini.sh/framework/plugins/enterprise/otlp/export"
+	_ "infini.sh/framework/plugins/enterprise/otlp/intake"
 	stats "infini.sh/framework/plugins/stats_statsd"
 	"infini.sh/gateway/config"
 	_ "infini.sh/gateway/pipeline"
@@ -63,6 +64,10 @@ func setup() {
 	module.RegisterSystemModule(&s3.S3Module{})
 	module.RegisterSystemModule(&queue2.DiskQueue{})
 	module.RegisterSystemModule(&redis.RedisModule{})
+	// sqlite registers the ORM handler (sqlite.orm.enabled in gateway.yml);
+	// must start BEFORE elastic — its Start() loads clusters from the ORM
+	// and panics when no handler is registered yet.
+	module.RegisterModuleWithPriority(&sqlite.SQLiteModule{}, -100) // before elastic: it loads clusters from the ORM at Start
 	module.RegisterSystemModule(&elastic.ElasticModule{})
 	module.RegisterSystemModule(&queue.Module{})
 	module.RegisterSystemModule(&task.TaskModule{})
