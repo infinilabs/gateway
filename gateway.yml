@@ -1,3 +1,6 @@
+node:
+  id: gw1-fixed
+  name: GW1
 allow_multi_instance: true
 #for more config examples, please visit: https://github.com/infinilabs/testing
 
@@ -17,7 +20,7 @@ path.data: data
 path.logs: log
 path.configs: config # directory of additional gateway configurations
 
-configs.auto_reload: false # set true to auto reload gateway configurations
+configs.auto_reload: true # set true to auto reload gateway configurations
 
 ## modules can be disabled by setting enabled to false
 #modules:
@@ -414,8 +417,11 @@ elastic:
 # appended to the log_processing queue for the processing pipeline.
 otlp:
   enabled: true
-  bind: ":4317"
+  bind: "0.0.0.0:4317"
   queue: log_processing
+  # large single records (e.g. long CSV/JSON lines) batch up quickly;
+  # default gRPC limit is 4MB which rejects legit agent shipments
+  max_receive_message_size: 134217728
 
 # ---------------------------------------------------------------------------
 # Third-party log intake via Kafka (opt-in): consume an external Kafka
@@ -472,3 +478,32 @@ otlp:
 #     servers:
 #       - "http://logpilot:29000"
 # ---------------------------------------------------------------------------
+
+configs:
+  managed: true
+  servers:
+    - "http://localhost:29000"
+  # one-time enrollment ticket: obtain from LogPilot UI (接入中心 → 注册券),
+  # or inject via env: enrollment_token: $[[env.ENROLLMENT_TOKEN]]
+  enrollment_token: ""
+
+sqlite:
+  enabled: true
+  orm:
+    enabled: true
+
+web:
+  enabled: true
+  embedding_api: true
+  network:
+    binding: 127.0.0.1:2901
+
+# 集群动态管理: /easysearch/ CRUD (sqlite 持久化), LogPilot 发布时经反向
+# 通道推送 sink 集群记录, 保存即注册活跃客户端。
+easysearch:
+  enabled: true
+
+# Kafka 总线 (transport=kafka 的流: Gateway 消费 Agent 直写的同名队列)
+kafka_queue:
+  enabled: true
+  brokers: ["127.0.0.1:9092"]
