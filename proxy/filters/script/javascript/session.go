@@ -258,15 +258,10 @@ func (s *session) Event() Event {
 }
 
 func init() {
-	// Register common.MapStr as being a simple map[string]interface{} for
-	// treatment within the JS VM.
-	AddSessionHook("_type_mapstr", func(s Session) {
-		s.Runtime().RegisterSimpleMapType(reflect.TypeOf(util.MapStr(nil)),
-			func(i interface{}) map[string]interface{} {
-				return map[string]interface{}(i.(util.MapStr))
-			},
-		)
-	})
+	// MapStr used to be registered with goja's RegisterSimpleMapType so
+	// the JS VM would treat it as a plain map[string]interface{}; newer
+	// goja versions removed that API and convert map types by default, so
+	// no registration is needed anymore.
 }
 
 type sessionPool struct {

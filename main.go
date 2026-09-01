@@ -32,16 +32,28 @@ import (
 	"infini.sh/framework"
 	"infini.sh/framework/core/module"
 	"infini.sh/framework/modules/api"
+	_ "infini.sh/framework/modules/configs/reverseclient"
+	"infini.sh/framework/modules/easysearch"
 	"infini.sh/framework/modules/elastic"
+	"infini.sh/framework/modules/keystore"
 	"infini.sh/framework/modules/metrics"
 	"infini.sh/framework/modules/pipeline"
 	"infini.sh/framework/modules/queue"
 	queue2 "infini.sh/framework/modules/queue/disk_queue"
 	"infini.sh/framework/modules/redis"
 	"infini.sh/framework/modules/s3"
+	"infini.sh/framework/modules/sqlite"
 	stats2 "infini.sh/framework/modules/stats"
 	"infini.sh/framework/modules/task"
+	"infini.sh/framework/modules/web"
 	_ "infini.sh/framework/plugins"
+	// enterprise data-processing processors (dissect, field_standardize,
+	// ...) - private repo checked out under framework/plugins/enterprise.
+	_ "infini.sh/framework/plugins/enterprise/processors"
+	// enterprise OTLP intake (gRPC :4317 module + HTTP filter) and
+	// otlp_export processor - private repo, self-register via init().
+	_ "infini.sh/framework/plugins/enterprise/otlp/export"
+	_ "infini.sh/framework/plugins/enterprise/otlp/intake"
 	stats "infini.sh/framework/plugins/stats_statsd"
 	"infini.sh/gateway/config"
 	_ "infini.sh/gateway/pipeline"
@@ -56,10 +68,24 @@ func setup() {
 	module.RegisterSystemModule(&s3.S3Module{})
 	module.RegisterSystemModule(&queue2.DiskQueue{})
 	module.RegisterSystemModule(&redis.RedisModule{})
+	// sqlite registers the ORM handler (sqlite.orm.enabled in gateway.yml);
+	// must start BEFORE elastic — its Start() loads clusters from the ORM
+	// and panics when no handler is registered yet.
+	module.RegisterModuleWithPriority(&sqlite.SQLiteModule{}, -100) // before elastic: it loads clusters from the ORM at Start
+	// easysearch owns the /easysearch/ cluster CRUD (sqlite-backed); saves
+	// register live ES clients immediately, so LogPilot can push sink
+	// clusters dynamically at publish time.
+	module.RegisterSystemModule(&easysearch.Module{})
+	// web serves the UI route realm (with permissions) — the reverse
+	// channel's loopback prefers this port, and LogPilot pushes sink
+	// clusters to /easysearch/ through it.
+	module.RegisterSystemModule(&web.WebModule{})
 	module.RegisterSystemModule(&elastic.ElasticModule{})
 	module.RegisterSystemModule(&queue.Module{})
 	module.RegisterSystemModule(&task.TaskModule{})
 	module.RegisterSystemModule(&api.APIModule{})
+	module.RegisterUserPlugin(&keystore.KeystoreModule{})
+	// otlp gRPC intake module self-registers via enterprise/otlp/intake init()
 	module.RegisterModuleWithPriority(&pipeline.PipeModule{}, 100)
 
 	module.RegisterUserPlugin(forcemerge.ForceMergeModule{})
