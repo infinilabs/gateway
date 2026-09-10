@@ -1,3 +1,6 @@
+node:
+  id: gw1-fixed
+  name: GW1
 allow_multi_instance: true
 #for more config examples, please visit: https://github.com/infinilabs/testing
 
@@ -17,7 +20,7 @@ path.data: data
 path.logs: log
 path.configs: config # directory of additional gateway configurations
 
-configs.auto_reload: false # set true to auto reload gateway configurations
+configs.auto_reload: true # set true to auto reload gateway configurations
 
 ## modules can be disabled by setting enabled to false
 #modules:
@@ -407,3 +410,103 @@ elastic:
   cluster_settings_check:
     enabled: false
     interval: 60s
+
+# OTLP/gRPC intake: standard OpenTelemetry LogsService endpoint.
+# Agents (or any OTel SDK/Collector) export logs here; records are
+# decoded into the otel log data model (snake_case attributes) and
+# appended to the log_processing queue for the processing pipeline.
+otlp:
+  enabled: true
+  bind: "0.0.0.0:4317"
+  queue: log_processing
+  # large single records (e.g. long CSV/JSON lines) batch up quickly;
+  # default gRPC limit is 4MB which rejects legit agent shipments
+  max_receive_message_size: 134217728
+
+# ---------------------------------------------------------------------------
+# Third-party log intake via Kafka (opt-in): consume an external Kafka
+# topic and run the same processing chain as OTLP-ingested records.
+#
+# pipeline:
+#   - name: kafka_log_processing
+#     enabled: false
+#     auto_start: true
+#     keep_running: true
+#     singleton: true
+#     processor:
+#       - consumer:
+#           queue_selector:
+#             keys:
+#               - log_processing
+#           consumer:
+#             group: gateway-log-processing
+#           message_field: messages
+#           processor:
+#             - for_each:
+#                 processor:
+#                   - dissect:
+#                       pattern: "%{log_level} %{service_name}: %{remainder}"
+#                       ignore_failure: true
+#                   - field_standardize:
+#                       mode: underscore
+#             - otlp_export:
+#                 endpoint: "127.0.0.1:4317"
+#                 insecure: true
+# kafka_queue:
+#   enabled: true
+#   brokers:
+#     - "127.0.0.1:9092"
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Managed-config server (opt-in): serve /instance/_register + /configs/_sync
+# so agents (and cascading gateways) register here and pull dynamic configs.
+# Point them at this gateway's web port:
+#
+#   configs:
+#     server:
+#       enabled: true
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Managed client (opt-in): register THIS gateway to a config manager
+# (LogPilot or an upstream gateway) and pull dynamic configs, so gateway
+# instances show up in the ingestion center like agents do:
+#
+#   configs:
+#     managed: true
+#     servers:
+#       - "http://logpilot:29000"
+# ---------------------------------------------------------------------------
+
+configs:
+  managed: true
+  servers:
+    - "http://localhost:29000"
+  # one-time enrollment ticket: obtain from LogPilot UI (接入中心 → 注册券),
+  # or inject via env: enrollment_token: $[[env.ENROLLMENT_TOKEN]]
+  enrollment_token: ""
+
+sqlite:
+  enabled: true
+  orm:
+    enabled: true
+
+# web serves the reverse-channel loopback target: the manager-originated
+# operational calls (stats/queue/config/keystore/pipeline/logging and the
+# /easysearch/ CRUD) all land on the UI-domain routes of this port behind
+# login + RBAC; the API-domain listener stays separate (api: section).
+web:
+  enabled: true
+  network:
+    binding: 127.0.0.1:2901
+
+# 集群动态管理: /easysearch/ CRUD (sqlite 持久化), LogPilot 发布时经反向
+# 通道推送 sink 集群记录, 保存即注册活跃客户端。
+easysearch:
+  enabled: true
+
+# Kafka 总线 (transport=kafka 的流: Gateway 消费 Agent 直写的同名队列)
+kafka_queue:
+  enabled: true
+  brokers: ["127.0.0.1:9092"]

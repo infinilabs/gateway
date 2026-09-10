@@ -56,3 +56,10 @@ generated_*.go
 *.swp
 .github/copilot*.md
 .github/hooks
+
+# runtime artifacts (local dev)
+/certs/
+/auto_certs.yml
+/config/stream-*.yml
+/config/stream-*.yml.*.bak
+/config/yolov3/
