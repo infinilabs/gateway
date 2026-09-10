@@ -492,9 +492,12 @@ sqlite:
   orm:
     enabled: true
 
+# web serves the reverse-channel loopback target: the manager-originated
+# operational calls (stats/queue/config/keystore/pipeline/logging and the
+# /easysearch/ CRUD) all land on the UI-domain routes of this port behind
+# login + RBAC; the API-domain listener stays separate (api: section).
 web:
   enabled: true
-  embedding_api: true
   network:
     binding: 127.0.0.1:2901
 
