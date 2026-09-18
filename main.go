@@ -33,6 +33,10 @@ import (
 	"infini.sh/framework/core/module"
 	"infini.sh/framework/modules/api"
 	"infini.sh/framework/modules/elastic"
+	// registers the instance log-viewing endpoints (/logging/files,
+	// /logging/tail) via init(); served on the web port behind login,
+	// so a managing console can tail gateway logs
+	_ "infini.sh/framework/modules/managed"
 	"infini.sh/framework/modules/metrics"
 	"infini.sh/framework/modules/pipeline"
 	"infini.sh/framework/modules/queue"
