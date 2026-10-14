@@ -36,6 +36,7 @@ import (
 	"infini.sh/framework/modules/easysearch"
 	"infini.sh/framework/modules/elastic"
 	"infini.sh/framework/modules/keystore"
+	_ "infini.sh/framework/modules/managed" // instance-side managed endpoints (/logging/files, /logging/tail)
 	"infini.sh/framework/modules/metrics"
 	"infini.sh/framework/modules/pipeline"
 	"infini.sh/framework/modules/queue"
