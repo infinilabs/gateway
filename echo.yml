@@ -1,0 +1,28 @@
+env:
+  LR_GATEWAY_HOST: 127.0.0.1:8008
+  HOST: dev
+  MY_dev: infini_dev
+path.data: data
+path.logs: log
+
+entry:
+  - name: my_es_entry
+    enabled: true
+    router: my_router
+    max_concurrency: 2000
+    network:
+      binding: $[[env.LR_GATEWAY_HOST]]
+
+flow:
+  - name: test
+    filter:
+      - echo:
+#          message: "hello world"
+          message: "hello $[[env.MY_$[[env.HOST]]]]"
+          #          repeat: 1
+          response: true
+          status: 404
+
+router:
+  - name: my_router
+    default_flow: test
