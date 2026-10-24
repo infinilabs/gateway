@@ -76,7 +76,7 @@ func setup() {
 	// easysearch owns the /easysearch/ cluster CRUD (sqlite-backed); saves
 	// register live ES clients immediately, so LogPilot can push sink
 	// clusters dynamically at publish time.
-	module.RegisterSystemModule(&easysearch.Module{})
+	module.RegisterSystemModule(&easysearch.Module{EnabledByDefault: true})
 	// web serves the UI route realm (with permissions) — the reverse
 	// channel's loopback prefers this port, and LogPilot pushes sink
 	// clusters to /easysearch/ through it.
