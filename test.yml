@@ -1,0 +1,39 @@
+entry:
+ - name: my_es_entry
+   enabled: true
+   router: my_router
+   network:
+    binding: 0.0.0.0:8000
+
+router:
+ - name: my_router
+   default_flow: logging_flow
+   tracing_flow: logging_flow
+
+flow:
+ - name: default_flow
+   filter:
+    - elasticsearch:
+       elasticsearch: prod
+       max_connection_per_node: 1000
+
+ - name: logging_flow
+   filter:
+    - logging:
+       queue_name: request_logging
+       max_request_body_size: 4096
+       max_response_body_size: 4096
+
+
+disk_queue:
+ prepare_files_to_read: true
+ max_bytes_per_file: 256
+ eof_retry_delay_in_ms: 500
+ cleanup_files_on_init: false
+ retention:
+  max_num_of_local_files: 20 # automatically cleanup consumed files
+ compress:
+  segment:
+   enabled: true
+  delete_after_compress: true # trigger cleanup after compression.
+  idle_threshold: 20 # max number of uncompressed consumed files to preserve.

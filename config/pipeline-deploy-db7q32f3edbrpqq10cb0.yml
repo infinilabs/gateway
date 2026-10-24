@@ -1,0 +1,3 @@
+{"pipeline":[{"auto_start":true,"enabled":true,"keep_running":true,"name":"test-pipeline","processor":[{"for_each":{"codec":"otel","processor":[{"grok":{"field":"message","patterns":["%{IPORHOST:ip}"]}}]}}],"singleton":false}]}
+#MANAGED_CONFIG_VERSION: 130
+#MANAGED: true

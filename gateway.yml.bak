@@ -1,0 +1,526 @@
+node:
+  id: gw1-fixed
+  name: GW1
+allow_multi_instance: true
+#for more config examples, please visit: https://github.com/infinilabs/testing
+
+#the env section used for setup default settings, it can be overwritten by system environments.
+#eg: PROD_ES_ENDPOINT=http://192.168.3.185:9200 LOGGING_ES_ENDPOINT=http://192.168.3.185:9201  ./bin/gateway
+env: #use $[[env.LOGGING_ES_ENDPOINT]] in config instead
+  LOGGING_ES_ENDPOINT: http://localhost:9200/
+  LOGGING_ES_USER: admin
+  LOGGING_ES_PASS: admin
+  PROD_ES_ENDPOINT: http://localhost:9200/
+  PROD_ES_USER: admin
+  PROD_ES_PASS: admin
+  GW_BINDING: "0.0.0.0:8000"
+  API_BINDING: "0.0.0.0:2900"
+  MANAGED: true
+  REMOTE_CONFIG_SERVERS: ["http://localhost:29000"]
+  REMOTE_CONFIG_INTERVAL: "1s"
+  ENROLLMENT_TOKEN: ""
+  SECURITY_ENABLED: true
+  SECURITY_MANAGED_ENABLED: false
+
+
+path.data: data
+path.logs: log
+path.configs: config # directory of additional gateway configurations
+
+configs.auto_reload: true # set true to auto reload gateway configurations
+
+## modules can be disabled by setting enabled to false
+#modules:
+#  - name: pipeline
+#    enabled: false
+#  - name: elasticsearch
+#    enabled: false
+#plugins:
+#  - name: gateway
+#    enabled: false
+#  - name: metrics
+#    enabled: false
+
+
+gateway:
+  # By default, gateway will always set entry.network.reuse_port as true.
+  # If the host doesn't support SO_REUSEPORT, set `true` to disable this behavior
+  disable_reuse_port_by_default: false
+
+# Gateway internal stats collecting
+stats:
+  enabled: true
+  # save stats under path.data
+  persist: true
+  # disable stats operations cache
+  no_buffer: true
+  # stats operations cache size
+  buffer_size: 1000
+  # stats operations cache flush interval
+  flush_interval_ms: 1000
+
+# Statsd integration
+statsd:
+  enabled: false
+  host: localhost
+  port: 8125
+  namespace: "gateway."
+  protocol: "udp"
+  # flush interval
+  interval_in_seconds: 1
+
+##json logging layout
+#log.format: '{"timestamp":"%UTCDateT%UTCTime","level":"%Level","message":"%EscapedMsg","file":"%File:%Line","func":"%FuncShort"}%n'
+
+#system api
+api:
+  enabled: true
+  network:
+    binding: $[[env.API_BINDING]]
+#  tls:
+#    enabled: true
+#    skip_insecure_verify: true
+  security: #basic auth for system api
+    enabled: false
+    username: admin
+    password: $[[keystore.API_PASS]] #./bin/gateway keystore add API_PASS
+
+##elasticsearch servers
+elasticsearch:
+  - name: prod
+    enabled: false
+    endpoints:
+      - $[[env.PROD_ES_ENDPOINT]]
+    discovery:
+      enabled: false
+    basic_auth:
+      username: $[[env.PROD_ES_USER]]
+      password: $[[env.PROD_ES_PASS]]
+    traffic_control.max_bytes_per_node: 1010485760
+    metadata_cache_enabled: false # Whether to cache the cluster info in memory cache
+  - name: logging-server
+    enabled: false
+    endpoints:
+      - $[[env.LOGGING_ES_ENDPOINT]]
+    basic_auth:
+      username: $[[env.LOGGING_ES_USER]]
+      password: $[[env.LOGGING_ES_PASS]]
+    discovery:
+      enabled: false
+
+entry:
+  - name: my_es_entry
+    enabled: false
+    router: my_router
+    max_concurrency: 10000
+    network:
+      binding: $[[env.GW_BINDING]]
+      # See `gateway.disable_reuse_port_by_default` for more information.
+      reuse_port: true
+#  tls:
+#   enabled: true #auto generate certs, cert_file and key_file are optional
+#   cert_file: /data/gateway/cert/elasticsearch.pem
+#   key_file: /data/gateway/cert/elasticsearch.key
+#   skip_insecure_verify: false
+
+router:
+  - name: my_router
+    default_flow: default_flow
+    tracing_flow: logging_flow
+    rules:
+      - method:
+          - "*"
+        pattern:
+          - "/_bulk"
+          - "/{any_index}/_bulk"
+        flow:
+          - async_bulk_flow
+
+flow:
+  - name: default_flow
+    filter:
+      - elasticsearch:
+          elasticsearch: prod
+          max_connection_per_node: 1000
+  #    - http: ##another general option to proxy requests
+  #        schema: "http" #https or http
+  #        max_idle_conn_duration: "900s"
+  #        skip_failure_host: false
+  #        hosts:
+  #          - "localhost:9200"
+  - name: logging_flow
+    filter:
+      - logging:
+          queue_name: request_logging
+          max_request_body_size: 4096
+          max_response_body_size: 4096
+  #        when: #>1s or none-200 requests will be logged
+  #         or:
+  #           - not:
+  #               or:
+  #                 - equals:
+  #                     _ctx.request.path: "/favicon.ico"
+  #                 - in:
+  #                     _ctx.response.status: [404,200,201]
+  #                 - suffix:
+  #                     _ctx.request.path: ".js"
+  #                 - suffix:
+  #                     _ctx.request.path: ".css"
+  #           - range:
+  #               _ctx.elapsed.gte: 1000
+  - name: async_bulk_flow
+    filter:
+      - bulk_reshuffle:
+          when:
+            contains:
+              _ctx.request.path: /_bulk
+          elasticsearch: prod
+          # Options: cluster,node,index,shard
+          # NOTE: node/shard level requires elasticsearch cluster info
+          level: node
+          partition_size: 10 #extra partition within level
+          #shards: [1,3,5,7,9,11,13] #filter shards to ingest for node or shard level
+          continue_metadata_missing: true # If true, will continue to execute following processors if cluster info missing (level: node, shard)
+          fix_null_id: true
+      - elasticsearch:
+          elasticsearch: prod
+          max_connection_per_node: 1000
+#    - http: #fallback for non-bulk requests
+#        schema: "http" #https or http
+#        hosts:
+#          - localhost:9200
+
+##background jobs
+pipeline:
+  - name: pipeline_logging_merge
+    auto_start: true
+    keep_running: true
+    processor:
+      - indexing_merge:
+          input_queue: "logging"
+          idle_timeout_in_seconds: 1
+          elasticsearch: "logging-server"
+          index_name: ".infini_logs"
+          output_queue:
+            name: "gateway-pipeline-logs"
+            label:
+              tag: "pipeline_logging"
+          worker_size: 1
+          bulk_size_in_kb: 1
+  - name: ingest_pipeline_logging
+    auto_start: true
+    keep_running: true
+    processor:
+      - bulk_indexing:
+          bulk:
+            compress: true
+            batch_size_in_mb: 1
+            batch_size_in_docs: 1
+          consumer:
+            fetch_max_messages: 100
+          queues:
+            type: indexing_merge
+            tag: "pipeline_logging"
+  ## system logging and metrics
+  - name: async_messages_merge
+    auto_start: true
+    keep_running: true
+    processor:
+      - indexing_merge:
+          input_queue: "bulk_result_messages"
+          elasticsearch: "logging-server"
+          index_name: ".infini_async_bulk_results"
+          output_queue:
+            name: "bulk_requests"
+            label:
+              tag: "bulk_logging"
+          worker_size: 1
+          bulk_size_in_mb: 10
+  - name: metrics_merge
+    auto_start: true
+    keep_running: true
+    processor:
+      - indexing_merge:
+          input_queue: "metrics"
+          elasticsearch: "logging-server"
+          index_name: ".infini_metrics"
+          output_queue:
+            name: "bulk_requests"
+            label:
+              tag: "metrics"
+          worker_size: 1
+          bulk_size_in_mb: 10
+  - name: request_logging_merge
+    auto_start: true
+    keep_running: true
+    processor:
+      - indexing_merge:
+          input_queue: "request_logging"
+          elasticsearch: "logging-server"
+          index_name: ".infini_requests_logging"
+          output_queue:
+            name: "bulk_requests"
+            label:
+              tag: "request_logging"
+          worker_size: 1
+          bulk_size_in_mb: 10
+  - name: ingest_merged_requests
+    auto_start: true
+    keep_running: true
+    processor:
+      - bulk_indexing:
+          num_of_slices: 1 #runtime slicing
+          bulk:
+            compress: false
+            batch_size_in_mb: 10
+            batch_size_in_docs: 500
+            #remove_duplicated_newlines: true
+            invalid_queue: "invalid_request"
+            response_handle:
+              bulk_result_message_queue: "system_failure_messages"
+              max_request_body_size: 10240
+              max_response_body_size: 10240
+              save_success_results: false
+              max_error_details_count: 5
+          consumer:
+            fetch_max_messages: 100
+          queues:
+            type: indexing_merge
+          when:
+            cluster_available: ["logging-server"]
+
+  ##async way to ingest bulk requests handled by async_bulk_flow
+  - name: async_ingest_bulk_requests
+    auto_start: true
+    keep_running: true
+    retry_delay_in_ms: 1000
+    processor:
+      - bulk_indexing:
+          max_connection_per_node: 1000
+          num_of_slices: 1 #runtime slice
+          max_worker_size: 200
+          idle_timeout_in_seconds: 10
+          bulk:
+            compress: false
+            batch_size_in_mb: 20
+            batch_size_in_docs: 5000
+            invalid_queue: "bulk_invalid_requests"
+            dead_letter_queue: "bulk_dead_requests"
+            response_handle:
+              bulk_result_message_queue: "bulk_result_messages"
+              max_request_body_size: 1024
+              max_response_body_size: 1024
+              save_success_results: true
+              max_error_details_count: 5
+              retry_rules:
+                default: true
+                retry_429: true
+                retry_4xx: false
+                denied:
+                  status: []
+                  keyword:
+                    - illegal_state_exception
+          consumer:
+            fetch_max_messages: 100
+            eof_retry_delay_in_ms: 500
+          queue_selector:
+            labels:
+              type: bulk_reshuffle
+
+##metrics
+metrics:
+  enabled: true
+  queue: metrics
+  logging_queue: logging
+  instance:
+    enabled: true
+  network:
+    enabled: true
+    summary: true
+    sockets: true
+
+##diskqueue
+disk_queue:
+  prepare_files_to_read: true
+  #max_bytes_per_file: 20971520
+  eof_retry_delay_in_ms: 500
+  cleanup_files_on_init: false
+  retention:
+    max_num_of_local_files: 20 # automatically cleanup consumed files
+  compress:
+    segment:
+      enabled: true
+    delete_after_compress: true # trigger cleanup after compression.
+    idle_threshold: 20 # max number of uncompressed consumed files to preserve.
+#  upload_to_s3: true
+#  s3:
+#    server: my_blob_store #name defined in s3 servers
+#    location: your_location
+#    bucket: your_bucket_name
+
+##s3 servers
+#s3:
+#  my_blob_store: #name of s3 server
+#    endpoint: "localhost:9021"
+#    access_key: "your_access_key"
+#    access_secret: "your_access_secret"
+#    token: "your_token"
+#    skip_insecure_verify: true
+#    ssl: true
+
+## badger kv storage configuration
+badger:
+  enabled: true
+  single_bucket_mode: true
+  path: '' # defaults to {path.data}/gateway/node/{nodeID}/badger/
+  memory_mode: false # don't persist data to disk
+  sync_writes: false # flush to disk on every write
+  mem_table_size: 10485760
+  num_mem_tables: 1
+  # lsm tuning options
+  value_log_max_entries: 1000000
+  value_log_file_size: 536870912
+  value_threshold: 1048576
+  num_level0_tables: 1
+  num_level0_tables_stall: 2
+
+## floating ip configuration
+floating_ip:
+  enabled: false # enable floating ip, requires root privilege
+  netmask: 255.255.255.0
+  ip: '' # if empty, will automatically bind to x.x.x.234
+  interface: '' # if empty, will automatically find an interface to bind
+  local_ip: '' # if empty, will automatically bind to interface's ip address
+  priority: 0 # if <= 0, will random set current node's priority. master will switch to standby if other nodes has higher priority
+  echo: # gateway will automatically ping master's echo.port to check whether it's still alive
+    port: 61111
+    dial_timeout_in_ms: 1000
+    timeout_in_ms: 5000
+  broadcast:
+    binding: 224.3.2.2:7654 # broadcast address for floating ip status broadcast
+
+## elasticsearch module global configurations
+elastic:
+  # elasticsearch for gateway's system info storage
+  elasticsearch: prod
+  enabled: false
+  remote_configs: false
+  health_check:
+    enabled: true
+    interval: 30s
+  availability_check:
+    enabled: true
+    interval: 30s
+  metadata_refresh:
+    enabled: true
+    interval: 60s
+  cluster_settings_check:
+    enabled: false
+    interval: 60s
+
+# OTLP/gRPC intake: standard OpenTelemetry LogsService endpoint.
+# Agents (or any OTel SDK/Collector) export logs here; records are
+# decoded into the otel log data model (snake_case attributes) and
+# appended to the log_processing queue for the processing pipeline.
+otlp:
+  enabled: true
+  bind: "0.0.0.0:4317"
+  queue: log_processing
+  # large single records (e.g. long CSV/JSON lines) batch up quickly;
+  # default gRPC limit is 4MB which rejects legit agent shipments
+  max_receive_message_size: 134217728
+
+# ---------------------------------------------------------------------------
+# Third-party log intake via Kafka (opt-in): consume an external Kafka
+# topic and run the same processing chain as OTLP-ingested records.
+#
+# pipeline:
+#   - name: kafka_log_processing
+#     enabled: false
+#     auto_start: true
+#     keep_running: true
+#     singleton: true
+#     processor:
+#       - consumer:
+#           queue_selector:
+#             keys:
+#               - log_processing
+#           consumer:
+#             group: gateway-log-processing
+#           message_field: messages
+#           processor:
+#             - for_each:
+#                 processor:
+#                   - dissect:
+#                       pattern: "%{log_level} %{service_name}: %{remainder}"
+#                       ignore_failure: true
+#                   - field_standardize:
+#                       mode: underscore
+#             - otlp_export:
+#                 endpoint: "127.0.0.1:4317"
+#                 insecure: true
+# kafka_queue:
+#   enabled: true
+#   brokers:
+#     - "127.0.0.1:9092"
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Managed-config server (opt-in): serve /instance/_register + /configs/_sync
+# so agents (and cascading gateways) register here and pull dynamic configs.
+# Point them at this gateway's web port:
+#
+#   configs:
+#     server:
+#       enabled: true
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Managed client (opt-in): register THIS gateway to a config manager
+# (LogPilot or an upstream gateway) and pull dynamic configs, so gateway
+# instances show up in the ingestion center like agents do:
+#
+#   configs:
+#     managed: true
+#     servers:
+#       - "http://logpilot:29000"
+# ---------------------------------------------------------------------------
+
+
+configs:
+  #for managed client's setting
+  managed: $[[env.MANAGED]] # managed by remote servers
+  panic_on_config_error: false #ignore config error
+  allow_generated_metrics_tasks: false # allow auto-generated metrics tasks (e.g. k8s)
+  interval: $[[env.REMOTE_CONFIG_INTERVAL]]
+  servers: $[[env.REMOTE_CONFIG_SERVERS]] # config servers
+  enrollment_token: $[[env.ENROLLMENT_TOKEN]] # one-time registration pass (required when the server sets enrollment.required; pass via -e ENROLLMENT_TOKEN=et-...)
+  max_backup_files: 5
+  soft_delete: false
+#  tls: #for mTLS connection with config servers
+#    enabled: true
+#    cert_file: /etc/ssl.crt
+#    key_file: /etc/ssl.key
+#    skip_insecure_verify: false
+
+
+sqlite:
+  enabled: true
+  orm:
+    enabled: true
+
+web:
+  enabled: true
+  embedding_api: true
+  network:
+    binding: 127.0.0.1:2901
+
+# 集群动态管理: /easysearch/ CRUD (sqlite 持久化), LogPilot 发布时经反向
+# 通道推送 sink 集群记录, 保存即注册活跃客户端。
+easysearch:
+  enabled: true
+
+# Kafka 总线 (transport=kafka 的流: Gateway 消费 Agent 直写的同名队列)
+kafka_queue:
+  enabled: true
+  brokers: ["127.0.0.1:9092"]
